@@ -15,13 +15,32 @@ export function createTray(opts: {
   const iconPath = (() => {
     // During dev/packaged, icon may differ; electron will fall back if missing.
     try {
-      return require('path').join(__dirname, '../../../assets/tray.png');
+      const path = require('path');
+      const fs = require('fs');
+      const fullPath = path.join(__dirname, '../../../assets/tray.png');
+      if (fs.existsSync(fullPath)) {
+        return fullPath;
+      }
+      return '';
     } catch {
       return '';
     }
   })();
 
-  const tray = new Tray(iconPath);
+  // Skip tray creation if no icon is available (avoid Electron Tray errors)
+  if (!iconPath) {
+    console.warn('Tray icon not found; skipping tray creation');
+    return null as any;
+  }
+
+  let tray: Tray;
+  try {
+    tray = new Tray(iconPath);
+  } catch (err) {
+    // If tray creation fails, skip it
+    console.warn('Failed to create tray:', err);
+    return null as any;
+  }
   tray.setToolTip('CompanionOS');
 
   const contextMenu = Menu.buildFromTemplate([
