@@ -1,0 +1,7 @@
+- [ ] Inspect src/main/preload/bridgeImpl.ts current state
+- [ ] Implement preload contextBridge to expose EXACTLY window.__pawos_ipc__ using existing renderer IPC contract (mirror windowBridge.ts / ipcBridge.ts)
+- [ ] Ensure bridgeImpl.ts exports contextBridge with exposeInMainWorld wiring (no renderer imports)
+- [ ] npm run build
+- [ ] npm run package
+- [ ] Run dist\win-unpacked\PawOS.exe --enable-logging and verify renderer no longer throws TypeError
+- [ ] If next error is only tray.png image load failure, stop

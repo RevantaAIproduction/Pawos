@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+ECHO is on.
+# Environment
+.env
+.env.*
+!.env.example
+ECHO is on.
+# Build output
+dist/
+build/
+out/
+release/
+ECHO is on.
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+ECHO is on.
+# Cache
+.cache/
+.parcel-cache/
+.vite/
+.turbo/
+ECHO is on.
+# IDE
+.vscode/
+.idea/
+*.swp
+ECHO is on.
+# OS
+.DS_Store
+Thumbs.db
+ECHO is on.
+# Coverage
+coverage/
+ECHO is on.
+# TypeScript
+*.tsbuildinfo

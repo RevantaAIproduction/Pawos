@@ -1,0 +1,72 @@
+.panel{
+  width:320px;
+  min-height:280px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  padding:14px;
+  border-radius:18px;
+  color:#f6f7fb;
+  background:linear-gradient(180deg, rgba(20,24,34,0.82), rgba(12,15,24,0.92));
+  border:1px solid rgba(255,255,255,0.12);
+  box-shadow:0 16px 50px rgba(0,0,0,0.34);
+  backdrop-filter: blur(18px);
+  pointer-events:auto;
+}
+
+.header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+.headerActions{display:flex;gap:8px;align-items:center;}
+.kicker{text-transform:uppercase;letter-spacing:0.14em;font-size:10px;color:rgba(255,255,255,0.58);}
+.title{font-size:17px;font-weight:700;margin-top:2px;}
+.closeBtn,.sendBtn,.listenBtn{
+  border:0;
+  border-radius:999px;
+  cursor:pointer;
+  padding:8px 12px;
+  color:#fff;
+  background:rgba(255,255,255,0.12);
+}
+.listenBtn{background:rgba(116,167,255,0.22);}
+.meta{display:flex;flex-wrap:wrap;gap:8px;font-size:11px;color:rgba(255,255,255,0.62);}
+.meta span{padding:5px 8px;border-radius:999px;background:rgba(255,255,255,0.06);}
+.transcript{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  min-height:140px;
+  max-height:180px;
+  overflow:auto;
+  padding:8px;
+  border-radius:14px;
+  background:rgba(255,255,255,0.04);
+}
+.emptyState,.speakingHint{color:rgba(255,255,255,0.55);font-size:13px;padding:8px 2px;}
+.message{
+  border-radius:14px;
+  padding:10px 12px;
+  font-size:13px;
+  line-height:1.45;
+}
+.assistant{background:rgba(104,168,255,0.16);align-self:flex-start;}
+.user{background:rgba(255,255,255,0.08);align-self:flex-end;}
+.role{text-transform:uppercase;letter-spacing:0.12em;font-size:10px;color:rgba(255,255,255,0.52);margin-bottom:6px;}
+.streaming{opacity:0.85;font-style:italic;}
+.error{
+  border-radius:12px;
+  padding:8px 10px;
+  background:rgba(255,86,86,0.16);
+  color:#ffd7d7;
+  font-size:12px;
+}
+.composer{display:flex;gap:8px;align-items:center;}
+.input{
+  flex:1;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,0.16);
+  background:rgba(255,255,255,0.06);
+  color:#fff;
+  padding:9px 12px;
+  outline:none;
+}
+.input::placeholder{color:rgba(255,255,255,0.42);}
+.sendBtn{background:linear-gradient(135deg, #74a7ff, #89d4ff);}
