@@ -1,25 +1,30 @@
 appId: "com.pawos.pet"
 productName: "PawOS"
+
 asar: true
+
 files:
   - dist/**/*
   - src/pets/**/*
+
 directories:
   buildResources: build
+
 win:
   target:
     - nsis
   artifactName: "PawOS-Setup-${version}.${ext}"
+
 nsis:
   oneClick: false
   perMachine: true
   allowToChangeInstallationDirectory: true
-
   deleteAppDataOnUninstall: false
 
 electronVersion: "35.0.0"
+
 extraResources:
-  - from: "src/assets"
-    to: "assets"
+  - from: src/assets
+    to: assets
     filter:
       - "**/*"
