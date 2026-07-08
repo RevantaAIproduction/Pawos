@@ -11,25 +11,50 @@ export function createTray(opts: {
   onChangePet: () => void;
   onOpenSettings: () => void;
 }): Tray {
-  // Icon: use app icon or placeholder
+  // Icon: try multiple locations that differ between dev and packaged apps
   const iconPath = (() => {
-    // During dev/packaged, icon may differ; electron will fall back if missing.
     try {
       const path = require('path');
       const fs = require('fs');
-      const fullPath = path.join(__dirname, '../../../assets/tray.png');
-      if (fs.existsSync(fullPath)) {
-        return fullPath;
+
+      const candidates: string[] = [];
+
+      // 1) resources path (unpacked location): <resources>/assets/tray.png
+      if (process && typeof process.resourcesPath === 'string') {
+        candidates.push(path.join(process.resourcesPath, 'assets', 'tray.png'));
       }
+
+      // 2) app.getAppPath() + assets (works in some packaged setups)
+      try {
+        const appPath = opts.app.getAppPath();
+        candidates.push(path.join(appPath, 'assets', 'tray.png'));
+        // some builders place files under src/..., include that possibility
+        candidates.push(path.join(appPath, 'src', 'assets', 'tray.png'));
+      } catch {}
+
+      // 3) relative to __dirname (development)
+      try {
+        candidates.push(path.join(__dirname, '../../../assets/tray.png'));
+      } catch {}
+
+      for (const p of candidates) {
+        try {
+          if (fs.existsSync(p)) {
+            const stats = fs.statSync(p);
+            if (stats.size > 100) return p; // require reasonable size
+          }
+        } catch {}
+      }
+
       return '';
     } catch {
       return '';
     }
   })();
 
-  // Skip tray creation if no icon is available (avoid Electron Tray errors)
+  // Skip tray creation if no valid icon is available
   if (!iconPath) {
-    console.warn('Tray icon not found; skipping tray creation');
+    console.warn('Tray icon not found or invalid; skipping tray creation');
     return null as any;
   }
 
@@ -37,7 +62,7 @@ export function createTray(opts: {
   try {
     tray = new Tray(iconPath);
   } catch (err) {
-    // If tray creation fails, skip it
+    // If tray creation fails, skip it gracefully
     console.warn('Failed to create tray:', err);
     return null as any;
   }
