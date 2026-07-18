@@ -8,7 +8,7 @@ import { createCompanionController } from './CompanionController';
 export function useCompanionController() {
   const [petList, setPetListState] = useState<CompanionInfo[]>([]);
   const [settings, setSettings] = useState<SettingsState | null>(null);
-  const [, setReadyTick] = useState(0);
+  const [readyTick, setReadyTick] = useState(0);
 
   // Create the concrete CompanionController once; it manages CompanionApp lifecycle.
   const controllerRef = useRef<CompanionController | null>(null);
@@ -51,7 +51,7 @@ export function useCompanionController() {
       controller: controllerRef.current as CompanionController,
       applySettings,
     }),
-    [applySettings, petList, setPetList]
+    [applySettings, petList, setPetList, readyTick]
   );
 
   return controller;

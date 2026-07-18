@@ -1,0 +1,85 @@
+src/core/living/LivingDesktopEngine.ts(52,27): error TS2322: Type 'LivingAction | undefined' is not assignable to type 'LivingAction'.
+  Type 'undefined' is not assignable to type 'LivingAction'.
+src/core/schedule/ScheduleEngine.ts(23,19): error TS18048: 'cur' is possibly 'undefined'.
+src/core/schedule/ScheduleEngine.ts(26,23): error TS18048: 'cur' is possibly 'undefined'.
+src/core/schedule/ScheduleEngine.ts(26,47): error TS18048: 'cur' is possibly 'undefined'.
+src/core/schedule/ScheduleEngine.ts(28,23): error TS18048: 'cur' is possibly 'undefined'.
+src/core/schedule/ScheduleEngine.ts(28,63): error TS18048: 'cur' is possibly 'undefined'.
+src/renderer/animations/AnimationPlayer.ts(114,9): error TS18048: 'asset' is possibly 'undefined'.
+src/renderer/animations/AnimationPlayer.ts(119,22): error TS18048: 'asset' is possibly 'undefined'.
+src/renderer/animations/AnimationPlayer.ts(119,28): error TS2339: Property 'frameDurationMs' does not exist on type 'AnyAsset'.
+  Property 'frameDurationMs' does not exist on type 'GifAsset'.
+src/renderer/animations/AnimationPlayer.ts(120,24): error TS18048: 'asset' is possibly 'undefined'.
+src/renderer/animations/AnimationPlayer.ts(120,55): error TS18048: 'asset' is possibly 'undefined'.
+src/renderer/animations/AnimationPlayer.ts(120,61): error TS2339: Property 'frameCount' does not exist on type 'AnyAsset'.
+  Property 'frameCount' does not exist on type 'GifAsset'.
+src/renderer/animations/AnimationPlayer.ts(120,74): error TS18048: 'asset' is possibly 'undefined'.
+src/renderer/animations/AnimationPlayer.ts(120,80): error TS2339: Property 'frameCount' does not exist on type 'AnyAsset'.
+  Property 'frameCount' does not exist on type 'GifAsset'.
+src/renderer/auth/ipcErrorMessage.ts(10,10): error TS2532: Object is possibly 'undefined'.
+src/renderer/avatar/AutoRigger.ts(56,7): error TS7053: Element implicitly has an 'any' type because expression of type '0' can't be used to index type 'Material<MaterialEventMap> | Material<MaterialEventMap>[]'.
+  Property '0' does not exist on type 'Material<MaterialEventMap> | Material<MaterialEventMap>[]'.
+src/renderer/avatar/AutoRigger.ts(132,54): error TS2345: Argument of type 'Vector3 | undefined' is not assignable to parameter of type 'Vector3Like'.
+  Type 'undefined' is not assignable to type 'Vector3Like'.
+src/renderer/avatar/AutoRigger.ts(159,57): error TS18048: 'refPosition' is possibly 'undefined'.
+src/renderer/avatar/AutoRigger.ts(160,54): error TS18048: 'refPosition' is possibly 'undefined'.
+src/renderer/avatar/AutoRigger.ts(161,23): error TS18048: 'refPosition' is possibly 'undefined'.
+src/renderer/avatar/AutoRigger.ts(162,69): error TS2345: Argument of type 'BufferAttribute<BufferAttributeEventMap> | InterleavedBufferAttribute | undefined' is not assignable to parameter of type 'InterleavedBufferAttribute | BufferAttribute<BufferAttributeEventMap>'.
+  Type 'undefined' is not assignable to type 'InterleavedBufferAttribute | BufferAttribute<BufferAttributeEventMap>'.
+src/renderer/avatar/AutoRigger.ts(164,19): error TS18048: 'refSkinIndex' is possibly 'undefined'.
+src/renderer/avatar/AutoRigger.ts(164,41): error TS18048: 'refSkinIndex' is possibly 'undefined'.
+src/renderer/avatar/AutoRigger.ts(164,63): error TS18048: 'refSkinIndex' is possibly 'undefined'.
+src/renderer/avatar/AutoRigger.ts(164,85): error TS18048: 'refSkinIndex' is possibly 'undefined'.
+src/renderer/avatar/AutoRigger.ts(165,20): error TS18048: 'refSkinWeight' is possibly 'undefined'.
+src/renderer/avatar/AutoRigger.ts(165,43): error TS18048: 'refSkinWeight' is possibly 'undefined'.
+src/renderer/avatar/AutoRigger.ts(165,66): error TS18048: 'refSkinWeight' is possibly 'undefined'.
+src/renderer/avatar/AutoRigger.ts(165,89): error TS18048: 'refSkinWeight' is possibly 'undefined'.
+src/renderer/avatar/AutoRigger.ts(174,23): error TS18048: 'position' is possibly 'undefined'.
+src/renderer/avatar/AutoRigger.ts(180,32): error TS2345: Argument of type 'BufferAttribute<BufferAttributeEventMap> | InterleavedBufferAttribute | undefined' is not assignable to parameter of type 'InterleavedBufferAttribute | BufferAttribute<BufferAttributeEventMap>'.
+  Type 'undefined' is not assignable to type 'InterleavedBufferAttribute | BufferAttribute<BufferAttributeEventMap>'.
+src/renderer/avatar/AutoRigger.ts(189,7): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/renderer/avatar/AutoRigger.ts(190,7): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/renderer/avatar/AutoRigger.ts(204,23): error TS18048: 'position' is possibly 'undefined'.
+src/renderer/avatar/AutoRigger.ts(214,32): error TS2345: Argument of type 'BufferAttribute<BufferAttributeEventMap> | InterleavedBufferAttribute | undefined' is not assignable to parameter of type 'InterleavedBufferAttribute | BufferAttribute<BufferAttributeEventMap>'.
+  Type 'undefined' is not assignable to type 'InterleavedBufferAttribute | BufferAttribute<BufferAttributeEventMap>'.
+src/renderer/avatar/AutoRigger.ts(219,55): error TS2532: Object is possibly 'undefined'.
+src/renderer/avatar/AutoRigger.ts(219,78): error TS2532: Object is possibly 'undefined'.
+src/renderer/avatar/AutoRigger.ts(232,22): error TS2532: Object is possibly 'undefined'.
+src/renderer/avatar/AutoRigger.ts(238,7): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/renderer/avatar/AutoRigger.ts(239,7): error TS2322: Type 'number | undefined' is not assignable to type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/renderer/avatar/AutoRigger.ts(287,9): error TS18048: 'w' is possibly 'undefined'.
+src/renderer/avatar/AutoRigger.ts(289,20): error TS18048: 'boneIndex' is possibly 'undefined'.
+src/renderer/avatar/AutoRigger.ts(289,53): error TS2538: Type 'undefined' cannot be used as an index type.
+src/renderer/avatar/AutoRigger.ts(290,52): error TS18048: 'w' is possibly 'undefined'.
+src/renderer/avatar/face/FaceRig.ts(161,63): error TS2532: Object is possibly 'undefined'.
+src/renderer/companion/CompanionController.ts(225,140): error TS2554: Expected 1 arguments, but got 2.
+src/renderer/companion/CompanionLoaderTypes.ts(1,65): error TS2307: Cannot find module '../CompanionDefinition' or its corresponding type declarations.
+src/renderer/companion/emotion/CompanionBrain.ts(10,7): error TS2739: Type '{ idle: "focused"; listening: "listening"; transcribing: "thinking"; thinking: "thinking"; speaking: "happy"; error: "confused"; waitingForPermission: "curious"; }' is missing the following properties from type 'Record<ConversationState, Expression>': completed, interrupted, performingAction
+src/renderer/companion/manager/CompanionProfileStore.ts(74,5): error TS2322: Type 'CompanionProfile | undefined' is not assignable to type 'CompanionProfile'.
+  Type 'undefined' is not assignable to type 'CompanionProfile'.
+src/renderer/companion/manager/useCompanionProfiles.ts(9,13): error TS2345: Argument of type '() => () => boolean' is not assignable to parameter of type 'EffectCallback'.
+  Type '() => boolean' is not assignable to type 'void | Destructor'.
+    Type '() => boolean' is not assignable to type 'Destructor'.
+      Type 'boolean' is not assignable to type 'void | { [UNDEFINED_VOID_ONLY]: never; }'.
+src/renderer/companion/skin/SkinStore.ts(49,5): error TS2322: Type 'SkinDescriptor | undefined' is not assignable to type 'SkinDescriptor'.
+  Type 'undefined' is not assignable to type 'SkinDescriptor'.
+src/renderer/companion/skin/useSkins.ts(9,13): error TS2345: Argument of type '() => () => boolean' is not assignable to parameter of type 'EffectCallback'.
+  Type '() => boolean' is not assignable to type 'void | Destructor'.
+    Type '() => boolean' is not assignable to type 'Destructor'.
+      Type 'boolean' is not assignable to type 'void | { [UNDEFINED_VOID_ONLY]: never; }'.
+src/renderer/companion/useCompanionController.ts(4,36): error TS2307: Cannot find module '../../services/settings/SettingsManager' or its corresponding type declarations.
+src/renderer/conversation/ConversationRuntime.ts(1013,39): error TS2532: Object is possibly 'undefined'.
+src/renderer/conversation/ConversationRuntime.ts(1014,73): error TS2532: Object is possibly 'undefined'.
+src/renderer/conversation/SpeechProviders.ts(98,30): error TS7053: Element implicitly has an 'any' type because expression of type '0' can't be used to index type '{}'.
+  Property '0' does not exist on type '{}'.
+src/renderer/conversation/SpeechProviders.ts(99,23): error TS2339: Property 'isFinal' does not exist on type '{}'.
+src/renderer/runtime/CompanionAnimationFsmContext.ts(1,15): error TS2305: Module '"../companion/CompanionDefinition"' has no exported member 'CompanionDefinition'.
+src/renderer/runtime/CompanionAnimationFsmController.ts(112,46): error TS2538: Type 'undefined' cannot be used as an index type.
+src/renderer/runtime/CompanionApp.ts(80,7): error TS2739: Type '{ onInput: () => void; getState: () => { readonly state: "sleep" | "active" | "lie"; readonly idleLieMs: number; readonly idleSleepMs: number; }; }' is missing the following properties from type '{ onInput: () => void; getState: () => { state: "sleep" | "active" | "lie"; }; idleLieMs: number; idleSleepMs: number; }': idleLieMs, idleSleepMs
+src/renderer/runtime/CompanionPhysicsController.ts(1,15): error TS2305: Module '"../companion/CompanionDefinition"' has no exported member 'CompanionDefinition'.
+src/renderer/runtime/CompanionRuntimeTypes.ts(1,15): error TS2305: Module '"../companion/CompanionDefinition"' has no exported member 'CompanionDefinition'.
+src/renderer/ui/CompanionExperience.tsx(35,20): error TS2532: Object is possibly 'undefined'.

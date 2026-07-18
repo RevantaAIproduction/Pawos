@@ -8,9 +8,12 @@ ECHO is on.
 ECHO is on.
 # Build output
 dist/
-build/
 out/
 release/
+
+# NOT ignored: build/ — that's electron-builder's buildResources dir,
+# holding checked-in icon source files (build/icon.ico, build/icon.png),
+# not generated output.
 ECHO is on.
 # Logs
 *.log

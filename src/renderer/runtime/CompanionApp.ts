@@ -7,6 +7,7 @@ import { CompanionCanvasRenderer } from './CompanionCanvasRenderer';
 import { createIdleDetector } from './idle/createIdleDetector';
 import { AnimationPlayer } from '../animations/AnimationPlayer';
 import type { ConversationState } from '../conversation/ConversationTypes';
+import type { AnimClip, EmotionState, Expression } from '../companion/emotion/EmotionTypes';
 
 type ResourceBaseUrl = string;
 
@@ -85,23 +86,30 @@ export class CompanionApp {
 
   private loop = (now: number) => {
     if (!this.running) return;
-    const dtMs = this.clock.tick(now);
+    // Schedule the next frame in a finally so one bad frame (a null-assertion
+    // failure, an unknown animation lookup, etc.) can never permanently
+    // stall this loop — it just skips a frame instead of freezing forever.
+    try {
+      const dtMs = this.clock.tick(now);
 
-    const width = this.args.canvas.width;
-    const height = this.args.canvas.height;
-    this.physics!.update(dtMs, { width, height });
-    this.fsm!.update(dtMs, { width, height });
+      const width = this.args.canvas.width;
+      const height = this.args.canvas.height;
+      this.physics!.update(dtMs, { width, height });
+      this.fsm!.update(dtMs, { width, height });
 
-    this.renderer!.render({
-      x: this.physics!.getX(),
-      y: this.physics!.getY(),
-      rotation: this.physics!.getRotation(),
-      size: this.physics!.getSize(),
-      flipX: this.physics!.getFlipX(),
-      animation: this.animCtx.animation,
-    });
-
-    requestAnimationFrame(this.loop);
+      this.renderer!.render({
+        x: this.physics!.getX(),
+        y: this.physics!.getY(),
+        rotation: this.physics!.getRotation(),
+        size: this.physics!.getSize(),
+        flipX: this.physics!.getFlipX(),
+        animation: this.animCtx.animation,
+      });
+    } catch (error) {
+      console.error('[CompanionApp] loop frame failed, continuing', error);
+    } finally {
+      requestAnimationFrame(this.loop);
+    }
   };
 
   stop() {
@@ -167,8 +175,32 @@ export class CompanionApp {
     this.fsm?.onAnyInput();
   }
 
-  setConversationState(state: ConversationState) {
-    this.fsm?.setConversationState(state);
+  setConversationState(state: ConversationState, lastAssistantMessage?: string) {
+    this.fsm?.setConversationState(state, lastAssistantMessage);
+  }
+
+  setEmotion(expression: Expression) {
+    this.fsm?.setEmotion(expression);
+  }
+
+  playAnimation(clip: AnimClip) {
+    this.fsm?.playAnimation(clip);
+  }
+
+  lookAt(target: { x: number; y: number } | null) {
+    this.fsm?.lookAt(target);
+  }
+
+  setMood(mood: string) {
+    this.fsm?.setMood(mood);
+  }
+
+  setContext(context: Record<string, unknown>) {
+    this.fsm?.setContext(context);
+  }
+
+  getEmotion(): EmotionState | undefined {
+    return this.fsm?.getEmotion();
   }
 }
 

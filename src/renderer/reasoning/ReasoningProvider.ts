@@ -6,7 +6,9 @@ import type {
 
 export type ReasoningProviderRequest = {
   systemPrompt: string;
+  /** Everything the provider should see before `input` — for a fresh turn, this is prior turns only; for a tool-result continuation (input === ''), this already includes the current turn's user message plus the assistant's tool call(s) and tool result(s), since there's nothing further to append. */
   history: ReasoningMessage[];
+  /** The new user input to append after history, or '' for a tool-result continuation — providers must not append a trailing empty user turn when this is ''. */
   input: string;
   tools: ReasoningToolDefinition[];
 };

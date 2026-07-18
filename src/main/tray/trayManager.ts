@@ -1,7 +1,6 @@
-import { BrowserWindow, Tray, app, Menu } from 'electron';
+import { Tray, app, Menu } from 'electron';
 
 export function createTray(opts: {
-  overlayWindow: BrowserWindow;
   app: typeof app;
   onToggleVisibility: () => void;
   onShow: () => void;
@@ -10,6 +9,7 @@ export function createTray(opts: {
   onExit: () => void;
   onChangePet: () => void;
   onOpenSettings: () => void;
+  onOpenDashboard: () => void;
 }): Tray {
   // Icon: try multiple locations that differ between dev and packaged apps
   const iconPath = (() => {
@@ -66,9 +66,16 @@ export function createTray(opts: {
     console.warn('Failed to create tray:', err);
     return null as any;
   }
-  tray.setToolTip('CompanionOS');
+  tray.setToolTip('PawOS');
 
   const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Open Dashboard',
+      click: () => opts.onOpenDashboard(),
+    },
+    {
+      type: 'separator',
+    },
     {
       label: 'Show Companion',
       click: () => opts.onShow(),

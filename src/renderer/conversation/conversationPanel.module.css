@@ -41,6 +41,50 @@
   background:rgba(255,255,255,0.04);
 }
 .emptyState,.speakingHint{color:rgba(255,255,255,0.55);font-size:13px;padding:8px 2px;}
+.systemLineWrap{align-self:stretch;display:flex;flex-direction:column;gap:0;}
+.systemLine{
+  align-self:stretch;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  color:rgba(255,255,255,0.92);
+  font-size:12.5px;
+  font-weight:500;
+  padding:6px 10px;
+  border-radius:10px;
+  background:rgba(116,167,255,0.14);
+  border:1px solid rgba(116,167,255,0.28);
+}
+.systemLineIcon{flex-shrink:0;font-size:12px;}
+.systemLineText{flex:1;}
+.systemLineToggle{
+  flex-shrink:0;
+  border:0;
+  background:rgba(255,255,255,0.1);
+  color:rgba(255,255,255,0.85);
+  font-size:10.5px;
+  font-weight:600;
+  border-radius:999px;
+  padding:3px 8px;
+  cursor:pointer;
+}
+.systemLineToggle:hover{background:rgba(255,255,255,0.18);}
+.systemLineDetail{
+  margin:4px 0 0;
+  padding:8px 10px;
+  border-radius:8px;
+  background:rgba(0,0,0,0.32);
+  border:1px solid rgba(255,255,255,0.1);
+  color:rgba(255,255,255,0.85);
+  font-size:11px;
+  font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
+  white-space:pre-wrap;
+  word-break:break-word;
+  max-height:220px;
+  overflow:auto;
+}
+.systemLineActive{background:rgba(116,167,255,0.2);border-color:rgba(116,167,255,0.4);}
+.systemLineDone{background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.12);color:rgba(255,255,255,0.75);}
 .message{
   border-radius:14px;
   padding:10px 12px;
@@ -58,15 +102,33 @@
   color:#ffd7d7;
   font-size:12px;
 }
-.composer{display:flex;gap:8px;align-items:center;}
+.composer{display:flex;gap:8px;align-items:flex-end;}
 .input{
   flex:1;
-  border-radius:999px;
+  border-radius:16px;
   border:1px solid rgba(255,255,255,0.16);
   background:rgba(255,255,255,0.06);
   color:#fff;
   padding:9px 12px;
   outline:none;
+  resize:none;
+  font:inherit;
+  line-height:1.4;
+  max-height:160px;
+  overflow-y:auto;
 }
 .input::placeholder{color:rgba(255,255,255,0.42);}
 .sendBtn{background:linear-gradient(135deg, #74a7ff, #89d4ff);}
+.attachBtn{
+  border:0;
+  border-radius:999px;
+  cursor:pointer;
+  width:34px;
+  height:34px;
+  flex-shrink:0;
+  color:#fff;
+  background:rgba(255,255,255,0.12);
+  font-size:15px;
+  line-height:1;
+}
+.attachBtn:hover{background:rgba(255,255,255,0.2);}

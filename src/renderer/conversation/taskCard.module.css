@@ -1,0 +1,237 @@
+.card{
+  align-self:stretch;
+  border-radius:12px;
+  background:rgba(255,255,255,0.05);
+  border:1px solid rgba(255,255,255,0.12);
+  overflow:hidden;
+}
+.header{
+  width:100%;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:9px 10px;
+  border:0;
+  background:transparent;
+  color:inherit;
+  cursor:pointer;
+  text-align:left;
+  font:inherit;
+}
+.header:hover{background:rgba(255,255,255,0.04);}
+.statusBadge{
+  flex-shrink:0;
+  font-size:10.5px;
+  font-weight:700;
+  padding:3px 8px;
+  border-radius:999px;
+  letter-spacing:0.02em;
+}
+.statusRunning{background:rgba(116,167,255,0.22);color:#bcd6ff;}
+.statusCompleted{background:rgba(96,215,140,0.2);color:#a8f0c2;}
+.statusFailed{background:rgba(255,110,110,0.22);color:#ffc4c4;}
+.statusInterrupted{background:rgba(255,190,110,0.22);color:#ffdba8;}
+.goal{
+  flex:1;
+  font-size:13px;
+  font-weight:600;
+  color:rgba(255,255,255,0.94);
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.metaStats{
+  flex-shrink:0;
+  display:flex;
+  gap:8px;
+  font-size:10.5px;
+  color:rgba(255,255,255,0.55);
+}
+.warnBadge{color:#ffd98a;}
+.errBadge{color:#ff9c9c;}
+.chevron{flex-shrink:0;font-size:11px;color:rgba(255,255,255,0.5);}
+
+.details{
+  border-top:1px solid rgba(255,255,255,0.1);
+  padding:10px;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  max-height:360px;
+  overflow:auto;
+}
+.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.toolbarBtn{
+  border:0;
+  background:rgba(255,255,255,0.1);
+  color:rgba(255,255,255,0.85);
+  font-size:10.5px;
+  font-weight:600;
+  border-radius:999px;
+  padding:4px 10px;
+  cursor:pointer;
+}
+.toolbarBtn:hover{background:rgba(255,255,255,0.18);}
+.toolbarTimestamps{font-size:10px;color:rgba(255,255,255,0.45);margin-left:auto;}
+
+.section{display:flex;flex-direction:column;gap:6px;}
+.sectionTitle{
+  margin:0;
+  font-size:10.5px;
+  text-transform:uppercase;
+  letter-spacing:0.08em;
+  color:rgba(255,255,255,0.5);
+}
+
+.stageGroup{display:flex;flex-direction:column;gap:6px;margin-bottom:8px;}
+.stageHeader{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  border:0;
+  background:rgba(255,255,255,0.05);
+  border-radius:8px;
+  padding:5px 8px;
+  cursor:pointer;
+  color:inherit;
+  font:inherit;
+  text-align:left;
+}
+.stageHeader:hover{background:rgba(255,255,255,0.09);}
+.stageChevron{font-size:10px;color:rgba(255,255,255,0.5);flex-shrink:0;}
+.stageTitle{
+  flex:1;
+  font-size:11px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:0.06em;
+  color:rgba(255,255,255,0.75);
+}
+.stageCounts{display:flex;gap:6px;font-size:10.5px;}
+
+.timeline{display:flex;flex-direction:column;gap:8px;padding:2px 4px 2px 20px;}
+.timelineRow{display:flex;gap:8px;align-items:flex-start;}
+.timelineIcon{flex-shrink:0;font-size:12px;margin-top:1px;}
+.timelineIconOk{color:#8ee6ac;}
+.timelineIconFailed{color:#ff9c9c;}
+.timelineIconRunning{color:#9fc4ff;}
+.timelineBody{flex:1;min-width:0;}
+.timelineHeader{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;}
+.timelineIndex{color:rgba(255,255,255,0.4);font-size:10.5px;}
+.timelineType{
+  font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
+  font-size:10.5px;
+  color:rgba(255,255,255,0.7);
+}
+.timelineTime,.timelineDuration{font-size:10px;color:rgba(255,255,255,0.4);}
+.timelineText{font-size:12px;color:rgba(255,255,255,0.88);margin-top:2px;}
+
+.codeBlock{
+  margin:0;
+  padding:8px 10px;
+  border-radius:8px;
+  background:rgba(0,0,0,0.34);
+  border:1px solid rgba(255,255,255,0.08);
+  color:rgba(255,255,255,0.85);
+  font-size:11px;
+  font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
+  white-space:pre-wrap;
+  word-break:break-word;
+  max-height:160px;
+  overflow:auto;
+}
+
+.fileRow{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-size:12px;
+  color:rgba(255,255,255,0.85);
+}
+.filePath{
+  flex:1;
+  overflow-wrap:anywhere;
+  font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
+  font-size:11px;
+}
+.openBtn,.retryBtn{
+  flex-shrink:0;
+  border:0;
+  background:rgba(255,255,255,0.1);
+  color:rgba(255,255,255,0.85);
+  font-size:10px;
+  font-weight:600;
+  border-radius:999px;
+  padding:3px 9px;
+  cursor:pointer;
+}
+.openBtn:hover,.retryBtn:hover{background:rgba(255,255,255,0.18);}
+.retryBtn{color:#ffd0d0;background:rgba(255,110,110,0.16);margin-top:4px;}
+.retryBtn:hover{background:rgba(255,110,110,0.26);}
+
+.verifyOk{color:#8ee6ac;flex-shrink:0;}
+.verifyFail{color:#ff9c9c;flex-shrink:0;}
+
+.errorRow{
+  padding:8px 10px;
+  border-radius:8px;
+  background:rgba(255,86,86,0.12);
+  border:1px solid rgba(255,86,86,0.22);
+  color:#ffd7d7;
+  font-size:12px;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  align-items:flex-start;
+}
+
+.finalReport{
+  font-size:12.5px;
+  line-height:1.5;
+  color:rgba(255,255,255,0.85);
+  white-space:pre-wrap;
+}
+
+.workflowBlock{
+  padding:8px 10px;
+  border-radius:8px;
+  background:rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.1);
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.workflowName{
+  font-size:12.5px;
+  font-weight:700;
+  color:rgba(255,255,255,0.92);
+}
+.workflowGrid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(110px,1fr));
+  gap:6px 12px;
+}
+.workflowStat{display:flex;flex-direction:column;gap:1px;}
+.workflowStatLabel{
+  font-size:9.5px;
+  text-transform:uppercase;
+  letter-spacing:0.06em;
+  color:rgba(255,255,255,0.45);
+}
+.workflowStatValue{font-size:12px;color:rgba(255,255,255,0.9);font-weight:600;}
+.planList{margin:4px 0 0;padding-left:16px;display:flex;flex-direction:column;gap:2px;}
+.planStep{font-size:11.5px;color:rgba(255,255,255,0.75);}
+
+.terminalOutputBlock{display:flex;flex-direction:column;gap:4px;}
+.codeBlockExpanded{max-height:none;}
+.expandOutputBtn{
+  align-self:flex-start;
+  border:0;
+  background:transparent;
+  color:rgba(255,255,255,0.5);
+  font-size:10.5px;
+  font-weight:600;
+  cursor:pointer;
+  padding:2px 4px;
+}
+.expandOutputBtn:hover{color:rgba(255,255,255,0.8);}

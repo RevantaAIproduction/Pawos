@@ -106,6 +106,20 @@ export class ReasoningRuntime {
     this.history = [...this.history, createMessage('system', content, 'final')];
   }
 
+  /**
+   * Feeds an executed tool's real result back into history as a 'tool'-role
+   * message — content should be the full result (e.g. JSON.stringify of the
+   * ActionResult), not the short human-facing narration. Call continueTurn()
+   * afterward to let the model actually react to it; this method only
+   * records the result, it doesn't invoke the provider itself.
+   */
+  provideToolResult(result: { toolCallId: string; name: string; content: string }) {
+    this.history = [
+      ...this.history,
+      createMessage('tool', result.content, 'final', { toolCallId: result.toolCallId, name: result.name }),
+    ];
+  }
+
   runTurn(input: string, callbacks: ReasoningRuntimeCallbacks = {}): ReasoningTurnHandle {
     const trimmedInput = input.trim();
     if (!trimmedInput) {
@@ -122,9 +136,35 @@ export class ReasoningRuntime {
       };
     }
 
+    // Captured before appending — every provider's request builder treats
+    // `history` as prior turns only and appends `input` as the new one, so
+    // passing history that already includes this turn would duplicate it
+    // as two consecutive user turns in the same request.
+    const priorHistory = this.getHistory();
     const userMessage = createMessage('user', trimmedInput, 'final');
     this.history = [...this.history, userMessage];
 
+    return this.streamAndTrack(priorHistory, trimmedInput, callbacks);
+  }
+
+  /**
+   * Continues the CURRENT turn after a tool result has been recorded via
+   * provideToolResult() — no new user input, just lets the model react to
+   * what's already in history (its own prior tool call plus the tool's real
+   * result). This is what makes "run command → see the real error → fix →
+   * retry" possible within a single turn instead of the model never
+   * learning whether its own tool call actually worked.
+   */
+  continueTurn(callbacks: ReasoningRuntimeCallbacks = {}): ReasoningTurnHandle {
+    return this.streamAndTrack(this.getHistory(), '', callbacks);
+  }
+
+  /** Shared by runTurn (input = new user text, history = prior turns) and continueTurn (input = '', history = everything up to and including the just-recorded tool result). */
+  private streamAndTrack(
+    historyForRequest: ReasoningMessage[],
+    input: string,
+    callbacks: ReasoningRuntimeCallbacks
+  ): ReasoningTurnHandle {
     const turnId = ++this.activeTurnId;
     const toolCalls: ReasoningToolCall[] = [];
     let response = '';
@@ -159,8 +199,8 @@ export class ReasoningRuntime {
       this.activeSession = this.provider.streamResponse(
         {
           systemPrompt: this.systemPrompt,
-          history: this.getHistory(),
-          input: trimmedInput,
+          history: historyForRequest,
+          input,
           tools: this.getTools(),
         },
         {
@@ -194,17 +234,19 @@ export class ReasoningRuntime {
           onComplete: (providerResponse) => {
             if (this.activeTurnId !== turnId) return;
             response = providerResponse || response;
+            const toolCallsForMessage = toolCalls.length > 0 ? [...toolCalls] : undefined;
             if (assistantMessage) {
               assistantMessage = {
                 ...assistantMessage,
                 status: 'final',
                 content: response,
+                toolCalls: toolCallsForMessage,
               };
               this.history = this.history.map((message) =>
                 message.id === assistantMessage?.id ? assistantMessage! : message
               );
             } else {
-              assistantMessage = createMessage('assistant', response, 'final');
+              assistantMessage = createMessage('assistant', response, 'final', { toolCalls: toolCallsForMessage });
               this.history = [...this.history, assistantMessage];
             }
 

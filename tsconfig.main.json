@@ -21,10 +21,13 @@
     "sourceMap": true,
     "noUncheckedIndexedAccess": true,
 
-    "ignoreDeprecations": "5.0"
+    "ignoreDeprecations": "5.0",
+
+    "jsx": "react-jsx"
   },
   "include": [
     "src/main/**/*.ts",
+    "src/main/**/*.tsx",
     "src/shared/**/*.ts"
   ],
   "exclude": [

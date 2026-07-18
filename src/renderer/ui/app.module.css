@@ -16,20 +16,41 @@
   width:280px;
   height:280px;
   pointer-events:auto;
+  transition:width 0.2s ease, height 0.2s ease;
+  flex-shrink:0;
+}
+
+/* Companion shrinks automatically to make room for the Workspace Runtime panel instead of the window needing to grow further — "small, sitting on the edge" rather than competing for space. */
+.avatarShellCompact{
+  width:120px;
+  height:120px;
 }
 
 .launcher{
   position:absolute;
-  left:50%;
-  bottom:-42px;
-  transform:translateX(-50%);
-  border:0;
+  top:8px;
+  right:8px;
+  border:1px solid rgba(255,255,255,0.18);
   border-radius:999px;
-  background:linear-gradient(135deg, #7e8cff, #8bd4ff);
+  background:rgba(10,10,12,0.55);
+  backdrop-filter:blur(6px);
   color:#fff;
-  padding:8px 14px;
+  padding:5px 12px;
+  font-size:12px;
   font-weight:600;
   cursor:pointer;
-  box-shadow:0 10px 22px rgba(0,0,0,0.28);
+  opacity:0;
+  transition:opacity 0.15s ease;
+}
+
+.avatarShell:hover .launcher{
+  opacity:1;
+}
+
+.workspaceRuntimeSlot{
+  flex:1;
+  min-width:0;
+  max-height:100%;
+  pointer-events:auto;
 }
 

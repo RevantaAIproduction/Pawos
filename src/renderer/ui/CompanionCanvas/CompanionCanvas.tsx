@@ -15,7 +15,7 @@ export function AvatarCanvas({
   useEffect(() => {
     const canvas = canvasRef.current;
     const wrap = wrapRef.current;
-    if (!canvas || !wrap) return;
+    if (!canvas || !wrap || !controller) return;
 
     controller.attachCanvas(canvas, wrap);
 

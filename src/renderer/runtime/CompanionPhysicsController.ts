@@ -22,6 +22,7 @@ export class CompanionPhysicsController {
   private linearDrag = 2.5; // higher => more damp
 
   private inputActive = false;
+  private emotionSpeedMultiplier = 1;
 
   private size: { width: number; height: number };
 
@@ -59,7 +60,8 @@ export class CompanionPhysicsController {
       const dy = this.target.y - this.y;
       const dist = Math.hypot(dx, dy);
 
-      const speed = (this.args.pet.physics.speed ?? 160) * (this.args.settings.animationSpeed ?? 1);
+      const speed =
+        (this.args.pet.physics.speed ?? 160) * (this.args.settings.animationSpeed ?? 1) * this.emotionSpeedMultiplier;
       const move = Math.min(dist, speed * dt);
       if (dist > 1) {
         const nx = dx / dist;
@@ -140,6 +142,11 @@ export class CompanionPhysicsController {
 
   setInputActive(v: boolean) {
     this.inputActive = v;
+  }
+
+  /** Emotion-driven walking-speed influence (e.g. sleepy = slower, excited = faster). */
+  setSpeedMultiplier(multiplier: number) {
+    this.emotionSpeedMultiplier = multiplier;
   }
 
   setTarget(x: number, y: number) {

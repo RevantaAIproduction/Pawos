@@ -17,11 +17,19 @@ export function createCompanionRuntimeHostLoop(args: {
     if (!running) return;
     if (!last) last = now;
     // fixed-ish interval
-    if (now - last >= tickIntervalMs) {
-      args.host.tick(Date.now(), args.activityProvider as any);
-      last = now;
+    try {
+      if (now - last >= tickIntervalMs) {
+        args.host.tick(Date.now(), args.activityProvider as any);
+        last = now;
+      }
+    } catch (error) {
+      // One bad tick should never permanently stall this loop (it drives
+      // mood/behavior that the visible 3D avatar's idle expression reads
+      // from) — log and keep going instead of freezing forever.
+      console.error('[CompanionRuntimeHostLoop] tick failed, continuing', error);
+    } finally {
+      requestAnimationFrame(tick);
     }
-    requestAnimationFrame(tick);
   };
 
   return {

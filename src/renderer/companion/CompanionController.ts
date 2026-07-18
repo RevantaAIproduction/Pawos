@@ -10,14 +10,25 @@ import { getCompanionResourceBaseUrl } from './CompanionAssetResolver';
 import { RendererActivityProvider as RendererActivityProviderImpl } from '../activity/RendererActivityProvider';
 import { CompanionRuntimeHost } from './CompanionRuntimeHost';
 import { createCompanionRuntimeHostLoop } from './CompanionRuntimeHostLoop';
+import type { AnimClip, EmotionState, Expression } from '../companion/emotion/EmotionTypes';
 
 
 export type CompanionController = {
   attachCanvas: (canvas: HTMLCanvasElement, wrap: HTMLDivElement) => void;
   detachCanvas: () => void;
   applySettings: (s: SettingsState) => void;
-  setConversationState: (state: import('../conversation/ConversationTypes').ConversationState) => void;
+  setConversationState: (
+    state: import('../conversation/ConversationTypes').ConversationState,
+    lastAssistantMessage?: string
+  ) => void;
   setConversationPanelOpen: (open: boolean) => void;
+  /** Backend command surface — the renderer only renders; these own the companion's behavior. */
+  setEmotion: (expression: Expression) => void;
+  playAnimation: (clip: AnimClip) => void;
+  lookAt: (target: { x: number; y: number } | null) => void;
+  setMood: (mood: string) => void;
+  setContext: (context: Record<string, unknown>) => void;
+  getEmotion: () => EmotionState | undefined;
 };
 
 export function createCompanionController(args: {
@@ -155,12 +166,21 @@ export function createCompanionController(args: {
   };
 
   const loadPetAndStart = async () => {
-    if (!canvasEl || !wrapEl) return;
+    // Capture the canvas/wrap this call is for; attachCanvas/detachCanvas can
+    // mutate the outer canvasEl/wrapEl while we're awaiting below (e.g. React
+    // StrictMode's mount→unmount→mount, or a settings-triggered restart), so
+    // every await must be followed by a check that we're still current
+    // before touching canvasEl/wrapEl or constructing CompanionApp — otherwise
+    // we can end up building it against a canvas that's already been nulled.
+    const canvas = canvasEl;
+    const wrap = wrapEl;
+    if (!canvas || !wrap) return;
     const s = currentSettings ?? ({} as SettingsState);
 
     // Resolve pet definition from main process.
     const petId = s.selectedPetId ?? 'cat';
     const petDef = await CompanionLoader.loadCompanion(petId);
+    if (canvasEl !== canvas || wrapEl !== wrap) return;
 
     const resourceBaseUrl = args.resourceBaseUrl;
     const petResourceBaseUrl = getCompanionResourceBaseUrl(resourceBaseUrl);
@@ -173,9 +193,9 @@ export function createCompanionController(args: {
       physics: petDef.physics,
     } as any;
 
-    app = new CompanionApp({
+    const newApp = new CompanionApp({
       pet: petRuntimePet,
-      canvas: canvasEl,
+      canvas,
       resourceBaseUrl: petResourceBaseUrl,
       settings: {
         animationSpeed: s.animationSpeed,
@@ -185,8 +205,13 @@ export function createCompanionController(args: {
       },
     });
 
-    await app.init();
-    app.setConversationState(conversationState);
+    await newApp.init();
+    if (canvasEl !== canvas || wrapEl !== wrap) {
+      newApp.stop();
+      return;
+    }
+    app = newApp;
+    newApp.setConversationState(conversationState);
 
     // Create companion runtime host and start its tick loop.
     // NOTE: CompanionApp currently stores its fsm privately; as a workaround we attach the
@@ -197,11 +222,11 @@ export function createCompanionController(args: {
     // This MVP uses a local activity provider and forwards activity to FSM.
     const activityProvider = new RendererActivityProviderImpl();
     // Expose activity signals from input events.
-    runtimeHost = new CompanionRuntimeHost((app as any).fsmController ?? (app as any).fsm ?? (app as any).animationFsmController, {} as any);
+    runtimeHost = new CompanionRuntimeHost((newApp as any).fsmController ?? (newApp as any).fsm ?? (newApp as any).animationFsmController, {} as any);
     runtimeLoop = createCompanionRuntimeHostLoop({
       host: runtimeHost,
       activityProvider,
-      fsm: (app as any).fsmController ?? (app as any).fsm ?? (app as any).animationFsmController,
+      fsm: (newApp as any).fsmController ?? (newApp as any).fsm ?? (newApp as any).animationFsmController,
     });
     void runtimeLoop?.start();
   };
@@ -247,13 +272,19 @@ export function createCompanionController(args: {
         })();
       }
     },
-    setConversationState: (state) => {
+    setConversationState: (state, lastAssistantMessage) => {
       conversationState = state;
-      app?.setConversationState(state);
+      app?.setConversationState(state, lastAssistantMessage);
     },
     setConversationPanelOpen: (open) => {
       conversationPanelOpen = open;
     },
+    setEmotion: (expression) => app?.setEmotion(expression),
+    playAnimation: (clip) => app?.playAnimation(clip),
+    lookAt: (target) => app?.lookAt(target),
+    setMood: (mood) => app?.setMood(mood),
+    setContext: (context) => app?.setContext(context),
+    getEmotion: () => app?.getEmotion(),
   };
 }
 

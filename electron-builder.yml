@@ -4,8 +4,11 @@ productName: "PawOS"
 asar: true
 
 files:
-  - dist/**/*
+  - dist/main/**/*
+  - dist/preload/**/*
+  - dist/renderer/**/*
   - src/pets/**/*
+  - "!node_modules/**/*"
 
 directories:
   buildResources: build
@@ -14,17 +17,24 @@ win:
   target:
     - nsis
   artifactName: "PawOS-Setup-${version}.${ext}"
+  icon: build/icon.ico
 
 nsis:
   oneClick: false
   perMachine: true
   allowToChangeInstallationDirectory: true
   deleteAppDataOnUninstall: false
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
 
 electronVersion: "35.0.0"
 
 extraResources:
   - from: src/assets
+    to: assets
+    filter:
+      - "**/*"
+  - from: assets
     to: assets
     filter:
       - "**/*"

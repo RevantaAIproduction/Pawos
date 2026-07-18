@@ -35,7 +35,9 @@ module: {
         {
           loader: 'css-loader',
           options: {
-            modules: true,
+            modules: {
+              namedExport: false,
+            },
           },
         },
       ],
@@ -45,6 +47,12 @@ module: {
       test: /\.css$/,
       exclude: /\.module\.css$/,
       use: ['style-loader', 'css-loader'],
+    },
+
+    {
+      test: /\.(png|jpe?g|gif|svg)$/i,
+      type: 'asset/resource',
+      generator: { filename: 'images/[name].[hash][ext]' },
     },
   ],
 },
@@ -62,4 +70,3 @@ module: {
     devMiddleware: { writeToDisk: true },
   },
 };
-

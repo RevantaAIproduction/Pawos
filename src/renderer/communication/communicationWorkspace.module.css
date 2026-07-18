@@ -1,0 +1,134 @@
+.workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-radius: 14px;
+  background: rgba(10, 10, 16, 0.85);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(120, 170, 255, 0.35);
+  padding: 12px 14px;
+  max-width: 340px;
+  pointer-events: auto;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.4);
+  flex-shrink: 0;
+}
+
+.status_recording {
+  background: #ff6e6e;
+  box-shadow: 0 0 6px #ff6e6e;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.status_processing {
+  background: #74a7ff;
+  box-shadow: 0 0 6px #74a7ff;
+}
+
+.status_completed {
+  background: #60d78c;
+}
+
+.status_failed {
+  background: #ff6e6e;
+}
+
+.status_interrupted {
+  background: #ffbe6e;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.statusLabel {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.modeBadge {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(120, 170, 255, 0.16);
+  color: rgba(200, 220, 255, 0.9);
+  white-space: nowrap;
+}
+
+.region {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.regionLabel {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.evidenceStalled {
+  font-size: 11px;
+  color: #ffbe6e;
+  font-weight: 600;
+}
+
+.evidenceDuration {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.chipList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  font-size: 11.5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(120, 170, 255, 0.18);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.transcript {
+  max-height: 120px;
+  overflow-y: auto;
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.75);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.transcriptLine {
+  white-space: pre-wrap;
+}
+
+.actionItemList {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+}

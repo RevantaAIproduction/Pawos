@@ -17,14 +17,24 @@ export interface SpeechRecognitionProvider {
   start(callbacks: SpeechRecognitionCallbacks): Promise<SpeechRecognitionSession>;
 }
 
+import type { VisemeFrame } from './LipSyncTypes';
+
 export type SpeechSynthesisCallbacks = {
   onStart?: () => void;
   onEnd?: () => void;
   onError?: (error: Error) => void;
+  /**
+   * Fired during playback for providers that can supply mouth-shape timing.
+   * Never called by providers whose `supportsVisemes` is false — the
+   * companion's animation layer must not assume this ever fires.
+   */
+  onVisemeFrame?: (frame: VisemeFrame) => void;
 };
 
 export interface TextToSpeechProvider {
   readonly name: string;
+  /** Whether this provider can drive onVisemeFrame. Honest per-provider — never assumed. */
+  readonly supportsVisemes: boolean;
   isSupported(): boolean;
   speak(text: string, callbacks?: SpeechSynthesisCallbacks): Promise<void>;
   stop(): void;
@@ -41,6 +51,16 @@ type BrowserSpeechRecognitionConstructor = new () => {
   start: () => void;
   stop: () => void;
   abort: () => void;
+};
+
+/** Standard SpeechRecognitionErrorEvent.error codes mapped to something a user can actually act on. */
+const SPEECH_ERROR_MESSAGES: Record<string, string> = {
+  'no-speech': "Didn't hear anything — try again.",
+  'audio-capture': 'No microphone found. Check that one is connected and enabled.',
+  network: 'Speech recognition needs a network connection.',
+  aborted: 'Listening was interrupted.',
+  'bad-grammar': 'Speech recognition configuration error.',
+  'language-not-supported': 'This language is not supported for speech recognition.',
 };
 
 function getSpeechRecognitionConstructor(): BrowserSpeechRecognitionConstructor | null {
@@ -100,7 +120,11 @@ export function createBrowserSpeechRecognitionProvider(): SpeechRecognitionProvi
           callbacks.onPermissionDenied();
           return;
         }
-        callbacks.onError(new Error(event?.message ?? errorName));
+        // event.message is very often an empty string (not null/undefined)
+        // on real SpeechRecognitionErrorEvents — `||` catches that where `??`
+        // wouldn't, so the user sees a real reason instead of a bare "Error".
+        const detail = event?.message || SPEECH_ERROR_MESSAGES[errorName] || errorName;
+        callbacks.onError(new Error(detail));
       };
 
       recognition.onend = () => {
@@ -120,6 +144,7 @@ export function createBrowserSpeechRecognitionProvider(): SpeechRecognitionProvi
 export function createBrowserSpeechSynthesisProvider(): TextToSpeechProvider {
   return {
     name: 'browser-speech-synthesis',
+    supportsVisemes: false,
     isSupported() {
       return typeof window !== 'undefined' && Boolean(window.speechSynthesis);
     },
@@ -143,7 +168,13 @@ export function createBrowserSpeechSynthesisProvider(): TextToSpeechProvider {
           reject(error);
         };
 
-        synthesis.cancel();
+        // No cancel() here — sentence-by-sentence chunked speech calls
+        // speak() repeatedly in quick succession, and Chromium's Web Speech
+        // API has a well-known bug where cancel() immediately followed by
+        // speak() silently drops the new utterance (no audio, no error).
+        // Interruption/barge-in is already handled by ConversationRuntime's
+        // own explicit stop() calls, so cancelling preemptively here was
+        // redundant and actively broke audio for every sentence after the first.
         synthesis.speak(utterance);
       });
     },
@@ -168,6 +199,7 @@ export function createNoopSpeechRecognitionProvider(): SpeechRecognitionProvider
 export function createNoopSpeechSynthesisProvider(): TextToSpeechProvider {
   return {
     name: 'noop-speech-synthesis',
+    supportsVisemes: false,
     isSupported() {
       return false;
     },

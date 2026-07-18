@@ -1,0 +1,19 @@
+{
+  "id": "cat",
+  "name": "Cat",
+  "bodySize": { "width": 64, "height": 64 },
+  "animations": {
+    "idle": { "kind": "unknown", "src": "" },
+    "walking": { "kind": "unknown", "src": "" },
+    "running": { "kind": "unknown", "src": "" },
+    "sleeping": { "kind": "unknown", "src": "" },
+    "typing": { "kind": "unknown", "src": "" },
+    "eating": { "kind": "unknown", "src": "" },
+    "jumping": { "kind": "unknown", "src": "" },
+    "spinning": { "kind": "unknown", "src": "" },
+    "catchBall": { "kind": "unknown", "src": "" },
+    "happy": { "kind": "unknown", "src": "" },
+    "celebrate": { "kind": "unknown", "src": "" }
+  },
+  "physics": { "mass": 1, "restitution": 0.6, "speed": 160, "ballChase": 250 }
+}

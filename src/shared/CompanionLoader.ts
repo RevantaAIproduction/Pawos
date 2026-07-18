@@ -27,19 +27,12 @@ function readJsonSafe<T>(raw: string | null): T | null {
   }
 }
 
-function getCompanionBaseDir() {
-  // Main-process compatible base dir: assets/pets
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const path = require('path') as typeof import('path');
-  // __dirname points to dist/main/shared/pets when built.
-  // Prefer using app.getAppPath() would require electron import; keep dependency-free.
-  // Using relative path from compiled output.
-  return path.join(__dirname, '../../../assets/pets');
-}
-
 export class CompanionLoader {
-  static async listCompanions(): Promise<PetSummary[]> {
-    const baseDir = getCompanionBaseDir();
+  // baseDir is resolved by the caller (see src/main/assets/AssetPathResolver.ts
+  // getPetsDir()) rather than guessed here, since dev vs packaged asset
+  // layout can't be told apart without an electron import — keeping this
+  // shared module free of that dependency.
+  static async listCompanions(baseDir: string): Promise<PetSummary[]> {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const fs = require('fs') as typeof import('fs');
 
@@ -77,8 +70,7 @@ export class CompanionLoader {
     return results;
   }
 
-  static async loadCompanion(id: string): Promise<CompanionDefinition> {
-    const baseDir = getCompanionBaseDir();
+  static async loadCompanion(id: string, baseDir: string): Promise<CompanionDefinition> {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const fs = require('fs') as typeof import('fs');
 

@@ -53,12 +53,11 @@ export class AnimationPlayer {
       const img = new Image();
       img.decoding = 'async';
       img.src = full(asset.src);
-      const p = new Promise<void>((resolve) => {
-        img.onload = () => resolve();
-        img.onerror = () => resolve();
+      const loaded = await new Promise<boolean>((resolve) => {
+        img.onload = () => resolve(true);
+        img.onerror = () => resolve(false);
       });
-      await p;
-      this.assets.gifByAssetKey.set(key, { img, ready: true });
+      this.assets.gifByAssetKey.set(key, { img, ready: loaded });
       return;
     }
 
@@ -140,8 +139,7 @@ export class AnimationPlayer {
 
     if (asset.kind === 'gif') {
       const gif = this.assets.gifByAssetKey.get(this.current as string);
-      const img = gif?.img;
-      if (img) ctx.drawImage(img, -w / 2, -h / 2, w, h);
+      if (gif?.ready) ctx.drawImage(gif.img, -w / 2, -h / 2, w, h);
       ctx.restore();
       return;
     }
