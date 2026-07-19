@@ -20,6 +20,8 @@ export type TtsProviderConfig = {
   voiceId?: string;
   model?: string;
   baseUrl?: string;
+  /** Real playback-speed control where the provider actually supports one (browser, openai). Honestly ignored otherwise. */
+  speed?: number;
 };
 
 export function createSttProvider(config: SttProviderConfig): SpeechRecognitionProvider {
@@ -46,8 +48,11 @@ export function createSttProvider(config: SttProviderConfig): SpeechRecognitionP
 export function createTtsProvider(config: TtsProviderConfig): TextToSpeechProvider {
   switch (config.id) {
     case 'openai':
-      return createOpenAiTtsProvider({ apiKey: config.apiKey ?? '', voice: config.voiceId, model: config.model, baseUrl: config.baseUrl });
+      return createOpenAiTtsProvider({ apiKey: config.apiKey ?? '', voice: config.voiceId, model: config.model, baseUrl: config.baseUrl, speed: config.speed });
     case 'elevenlabs':
+      // ElevenLabs' voice_settings has no real speed/rate field — `speed` is
+      // honestly not applied here, same as azure/kokoro/piper below not
+      // being wired at all.
       return createElevenLabsTtsProvider({
         apiKey: config.apiKey ?? '',
         voiceId: config.voiceId ?? '',
@@ -61,7 +66,7 @@ export function createTtsProvider(config: TtsProviderConfig): TextToSpeechProvid
       return createNoopSpeechSynthesisProvider();
     case 'browser':
     default: {
-      const provider = createBrowserSpeechSynthesisProvider();
+      const provider = createBrowserSpeechSynthesisProvider(config.speed);
       return provider.isSupported() ? provider : createNoopSpeechSynthesisProvider();
     }
   }

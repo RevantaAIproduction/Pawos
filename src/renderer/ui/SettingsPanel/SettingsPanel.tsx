@@ -15,6 +15,8 @@ export function SettingsPanel({
 
   const [draft, setDraft] = useState<SettingsState>(DEFAULT_SETTINGS);
   const [codingMode, setCodingModeState] = useState<'go' | 'pro'>('go');
+  const [infraMode, setInfraModeState] = useState<'investigate' | 'full'>('investigate');
+  const [infraConnectors, setInfraConnectors] = useState<{ kind: string; id: string; displayName: string; configured: boolean; detail?: string }[]>([]);
 
   useEffect(() => {
     ipc.getSettings().then((s) => setDraft(s));
@@ -24,11 +26,28 @@ export function SettingsPanel({
         if (preferences) setCodingModeState(preferences.mode);
       }
     });
+    ipc.executeAction({ type: 'getInfraMode' }).then((result) => {
+      if (result.ok) {
+        const preferences = (result.data as { preferences?: { mode: 'investigate' | 'full' } } | undefined)?.preferences;
+        if (preferences) setInfraModeState(preferences.mode);
+      }
+    });
+    ipc.executeAction({ type: 'listConfiguredInfraConnectors' }).then((result) => {
+      if (result.ok) {
+        const data = result.data as { connectors: typeof infraConnectors; cliTools: typeof infraConnectors } | undefined;
+        if (data) setInfraConnectors([...data.connectors, ...data.cliTools]);
+      }
+    });
   }, []);
 
   const changeCodingMode = async (mode: 'go' | 'pro') => {
     const result = await ipc.executeAction({ type: 'setCodingMode', mode });
     if (result.ok) setCodingModeState(mode);
+  };
+
+  const changeInfraMode = async (mode: 'investigate' | 'full') => {
+    const result = await ipc.executeAction({ type: 'setInfraMode', mode });
+    if (result.ok) setInfraModeState(mode);
   };
 
   const save = async () => {
@@ -119,6 +138,40 @@ export function SettingsPanel({
               Paw Pro — full execution
             </button>
           </div>
+        </div>
+
+        <div className={styles.row} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+          <span>Infrastructure mode</span>
+          <span style={{ fontSize: 12, opacity: 0.7 }}>
+            A local capability preference — not a purchased plan. Investigation mode is read-only (tickets,
+            deployment status, health checks). Full mode also allows deploys and rollbacks, always with your
+            explicit confirmation first.
+          </span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className={infraMode === 'investigate' ? styles.primary : styles.secondary}
+              onClick={() => changeInfraMode('investigate')}
+              type="button"
+            >
+              Investigate — read-only
+            </button>
+            <button
+              className={infraMode === 'full' ? styles.primary : styles.secondary}
+              onClick={() => changeInfraMode('full')}
+              type="button"
+            >
+              Full — deploy &amp; rollback
+            </button>
+          </div>
+          {infraConnectors.length > 0 && (
+            <div style={{ fontSize: 12, opacity: 0.85, display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>
+              {infraConnectors.map((c) => (
+                <span key={`${c.kind}-${c.id}`}>
+                  {c.configured ? '●' : '○'} {c.displayName}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className={styles.actions}>

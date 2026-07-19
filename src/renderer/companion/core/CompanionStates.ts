@@ -25,6 +25,8 @@ export type CompanionState =
   | 'greeting'
   | 'sitting'
   | 'jumping'
+  | 'waving'
+  | 'pointing'
   | 'disabled';
 
 /**
@@ -32,9 +34,13 @@ export type CompanionState =
  * command or Gemini function-call would target (e.g. "sit down" ->
  * requestGesture('sitting')). 'highFive' reuses the 'greeting' state/clip
  * (the real animation library has no dedicated high-five mocap) — an
- * honest substitute, not fabricated animation data.
+ * honest substitute, not fabricated animation data. 'waving' reuses the
+ * same clip as 'greeting' for the same reason (no dedicated wave mocap
+ * exists); 'pointing' substitutes the closest real directional-arm clip
+ * ('salute') since no pointing mocap exists either — see AnimationController's
+ * STATE_TO_CLIP for both mappings, documented there too.
  */
-export type CompanionGesture = 'greeting' | 'sitting' | 'jumping' | 'highFive';
+export type CompanionGesture = 'greeting' | 'sitting' | 'jumping' | 'highFive' | 'waving' | 'pointing';
 
 export interface OverlayWindowBridge {
   moveOverlayWindow(x: number, y: number): Promise<boolean>;

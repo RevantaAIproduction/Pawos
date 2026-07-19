@@ -1,5 +1,6 @@
 import type { ReasoningToolDefinition, ReasoningToolCall } from '../reasoning/ReasoningTypes';
 import type { ActionRequest, KnownAppId } from '../../shared/actions/ActionTypes';
+import { companionProfileStore } from '../companion/manager/CompanionProfileStore';
 
 /** Shared wording for every `confirmed` parameter — repeated per-tool (not just in the system prompt) so the model sees it right where it matters, at the moment it's filling the field in. */
 const CONFIRMED_PARAM_DESCRIPTION =
@@ -1609,6 +1610,317 @@ export const ACTION_TOOL_DEFINITIONS: ReasoningToolDefinition[] = [
       required: ['communicationId', 'draftId', 'recipients'],
     },
   },
+  {
+    name: 'deploy_project',
+    description:
+      'Host or deploy a project without naming a provider — "host my website," "deploy this SaaS." Only works when the project has no deploy script of its own (if it does, use run_deploy_script instead — never both) AND a hosting connector (Vercel/Netlify) is actually configured; if neither is true, this returns an honest message saying so, never a fabricated deployment. Always confirm before setting confirmed: true — this is production-impacting.',
+    parameters: {
+      type: 'object',
+      properties: {
+        cwd: { type: 'string', description: 'Absolute path to the project to deploy.' },
+        environment: { type: 'string', enum: ['production', 'staging', 'preview'], description: 'Defaults to production.' },
+        confirmed: { type: 'boolean', description: CONFIRMED_PARAM_DESCRIPTION },
+      },
+      required: ['cwd'],
+    },
+  },
+  {
+    name: 'rollback_deployment',
+    description:
+      '"Rollback yesterday\'s deployment" — reverts a service to the deployment recorded immediately before its current one, using whichever hosting connector performed the original deploy. Fails honestly if there is no previous deployment on record. Always confirm before setting confirmed: true — production-impacting.',
+    parameters: {
+      type: 'object',
+      properties: {
+        serviceName: { type: 'string', description: 'The service to roll back, as recorded by a prior deploy_project call.' },
+        confirmed: { type: 'boolean', description: CONFIRMED_PARAM_DESCRIPTION },
+      },
+      required: ['serviceName'],
+    },
+  },
+  {
+    name: 'promote_deployment',
+    description:
+      '"Promote staging to production" — finds the most recent non-production deployment recorded for a service and promotes it to production through the same hosting connector that built it, without a new build when the provider supports it (real Vercel promote / Netlify publish-existing-deploy). Fails honestly if there is no staging/preview deployment on record. Always confirm before setting confirmed: true — production-impacting.',
+    parameters: {
+      type: 'object',
+      properties: {
+        serviceName: { type: 'string', description: 'The service whose staging/preview deployment should be promoted, as recorded by a prior deploy_project call.' },
+        confirmed: { type: 'boolean', description: CONFIRMED_PARAM_DESCRIPTION },
+      },
+      required: ['serviceName'],
+    },
+  },
+  {
+    name: 'get_deployment_status',
+    description:
+      'Read-only "is it deployed, is CI green" check for a service — tries a configured CI/CD connector\'s latest run status first, falls back to the last recorded deployment. Never gated, never fabricates a status when nothing is on record.',
+    parameters: {
+      type: 'object',
+      properties: {
+        serviceName: { type: 'string' },
+        repo: { type: 'string', description: 'Optional "owner/repo" to check CI/CD status for, if different from serviceName.' },
+        branch: { type: 'string' },
+      },
+      required: ['serviceName'],
+    },
+  },
+  {
+    name: 'list_configured_infra_connectors',
+    description:
+      'Read-only "what is actually connected right now" across source control, project management, CI/CD, hosting, and detected local cloud/container CLIs. Call this before attempting a deploy/investigate/ticket action when you are not sure anything is configured, instead of guessing or trying blind.',
+    parameters: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_approval_queue',
+    description: "Read-only check of what's currently waiting on the user's approval (a deploy/rollback/promote that returned requires-confirmation and hasn't been answered yet). Never gated.",
+    parameters: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'list_engineering_memory',
+    description: 'Read-only list of the most recent deployments/rollbacks/incidents Paw has recorded, across every service. Use this for "what have we deployed recently" or "show deployment history" style questions.',
+    parameters: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_infrastructure_graph_summary',
+    description: 'Read-only "how does this service relate to everything else I know about" — real stored relationships only (repository, domain, database, deployments), never a guess. Use for "what does X depend on" or "what is connected to Y" questions.',
+    parameters: {
+      type: 'object',
+      properties: { serviceName: { type: 'string', description: 'A service already registered via a prior deploy_project/investigate_ticket call.' } },
+      required: ['serviceName'],
+    },
+  },
+  {
+    name: 'investigate_ticket',
+    description:
+      'Enterprise Ticket Intelligence — reads a real ticket from whichever configured project management connector (Jira/Linear/GitHub Issues) has it, and if given a project cwd, gathers real evidence: project context, latest commit, a live health check if the matched service has a registered domain, real browser console errors and network failures captured from actually opening the live application when that health check passes, and relatedHistory (prior deployments/rollbacks/incidents already on record for that service). Never diagnoses a root cause or proposes a fix itself — it only gathers real, verifiable evidence; you reason over that evidence afterward and, if you decide on a fix, make it through the normal gated write_file/git_commit/deploy_project/promote_deployment calls with their own confirmations. Read-only, never gated.',
+    parameters: {
+      type: 'object',
+      properties: {
+        ticketId: { type: 'string', description: 'The ticket identifier, e.g. "PROJ-123", "owner/repo#42", or a Linear issue id.' },
+        cwd: { type: 'string', description: 'Optional path to the related project, to gather project/commit/health evidence.' },
+      },
+      required: ['ticketId'],
+    },
+  },
+  {
+    name: 'investigate_production_issue',
+    description:
+      'The Autonomous Engineering Loop\'s entry point for a reported issue with no ticket — "Fix production," "Production is slow," "Users cannot login," "Payment is failing," "Rollback production" (investigate first, before deciding to roll back). Same real evidence-gathering and Root Cause Engine correlation as investigate_ticket, just starting from a free-text description. Never proposes a fix itself. Read-only, never gated.',
+    parameters: {
+      type: 'object',
+      properties: {
+        description: { type: 'string', description: 'What the user actually said is wrong, in their own words.' },
+        cwd: { type: 'string', description: 'The related project, so I can find the right service to investigate.' },
+      },
+      required: ['description', 'cwd'],
+    },
+  },
+  {
+    name: 'compare_deployments',
+    description: 'Deployment Intelligence\'s deployment comparison — diffs the two most recent real deployment records for a service (status, environment, hosting connector, time between them). Fails honestly if fewer than 2 deployments are on record. Never gated.',
+    parameters: {
+      type: 'object',
+      properties: { serviceName: { type: 'string' } },
+      required: ['serviceName'],
+    },
+  },
+  {
+    name: 'discover_infrastructure',
+    description:
+      'Infrastructure Discovery Engine — lists real repositories from every configured source control connector and registers each in the infrastructure graph. Only discovers what a configured connector can actually see; never invents a service, deployment, or domain that hasn\'t actually been seen yet. Never gated.',
+    parameters: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'search_infrastructure',
+    description: 'Infrastructure Search — a real substring search across every registered infrastructure entity (repositories, services, deployments, databases, clusters, domains, incidents, and more). Never gated.',
+    parameters: {
+      type: 'object',
+      properties: { query: { type: 'string' } },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'get_infra_mode',
+    description: "Check the local Infrastructure Runtime mode — 'investigate' (read-only: tickets, status, health) or 'full' (deploy/rollback available when confirmed).",
+    parameters: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'set_infra_mode',
+    description: "Switch the local Infrastructure Runtime mode. Only call this when the user explicitly asks to switch (e.g. \"enable full infrastructure mode\") — never switch on your own initiative.",
+    parameters: {
+      type: 'object',
+      properties: { mode: { type: 'string', enum: ['investigate', 'full'] } },
+      required: ['mode'],
+    },
+  },
+  {
+    name: 'merge_pdfs',
+    description: 'Document Intelligence — merges two or more real PDF files, byte-for-byte, into one output PDF via pdf-lib. Always confirm before setting confirmed: true if the output path already exists.',
+    parameters: {
+      type: 'object',
+      properties: {
+        inputPaths: { type: 'array', items: { type: 'string' }, description: 'Absolute paths to the PDFs to merge, in order.' },
+        outputPath: { type: 'string', description: 'Absolute path for the merged output PDF.' },
+        confirmed: { type: 'boolean', description: CONFIRMED_PARAM_DESCRIPTION },
+      },
+      required: ['inputPaths', 'outputPath'],
+    },
+  },
+  {
+    name: 'create_docx',
+    description: 'Document Intelligence — creates a real .docx file (via the docx library) with a title and one or more headed sections of paragraphs. Always confirm before setting confirmed: true if the output path already exists.',
+    parameters: {
+      type: 'object',
+      properties: {
+        outputPath: { type: 'string', description: 'Absolute path for the new .docx file.' },
+        title: { type: 'string' },
+        sections: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { heading: { type: 'string' }, paragraphs: { type: 'array', items: { type: 'string' } } },
+            required: ['paragraphs'],
+          },
+        },
+        confirmed: { type: 'boolean', description: CONFIRMED_PARAM_DESCRIPTION },
+      },
+      required: ['outputPath', 'sections'],
+    },
+  },
+  {
+    name: 'create_spreadsheet',
+    description: 'Spreadsheet Intelligence — creates a real .xlsx workbook (via SheetJS) with one or more named sheets of row data, and optionally real cell formulas. Never claims to add a chart — the underlying library can\'t write those; say so honestly if asked. Always confirm before setting confirmed: true if the output path already exists.',
+    parameters: {
+      type: 'object',
+      properties: {
+        outputPath: { type: 'string', description: 'Absolute path for the new .xlsx file.' },
+        sheets: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              rows: { type: 'array', items: { type: 'array' } },
+              formulas: { type: 'array', items: { type: 'object', properties: { cell: { type: 'string' }, formula: { type: 'string' } }, required: ['cell', 'formula'] } },
+            },
+            required: ['name', 'rows'],
+          },
+        },
+        confirmed: { type: 'boolean', description: CONFIRMED_PARAM_DESCRIPTION },
+      },
+      required: ['outputPath', 'sheets'],
+    },
+  },
+  {
+    name: 'analyze_spreadsheet',
+    description: 'Spreadsheet Intelligence — reads a real .xlsx file and computes real per-column statistics (count/sum/average/min/max for numeric columns). Read-only, never gated, never fabricates a pivot table or chart.',
+    parameters: {
+      type: 'object',
+      properties: {
+        filePath: { type: 'string', description: 'Absolute path to the .xlsx file to analyze.' },
+        sheetName: { type: 'string', description: 'Defaults to the first sheet if omitted.' },
+      },
+      required: ['filePath'],
+    },
+  },
+  {
+    name: 'create_presentation',
+    description: 'Presentation Intelligence — creates a real .pptx (via pptxgenjs) with real slides, speaker notes, an optional theme, and real rendered charts (bar/line/pie/doughnut/area) — never a static image pretending to be a chart. Always confirm before setting confirmed: true if the output path already exists.',
+    parameters: {
+      type: 'object',
+      properties: {
+        outputPath: { type: 'string', description: 'Absolute path for the new .pptx file.' },
+        theme: { type: 'object', properties: { primaryColor: { type: 'string' }, backgroundColor: { type: 'string' } } },
+        slides: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              bullets: { type: 'array', items: { type: 'string' } },
+              notes: { type: 'string' },
+              chart: {
+                type: 'object',
+                properties: {
+                  kind: { type: 'string', enum: ['bar', 'line', 'pie', 'doughnut', 'area'] },
+                  categories: { type: 'array', items: { type: 'string' } },
+                  series: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, values: { type: 'array', items: { type: 'number' } } }, required: ['name', 'values'] } },
+                },
+                required: ['kind', 'categories', 'series'],
+              },
+            },
+          },
+        },
+        confirmed: { type: 'boolean', description: CONFIRMED_PARAM_DESCRIPTION },
+      },
+      required: ['outputPath', 'slides'],
+    },
+  },
+  {
+    name: 'list_recent_office_files',
+    description: 'Read-only "what have I recently created or edited" across documents, spreadsheets, and presentations. Never gated.',
+    parameters: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'confirm_general_email_sent',
+    description: 'Records that the user explicitly confirmed they sent an email drafted via open_mail_compose_window. NEVER call this just because a compose window was opened — only call it after the user directly says they sent it. General-purpose (not tied to a Communication Runtime session) — use confirm_email_sent instead for a meeting/call follow-up email.',
+    parameters: {
+      type: 'object',
+      properties: { recipient: { type: 'string' }, subject: { type: 'string' } },
+      required: ['recipient', 'subject'],
+    },
+  },
+  {
+    name: 'record_companion_goal',
+    description: 'Companion Memory — remembers a real goal the user told you about (e.g. "remember that I\'m trying to launch by Friday"). Always tied to whichever companion is currently active; you never need to know or pass a companion id.',
+    parameters: {
+      type: 'object',
+      properties: { text: { type: 'string' } },
+      required: ['text'],
+    },
+  },
+  {
+    name: 'list_companion_goals',
+    description: 'Read-only list of goals remembered for the currently active companion. Never gated.',
+    parameters: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'complete_companion_goal',
+    description: 'Marks a previously remembered goal as done, once the user says they finished it.',
+    parameters: {
+      type: 'object',
+      properties: { goalId: { type: 'string', description: 'The goal id from a prior record_companion_goal/list_companion_goals call.' } },
+      required: ['goalId'],
+    },
+  },
+  {
+    name: 'record_companion_routine',
+    description: 'Companion Memory — remembers a recurring routine the user told you about (e.g. "I check email every morning at 9"). Always tied to the currently active companion.',
+    parameters: {
+      type: 'object',
+      properties: { description: { type: 'string' }, cadence: { type: 'string', description: 'Optional, e.g. "daily", "weekdays at 9am".' } },
+      required: ['description'],
+    },
+  },
+  {
+    name: 'list_companion_routines',
+    description: 'Read-only list of routines remembered for the currently active companion. Never gated.',
+    parameters: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_companion_memory_summary',
+    description: 'Read-only "what do you remember about me" — real goals/routines/linked-entity counts for the currently active companion, never fabricated. Never gated.',
+    parameters: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'reset_companion_memory',
+    description: 'Permanently erases every goal and routine remembered for the currently active companion. Irreversible — always confirm with the user before setting confirmed: true.',
+    parameters: {
+      type: 'object',
+      properties: { confirmed: { type: 'boolean', description: CONFIRMED_PARAM_DESCRIPTION } },
+      required: [],
+    },
+  },
 ];
 
 /** Converts a validated tool call into the corresponding ActionRequest, or null if malformed/unknown. */
@@ -2425,6 +2737,145 @@ export function toolCallToActionRequest(toolCall: ReasoningToolCall): ActionRequ
       return typeof args.communicationId === 'string' && typeof args.draftId === 'string' && Array.isArray(args.recipients)
         ? { type: 'confirmEmailSent', communicationId: args.communicationId, draftId: args.draftId, recipients: args.recipients.map(String) }
         : null;
+
+    case 'deploy_project':
+      return typeof args.cwd === 'string'
+        ? {
+            type: 'deployProject',
+            cwd: args.cwd,
+            environment: args.environment === 'staging' || args.environment === 'preview' ? args.environment : 'production',
+            confirmed: args.confirmed === true,
+          }
+        : null;
+
+    case 'rollback_deployment':
+      return typeof args.serviceName === 'string' ? { type: 'rollbackDeployment', serviceName: args.serviceName, confirmed: args.confirmed === true } : null;
+
+    case 'promote_deployment':
+      return typeof args.serviceName === 'string' ? { type: 'promoteDeployment', serviceName: args.serviceName, confirmed: args.confirmed === true } : null;
+
+    case 'get_deployment_status':
+      return typeof args.serviceName === 'string'
+        ? { type: 'getDeploymentStatus', serviceName: args.serviceName, repo: typeof args.repo === 'string' ? args.repo : undefined, branch: typeof args.branch === 'string' ? args.branch : undefined }
+        : null;
+
+    case 'list_configured_infra_connectors':
+      return { type: 'listConfiguredInfraConnectors' };
+
+    case 'get_approval_queue':
+      return { type: 'getApprovalQueue' };
+
+    case 'list_engineering_memory':
+      return { type: 'listEngineeringMemory' };
+
+    case 'get_infrastructure_graph_summary':
+      return typeof args.serviceName === 'string' ? { type: 'getInfrastructureGraphSummary', serviceName: args.serviceName } : null;
+
+    case 'investigate_ticket':
+      return typeof args.ticketId === 'string' ? { type: 'investigateTicket', ticketId: args.ticketId, cwd: typeof args.cwd === 'string' ? args.cwd : undefined } : null;
+
+    case 'investigate_production_issue':
+      return typeof args.description === 'string' && typeof args.cwd === 'string' ? { type: 'investigateProductionIssue', description: args.description, cwd: args.cwd } : null;
+
+    case 'compare_deployments':
+      return typeof args.serviceName === 'string' ? { type: 'compareDeployments', serviceName: args.serviceName } : null;
+
+    case 'discover_infrastructure':
+      return { type: 'discoverInfrastructure' };
+
+    case 'search_infrastructure':
+      return typeof args.query === 'string' ? { type: 'searchInfrastructure', query: args.query } : null;
+
+    case 'get_infra_mode':
+      return { type: 'getInfraMode' };
+
+    case 'set_infra_mode':
+      return args.mode === 'investigate' || args.mode === 'full' ? { type: 'setInfraMode', mode: args.mode } : null;
+
+    case 'merge_pdfs':
+      return Array.isArray(args.inputPaths) && typeof args.outputPath === 'string'
+        ? { type: 'mergePdfs', inputPaths: args.inputPaths.map(String), outputPath: args.outputPath, confirmed: args.confirmed === true }
+        : null;
+
+    case 'create_docx':
+      return typeof args.outputPath === 'string' && Array.isArray(args.sections)
+        ? {
+            type: 'createDocx',
+            outputPath: args.outputPath,
+            title: typeof args.title === 'string' ? args.title : undefined,
+            sections: args.sections as { heading?: string; paragraphs: string[] }[],
+            confirmed: args.confirmed === true,
+          }
+        : null;
+
+    case 'create_spreadsheet':
+      return typeof args.outputPath === 'string' && Array.isArray(args.sheets)
+        ? {
+            type: 'createSpreadsheet',
+            outputPath: args.outputPath,
+            sheets: args.sheets as { name: string; rows: (string | number)[][]; formulas?: { cell: string; formula: string }[] }[],
+            confirmed: args.confirmed === true,
+          }
+        : null;
+
+    case 'analyze_spreadsheet':
+      return typeof args.filePath === 'string'
+        ? { type: 'analyzeSpreadsheet', filePath: args.filePath, sheetName: typeof args.sheetName === 'string' ? args.sheetName : undefined }
+        : null;
+
+    case 'create_presentation':
+      return typeof args.outputPath === 'string' && Array.isArray(args.slides)
+        ? {
+            type: 'createPresentation',
+            outputPath: args.outputPath,
+            theme: args.theme as { primaryColor?: string; backgroundColor?: string } | undefined,
+            slides: args.slides as {
+              title?: string;
+              bullets?: string[];
+              notes?: string;
+              chart?: { kind: 'bar' | 'line' | 'pie' | 'doughnut' | 'area'; categories: string[]; series: { name: string; values: number[] }[] };
+            }[],
+            confirmed: args.confirmed === true,
+          }
+        : null;
+
+    case 'list_recent_office_files':
+      return { type: 'listRecentOfficeFiles' };
+
+    case 'confirm_general_email_sent':
+      return typeof args.recipient === 'string' && typeof args.subject === 'string'
+        ? { type: 'confirmGeneralEmailSent', recipient: args.recipient, subject: args.subject }
+        : null;
+
+    case 'record_companion_goal':
+      return typeof args.text === 'string' && companionProfileStore.getActive().memory.enabled
+        ? { type: 'recordCompanionGoal', companionId: companionProfileStore.getActive().id, text: args.text }
+        : null;
+
+    case 'list_companion_goals':
+      return { type: 'listCompanionGoals', companionId: companionProfileStore.getActive().id };
+
+    case 'complete_companion_goal':
+      return typeof args.goalId === 'string' ? { type: 'completeCompanionGoal', goalId: args.goalId } : null;
+
+    case 'record_companion_routine':
+      return typeof args.description === 'string' && companionProfileStore.getActive().memory.enabled
+        ? {
+            type: 'recordCompanionRoutine',
+            companionId: companionProfileStore.getActive().id,
+            description: args.description,
+            cadence: typeof args.cadence === 'string' ? args.cadence : undefined,
+          }
+        : null;
+
+    case 'list_companion_routines':
+      return { type: 'listCompanionRoutines', companionId: companionProfileStore.getActive().id };
+
+    case 'get_companion_memory_summary':
+      return { type: 'getCompanionMemorySummary', companionId: companionProfileStore.getActive().id };
+
+    case 'reset_companion_memory':
+      return { type: 'resetCompanionMemory', companionId: companionProfileStore.getActive().id, confirmed: args.confirmed === true };
 
     default:
       return null;

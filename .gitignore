@@ -42,3 +42,6 @@ coverage/
 ECHO is on.
 # TypeScript
 *.tsbuildinfo
+
+# pawos-web (Next.js marketing site) build output
+pawos-web/.next/

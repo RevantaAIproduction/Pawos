@@ -3,7 +3,7 @@ export type SectionId = 'home' | 'talk' | 'companionLab' | 'history' | 'workHist
 export const SECTION_TITLES: Record<SectionId, string> = {
   home: 'Home',
   talk: 'Talk with Paw',
-  companionLab: 'Companion Lab',
+  companionLab: 'Companion Studio',
   history: 'Conversation History',
   workHistory: 'Work History',
   browserCapabilities: 'Browser Capabilities',

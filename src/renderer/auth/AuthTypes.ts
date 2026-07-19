@@ -30,8 +30,21 @@ export interface AuthService {
   /** Signs the current guest in as a real account, keeping the same local id (see providers/GuestAuthProvider.ts for why nothing needs to be "merged" today). */
   upgradeGuestWithGoogle(): Promise<AuthUser>;
   upgradeGuestWithEmail(options: EmailCreateAccountOptions): Promise<AuthUser>;
-  /** UI placeholder only — no email delivery exists yet. */
-  requestPasswordReset(email: string): Promise<void>;
+  /** Sends a real 6-digit password-reset code to the given email (independent OTP namespace from sendVerificationCode). */
+  requestPasswordReset(email: string): Promise<{ expiresInMinutes: number }>;
+  /** Verifies the reset code; on success returns a short-lived signed token that authorizes completePasswordReset. */
+  verifyPasswordResetCode(email: string, code: string): Promise<{ valid: boolean; reason?: string; resetToken?: string }>;
+  /**
+   * Commits the new password using a token from verifyPasswordResetCode.
+   * Pending final Gemini verification is not relevant here (no reasoning
+   * involved) — but this call can only succeed against Supabase with an
+   * active session for that user (anon-key-only client, by design — see
+   * supabaseClient.ts). A full "forgot password, fully signed out"
+   * commit requires either a trusted backend holding the Supabase service
+   * role key, or bridging through Supabase's own recovery OTP — neither
+   * exists in this codebase yet. Business Configuration Required.
+   */
+  completePasswordReset(resetToken: string, newPassword: string): Promise<{ ok: boolean; reason?: string }>;
   /** Sends a real 6-digit email-ownership code — proves the entered address before createEmailAccount is ever called. */
   sendVerificationCode(email: string): Promise<{ expiresInMinutes: number }>;
   verifyEmailCode(email: string, code: string): Promise<{ valid: boolean; reason?: string }>;

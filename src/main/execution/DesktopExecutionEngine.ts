@@ -1,7 +1,9 @@
 import { EventEmitter } from 'events';
 import type { ActionRequest, ActionRequirement, ActionResult } from '../../shared/actions/ActionTypes';
-import { DESTRUCTIVE_ACTION_TYPES, CODING_EXECUTION_ACTION_TYPES } from '../../shared/actions/ActionTypes';
+import { DESTRUCTIVE_ACTION_TYPES, CODING_EXECUTION_ACTION_TYPES, INFRA_EXECUTION_ACTION_TYPES } from '../../shared/actions/ActionTypes';
 import { codingModeStore } from './CodingModeStore';
+import { infraModeStore } from '../infrastructure/InfraModeStore';
+import { pendingApprovalStore, deriveApprovalKey } from '../infrastructure/PendingApprovalStore';
 import type { ExecutionTrail, ObservationEvent } from '../../shared/actions/ExecutionLifecycle';
 import type { DesktopPlugin } from './DesktopPlugin';
 import { openAppPlugin } from './plugins/OpenAppPlugin';
@@ -142,6 +144,35 @@ import { setCodingModePlugin } from './plugins/SetCodingModePlugin';
 import { setTaskChecklistPlugin } from './plugins/SetTaskChecklistPlugin';
 import { gitDiffStatPlugin } from './plugins/GitDiffStatPlugin';
 import { devBrowserPreviewPlugin } from './plugins/DevBrowserPreviewPlugin';
+import { deployProjectPlugin } from './plugins/infrastructure/DeployProjectPlugin';
+import { rollbackDeploymentPlugin } from './plugins/infrastructure/RollbackDeploymentPlugin';
+import { promoteDeploymentPlugin } from './plugins/infrastructure/PromoteDeploymentPlugin';
+import { getApprovalQueuePlugin } from './plugins/infrastructure/GetApprovalQueuePlugin';
+import { listEngineeringMemoryPlugin } from './plugins/infrastructure/ListEngineeringMemoryPlugin';
+import { getInfrastructureGraphSummaryPlugin } from './plugins/infrastructure/GetInfrastructureGraphSummaryPlugin';
+import { getDeploymentStatusPlugin } from './plugins/infrastructure/GetDeploymentStatusPlugin';
+import { listConfiguredInfraConnectorsPlugin } from './plugins/infrastructure/ListConfiguredInfraConnectorsPlugin';
+import { investigateTicketPlugin } from './plugins/infrastructure/InvestigateTicketPlugin';
+import { investigateProductionIssuePlugin } from './plugins/infrastructure/InvestigateProductionIssuePlugin';
+import { compareDeploymentsPlugin } from './plugins/infrastructure/CompareDeploymentsPlugin';
+import { discoverInfrastructurePlugin } from './plugins/infrastructure/DiscoverInfrastructurePlugin';
+import { searchInfrastructurePlugin } from './plugins/infrastructure/SearchInfrastructurePlugin';
+import { mergePdfsPlugin } from './plugins/office/MergePdfsPlugin';
+import { createDocxPlugin } from './plugins/office/CreateDocxPlugin';
+import { createSpreadsheetPlugin } from './plugins/office/CreateSpreadsheetPlugin';
+import { analyzeSpreadsheetPlugin } from './plugins/office/AnalyzeSpreadsheetPlugin';
+import { createPresentationPlugin } from './plugins/office/CreatePresentationPlugin';
+import { listRecentOfficeFilesPlugin } from './plugins/office/ListRecentOfficeFilesPlugin';
+import { confirmGeneralEmailSentPlugin } from './plugins/office/ConfirmGeneralEmailSentPlugin';
+import { recordCompanionGoalPlugin } from './plugins/companion/RecordCompanionGoalPlugin';
+import { listCompanionGoalsPlugin } from './plugins/companion/ListCompanionGoalsPlugin';
+import { completeCompanionGoalPlugin } from './plugins/companion/CompleteCompanionGoalPlugin';
+import { recordCompanionRoutinePlugin } from './plugins/companion/RecordCompanionRoutinePlugin';
+import { listCompanionRoutinesPlugin } from './plugins/companion/ListCompanionRoutinesPlugin';
+import { getCompanionMemorySummaryPlugin } from './plugins/companion/GetCompanionMemorySummaryPlugin';
+import { resetCompanionMemoryPlugin } from './plugins/companion/ResetCompanionMemoryPlugin';
+import { getInfraModePlugin } from './plugins/infrastructure/GetInfraModePlugin';
+import { setInfraModePlugin } from './plugins/infrastructure/SetInfraModePlugin';
 
 /** Observe → Diagnose → Repair → Retry → Verify — max 3 automatic attempts, then honestly report failure rather than looping or silently giving up. */
 const MAX_RECOVERY_ATTEMPTS = 3;
@@ -293,6 +324,35 @@ export class DesktopExecutionEngine extends EventEmitter {
     setTaskChecklistPlugin,
     gitDiffStatPlugin,
     devBrowserPreviewPlugin,
+    deployProjectPlugin,
+    rollbackDeploymentPlugin,
+    promoteDeploymentPlugin,
+    getDeploymentStatusPlugin,
+    listConfiguredInfraConnectorsPlugin,
+    getApprovalQueuePlugin,
+    listEngineeringMemoryPlugin,
+    getInfrastructureGraphSummaryPlugin,
+    investigateTicketPlugin,
+    investigateProductionIssuePlugin,
+    compareDeploymentsPlugin,
+    discoverInfrastructurePlugin,
+    searchInfrastructurePlugin,
+    mergePdfsPlugin,
+    createDocxPlugin,
+    createSpreadsheetPlugin,
+    analyzeSpreadsheetPlugin,
+    createPresentationPlugin,
+    listRecentOfficeFilesPlugin,
+    confirmGeneralEmailSentPlugin,
+    recordCompanionGoalPlugin,
+    listCompanionGoalsPlugin,
+    completeCompanionGoalPlugin,
+    recordCompanionRoutinePlugin,
+    listCompanionRoutinesPlugin,
+    getCompanionMemorySummaryPlugin,
+    resetCompanionMemoryPlugin,
+    getInfraModePlugin,
+    setInfraModePlugin,
     notImplementedPlugin, // must stay last — catches everything still unbuilt
   ];
 
@@ -331,9 +391,23 @@ export class DesktopExecutionEngine extends EventEmitter {
       };
     }
 
+    if (INFRA_EXECUTION_ACTION_TYPES.includes(request.type) && infraModeStore.getMode() === 'investigate') {
+      return {
+        ok: false,
+        reason: 'infra-mode-restricted',
+        message:
+          'Infrastructure investigation mode is read-only — I can read tickets, check status, and check health, but deploying or rolling back needs Full mode enabled in Settings.',
+      };
+    }
+
     if (DESTRUCTIVE_ACTION_TYPES.includes(request.type) && !('confirmed' in request && request.confirmed)) {
+      const approval = deriveApprovalKey(request);
+      if (approval) pendingApprovalStore.record({ ...approval, requestedAt: Date.now() });
       return { ok: false, reason: 'requires-confirmation' };
     }
+
+    const infraApproval = deriveApprovalKey(request);
+    if (infraApproval) pendingApprovalStore.resolve(infraApproval.id);
 
     const plugin = this.findPlugin(request);
     if (!plugin) return { ok: false, reason: 'not-implemented' };

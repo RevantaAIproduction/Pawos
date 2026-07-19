@@ -5,7 +5,8 @@ import { CompanionAnimationController } from '../../avatar/CompanionAnimationCon
 import { CompanionRuntime } from '../../companion/core/CompanionRuntime';
 import type { RuntimeContext } from '../../companion/core/CompanionStates';
 import { AnimationController } from '../../companion/core/controllers/AnimationController';
-import { ActionController } from '../../companion/core/controllers/ActionController';
+import { ActionController, IDLE_BEHAVIOR_TUNING } from '../../companion/core/controllers/ActionController';
+import type { CompanionBehavior } from '../../companion/manager/CompanionProfileTypes';
 import { EmotionController } from '../../companion/core/controllers/EmotionController';
 import { FacialController } from '../../companion/core/controllers/FacialController';
 import { VoiceController } from '../../companion/core/controllers/VoiceController';
@@ -32,6 +33,9 @@ export function Avatar3DOverlay({
   conversationStateRef,
   workspaceActiveRef,
   celebrateUntilRef,
+  behavior,
+  uploadedFilePath,
+  onUploadRigged,
 }: {
   controller: CompanionController | null;
   /** Latest lip-sync frame from a viseme-capable TTS provider (e.g. ElevenLabs) — null when none has arrived yet. */
@@ -44,6 +48,12 @@ export function Avatar3DOverlay({
   workspaceActiveRef?: React.RefObject<boolean>;
   /** Future timestamp (Date.now() + duration) until which the companion celebrates — set once by CompanionExperience.tsx the moment a task completes. */
   celebrateUntilRef?: React.RefObject<number>;
+  /** Companion Editor's Behavior tab — greetingStyle gates the initial greeting gesture, idleBehavior tunes ActionController's real wander/sleep timing. Read once at mount; a behavior change made in the Editor takes effect the next time this overlay remounts (e.g. switching the active companion). */
+  behavior?: CompanionBehavior;
+  /** Upload Existing Companion pipeline's real input — the active companion's own original file (never modified), loaded and auto-rigged (or imported as-is if already rigged) onto this overlay's shared skeleton once assets are ready. */
+  uploadedFilePath?: string;
+  /** Reports whether the upload turned out to already be rigged, once loading actually finishes — real telemetry, not set until the pipeline runs. */
+  onUploadRigged?: (rigged: boolean) => void;
 }) {
   const ipc = useIpcBridge();
   const mountRef = useRef<HTMLDivElement>(null);
@@ -84,10 +94,19 @@ export function Avatar3DOverlay({
     let actionController: ActionController | null = null;
     let animationController: AnimationController | null = null;
 
-    animController.whenReady().then(() => {
+    animController.whenReady().then(async () => {
       if (disposed || !animController.root) return;
       scene.add(animController.root);
       if (animController.faceOverlayMesh) scene.add(animController.faceOverlayMesh);
+
+      if (uploadedFilePath) {
+        try {
+          const { rigged } = await animController.loadUploadedCompanion(uploadedFilePath);
+          if (!disposed) onUploadRigged?.(rigged);
+        } catch (error) {
+          if (!disposed) console.error('Failed to load uploaded companion:', error);
+        }
+      }
 
       // The mount div (.avatar3d) fills its parent (.avatarShell) exactly
       // via inset:0 — .avatarShell itself is a fixed 280x280 box anchored
@@ -109,7 +128,8 @@ export function Avatar3DOverlay({
 
       runtime = new CompanionRuntime(ctx);
       animationController = new AnimationController(ctx);
-      actionController = new ActionController(animationController, workspaceActiveRef, celebrateUntilRef);
+      const tuning = IDLE_BEHAVIOR_TUNING[behavior?.idleBehavior ?? 'calm'];
+      actionController = new ActionController(animationController, workspaceActiveRef, celebrateUntilRef, tuning);
       const emotionController = new EmotionController(() => controller?.getEmotion()?.primary ?? null);
       const facialController = new FacialController(emotionController);
       const voiceController = new VoiceController(csRef, isSpeakingRef, visemeRef, () =>
@@ -124,8 +144,11 @@ export function Avatar3DOverlay({
       runtime.setVoiceRequester(voiceController);
       runtime.setActionRequester(actionController);
 
-      // Greet once, the moment the companion first appears.
-      runtime.performGesture('greeting');
+      // Greet once, the moment the companion first appears — unless the
+      // Behavior tab's greetingStyle is 'silent'. Only one real greeting
+      // gesture exists today, so 'enthusiastic' and 'calm' are currently
+      // indistinguishable; that's an honest limitation, not a bug.
+      if ((behavior?.greetingStyle ?? 'enthusiastic') !== 'silent') runtime.performGesture('greeting');
     });
 
     const clock = new THREE.Clock();
@@ -179,7 +202,7 @@ export function Avatar3DOverlay({
       renderer.dispose();
       mount.removeChild(renderer.domElement);
     };
-  }, [ipc, controller]);
+  }, [ipc, controller, behavior?.idleBehavior, behavior?.greetingStyle, uploadedFilePath]);
 
   return <div ref={mountRef} className={styles.avatar3d} />;
 }

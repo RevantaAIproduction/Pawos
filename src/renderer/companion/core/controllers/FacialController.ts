@@ -21,7 +21,7 @@ export class FacialController implements CompanionSubsystem {
   }
 
   update(_deltaSeconds: number, ctx: RuntimeContext): void {
-    // Re-applies every tick too, so an external override (Companion Lab /
+    // Re-applies every tick too, so an external override (Companion Studio /
     // dashboard setEmotion command) that doesn't itself cause a
     // CompanionState transition still shows up promptly.
     this.apply(ctx);

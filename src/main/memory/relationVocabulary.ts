@@ -24,6 +24,15 @@ export const RELATION = {
   ATTENDED_BY: 'attendedBy',
   OWNED_BY: 'ownedBy',
   SCHEDULED_FOR: 'scheduledFor',
+  // Infrastructure Awareness — how repositories/services/deployments/
+  // clusters/databases/domains relate to each other.
+  DEPLOYS_TO: 'deploysTo',
+  RUNS_ON: 'runsOn',
+  EXPOSED_VIA: 'exposedVia',
+  MONITORED_BY: 'monitoredBy',
+  DEPENDS_ON: 'dependsOn',
+  CONTAINS: 'contains',
+  ROUTES_TO: 'routesTo',
 } as const;
 
 export type RelationName = (typeof RELATION)[keyof typeof RELATION];

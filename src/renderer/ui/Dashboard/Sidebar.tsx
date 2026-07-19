@@ -5,7 +5,7 @@ import type { SectionId } from './sections';
 const NAV: { id: SectionId; label: string }[] = [
   { id: 'home', label: 'Home' },
   { id: 'talk', label: 'Talk with Paw' },
-  { id: 'companionLab', label: 'Companion Lab' },
+  { id: 'companionLab', label: 'Companion Studio' },
   { id: 'history', label: 'Conversation History' },
   { id: 'workHistory', label: 'Work History' },
   { id: 'browserCapabilities', label: 'Browser Capabilities' },

@@ -12,6 +12,13 @@ const STATE_TO_CLIP: Partial<Record<CompanionState, AnimationName>> = {
   greeting: 'happyHandGesture',
   sitting: 'cheeringWhileSitting',
   jumping: 'excited',
+  // No dedicated wave/point mocap exists in the animation library — these
+  // are honest closest-clip substitutes, same discipline as sitting/
+  // sleeping/celebrating above. 'waving' reuses the same hand-gesture clip
+  // as 'greeting'; 'pointing' substitutes 'salute' as the closest real
+  // directional-arm clip.
+  waving: 'happyHandGesture',
+  pointing: 'salute',
   disabled: 'neutral',
   // 'walking' is handled specially below — it has direction/run/approach variants.
 };

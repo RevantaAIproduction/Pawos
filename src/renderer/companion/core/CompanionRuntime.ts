@@ -12,6 +12,8 @@ const GESTURE_TO_STATE: Record<CompanionGesture, CompanionState> = {
   sitting: 'sitting',
   jumping: 'jumping',
   highFive: 'greeting',
+  waving: 'waving',
+  pointing: 'pointing',
 };
 
 /** How long each transient gesture holds before handing control back. */
@@ -19,6 +21,8 @@ const GESTURE_DURATION_MS: Record<CompanionState, number> = {
   greeting: 2500,
   sitting: 3000,
   jumping: 550,
+  waving: 2000,
+  pointing: 1800,
   idle: 0,
   walking: 0,
   listening: 0,

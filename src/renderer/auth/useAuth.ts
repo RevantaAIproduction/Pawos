@@ -61,6 +61,16 @@ export function useAuth() {
 
   const requestPasswordReset = useCallback(async (email: string) => authService.requestPasswordReset(email), []);
 
+  const verifyPasswordResetCode = useCallback(
+    async (email: string, code: string) => authService.verifyPasswordResetCode(email, code),
+    []
+  );
+
+  const completePasswordReset = useCallback(
+    async (resetToken: string, newPassword: string) => authService.completePasswordReset(resetToken, newPassword),
+    []
+  );
+
   const sendVerificationCode = useCallback(async (email: string) => authService.sendVerificationCode(email), []);
 
   const verifyEmailCode = useCallback(
@@ -86,6 +96,8 @@ export function useAuth() {
     upgradeGuestWithGoogle,
     upgradeGuestWithEmail,
     requestPasswordReset,
+    verifyPasswordResetCode,
+    completePasswordReset,
     sendVerificationCode,
     verifyEmailCode,
     signOut,

@@ -13,13 +13,15 @@ const STATE_TO_EXPRESSION: Record<CompanionState, Expression> = {
   greeting: 'happy',
   sitting: 'celebrating',
   jumping: 'excited',
+  waving: 'happy',
+  pointing: 'determined',
   disabled: 'focused',
 };
 
 /**
  * The "decider" — computes which Expression the companion should be
  * showing right now, from the current CompanionState plus an optional
- * external override (Companion Lab / dashboard-triggered setEmotion
+ * external override (Companion Studio / dashboard-triggered setEmotion
  * commands via the legacy CompanionController, which only apply while
  * truly idle so they don't fight a real conversation/gesture in progress).
  * FacialController is the "effector" that actually paints this onto the

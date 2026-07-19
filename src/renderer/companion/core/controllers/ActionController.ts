@@ -3,15 +3,17 @@ import type { StateRequester } from '../CompanionRuntime';
 import type { CompanionState, CompanionSubsystem, RuntimeContext } from '../CompanionStates';
 import type { AnimationController } from './AnimationController';
 
-const WALK_MIN_DELAY_MS = 15000;
-const WALK_MAX_DELAY_MS = 35000;
-const SLEEPY_AFTER_MS = 3 * 60 * 1000;
 const FOREGROUND_POLL_MS = 1500;
 const DOCK_MARGIN = 16;
 
-function randomWalkDelay(): number {
-  return WALK_MIN_DELAY_MS + Math.random() * (WALK_MAX_DELAY_MS - WALK_MIN_DELAY_MS);
-}
+export type ActionControllerTuning = { walkMinDelayMs: number; walkMaxDelayMs: number; sleepyAfterMs: number };
+
+/** Companion Editor's Behavior tab "Idle behavior" preset — real tuning of how often the companion wanders and how quickly it falls asleep when untouched. 'calm' matches this file's original hardcoded defaults exactly, so existing companions see no change unless the user picks a different preset. */
+export const IDLE_BEHAVIOR_TUNING: Record<'active' | 'calm' | 'minimal', ActionControllerTuning> = {
+  active: { walkMinDelayMs: 8000, walkMaxDelayMs: 18000, sleepyAfterMs: 90 * 1000 },
+  calm: { walkMinDelayMs: 15000, walkMaxDelayMs: 35000, sleepyAfterMs: 3 * 60 * 1000 },
+  minimal: { walkMinDelayMs: 60000, walkMaxDelayMs: 120000, sleepyAfterMs: 5 * 60 * 1000 },
+};
 
 /**
  * The "scheduler" — decides WHEN idle-life should become walking or
@@ -35,7 +37,7 @@ function randomWalkDelay(): number {
  * are transient gestures, not idle-life/environment scheduling).
  */
 export class ActionController implements CompanionSubsystem, StateRequester {
-  private nextActivityAt = Date.now() + randomWalkDelay();
+  private nextActivityAt: number;
   private lastInteractionAt = Date.now();
   private isSleepy = false;
 
@@ -64,8 +66,15 @@ export class ActionController implements CompanionSubsystem, StateRequester {
   constructor(
     private animation: AnimationController,
     private workspaceActiveRef?: { current: boolean | null },
-    private celebrateUntilRef?: { current: number | null }
-  ) {}
+    private celebrateUntilRef?: { current: number | null },
+    private tuning: ActionControllerTuning = IDLE_BEHAVIOR_TUNING.calm
+  ) {
+    this.nextActivityAt = Date.now() + this.randomWalkDelay();
+  }
+
+  private randomWalkDelay(): number {
+    return this.tuning.walkMinDelayMs + Math.random() * (this.tuning.walkMaxDelayMs - this.tuning.walkMinDelayMs);
+  }
 
   /** Call whenever a real interaction happens (mouse move, conversation activity) — resets the idle/sleepy clock. */
   notifyInteraction(): void {
@@ -132,12 +141,12 @@ export class ActionController implements CompanionSubsystem, StateRequester {
     if (this.workspaceActiveRef?.current) return 'sitting';
 
     if (current === 'walking') {
-      this.nextActivityAt = now + randomWalkDelay();
+      this.nextActivityAt = now + this.randomWalkDelay();
       return null;
     }
 
     const idleMs = now - this.lastInteractionAt;
-    if (!this.isSleepy && idleMs > SLEEPY_AFTER_MS) {
+    if (!this.isSleepy && idleMs > this.tuning.sleepyAfterMs) {
       this.isSleepy = true;
       return 'sleeping';
     }

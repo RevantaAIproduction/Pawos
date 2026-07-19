@@ -1,0 +1,17 @@
+import type { BillingCheckoutResult, BillingProviderId, SubscriptionTierId } from '../../shared/billing/BillingTypes';
+
+/**
+ * Payment provider abstraction — mirrors the existing
+ * ReasoningProviderRegistry / EmailAccountAdapter pattern already used
+ * elsewhere in PawOS: one interface, one registry, swap providers via
+ * config only. No processor is wired up yet (no Stripe dependency, no API
+ * keys) — NoOpBillingProvider is the only real implementation until a
+ * payment processor is chosen (Business Configuration Required). A future
+ * StripeBillingProvider (or any other processor) implements this same
+ * interface and registers alongside it — no call site changes needed.
+ */
+export interface BillingProvider {
+  readonly id: BillingProviderId;
+  isConfigured(): boolean;
+  createCheckoutSession(tier: SubscriptionTierId): Promise<BillingCheckoutResult>;
+}

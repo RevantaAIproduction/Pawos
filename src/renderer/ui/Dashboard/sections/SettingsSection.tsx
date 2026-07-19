@@ -4,9 +4,10 @@ import { SkinManagerPanel } from './SkinManagerPanel';
 import { UpgradeGuestPanel } from './UpgradeGuestPanel';
 import { AccountSection } from './AccountSection';
 import { MailPreviewSection } from './MailPreviewSection';
+import { PairedDevicesPanel } from './PairedDevicesPanel';
 import type { AuthUser, EmailCreateAccountOptions } from '../../../auth/AuthTypes';
 
-const TABS = ['Appearance', 'Account', 'Mail Preview'] as const;
+const TABS = ['Appearance', 'Account', 'Devices', 'Mail Preview'] as const;
 
 type Tab = (typeof TABS)[number];
 
@@ -55,6 +56,7 @@ export function SettingsSection({
           )}
         </div>
       )}
+      {tab === 'Devices' && <PairedDevicesPanel userId={user.isGuest ? undefined : user.id} />}
       {tab === 'Mail Preview' && <MailPreviewSection />}
     </div>
   );

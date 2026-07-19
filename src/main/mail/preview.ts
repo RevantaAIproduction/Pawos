@@ -214,8 +214,8 @@ const TEMPLATES: Record<string, TemplateEntry> = {
     build: (b) =>
       React.createElement(ProductUpdate, {
         variant: 'newFeature',
-        title: 'Introducing Companion Lab',
-        body: 'Design a fully custom companion from scratch, or start from a template.',
+        title: 'Introducing Companion Studio',
+        body: 'Upload your own 3D companion model, or start from the default Paw.',
         learnMoreUrl: 'https://revantaai.com/changelog',
         ...b,
       }),
@@ -238,7 +238,7 @@ const TEMPLATES: Record<string, TemplateEntry> = {
         headline: "What's new this month at PawOS",
         intro: 'A quick roundup of what shipped and what to expect next.',
         sections: [
-          { title: 'Companion Lab', body: 'Build a fully custom companion, no templates required.' },
+          { title: 'Companion Studio', body: 'Upload your own 3D companion model in just a few clicks.' },
           { title: 'Faster animations', body: 'Locomotion and idle behaviors are noticeably smoother.' },
         ],
         ctaLabel: 'Read the full changelog',

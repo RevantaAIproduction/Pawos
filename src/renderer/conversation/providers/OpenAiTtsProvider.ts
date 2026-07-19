@@ -5,6 +5,8 @@ export type OpenAiTtsConfig = {
   voice?: string;
   model?: string;
   baseUrl?: string;
+  /** OpenAI's own `speed` request field (0.25-4.0, 1 = normal) — a real API parameter, not a client-side approximation. */
+  speed?: number;
 };
 
 /**
@@ -33,6 +35,7 @@ export function createOpenAiTtsProvider(config: OpenAiTtsConfig): TextToSpeechPr
           model: config.model ?? 'gpt-4o-mini-tts',
           voice: config.voice ?? 'alloy',
           input: text,
+          ...(config.speed !== undefined ? { speed: Math.max(0.25, Math.min(4, config.speed)) } : {}),
         }),
       });
 

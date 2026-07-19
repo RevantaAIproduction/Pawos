@@ -415,6 +415,13 @@ export class ConversationRuntime {
     this.updateSnapshot({ supportsSpeechRecognition: provider.isSupported() });
   }
 
+  /** Swaps the TTS backend at runtime — e.g. when the active companion profile's voice provider/voiceId/speed changes. */
+  setSpeechSynthesisProvider(provider: TextToSpeechProvider) {
+    this.args.speechSynthesis.stop();
+    this.args.speechSynthesis = provider;
+    this.updateSnapshot({ supportsSpeechSynthesis: provider.isSupported() });
+  }
+
   setReasoningSystemPrompt(systemPrompt: string) {
     this.args.reasoningRuntime.setSystemPrompt(systemPrompt);
   }
@@ -1001,8 +1008,8 @@ export class ConversationRuntime {
     }
 
     // Vision-backed actions always use Gemini regardless of the active
-    // chat provider, same precedent as the Companion Lab photo flow
-    // (AIRouter) — the model never supplies its own key, and
+    // chat provider (same internal-Gemini precedent as AIRouter's other
+    // vision-backed helpers) — the model never supplies its own key, and
     // analyzeReferenceImage never receives raw image bytes from the
     // model (it can't produce them) — resolved here from every image
     // attached this session: a valid 1-based imageIndex picks one

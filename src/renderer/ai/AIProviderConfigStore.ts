@@ -29,8 +29,8 @@ function save(config: AIProviderConfig) {
 /**
  * Persists which AI provider is active and its credentials. This is the
  * only place provider identity/config lives — the rest of the app (UI,
- * ConversationRuntime, Companion Lab) goes through AIRouter, never reading
- * this directly or naming a provider itself.
+ * ConversationRuntime) goes through AIRouter, never reading this directly
+ * or naming a provider itself.
  */
 export class AIProviderConfigStore {
   private config = load();
@@ -51,16 +51,11 @@ export class AIProviderConfigStore {
   }
 
   setApiKey(providerId: ReasoningProviderId, apiKey: string) {
-    const previousKey = this.config.apiKeys[providerId];
     this.config = { ...this.config, apiKeys: { ...this.config.apiKeys, [providerId]: apiKey } };
-    // Configuring a *new or changed* key for a cloud provider makes it
-    // active automatically — this is how Gemini becomes primary once the
-    // user supplies a key, without a separate "set active" step. Re-reading
-    // the same already-stored key (as happens on every app launch, since
-    // .env is re-applied each time) must NOT re-trigger this — otherwise a
-    // deliberate switch to another provider (e.g. a local fallback while
-    // Gemini credits are exhausted) would silently reset on next relaunch.
-    if (apiKey.trim() && apiKey !== previousKey) {
+    // Configuring a key for a cloud provider makes it active automatically —
+    // this is how Gemini becomes primary once the user supplies a key,
+    // without a separate "set active" step.
+    if (apiKey.trim()) {
       this.config.activeProviderId = providerId;
     }
     this.persist();

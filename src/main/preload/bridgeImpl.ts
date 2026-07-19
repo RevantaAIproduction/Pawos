@@ -1,10 +1,12 @@
 import {
   contextBridge as electronContextBridge,
   ipcRenderer,
+  webUtils,
 } from "electron";
 
 import type { SettingsState } from "../../renderer/services/ipc/ipcTypes";
 import type { CompanionCommand } from "../../shared/companion/CompanionCommand";
+import type { CompanionPackageInput, ImportedCompanionPackage } from "../../shared/companion/CompanionPackageTypes";
 import type { ActionRequest, ActionRequirement, ActionResult } from "../../shared/actions/ActionTypes";
 import type { ProcessOutputEvent, ProcessExitEvent } from "../../shared/actions/ProcessTypes";
 import type { WorkspaceFileChangeEvent } from "../../shared/actions/WorkspaceFileChangeTypes";
@@ -14,6 +16,15 @@ import type { BrowserCapabilityReport } from "../../shared/actions/BrowserCapabi
 import type { CommunicationRuntimeEvent } from "../../shared/communication/CommunicationTypes";
 import type { ForegroundWindowInfo } from "../../shared/system/ForegroundWindowInfo";
 import type { GoogleProfile } from "../../shared/auth/AccountTypes";
+import type { PairedDevice } from "../../shared/pairing/PairingTypes";
+import type {
+  PricingConfig,
+  SubscriptionState,
+  SubscriptionTierId,
+  CreditBalance,
+  BillingCheckoutResult,
+} from "../../shared/billing/BillingTypes";
+import type { OnboardingState } from "../../shared/onboarding/OnboardingTypes";
 import type {
   ConversationSession,
   ConversationSessionSummary,
@@ -70,6 +81,46 @@ export function contextBridge() {
     authSendOtp: (email: string) => ipcRenderer.invoke("auth:sendOtp", email) as Promise<{ expiresInMinutes: number }>,
     authVerifyOtp: (email: string, code: string) =>
       ipcRenderer.invoke("auth:verifyOtp", email, code) as Promise<{ valid: boolean; reason?: string }>,
+    authSendPasswordResetOtp: (email: string) =>
+      ipcRenderer.invoke("auth:sendPasswordResetOtp", email) as Promise<{ expiresInMinutes: number }>,
+    authVerifyPasswordResetOtp: (email: string, code: string) =>
+      ipcRenderer.invoke("auth:verifyPasswordResetOtp", email, code) as Promise<{ valid: boolean; reason?: string; token?: string }>,
+    authValidatePasswordResetToken: (token: string) =>
+      ipcRenderer.invoke("auth:validatePasswordResetToken", token) as Promise<{ valid: boolean; email?: string; reason?: string }>,
+
+    pairingBegin: (userId?: string) =>
+      ipcRenderer.invoke("pairing:begin", userId) as Promise<{ token: string; pairingUri: string; qrDataUrl: string; expiresAt: number }>,
+    pairingComplete: (token: string, deviceName: string, publicKey: string) =>
+      ipcRenderer.invoke("pairing:complete", token, deviceName, publicKey) as Promise<
+        { ok: true; device: PairedDevice } | { ok: false; reason: string }
+      >,
+    pairingList: (userId?: string) => ipcRenderer.invoke("pairing:list", userId) as Promise<PairedDevice[]>,
+    pairingRevoke: (deviceId: string) => ipcRenderer.invoke("pairing:revoke", deviceId) as Promise<boolean>,
+
+    billingGetPricing: () => ipcRenderer.invoke("billing:getPricing") as Promise<PricingConfig>,
+    billingGetSubscription: () => ipcRenderer.invoke("billing:getSubscription") as Promise<SubscriptionState>,
+    billingSetSubscriptionTier: (tier: SubscriptionTierId) =>
+      ipcRenderer.invoke("billing:setSubscriptionTier", tier) as Promise<SubscriptionState>,
+    billingGetCreditBalance: () => ipcRenderer.invoke("billing:getCreditBalance") as Promise<CreditBalance>,
+    billingCreateCheckoutSession: (tier: SubscriptionTierId) =>
+      ipcRenderer.invoke("billing:createCheckoutSession", tier) as Promise<BillingCheckoutResult>,
+
+    onboardingGet: () => ipcRenderer.invoke("onboarding:get") as Promise<OnboardingState>,
+    onboardingSetStep: (step: number) => ipcRenderer.invoke("onboarding:setStep", step) as Promise<OnboardingState>,
+    onboardingComplete: () => ipcRenderer.invoke("onboarding:complete") as Promise<OnboardingState>,
+    onboardingSelectWorkspaceFolder: () =>
+      ipcRenderer.invoke("onboarding:selectWorkspaceFolder") as Promise<OnboardingState>,
+
+    companionPickUploadFile: () => ipcRenderer.invoke("companion:pickUploadFile") as Promise<string | null>,
+    // webUtils.getPathForFile runs directly in preload (no IPC round-trip needed) — it recovers the
+    // real filesystem path of a File dropped via HTML5 drag-and-drop, which browser File objects no
+    // longer expose directly as of Electron 32+.
+    companionGetPathForFile: (file: File) => webUtils.getPathForFile(file) as string,
+    companionShowNotification: (title: string, body: string) =>
+      ipcRenderer.invoke("companion:showNotification", title, body) as Promise<boolean>,
+    companionExportPackage: (input: CompanionPackageInput, suggestedName: string) =>
+      ipcRenderer.invoke("companion:exportPackage", input, suggestedName) as Promise<string | null>,
+    companionImportPackage: () => ipcRenderer.invoke("companion:importPackage") as Promise<ImportedCompanionPackage | null>,
 
     mailSend: (method: string, to: string, params: unknown) =>
       ipcRenderer.invoke("mail:send", method, to, params) as Promise<boolean>,

@@ -204,6 +204,16 @@
   background: rgba(255, 255, 255, 0.05);
 }
 
+.chip:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.chip:disabled:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.02);
+}
+
 /* Companion panel */
 
 .companionPanel {
@@ -362,6 +372,67 @@
   font-size: 13px;
   line-height: 1.5;
   color: #96969e;
+}
+
+/* Upload drop zone */
+
+.dropZone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 28px 20px;
+  border-radius: 16px;
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.015);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.dropZoneActive {
+  border-color: #8b7bff;
+  background: rgba(139, 123, 255, 0.08);
+}
+
+.dropZoneTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #f5f5f7;
+}
+
+.dropZoneHint {
+  margin: 0;
+  font-size: 12px;
+  color: #96969e;
+}
+
+/* Spinner */
+
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-top-color: #8b7bff;
+  animation: pawSpin 0.7s linear infinite;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+
+@keyframes pawSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.fadeInUp {
+  animation: pawFadeInUp 0.25s ease;
+}
+
+@keyframes pawFadeInUp {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* Mail preview */

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ConversationRuntime } from './ConversationRuntime';
 import type { ConversationSnapshot } from './ConversationTypes';
-import { createSttProvider, createTtsProvider } from './SpeechProviderRegistry';
+import { createSttProvider, createTtsProvider, type TtsProviderConfig } from './SpeechProviderRegistry';
 import { ReasoningRuntime } from '../reasoning/ReasoningRuntime';
 import type { ReasoningProvider } from '../reasoning/ReasoningProvider';
 import { aiRouter } from '../ai/AIRouter';
@@ -121,6 +121,9 @@ export function useConversationController(args?: {
   const setReasoningSystemPrompt = useCallback((systemPrompt: string) => {
     runtimeRef.current?.setReasoningSystemPrompt(systemPrompt);
   }, []);
+  const setSpeechSynthesisProvider = useCallback((config: TtsProviderConfig) => {
+    runtimeRef.current?.setSpeechSynthesisProvider(createTtsProvider(config));
+  }, []);
 
   /** "Retry failed step" in a Task Card's Details panel. */
   const retryAction = useCallback(
@@ -145,6 +148,7 @@ export function useConversationController(args?: {
     speak,
     setReasoningProvider,
     setReasoningSystemPrompt,
+    setSpeechSynthesisProvider,
     retryAction,
     openPath,
   };

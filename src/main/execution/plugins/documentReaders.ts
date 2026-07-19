@@ -15,8 +15,9 @@ import Papa from 'papaparse';
 import { XMLParser } from 'fast-xml-parser';
 import exifr from 'exifr';
 import { imageSize } from 'image-size';
+import AdmZip from 'adm-zip';
 
-export type ReadableFormat = 'text' | 'pdf' | 'docx' | 'xlsx' | 'csv' | 'json' | 'xml' | 'image-metadata';
+export type ReadableFormat = 'text' | 'pdf' | 'docx' | 'xlsx' | 'csv' | 'json' | 'xml' | 'image-metadata' | 'pptx';
 
 export type DocumentReadResult = { content: string; truncated: boolean; metadata?: Record<string, unknown> };
 
@@ -35,6 +36,7 @@ const EXTENSION_FORMAT: Record<string, ReadableFormat> = {
   '.webp': 'image-metadata',
   '.tiff': 'image-metadata',
   '.heic': 'image-metadata',
+  '.pptx': 'pptx',
 };
 
 /** Picks a reader by extension — 'text' (plain UTF-8) is the fallback for anything unrecognized. */
@@ -100,6 +102,48 @@ async function readImageMetadata(filePath: string): Promise<DocumentReadResult> 
   return { content: JSON.stringify(metadata, null, 2), truncated: false, metadata };
 }
 
+/** Recursively collects every `a:t` (text run) value from a parsed slide XML object, in document order. */
+function collectTextRuns(node: unknown, out: string[]): void {
+  if (Array.isArray(node)) {
+    for (const item of node) collectTextRuns(item, out);
+    return;
+  }
+  if (node && typeof node === 'object') {
+    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+      if (key === 'a:t' && typeof value === 'string') {
+        out.push(value);
+      } else {
+        collectTextRuns(value, out);
+      }
+    }
+  }
+}
+
+/** PPTX is a ZIP of slide XML files (ppt/slides/slideN.xml) — reused adm-zip + fast-xml-parser, no new dependency needed just to read one. */
+async function readPptx(filePath: string, maxChars: number): Promise<DocumentReadResult> {
+  const zip = new AdmZip(filePath);
+  const slideEntries = zip
+    .getEntries()
+    .filter((e) => /^ppt\/slides\/slide\d+\.xml$/.test(e.entryName))
+    .sort((a, b) => {
+      const numOf = (name: string) => Number(name.match(/slide(\d+)\.xml$/)?.[1] ?? 0);
+      return numOf(a.entryName) - numOf(b.entryName);
+    });
+
+  const parser = new XMLParser({ ignoreAttributes: true });
+  const slideTexts = slideEntries.map((entry, i) => {
+    const xml = entry.getData().toString('utf-8');
+    const parsed = parser.parse(xml);
+    const runs: string[] = [];
+    collectTextRuns(parsed, runs);
+    return `# Slide ${i + 1}\n${runs.join(' ')}`;
+  });
+
+  const content = slideTexts.join('\n\n');
+  const truncated = content.length > maxChars;
+  return { content: truncated ? content.slice(0, maxChars) : content, truncated, metadata: { slideCount: slideEntries.length } };
+}
+
 async function readPlainText(filePath: string, maxChars: number): Promise<DocumentReadResult> {
   const content = await fs.promises.readFile(filePath, 'utf-8');
   const truncated = content.length > maxChars;
@@ -124,6 +168,8 @@ export async function readDocument(filePath: string, format: ReadableFormat | 'a
       return readXml(filePath, maxChars);
     case 'image-metadata':
       return readImageMetadata(filePath);
+    case 'pptx':
+      return readPptx(filePath, maxChars);
     case 'text':
     default:
       return readPlainText(filePath, maxChars);

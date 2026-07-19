@@ -21,19 +21,25 @@ type OtpRecord = { hash: string; salt: string; expiresAt: number; used: boolean 
  */
 const otpStore = new Map<string, OtpRecord>();
 
-function normalize(email: string): string {
-  return email.trim().toLowerCase();
+function normalize(email: string, purpose: string): string {
+  return `${purpose}:${email.trim().toLowerCase()}`;
 }
 
 export function generateOtpCode(): string {
   return String(randomInt(0, 10 ** OTP_LENGTH)).padStart(OTP_LENGTH, '0');
 }
 
-export async function createOtp(email: string): Promise<{ code: string; expiresInMinutes: number }> {
+/**
+ * `purpose` keeps unrelated OTP requests for the same email from colliding
+ * (e.g. signup email verification vs. a password-reset code requested
+ * around the same time) — defaults to '' so existing signup-verification
+ * call sites are unaffected.
+ */
+export async function createOtp(email: string, purpose = ''): Promise<{ code: string; expiresInMinutes: number }> {
   const code = generateOtpCode();
   const salt = randomBytes(16);
   const hash = (await scryptAsync(code, salt, 64)) as Buffer;
-  otpStore.set(normalize(email), {
+  otpStore.set(normalize(email, purpose), {
     hash: hash.toString('hex'),
     salt: salt.toString('hex'),
     expiresAt: Date.now() + OTP_EXPIRY_MS,
@@ -42,8 +48,8 @@ export async function createOtp(email: string): Promise<{ code: string; expiresI
   return { code, expiresInMinutes: OTP_EXPIRY_MS / 60000 };
 }
 
-export async function verifyOtp(email: string, code: string): Promise<{ valid: boolean; reason?: string }> {
-  const record = otpStore.get(normalize(email));
+export async function verifyOtp(email: string, code: string, purpose = ''): Promise<{ valid: boolean; reason?: string }> {
+  const record = otpStore.get(normalize(email, purpose));
   if (!record) return { valid: false, reason: 'No code was requested for this email.' };
   if (record.used) return { valid: false, reason: 'This code has already been used.' };
   if (Date.now() > record.expiresAt) return { valid: false, reason: 'This code has expired.' };

@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
 import type { AuthUser } from '../../../auth/AuthTypes';
+import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
+import type { PricingConfig, SubscriptionState, CreditBalance, SubscriptionTierId } from '../../../../shared/billing/BillingTypes';
 
 const PROVIDER_LABEL: Record<AuthUser['provider'], string> = {
   google: 'Google',
@@ -11,8 +13,58 @@ const PROVIDER_LABEL: Record<AuthUser['provider'], string> = {
   apple: 'Apple',
 };
 
+function formatPrice(priceCents: number | null, period: 'month' | 'year'): string {
+  if (priceCents === null) return 'Pricing not finalized yet';
+  if (priceCents === 0) return 'Free';
+  return `$${(priceCents / 100).toFixed(2)}/${period}`;
+}
+
 export function AccountSection({ user, onSignOut }: { user: AuthUser; onSignOut: () => void }) {
   const initial = user.name.trim().charAt(0).toUpperCase() || '?';
+  const [pricing, setPricing] = useState<PricingConfig | null>(null);
+  const [subscription, setSubscription] = useState<SubscriptionState | null>(null);
+  const [credits, setCredits] = useState<CreditBalance | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const refresh = () => {
+    ipc.billingGetPricing().then(setPricing).catch(() => {});
+    ipc.billingGetSubscription().then(setSubscription).catch(() => {});
+    ipc.billingGetCreditBalance().then(setCredits).catch(() => {});
+  };
+
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  const switchTier = async (tier: SubscriptionTierId) => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const updated = await ipc.billingSetSubscriptionTier(tier);
+      setSubscription(updated);
+      setMessage(
+        tier === 'pro'
+          ? "You're previewing Paw Pro — no payment was taken (billing isn't configured yet)."
+          : 'Switched back to Paw Go.'
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const startCheckout = async (tier: SubscriptionTierId) => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const result = await ipc.billingCreateCheckoutSession(tier);
+      setMessage(result.ok ? `Redirecting to checkout: ${result.checkoutUrl}` : result.reason);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const currentPlan = pricing?.plans.find((p) => p.id === (subscription?.tier ?? 'go'));
 
   return (
     <div>
@@ -46,13 +98,35 @@ export function AccountSection({ user, onSignOut }: { user: AuthUser; onSignOut:
       <div className={styles.grid}>
         <div className={styles.card}>
           <h3 className={styles.cardTitle}>Subscription</h3>
-          <p className={styles.cardBody}>Free (no paid plans exist yet).</p>
+          <p className={styles.cardBody}>
+            {subscription ? (currentPlan?.label ?? subscription.tier) : '…'}
+            {currentPlan && ` — ${formatPrice(currentPlan.priceCents, currentPlan.billingPeriod)}`}
+          </p>
+          {subscription?.tier === 'go' ? (
+            <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+              <button type="button" className={styles.primaryButton} onClick={() => switchTier('pro')} disabled={busy}>
+                Preview Paw Pro
+              </button>
+              <button type="button" className={styles.primaryButton} onClick={() => startCheckout('pro')} disabled={busy}>
+                Set up billing
+              </button>
+            </div>
+          ) : (
+            <button type="button" className={styles.primaryButton} style={{ marginTop: 8 }} onClick={() => switchTier('go')} disabled={busy}>
+              Switch to Paw Go
+            </button>
+          )}
         </div>
         <div className={styles.card}>
-          <h3 className={styles.cardTitle}>Token Balance</h3>
-          <p className={styles.cardBody}>0 — token purchases aren't implemented yet.</p>
+          <h3 className={styles.cardTitle}>AI Credit Usage</h3>
+          <p className={styles.cardBody}>
+            {credits ? `${credits.usedThisPeriod} used this period` : '…'}
+            {credits && (credits.limit === null ? ' — no cap configured yet' : ` / ${credits.limit}`)}
+          </p>
         </div>
       </div>
+
+      {message && <p className={styles.cardBody} style={{ marginTop: 12 }}>{message}</p>}
 
       {user.isGuest && (
         <div className={styles.card} style={{ marginTop: 14 }}>

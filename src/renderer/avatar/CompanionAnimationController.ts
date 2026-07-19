@@ -5,6 +5,8 @@ import { AnimationStateMachine, type AnimationEventListener } from './AnimationS
 import { BASE_MESH_ANIMATION, type AnimationName } from './AnimationLibrary';
 import { ProceduralMotion } from './ProceduralMotion';
 import { FaceOverlay } from './face/FaceOverlay';
+import { autoRigMeshToSkeleton } from './AutoRigger';
+import { loadUploadedCompanionFile, detectRig } from './CompanionUploadPipeline';
 import type { Expression } from '../companion/emotion/EmotionTypes';
 import type { Viseme } from '../conversation/LipSyncTypes';
 
@@ -175,11 +177,55 @@ export class CompanionAnimationController {
     else this.pendingCommands.push(() => this.animationManager?.setTimeScale(name, rate));
   }
 
-  /** `camera` is optional — pass it so the face overlay billboards toward the actual viewing angle (important wherever the camera can move, e.g. AvatarViewer's OrbitControls). */
+  /** `camera` is optional — pass it so the face overlay billboards toward the actual viewing angle (important wherever the camera can move, e.g. an orbit-controlled preview). */
   update(deltaSeconds: number, camera?: THREE.Camera) {
     this.animationManager?.update(deltaSeconds);
     this.proceduralMotion?.update(deltaSeconds);
     this.faceOverlay?.update(deltaSeconds, camera);
+  }
+
+  /**
+   * Upload Existing Companion pipeline's terminal step: validate -> detect
+   * rig -> (rigged: import as-is) / (not rigged: auto-rig onto our own
+   * shared skeleton) -> Companion Runtime. Reuses every existing system
+   * (expressions/lip-sync/physics/animations) unchanged — they're already
+   * generic over "whatever skeleton this controller is driving," not
+   * specific to the bundled mesh.
+   *
+   * Honest limitation for the "already rigged" branch: our animation clips
+   * target Mixamo bone names. If the uploaded rig uses different names,
+   * three.js's AnimationMixer silently skips the non-matching tracks
+   * (never throws) rather than animating it — no bone retargeting is
+   * attempted here. The auto-rig branch has no such limitation since it
+   * binds directly onto our own skeleton.
+   */
+  async loadUploadedCompanion(filePath: string): Promise<{ rigged: boolean }> {
+    await this.ready;
+    if (!this._root) throw new Error('Base companion assets have not finished loading yet.');
+
+    let referenceMesh: THREE.SkinnedMesh | null = null;
+    this._root.traverse((obj) => {
+      if (!referenceMesh && (obj as THREE.SkinnedMesh).isSkinnedMesh) referenceMesh = obj as THREE.SkinnedMesh;
+    });
+    if (!referenceMesh) throw new Error('No reference skeleton available to bind the uploaded model to.');
+    const skeleton = (referenceMesh as THREE.SkinnedMesh).skeleton;
+    const parent = (referenceMesh as THREE.SkinnedMesh).parent;
+
+    const uploadedGroup = await loadUploadedCompanionFile(filePath);
+    const { rigged } = detectRig(uploadedGroup);
+
+    parent?.remove(referenceMesh);
+    (referenceMesh as THREE.SkinnedMesh).geometry.dispose();
+
+    if (rigged) {
+      // Self-contained: brings its own bone hierarchy along with the mesh.
+      this._root.add(uploadedGroup);
+    } else {
+      const rig = autoRigMeshToSkeleton(uploadedGroup, skeleton, referenceMesh);
+      parent?.add(rig);
+    }
+
+    return { rigged };
   }
 
   dispose() {

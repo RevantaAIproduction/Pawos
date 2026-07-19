@@ -1,8 +1,18 @@
 import type { SettingsState } from './ipcTypes';
 import type { CompanionCommand } from '../../../shared/companion/CompanionCommand';
+import type { CompanionPackageInput, ImportedCompanionPackage } from '../../../shared/companion/CompanionPackageTypes';
 import type { ActionRequest, ActionRequirement, ActionResult } from '../../../shared/actions/ActionTypes';
 import type { ForegroundWindowInfo } from '../../../shared/system/ForegroundWindowInfo';
 import type { GoogleProfile } from '../../../shared/auth/AccountTypes';
+import type { PairedDevice } from '../../../shared/pairing/PairingTypes';
+import type {
+  PricingConfig,
+  SubscriptionState,
+  SubscriptionTierId,
+  CreditBalance,
+  BillingCheckoutResult,
+} from '../../../shared/billing/BillingTypes';
+import type { OnboardingState } from '../../../shared/onboarding/OnboardingTypes';
 import type {
   ConversationSession,
   ConversationSessionSummary,
@@ -69,6 +79,44 @@ export function contextBridge() {
     authSendOtp: async (email: string): Promise<{ expiresInMinutes: number }> => ipcApi.invoke('auth:sendOtp', email),
     authVerifyOtp: async (email: string, code: string): Promise<{ valid: boolean; reason?: string }> =>
       ipcApi.invoke('auth:verifyOtp', email, code),
+    authSendPasswordResetOtp: async (email: string): Promise<{ expiresInMinutes: number }> =>
+      ipcApi.invoke('auth:sendPasswordResetOtp', email),
+    authVerifyPasswordResetOtp: async (email: string, code: string): Promise<{ valid: boolean; reason?: string; token?: string }> =>
+      ipcApi.invoke('auth:verifyPasswordResetOtp', email, code),
+    authValidatePasswordResetToken: async (token: string): Promise<{ valid: boolean; email?: string; reason?: string }> =>
+      ipcApi.invoke('auth:validatePasswordResetToken', token),
+
+    pairingBegin: async (userId?: string): Promise<{ token: string; pairingUri: string; qrDataUrl: string; expiresAt: number }> =>
+      ipcApi.invoke('pairing:begin', userId),
+    pairingComplete: async (
+      token: string,
+      deviceName: string,
+      publicKey: string
+    ): Promise<{ ok: true; device: PairedDevice } | { ok: false; reason: string }> =>
+      ipcApi.invoke('pairing:complete', token, deviceName, publicKey),
+    pairingList: async (userId?: string): Promise<PairedDevice[]> => ipcApi.invoke('pairing:list', userId),
+    pairingRevoke: async (deviceId: string): Promise<boolean> => ipcApi.invoke('pairing:revoke', deviceId),
+
+    billingGetPricing: async (): Promise<PricingConfig> => ipcApi.invoke('billing:getPricing'),
+    billingGetSubscription: async (): Promise<SubscriptionState> => ipcApi.invoke('billing:getSubscription'),
+    billingSetSubscriptionTier: async (tier: SubscriptionTierId): Promise<SubscriptionState> =>
+      ipcApi.invoke('billing:setSubscriptionTier', tier),
+    billingGetCreditBalance: async (): Promise<CreditBalance> => ipcApi.invoke('billing:getCreditBalance'),
+    billingCreateCheckoutSession: async (tier: SubscriptionTierId): Promise<BillingCheckoutResult> =>
+      ipcApi.invoke('billing:createCheckoutSession', tier),
+
+    onboardingGet: async (): Promise<OnboardingState> => ipcApi.invoke('onboarding:get'),
+    onboardingSetStep: async (step: number): Promise<OnboardingState> => ipcApi.invoke('onboarding:setStep', step),
+    onboardingComplete: async (): Promise<OnboardingState> => ipcApi.invoke('onboarding:complete'),
+    onboardingSelectWorkspaceFolder: async (): Promise<OnboardingState> => ipcApi.invoke('onboarding:selectWorkspaceFolder'),
+
+    companionPickUploadFile: async (): Promise<string | null> => ipcApi.invoke('companion:pickUploadFile'),
+    companionGetPathForFile: (file: File): string => ipcApi.invoke('companion:getPathForFile', file),
+    companionShowNotification: async (title: string, body: string): Promise<boolean> =>
+      ipcApi.invoke('companion:showNotification', title, body),
+    companionExportPackage: async (input: CompanionPackageInput, suggestedName: string): Promise<string | null> =>
+      ipcApi.invoke('companion:exportPackage', input, suggestedName),
+    companionImportPackage: async (): Promise<ImportedCompanionPackage | null> => ipcApi.invoke('companion:importPackage'),
 
     mailSend: async (method: string, to: string, params: unknown): Promise<boolean> => ipcApi.invoke('mail:send', method, to, params),
     mailListTemplates: async (): Promise<{ key: string; label: string }[]> => ipcApi.invoke('mail:listTemplates'),

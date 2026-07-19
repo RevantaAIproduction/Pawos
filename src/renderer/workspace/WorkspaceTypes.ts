@@ -33,7 +33,43 @@ export type WorkspaceRegionId =
   | 'testResults'
   | 'browserConsole'
   | 'errorTimeline'
-  | 'codingMemory';
+  | 'codingMemory'
+  // Infrastructure Canvas (Infrastructure/DevOps/SRE Runtime) — only
+  // rendered for a detected infra task (see isInfraTask in
+  // WorkspaceRuntime.tsx), same "always renders, honest placeholder when
+  // empty" discipline as the Coding Canvas above.
+  | 'infrastructureOverview'
+  | 'connectedProviders'
+  | 'activeDeployments'
+  | 'deploymentHistory'
+  | 'liveDeploymentStatus'
+  | 'ticketInvestigation'
+  | 'infrastructureGraph'
+  | 'engineeringMemory'
+  | 'approvalQueue'
+  | 'rollbackHistory'
+  // Runtime 9 Phase 3 additions. Infrastructure Explorer/Service Dependency
+  // Graph/Production Health/Live Investigation/Incident Timeline/Approval
+  // Center/Deployment Timeline from the Phase 3 spec are deliberately NOT
+  // new region ids here — they're already served by infrastructureGraph,
+  // liveDeploymentStatus, ticketInvestigation, engineeringMemory,
+  // approvalQueue, and deploymentHistory respectively (reusing, not
+  // duplicating). Only genuinely new surfaces get new ids:
+  | 'engineeringReports'
+  | 'deploymentComparison'
+  // Office Canvas (Office Intelligence Runtime) — only rendered for a
+  // detected office task (see isOfficeTask in WorkspaceRuntime.tsx), same
+  // "always renders, honest placeholder when empty" discipline as the
+  // Coding/Infrastructure Canvases above. Calendar and Shared Files are
+  // deliberately NOT included yet — both depend on the OAuth-based
+  // provider connectors deferred to OFF-11+ (no real data to back them).
+  | 'officeDocuments'
+  | 'officeEmail'
+  | 'officeTasks'
+  | 'officeSearch'
+  | 'officeMemory'
+  | 'officeTimeline'
+  | 'recentOfficeFiles';
 
 /** null render means the region is reserved but not yet populated — no placeholder chrome is shown for it. */
 export type WorkspaceRegionSlot = {

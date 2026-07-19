@@ -24,7 +24,7 @@ import {
 } from './icons';
 
 type Mode = 'signin' | 'create';
-type Step = 'form' | 'verify';
+type Step = 'form' | 'verify' | 'reset-code' | 'reset-new';
 const RESEND_COOLDOWN_SECONDS = 30;
 const OTP_LENGTH = 6;
 
@@ -47,6 +47,8 @@ export function AuthScreen({
   onCreateEmailAccount,
   onContinueAsGuest,
   onRequestPasswordReset,
+  onVerifyPasswordResetCode,
+  onCompletePasswordReset,
   onSendVerificationCode,
   onVerifyEmailCode,
   isGoogleSignInAvailable,
@@ -55,7 +57,9 @@ export function AuthScreen({
   onSignInWithEmail: (options: EmailSignInOptions) => Promise<unknown>;
   onCreateEmailAccount: (options: EmailCreateAccountOptions) => Promise<unknown>;
   onContinueAsGuest: () => Promise<unknown>;
-  onRequestPasswordReset: (email: string) => Promise<void>;
+  onRequestPasswordReset: (email: string) => Promise<{ expiresInMinutes: number }>;
+  onVerifyPasswordResetCode: (email: string, code: string) => Promise<{ valid: boolean; reason?: string; resetToken?: string }>;
+  onCompletePasswordReset: (resetToken: string, newPassword: string) => Promise<{ ok: boolean; reason?: string }>;
   onSendVerificationCode: (email: string) => Promise<{ expiresInMinutes: number }>;
   onVerifyEmailCode: (email: string, code: string) => Promise<{ valid: boolean; reason?: string }>;
   isGoogleSignInAvailable: () => Promise<boolean>;
@@ -71,7 +75,6 @@ export function AuthScreen({
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [resetSent, setResetSent] = useState(false);
   const [pending, setPending] = useState<'google' | 'email' | 'guest' | null>(null);
   const [googleAvailable, setGoogleAvailable] = useState(true);
 
@@ -79,6 +82,11 @@ export function AuthScreen({
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [codeExpiresInMinutes, setCodeExpiresInMinutes] = useState<number | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
+
+  const [resetToken, setResetToken] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [resetDone, setResetDone] = useState(false);
 
   useEffect(() => {
     isGoogleSignInAvailable().then(setGoogleAvailable);
@@ -183,6 +191,7 @@ export function AuthScreen({
     setStep('form');
     setOtpCode('');
     setVerifyError(null);
+    setResetToken(null);
   };
 
   const handleForgotPassword = async () => {
@@ -190,8 +199,83 @@ export function AuthScreen({
       setError('Enter your email above first, then tap "Forgot password?".');
       return;
     }
-    await onRequestPasswordReset(email);
-    setResetSent(true);
+    setError(null);
+    setPending('email');
+    try {
+      const { expiresInMinutes } = await onRequestPasswordReset(email);
+      setCodeExpiresInMinutes(expiresInMinutes);
+      setOtpCode('');
+      setVerifyError(null);
+      setStep('reset-code');
+      setResendCooldown(RESEND_COOLDOWN_SECONDS);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send a reset code. Please try again.');
+    } finally {
+      setPending(null);
+    }
+  };
+
+  const handleResendResetCode = () => {
+    if (resendCooldown > 0 || pending) return;
+    void handleForgotPassword();
+  };
+
+  const handleResetCodeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (otpCode.length !== OTP_LENGTH) {
+      setVerifyError(`Enter the ${OTP_LENGTH}-digit code.`);
+      return;
+    }
+    setVerifyError(null);
+    setPending('email');
+    try {
+      const result = await onVerifyPasswordResetCode(email, otpCode);
+      if (!result.valid || !result.resetToken) {
+        setVerifyError(result.reason ?? 'Incorrect code.');
+        return;
+      }
+      setResetToken(result.resetToken);
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setStep('reset-new');
+    } catch (err) {
+      setVerifyError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+    } finally {
+      setPending(null);
+    }
+  };
+
+  const handleSetNewPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isValidPassword(newPassword)) {
+      setVerifyError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setVerifyError('Passwords don’t match.');
+      return;
+    }
+    if (!resetToken) {
+      setVerifyError('Your reset session expired — start over from "Forgot password?".');
+      return;
+    }
+    setVerifyError(null);
+    setPending('email');
+    try {
+      const result = await onCompletePasswordReset(resetToken, newPassword);
+      if (!result.ok) {
+        setVerifyError(result.reason ?? 'Could not reset your password. Please try again.');
+        return;
+      }
+      setResetDone(true);
+      setResetToken(null);
+      setStep('form');
+      setMode('signin');
+    } catch (err) {
+      setVerifyError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+    } finally {
+      setPending(null);
+    }
   };
 
   const switchMode = () => {
@@ -204,6 +288,8 @@ export function AuthScreen({
 
   const busy = pending !== null;
   const verifying = mode === 'create' && step === 'verify';
+  const resettingCode = step === 'reset-code';
+  const resettingNew = step === 'reset-new';
 
   return (
     <div className={styles.screen}>
@@ -211,14 +297,22 @@ export function AuthScreen({
         <div className={styles.visualPane}>
           <div className={styles.speechBubble}>
             <div className={styles.speechTitle}>
-              {verifying ? 'Check your email!' : mode === 'signin' ? 'Welcome back!' : "Let's get started!"}
+              {verifying || resettingCode
+                ? 'Check your email!'
+                : resettingNew
+                  ? 'Almost done!'
+                  : mode === 'signin'
+                    ? 'Welcome back!'
+                    : "Let's get started!"}
             </div>
             <div className={styles.speechBody}>
-              {verifying
+              {verifying || resettingCode
                 ? `We sent a ${OTP_LENGTH}-digit code to ${email}.`
-                : mode === 'signin'
-                  ? "Good to see you again. Let's continue our journey."
-                  : 'Create your account and unlock everything.'}
+                : resettingNew
+                  ? 'Choose a new password to finish resetting your account.'
+                  : mode === 'signin'
+                    ? "Good to see you again. Let's continue our journey."
+                    : 'Create your account and unlock everything.'}
             </div>
           </div>
           <div className={styles.mascotWrap}>
@@ -239,10 +333,102 @@ export function AuthScreen({
             Paw<span className={styles.brandOs}>OS</span>
           </div>
           <p className={styles.tagline}>
-            {verifying ? 'Verify your email' : mode === 'signin' ? 'Your companion. Your workspace. Your world.' : 'Create your account'}
+            {verifying
+              ? 'Verify your email'
+              : resettingCode
+                ? 'Reset your password'
+                : resettingNew
+                  ? 'Set a new password'
+                  : mode === 'signin'
+                    ? 'Your companion. Your workspace. Your world.'
+                    : 'Create your account'}
           </p>
 
-          {verifying ? (
+          {resettingCode ? (
+            <form className={styles.emailForm} onSubmit={handleResetCodeSubmit}>
+              <p className={styles.verifyIntro}>
+                Enter the code we sent to <strong>{email}</strong>
+                {codeExpiresInMinutes ? ` — it expires in ${codeExpiresInMinutes} minutes.` : '.'}
+              </p>
+
+              <OtpInput value={otpCode} onChange={setOtpCode} disabled={busy} />
+
+              {verifyError && <p className={styles.errorText}>{verifyError}</p>}
+
+              <button type="submit" className={styles.primaryButton} disabled={busy}>
+                {pending === 'email' ? 'Verifying…' : 'Verify Code'}
+                {!busy && <ArrowRightIcon />}
+              </button>
+
+              <div className={styles.resendRow}>
+                <button type="button" className={styles.linkButton} onClick={handleBackToForm} disabled={busy}>
+                  Back
+                </button>
+                <button type="button" className={styles.linkButton} onClick={handleResendResetCode} disabled={busy || resendCooldown > 0}>
+                  {resendCooldown > 0 ? `Resend code (${resendCooldown}s)` : 'Resend code'}
+                </button>
+              </div>
+            </form>
+          ) : resettingNew ? (
+            <form className={styles.emailForm} onSubmit={handleSetNewPassword}>
+              <div className={styles.inputGroup}>
+                <span className={styles.inputIcon}>
+                  <LockIcon />
+                </span>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="New password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className={styles.emailInput}
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  className={styles.passwordToggle}
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                </button>
+              </div>
+
+              <div className={styles.inputGroup}>
+                <span className={styles.inputIcon}>
+                  <LockIcon />
+                </span>
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  placeholder="Confirm new password"
+                  value={confirmNewPassword}
+                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                  className={styles.emailInput}
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  className={styles.passwordToggle}
+                  onClick={() => setShowConfirmPassword((v) => !v)}
+                  aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showConfirmPassword ? <EyeOffIcon /> : <EyeIcon />}
+                </button>
+              </div>
+
+              {verifyError && <p className={styles.errorText}>{verifyError}</p>}
+
+              <button type="submit" className={styles.primaryButton} disabled={busy}>
+                {pending === 'email' ? 'Saving…' : 'Set New Password'}
+                {!busy && <ArrowRightIcon />}
+              </button>
+
+              <div className={styles.resendRow}>
+                <button type="button" className={styles.linkButton} onClick={handleBackToForm} disabled={busy}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : verifying ? (
             <form className={styles.emailForm} onSubmit={handleVerifySubmit}>
               <p className={styles.verifyIntro}>
                 Enter the code we sent to <strong>{email}</strong>
@@ -381,10 +567,8 @@ export function AuthScreen({
                     </span>
                   </label>
                 )}
-                {resetSent && (
-                  <p className={styles.hint}>
-                    If that's a real reset flow, an email would be on its way — this is a placeholder for now.
-                  </p>
+                {resetDone && (
+                  <p className={styles.hint}>Your password was reset — sign in with your new password.</p>
                 )}
 
                 <button type="submit" className={styles.primaryButton} disabled={busy}>

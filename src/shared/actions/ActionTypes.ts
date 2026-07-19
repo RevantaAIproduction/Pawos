@@ -355,8 +355,8 @@ export type ActionRequest =
   // verifyRenderedUi) or writes to a NEW derived path it generates
   // itself, never overwriting the user's original asset. `apiKey` on the
   // two vision-backed types is always injected by ConversationRuntime
-  // right before execution (same "always Gemini for vision" precedent as
-  // the Companion Lab photo flow) — never model-supplied.
+  // right before execution (vision-backed actions always use Gemini
+  // regardless of the active chat provider) — never model-supplied.
   //
   // Every image the user has attached this conversation stays available
   // (ConversationRuntime.pendingReferenceImages) — never a single
@@ -422,7 +422,98 @@ export type ActionRequest =
   // Pro (planning a checklist is analysis, not execution). Re-call with the
   // same items (updated statuses) to reflect progress; no taskId needed,
   // see TodoProgress's doc comment in ExecutionLifecycle.ts.
-  | { type: 'setTaskChecklist'; items: { id: string; label: string; status: 'pending' | 'inProgress' | 'done' | 'skipped' }[] };
+  | { type: 'setTaskChecklist'; items: { id: string; label: string; status: 'pending' | 'inProgress' | 'done' | 'skipped' }[] }
+  // Infrastructure/DevOps/SRE Runtime — "host my website" / "deploy my
+  // CRM" without naming a provider. Only used when the project has no
+  // deploy script of its own (see RunDeployScriptPlugin, which always
+  // takes priority) and a hosting connector is configured. Always confirmed
+  // — production-impacting.
+  | { type: 'deployProject'; cwd: string; environment?: 'production' | 'staging' | 'preview'; confirmed?: boolean }
+  | { type: 'rollbackDeployment'; serviceName: string; confirmed?: boolean }
+  // "Promote staging to production" — promotes the most recent non-production
+  // deployment recorded for a service to production, without a new build,
+  // via the provider's own promote capability. Always confirmed.
+  | { type: 'promoteDeployment'; serviceName: string; confirmed?: boolean }
+  // Read-only investigation mode toggle — mirrors getCodingMode/setCodingMode.
+  | { type: 'getInfraMode' }
+  | { type: 'setInfraMode'; mode: 'investigate' | 'full' }
+  // Read-only status/health checks — never gated.
+  | { type: 'getDeploymentStatus'; serviceName: string; repo?: string; branch?: string }
+  | { type: 'listConfiguredInfraConnectors' }
+  | { type: 'getApprovalQueue' }
+  | { type: 'listEngineeringMemory' }
+  | { type: 'getInfrastructureGraphSummary'; serviceName: string }
+  // Enterprise Ticket Intelligence — reads a ticket, investigates, and
+  // produces a structured engineering report. Never modifies code or
+  // deploys anything itself (the model does that afterward through the
+  // normal gated writeFile/gitCommit/deployProject actions, each with its
+  // own confirmation) — this action alone is read-only investigation.
+  | { type: 'investigateTicket'; ticketId: string; cwd?: string }
+  // "Fix production" / "Production is slow" / "Users cannot login" / "Payment
+  // is failing" — the same real evidence-gathering pipeline as
+  // investigateTicket, just without a ticket to read first. Read-only, never gated.
+  | { type: 'investigateProductionIssue'; description: string; cwd?: string }
+  // Read-only Deployment Intelligence helpers — never gated.
+  | { type: 'compareDeployments'; serviceName: string }
+  | { type: 'discoverInfrastructure' }
+  | { type: 'searchInfrastructure'; query: string }
+  // Office Intelligence Runtime — Document Intelligence. Both create a new
+  // file, so they share writeFile's "confirm only when overwriting an
+  // existing path" discipline, checked per-request, not a blanket gate.
+  | { type: 'mergePdfs'; inputPaths: string[]; outputPath: string; confirmed?: boolean }
+  | {
+      type: 'createDocx';
+      outputPath: string;
+      title?: string;
+      sections: { heading?: string; paragraphs: string[] }[];
+      confirmed?: boolean;
+    }
+  // Spreadsheet Intelligence — real .xlsx via the xlsx (SheetJS) library.
+  // formulas are real spreadsheet formulas (no leading '='), set on
+  // specific cells after the row data is written.
+  | {
+      type: 'createSpreadsheet';
+      outputPath: string;
+      sheets: { name: string; rows: (string | number)[][]; formulas?: { cell: string; formula: string }[] }[];
+      confirmed?: boolean;
+    }
+  // Read-only real column statistics (count/sum/avg/min/max) for every
+  // numeric column in a real spreadsheet — never a fabricated pivot table.
+  | { type: 'analyzeSpreadsheet'; filePath: string; sheetName?: string }
+  // Presentation Intelligence — real .pptx via pptxgenjs. Charts are real
+  // rendered chart objects (pptxgenjs supports bar/line/pie/doughnut/area/
+  // scatter/radar/bubble natively) — never a static image pretending to be one.
+  | {
+      type: 'createPresentation';
+      outputPath: string;
+      theme?: { primaryColor?: string; backgroundColor?: string };
+      slides: {
+        title?: string;
+        bullets?: string[];
+        notes?: string;
+        chart?: { kind: 'bar' | 'line' | 'pie' | 'doughnut' | 'area'; categories: string[]; series: { name: string; values: number[] }[] };
+      }[];
+      confirmed?: boolean;
+    }
+  // Read-only — most recently created/modified documents/spreadsheets/presentations. Never gated.
+  | { type: 'listRecentOfficeFiles' }
+  // General-purpose Email Intelligence — records that a browser-compose
+  // email (opened via the existing openMailComposeWindow) was actually
+  // sent, once the user explicitly confirms it, same "never assume sent"
+  // discipline as confirmEmailSent, just not tied to a communication session.
+  | { type: 'confirmGeneralEmailSent'; recipient: string; subject: string }
+  // Companion Memory (Paw Companion Runtime) — goals/routines scoped to a
+  // specific companion id, stored in the generic Memory Graph via
+  // companionEntities.ts. Never gated; all honestly no-op if the caller
+  // passes an id for a companion that's never been referenced before (the
+  // anchor node is created lazily on first real write).
+  | { type: 'recordCompanionGoal'; companionId: string; text: string }
+  | { type: 'listCompanionGoals'; companionId: string }
+  | { type: 'completeCompanionGoal'; goalId: string }
+  | { type: 'recordCompanionRoutine'; companionId: string; description: string; cadence?: string }
+  | { type: 'listCompanionRoutines'; companionId: string }
+  | { type: 'getCompanionMemorySummary'; companionId: string }
+  | { type: 'resetCompanionMemory'; companionId: string; confirmed?: boolean };
 
 export type KnownAppId =
   | 'vscode'
@@ -441,7 +532,7 @@ export type ActionResult =
   // data on a failure carries a plugin's own diagnostic state forward (e.g. what was
   // installed/run before verify() failed) so recover() has something real to act on,
   // not just a message string.
-  | { ok: false; reason: 'not-implemented' | 'requires-confirmation' | 'coding-mode-restricted' | 'failed'; message?: string; data?: unknown; trail?: ExecutionTrail };
+  | { ok: false; reason: 'not-implemented' | 'requires-confirmation' | 'coding-mode-restricted' | 'infra-mode-restricted' | 'failed'; message?: string; data?: unknown; trail?: ExecutionTrail };
 
 /**
  * Destructive action types require an explicit `confirmed: true` before
@@ -471,6 +562,9 @@ export const DESTRUCTIVE_ACTION_TYPES: ActionRequest['type'][] = [
   'gitCommit',
   'gitCreateBranch',
   'gitCheckout',
+  'deployProject',
+  'rollbackDeployment',
+  'promoteDeployment',
   // Recording a real conversation is always confirmed — same explicit-
   // grant discipline as the Capture Layer permission model in
   // COMMUNICATION_INTELLIGENCE_RUNTIME.md §5.2, never a silent background start.
@@ -494,6 +588,9 @@ export const DESTRUCTIVE_ACTION_TYPES: ActionRequest['type'][] = [
   // collisions the same way (see the plugins), so they aren't here either
   // — only mergeFolders carries genuine compound multi-file risk that a
   // single per-request check can't fully capture.
+  // Companion Memory's reset is real, irreversible data loss (deletes real
+  // goal/routine entities) — always confirmed, same as any other delete.
+  'resetCompanionMemory',
 ];
 
 /**
@@ -518,6 +615,16 @@ export const CODING_EXECUTION_ACTION_TYPES: ActionRequest['type'][] = [
   'buildProject',
   'devBrowserPreview',
 ];
+
+/**
+ * Infrastructure Runtime — "read-only investigation mode" gate. Refused
+ * unconditionally in 'investigate' mode (see InfraModeStore), before the
+ * destructive-action confirmation gate is ever reached, same two-gate order
+ * as Paw Go/Pro above. Read-only infra actions (investigateTicket,
+ * getDeploymentStatus, listConfiguredInfraConnectors) are deliberately NOT
+ * here — investigation always stays available.
+ */
+export const INFRA_EXECUTION_ACTION_TYPES: ActionRequest['type'][] = ['deployProject', 'rollbackDeployment', 'promoteDeployment'];
 
 /**
  * Something a plugin needs before it can execute a request — surfaced as a

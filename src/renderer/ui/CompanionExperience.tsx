@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import styles from './app.module.css';
-import { AvatarCanvas } from './CompanionCanvas/CompanionCanvas';
 import { Avatar3DOverlay } from './CompanionCanvas/Avatar3DOverlay';
 import { SettingsPanel } from './SettingsPanel/SettingsPanel';
 import { ConversationPanel } from '../conversation/ConversationPanel';
@@ -8,13 +7,28 @@ import { WorkspaceRuntime } from '../workspace/WorkspaceRuntime';
 import { CommunicationWorkspaceRuntime } from '../communication/CommunicationWorkspaceRuntime';
 import { useIpcBridge } from '../services/ipc/useIpcBridge';
 import { useCompanionController } from '../companion/useCompanionController';
+import { useCompanionProfiles } from '../companion/manager/useCompanionProfiles';
+import { buildPersonalityAddendum } from '../companion/manager/CompanionProfileTypes';
 import { useConversationController } from '../conversation/useConversationController';
+import { PAW_SYSTEM_PROMPT } from '../conversation/systemPrompt';
+import { aiProviderConfigStore } from '../ai/AIProviderConfigStore';
 import type { VisemeFrame } from '../conversation/LipSyncTypes';
 // [DEBUG-TEMP] remove this import and its usage below once real-mic verification is done.
 import { VoiceDebugPanel } from './VoiceDebugPanel';
 
 export default function CompanionExperience() {
   const ipc = useIpcBridge();
+  // Runtime 10: the 3D stack (Avatar3DOverlay -> CompanionRuntime in
+  // companion/core/) is now the sole rendered companion. The legacy 2D
+  // controller below is kept only as a dormant compatibility layer — since
+  // AvatarCanvas (the only thing that ever called controller.attachCanvas)
+  // is no longer mounted, CompanionApp/the 2D runtime loop/keyboard&mouse
+  // hooks never start. What's left in active use is the IPC command bridge
+  // (setEmotion/setMood/setContext/setConversationState/applySettings),
+  // which Avatar3DOverlay's EmotionController reads as an idle-time
+  // override — every method here is already null-safe (`app?.`) with no
+  // canvas attached. Retire this hook entirely once that bridge is ported
+  // to the 3D stack directly.
   const controller = useCompanionController();
   const visemeRef = useRef<VisemeFrame | null>(null);
   const conversation = useConversationController({
@@ -24,6 +38,32 @@ export default function CompanionExperience() {
     },
   });
   const conversationSnapshot = conversation.snapshot;
+
+  // Personality preset/custom addendum (see CompanionProfileTypes.ts) is
+  // layered onto the base system prompt whenever the active companion's
+  // personality changes — the one real behavioral effect of a preset choice,
+  // not just a label shown in a list.
+  const { active: activeProfile, markUploadRigged } = useCompanionProfiles();
+  useEffect(() => {
+    if (!activeProfile) return;
+    const parts = [buildPersonalityAddendum(activeProfile.personality)];
+    if (activeProfile.behavior.interactionStyle.trim()) parts.push(activeProfile.behavior.interactionStyle.trim());
+    const addendum = parts.filter(Boolean).join(' ');
+    conversation.setReasoningSystemPrompt(addendum ? `${PAW_SYSTEM_PROMPT}\n\n${addendum}` : PAW_SYSTEM_PROMPT);
+  }, [activeProfile, conversation.setReasoningSystemPrompt]);
+
+  // Same real-wiring gap as personality above: CompanionProfile.voice
+  // (provider/voiceId/speed) previously had no effect on anything — the TTS
+  // provider was hard-coded to 'browser' inside useConversationController.
+  // Reusing an already-configured reasoning API key for the matching TTS
+  // provider (same pattern as the Gemini STT key reuse a few lines up in
+  // that hook) since there's no separate per-feature key store.
+  useEffect(() => {
+    if (!activeProfile) return;
+    const { ttsProvider, voiceId, speed } = activeProfile.voice;
+    const apiKey = ttsProvider === 'openai' ? aiProviderConfigStore.getApiKey('openai') : undefined;
+    conversation.setSpeechSynthesisProvider({ id: ttsProvider, voiceId, speed, apiKey });
+  }, [activeProfile, conversation.setSpeechSynthesisProvider]);
 
   // Workspace Runtime — the currently-running task, if any, is the same
   // data ConversationPanel/TaskCard already derive from the snapshot; no
@@ -135,9 +175,18 @@ export default function CompanionExperience() {
       if (task && task.status === 'completed' && !celebratedTaskIdsRef.current.has(task.id)) {
         celebratedTaskIdsRef.current.add(task.id);
         celebrateUntilRef.current = Date.now() + 2500;
+
+        // Desktop Companion notification reaction: a real OS notification
+        // (Electron's own Notification API) only when the user wasn't
+        // actually looking at this window — document.hasFocus() is real,
+        // not simulated. Never fires while the user is already watching
+        // the companion celebrate.
+        if (!document.hasFocus()) {
+          void ipc.showCompanionNotification('Paw finished a task', task.goal);
+        }
       }
     }
-  }, [conversationSnapshot.messages]);
+  }, [conversationSnapshot.messages, ipc]);
 
   // The desktop always remains the user's desktop: the overlay window is
   // click-through by default (main.ts), and only becomes interactive while
@@ -183,11 +232,8 @@ export default function CompanionExperience() {
       <div
         data-interactive="true"
         className={`${styles.avatarShell} ${isWorkspaceActive ? styles.avatarShellCompact : ''}`}
+        onDoubleClick={() => setSettingsOpen(true)}
       >
-        <AvatarCanvas
-          controller={controller.controller}
-          onRequestOpenSettings={() => setSettingsOpen(true)}
-        />
         <Avatar3DOverlay
           controller={controller.controller}
           visemeRef={visemeRef}
@@ -195,6 +241,9 @@ export default function CompanionExperience() {
           conversationStateRef={conversationStateRef}
           workspaceActiveRef={workspaceActiveRef}
           celebrateUntilRef={celebrateUntilRef}
+          behavior={activeProfile?.behavior}
+          uploadedFilePath={activeProfile?.avatarSource?.mode === 'upload' ? activeProfile.avatarSource.uploadedFilePath : undefined}
+          onUploadRigged={(rigged) => activeProfile && markUploadRigged(activeProfile.id, rigged)}
         />
         {!conversationSnapshot.panelOpen && (
           <button

@@ -87,9 +87,19 @@ export class AuthenticationProvider implements AuthService {
     return user;
   }
 
-  async requestPasswordReset(_email: string): Promise<void> {
-    // UI placeholder only, as specified — no email delivery exists yet.
-    return Promise.resolve();
+  async requestPasswordReset(email: string): Promise<{ expiresInMinutes: number }> {
+    return ipc.authSendPasswordResetOtp(email);
+  }
+
+  async verifyPasswordResetCode(email: string, code: string): Promise<{ valid: boolean; reason?: string; resetToken?: string }> {
+    const result = await ipc.authVerifyPasswordResetOtp(email, code);
+    return { valid: result.valid, reason: result.reason, resetToken: result.token };
+  }
+
+  async completePasswordReset(resetToken: string, newPassword: string): Promise<{ ok: boolean; reason?: string }> {
+    const { valid, email, reason } = await ipc.authValidatePasswordResetToken(resetToken);
+    if (!valid || !email) return { ok: false, reason: reason ?? 'This reset link is no longer valid.' };
+    return this.emailProvider.resetPassword(email, newPassword);
   }
 
   async sendVerificationCode(email: string): Promise<{ expiresInMinutes: number }> {

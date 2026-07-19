@@ -1,6 +1,7 @@
 import type { SettingsState } from './ipcTypes';
 import { getIpcBridge } from './ipcBridge';
 import type { CompanionCommand } from '../../../shared/companion/CompanionCommand';
+import type { CompanionPackageInput, ImportedCompanionPackage } from '../../../shared/companion/CompanionPackageTypes';
 import type { ActionRequest, ActionRequirement, ActionResult } from '../../../shared/actions/ActionTypes';
 import type { ForegroundWindowInfo } from '../../../shared/system/ForegroundWindowInfo';
 import type { GoogleProfile } from '../../../shared/auth/AccountTypes';
@@ -16,6 +17,15 @@ import type { WorkspaceObservationEvent } from '../../../shared/actions/Executio
 import type { ExecutionRecord } from '../../../shared/actions/ExecutionRecordTypes';
 import type { BrowserCapabilityReport } from '../../../shared/actions/BrowserCapabilityTypes';
 import type { CommunicationRuntimeEvent } from '../../../shared/communication/CommunicationTypes';
+import type { PairedDevice } from '../../../shared/pairing/PairingTypes';
+import type {
+  PricingConfig,
+  SubscriptionState,
+  SubscriptionTierId,
+  CreditBalance,
+  BillingCheckoutResult,
+} from '../../../shared/billing/BillingTypes';
+import type { OnboardingState } from '../../../shared/onboarding/OnboardingTypes';
 
 // Lazy initialization - access the bridge only when first needed
 let _bridge: ReturnType<typeof getIpcBridge> | undefined;
@@ -111,6 +121,73 @@ export const ipc = {
   },
   async authVerifyOtp(email: string, code: string): Promise<{ valid: boolean; reason?: string }> {
     return getBridge().authVerifyOtp(email, code);
+  },
+  async authSendPasswordResetOtp(email: string): Promise<{ expiresInMinutes: number }> {
+    return getBridge().authSendPasswordResetOtp(email);
+  },
+  async authVerifyPasswordResetOtp(email: string, code: string): Promise<{ valid: boolean; reason?: string; token?: string }> {
+    return getBridge().authVerifyPasswordResetOtp(email, code);
+  },
+  async authValidatePasswordResetToken(token: string): Promise<{ valid: boolean; email?: string; reason?: string }> {
+    return getBridge().authValidatePasswordResetToken(token);
+  },
+  async pairingBegin(userId?: string): Promise<{ token: string; pairingUri: string; qrDataUrl: string; expiresAt: number }> {
+    return getBridge().pairingBegin(userId);
+  },
+  async pairingComplete(
+    token: string,
+    deviceName: string,
+    publicKey: string
+  ): Promise<{ ok: true; device: PairedDevice } | { ok: false; reason: string }> {
+    return getBridge().pairingComplete(token, deviceName, publicKey);
+  },
+  async pairingList(userId?: string): Promise<PairedDevice[]> {
+    return getBridge().pairingList(userId);
+  },
+  async pairingRevoke(deviceId: string): Promise<boolean> {
+    return getBridge().pairingRevoke(deviceId);
+  },
+  async billingGetPricing(): Promise<PricingConfig> {
+    return getBridge().billingGetPricing();
+  },
+  async billingGetSubscription(): Promise<SubscriptionState> {
+    return getBridge().billingGetSubscription();
+  },
+  async billingSetSubscriptionTier(tier: SubscriptionTierId): Promise<SubscriptionState> {
+    return getBridge().billingSetSubscriptionTier(tier);
+  },
+  async billingGetCreditBalance(): Promise<CreditBalance> {
+    return getBridge().billingGetCreditBalance();
+  },
+  async billingCreateCheckoutSession(tier: SubscriptionTierId): Promise<BillingCheckoutResult> {
+    return getBridge().billingCreateCheckoutSession(tier);
+  },
+  async onboardingGet(): Promise<OnboardingState> {
+    return getBridge().onboardingGet();
+  },
+  async onboardingSetStep(step: number): Promise<OnboardingState> {
+    return getBridge().onboardingSetStep(step);
+  },
+  async onboardingComplete(): Promise<OnboardingState> {
+    return getBridge().onboardingComplete();
+  },
+  async onboardingSelectWorkspaceFolder(): Promise<OnboardingState> {
+    return getBridge().onboardingSelectWorkspaceFolder();
+  },
+  async companionPickUploadFile(): Promise<string | null> {
+    return getBridge().companionPickUploadFile();
+  },
+  companionGetPathForFile(file: File): string {
+    return getBridge().companionGetPathForFile(file);
+  },
+  async companionShowNotification(title: string, body: string): Promise<boolean> {
+    return getBridge().companionShowNotification(title, body);
+  },
+  async companionExportPackage(input: CompanionPackageInput, suggestedName: string): Promise<string | null> {
+    return getBridge().companionExportPackage(input, suggestedName);
+  },
+  async companionImportPackage(): Promise<ImportedCompanionPackage | null> {
+    return getBridge().companionImportPackage();
   },
   async mailSend(method: string, to: string, params: unknown): Promise<boolean> {
     return getBridge().mailSend(method, to, params);

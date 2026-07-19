@@ -141,7 +141,8 @@ export function createBrowserSpeechRecognitionProvider(): SpeechRecognitionProvi
   };
 }
 
-export function createBrowserSpeechSynthesisProvider(): TextToSpeechProvider {
+/** rate is the Web Speech API's own real playback-speed control (SpeechSynthesisUtterance.rate, 0.1-10, 1 = normal) — clamped to a sane 0.5-2 range here since that's what the Companion Editor's speed slider offers. */
+export function createBrowserSpeechSynthesisProvider(rate?: number): TextToSpeechProvider {
   return {
     name: 'browser-speech-synthesis',
     supportsVisemes: false,
@@ -157,6 +158,7 @@ export function createBrowserSpeechSynthesisProvider(): TextToSpeechProvider {
         }
 
         const utterance = new SpeechSynthesisUtterance(text);
+        if (rate !== undefined) utterance.rate = Math.max(0.5, Math.min(2, rate));
         utterance.onstart = () => callbacks?.onStart?.();
         utterance.onend = () => {
           callbacks?.onEnd?.();

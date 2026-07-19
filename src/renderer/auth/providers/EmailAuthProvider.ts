@@ -91,4 +91,39 @@ export class EmailAuthProvider {
     const supabase = await getSupabaseClient().catch(() => null);
     await supabase?.auth.signOut();
   }
+
+  /**
+   * Commits a new password after PawOS's own OTP + signed reset token
+   * (otp.ts + passwordResetToken.ts, verified by the caller before this is
+   * reached) have proven ownership of the email. Supabase's client SDK only
+   * allows updateUser({password}) for the CURRENTLY authenticated session —
+   * there's no way to set another, currently-signed-out user's password
+   * with only the anon/publishable key (by design, see supabaseClient.ts).
+   * This succeeds for "change password while still signed in as this
+   * email"; a full "forgot password, fully signed out" reset needs either a
+   * trusted backend holding the Supabase service-role key, or bridging
+   * through Supabase's own resetPasswordForEmail/verifyOtp(type:'recovery')
+   * flow — neither exists yet. Business Configuration Required for that gap.
+   */
+  async resetPassword(email: string, newPassword: string): Promise<{ ok: boolean; reason?: string }> {
+    if (!isValidPassword(newPassword)) return { ok: false, reason: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.` };
+    const supabase = await getSupabaseClient().catch(() => null);
+    if (!supabase) return { ok: false, reason: 'Account services are not configured yet.' };
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const sessionEmail = sessionData.session?.user.email?.toLowerCase();
+    if (!sessionEmail || sessionEmail !== email.trim().toLowerCase()) {
+      return {
+        ok: false,
+        reason:
+          "Your reset code was verified, but this device isn't currently signed in as that account, so the password can't be changed yet. " +
+          'Completing a reset with no active session needs a secure backend (Business Configuration Required) — for now, sign in first, then use "Change password" from Account settings.',
+      };
+    }
+
+    const { data, error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) return { ok: false, reason: toUserFacingAuthError(error.message) };
+    if (data.user) notify('sendPasswordChanged', email, { name: toAuthUser(data.user).name, whenText: new Date().toLocaleString() });
+    return { ok: true };
+  }
 }

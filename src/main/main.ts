@@ -19,6 +19,14 @@ import { observationEngine } from './memory/ObservationEngine';
 import { browserPreferences } from './execution/browser/browserPreferences';
 import { browserCapabilityStatus } from './execution/browser/browserCapabilityStatus';
 import { codingModeStore } from './execution/CodingModeStore';
+import { platformPairingStore } from './pairing/PlatformPairingStore';
+import { pricingConfigStore } from './billing/PricingConfigStore';
+import { subscriptionStore } from './billing/SubscriptionStore';
+import { creditStore } from './billing/CreditStore';
+import { onboardingStore } from './onboarding/OnboardingStore';
+import { initInfrastructureConnectors } from './infrastructure/bootstrap';
+import { engineeringMemoryStore } from './infrastructure/EngineeringMemoryStore';
+import { infraModeStore } from './infrastructure/InfraModeStore';
 // One constant size, always — the overlay window itself never resizes at
 // runtime. A native window resize inherently reads as "an application
 // window resizing," which is exactly the feel the Workspace Runtime must
@@ -214,6 +222,13 @@ app.whenReady().then(async () => {
   browserCapabilityStatus.init();
   codingModeStore.init();
   communicationRuntime.init();
+  platformPairingStore.init();
+  pricingConfigStore.init();
+  subscriptionStore.init();
+  creditStore.init();
+  onboardingStore.init();
+  engineeringMemoryStore.init();
+  infraModeStore.init();
 
   // .env next to the installed exe (packaged) or at the repo root (dev
   // checkout, cwd when running `electron .`) — lets the user drop keys in a
@@ -230,6 +245,8 @@ app.whenReady().then(async () => {
       from: envVars.EMAIL_FROM,
     });
   }
+
+  initInfrastructureConnectors(envVars);
 
   createMainWindow();
   createAppTray();
@@ -248,6 +265,7 @@ app.whenReady().then(async () => {
       supabasePublishableKey: envVars.SUPABASE_PUBLISHABLE_KEY,
     }),
     getForegroundWindowInfo,
+    getEmailSigningSecret: () => envVars.EMAIL_SIGNING_SECRET,
     isGoogleSignInConfigured: () => Boolean(envVars.GOOGLE_CLIENT_ID && envVars.GOOGLE_REDIRECT_URI),
     startGoogleSignIn: () => {
       if (!envVars.GOOGLE_CLIENT_ID || !envVars.GOOGLE_REDIRECT_URI) {

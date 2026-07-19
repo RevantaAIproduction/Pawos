@@ -43,14 +43,23 @@ function sign(payload: string, secret: string): string {
  * Signed, expiring, single-use password reset tokens — 15-minute expiry.
  * Independent of Supabase Auth's own resetPasswordForEmail() flow; this is
  * for a custom reset flow PawOS's own code fully controls end to end.
+ *
+ * The payload is JSON, base64url-encoded as a single opaque blob, with
+ * exactly one literal '.' separating it from the hex signature — NOT the
+ * naive `field.field.field` join a first version of this used, which broke
+ * on any email containing a dot (i.e. virtually every real email address,
+ * since domains always have one) because splitting on '.' produced more
+ * than the expected number of parts.
  */
 export function createPasswordResetToken(email: string, userDataDir: string, envSecret: string | undefined): string {
   const secret = getOrCreateSecret(userDataDir, envSecret);
   const expiresAt = Date.now() + TOKEN_EXPIRY_MS;
   const nonce = randomBytes(8).toString('hex');
-  const payload = `${email.trim().toLowerCase()}.${expiresAt}.${nonce}`;
+  const payload = Buffer.from(JSON.stringify({ email: email.trim().toLowerCase(), expiresAt, nonce }), 'utf-8').toString(
+    'base64url'
+  );
   const signature = sign(payload, secret);
-  return Buffer.from(`${payload}.${signature}`, 'utf-8').toString('base64url');
+  return `${payload}.${signature}`;
 }
 
 export function verifyPasswordResetToken(
@@ -60,28 +69,29 @@ export function verifyPasswordResetToken(
 ): { valid: boolean; email?: string; reason?: string } {
   const secret = getOrCreateSecret(userDataDir, envSecret);
 
-  let decoded: string;
-  try {
-    decoded = Buffer.from(token, 'base64url').toString('utf-8');
-  } catch {
-    return { valid: false, reason: 'Malformed token.' };
-  }
+  const lastDot = token.lastIndexOf('.');
+  if (lastDot === -1) return { valid: false, reason: 'Malformed token.' };
+  const payload = token.slice(0, lastDot);
+  const signature = token.slice(lastDot + 1);
 
-  const parts = decoded.split('.');
-  if (parts.length !== 4) return { valid: false, reason: 'Malformed token.' };
-  const [email, expiresAtStr, nonce, signature] = parts;
-  if (!email || !expiresAtStr || !nonce || !signature) return { valid: false, reason: 'Malformed token.' };
-  const payload = `${email}.${expiresAtStr}.${nonce}`;
   const expectedSignature = sign(payload, secret);
-
   const sigBuf = Buffer.from(signature, 'hex');
   const expectedBuf = Buffer.from(expectedSignature, 'hex');
   if (sigBuf.length !== expectedBuf.length || !timingSafeEqual(sigBuf, expectedBuf)) {
     return { valid: false, reason: 'Invalid token.' };
   }
+
+  let parsed: { email?: string; expiresAt?: number; nonce?: string };
+  try {
+    parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf-8'));
+  } catch {
+    return { valid: false, reason: 'Malformed token.' };
+  }
+  if (!parsed.email || !parsed.expiresAt || !parsed.nonce) return { valid: false, reason: 'Malformed token.' };
+
   if (usedTokens.has(token)) return { valid: false, reason: 'This link has already been used.' };
-  if (Date.now() > Number(expiresAtStr)) return { valid: false, reason: 'This link has expired.' };
+  if (Date.now() > parsed.expiresAt) return { valid: false, reason: 'This link has expired.' };
 
   usedTokens.add(token);
-  return { valid: true, email };
+  return { valid: true, email: parsed.email };
 }

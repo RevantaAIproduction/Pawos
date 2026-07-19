@@ -10,6 +10,13 @@ const ALLOWED_PREFIXES = [
   'npm', 'npx', 'node', 'git', 'python', 'python3', 'py', 'pip', 'pip3', 'yarn', 'pnpm',
   'claude', 'codex', 'gemini', 'ollama',
   'java', 'javac',
+  // Infrastructure Runtime — the user's own installed, authenticated CLIs.
+  // Paw drives real container/cloud/orchestration tools this way instead of
+  // reimplementing their APIs, same discipline as RunDeployScriptPlugin
+  // never inventing deployment infrastructure.
+  'docker', 'docker-compose', 'kubectl', 'helm',
+  'aws', 'gcloud', 'az', 'doctl', 'terraform', 'ssh', 'scp',
+  'vercel', 'netlify',
 ];
 
 export function firstToken(command: string): string {
