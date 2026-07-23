@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Section } from "../../../components/ui/Section";
+import { Breadcrumbs } from "../../../components/ui/Breadcrumbs";
 import { ARTICLES, getArticleBySlug } from "../../../lib/articlesContent";
 
 export function generateStaticParams() {
@@ -23,6 +24,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
   return (
     <Section>
       <article className="mx-auto max-w-2xl">
+        <Breadcrumbs items={[{ label: "Blog", href: "/blog" }, { label: article.title }]} />
         <p className="text-xs font-semibold uppercase tracking-wider text-blue-400">{article.category}</p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">{article.title}</h1>
         <p className="mt-4 text-lg text-neutral-400">{article.excerpt}</p>

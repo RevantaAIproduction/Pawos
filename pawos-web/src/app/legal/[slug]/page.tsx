@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Section } from "../../../components/ui/Section";
+import { Breadcrumbs } from "../../../components/ui/Breadcrumbs";
 import { DraftBanner } from "../../../components/legal/DraftBanner";
 import { LEGAL_DOCS, getLegalDocBySlug } from "../../../lib/legalContent";
 
@@ -24,6 +25,7 @@ export default async function LegalDetailPage({ params }: { params: Promise<{ sl
   return (
     <Section>
       <div className="mx-auto max-w-2xl">
+        <Breadcrumbs items={[{ label: "Legal", href: "/legal" }, { label: doc.title }]} />
         <p className="text-xs font-semibold uppercase tracking-wider text-blue-400">{doc.category}</p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">{doc.title}</h1>
         <p className="mt-4 text-neutral-400">{doc.summary}</p>

@@ -5,6 +5,7 @@ import { Section } from "../../../components/ui/Section";
 import { Container } from "../../../components/ui/Container";
 import { Button } from "../../../components/ui/Button";
 import { Badge } from "../../../components/ui/Badge";
+import { Breadcrumbs } from "../../../components/ui/Breadcrumbs";
 import { FEATURES, getFeatureBySlug } from "../../../lib/featuresContent";
 
 export function generateStaticParams() {
@@ -29,6 +30,9 @@ export default async function FeatureDetailPage({ params }: { params: Promise<{ 
   return (
     <>
       <Section>
+        <Container>
+          <Breadcrumbs items={[{ label: "Features", href: "/features" }, { label: feature.title }]} />
+        </Container>
         <div className="mx-auto max-w-3xl text-center">
           <Badge tone="blue">{feature.category}</Badge>
           <h1 className="mt-4 text-4xl font-bold tracking-tight sm:text-5xl">{feature.title}</h1>

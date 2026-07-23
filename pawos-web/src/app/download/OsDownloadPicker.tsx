@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { trackEvent } from "../../components/analytics/Analytics";
 
 type OsId = "windows" | "macos" | "linux";
 
@@ -83,6 +84,7 @@ export function OsDownloadPicker() {
                 href={REPO_RELEASES_URL}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => trackEvent("download_click", { platform: OS_OPTIONS[active].label, variant: v.name })}
                 className="rounded-full border border-neutral-700 px-4 py-1.5 text-xs font-semibold text-neutral-200 hover:bg-neutral-800"
               >
                 {v.status === "available" ? "Download" : "View on GitHub"}

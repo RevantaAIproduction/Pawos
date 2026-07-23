@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Section } from "../../../../components/ui/Section";
+import { Breadcrumbs } from "../../../../components/ui/Breadcrumbs";
 import { RUNTIMES, getRuntimeBySlug } from "../../../../lib/runtimesContent";
 
 export function generateStaticParams() {
@@ -32,6 +33,7 @@ export default async function RuntimeDetailPage({ params }: { params: Promise<{ 
   return (
     <Section>
       <div className="mx-auto max-w-2xl">
+        <Breadcrumbs items={[{ label: "Documentation", href: "/docs" }, { label: runtime.name }]} />
         <p className="text-xs font-semibold uppercase tracking-wider text-blue-400">Runtime documentation</p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">{runtime.name}</h1>
         <p className="mt-4 text-neutral-400">{runtime.purpose}</p>

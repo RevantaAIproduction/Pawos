@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Section } from "../../../components/ui/Section";
+import { Breadcrumbs } from "../../../components/ui/Breadcrumbs";
 import { DOCS, getDocBySlug } from "../../../lib/docsContent";
 
 export function generateStaticParams() {
@@ -25,6 +26,7 @@ export default async function DocDetailPage({ params }: { params: Promise<{ slug
   return (
     <Section>
       <div className="mx-auto max-w-2xl">
+        <Breadcrumbs items={[{ label: "Documentation", href: "/docs" }, { label: doc.title }]} />
         <p className="text-xs font-semibold uppercase tracking-wider text-blue-400">{doc.category}</p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">{doc.title}</h1>
         <p className="mt-4 text-neutral-400">{doc.summary}</p>

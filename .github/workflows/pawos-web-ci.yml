@@ -1,0 +1,47 @@
+name: pawos-web CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "pawos-web/**"
+      - ".github/workflows/pawos-web-ci.yml"
+  pull_request:
+    paths:
+      - "pawos-web/**"
+      - ".github/workflows/pawos-web-ci.yml"
+
+defaults:
+  run:
+    working-directory: pawos-web
+
+jobs:
+  build:
+    name: Lint, typecheck, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: pawos-web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+  # Production deploys are intentionally not wired up here yet — they require
+  # real hosting credentials (e.g. a Vercel token) as repository secrets,
+  # which have not been configured. Once a hosting provider and its secrets
+  # are set up, add a `deploy` job here that runs after `build` succeeds on
+  # `main`, rather than pretending a deploy step exists when it doesn't.
