@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Link from "next/link";
 import "./globals.css";
+import { Nav } from "../components/layout/Nav";
+import { Footer } from "../components/layout/Footer";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,9 +14,31 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const SITE_URL = "https://pawos.app";
+
 export const metadata: Metadata = {
-  title: "PawOS — Your AI desktop companion",
-  description: "PawOS is an AI companion that lives on your desktop, plans and executes real work, and helps you code, browse, and communicate.",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "PawOS — Your AI desktop companion",
+    template: "%s — PawOS",
+  },
+  description:
+    "PawOS is an AI companion that lives on your desktop, plans and executes real work, and helps you code, browse, deploy, and communicate — with autonomous engineering built in.",
+  openGraph: {
+    type: "website",
+    siteName: "PawOS",
+    title: "PawOS — Your AI desktop companion",
+    description:
+      "PawOS is an AI companion that lives on your desktop, plans and executes real work, and helps you code, browse, deploy, and communicate.",
+    url: SITE_URL,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "PawOS — Your AI desktop companion",
+    description:
+      "PawOS is an AI companion that lives on your desktop, plans and executes real work, and helps you code, browse, deploy, and communicate.",
+  },
+  robots: { index: true, follow: true },
 };
 
 export default function RootLayout({
@@ -29,21 +52,17 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-neutral-950 text-neutral-100">
-        <header className="border-b border-neutral-800">
-          <nav className="mx-auto max-w-6xl flex items-center justify-between px-6 py-4">
-            <Link href="/" className="font-semibold text-lg">
-              Paw<span className="text-blue-400">OS</span>
-            </Link>
-            <div className="flex gap-6 text-sm text-neutral-300">
-              <Link href="/pricing" className="hover:text-white">Pricing</Link>
-              <Link href="/docs" className="hover:text-white">Docs</Link>
-            </div>
-          </nav>
-        </header>
-        <main className="flex-1">{children}</main>
-        <footer className="border-t border-neutral-800 py-8 text-center text-sm text-neutral-500">
-          © {new Date().getFullYear()} PawOS. All rights reserved.
-        </footer>
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-blue-500 focus:px-4 focus:py-2 focus:text-black"
+        >
+          Skip to content
+        </a>
+        <Nav />
+        <main id="main-content" className="flex-1">
+          {children}
+        </main>
+        <Footer />
       </body>
     </html>
   );
