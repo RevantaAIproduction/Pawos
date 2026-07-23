@@ -62,6 +62,7 @@ export default function Home() {
 
       {/* Value proposition */}
       <Section
+        id="value-prop"
         eyebrow="Why it's different"
         title="Most AI tools talk. Paw acts."
         subtitle="PawOS doesn't wait in a chat window for you to copy-paste its suggestions. It runs on your machine, sees what you're working on, and takes real, confirmed action — files, terminals, browsers, deployments, and more."
@@ -154,7 +155,7 @@ export default function Home() {
       </Section>
 
       {/* How it works */}
-      <Section eyebrow="How it works" title="From request to result">
+      <Section id="how-it-works" eyebrow="How it works" title="From request to result">
         <div className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {HOW_IT_WORKS.map((s) => (
             <div key={s.step}>

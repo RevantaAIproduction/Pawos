@@ -5,6 +5,7 @@ import { Nav } from "../components/layout/Nav";
 import { Footer } from "../components/layout/Footer";
 import { Analytics } from "../components/analytics/Analytics";
 import { CookieConsent } from "../components/analytics/CookieConsent";
+import { SiteCompanion } from "../components/site-companion/SiteCompanion";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -91,6 +92,7 @@ export default function RootLayout({
         <Footer />
         <CookieConsent />
         <Analytics />
+        <SiteCompanion />
       </body>
     </html>
   );
