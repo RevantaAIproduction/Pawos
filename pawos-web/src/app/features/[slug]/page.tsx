@@ -46,13 +46,6 @@ export default async function FeatureDetailPage({ params }: { params: Promise<{ 
             <h2 className="text-xl font-semibold">Overview</h2>
             <p className="mt-4 text-neutral-400">{feature.summary}</p>
 
-            <div
-              aria-hidden
-              className="mt-8 flex h-64 items-center justify-center rounded-xl border border-dashed border-neutral-800 bg-neutral-900/40 text-sm text-neutral-600"
-            >
-              Screenshot placeholder — {feature.title} in the PawOS desktop app
-            </div>
-
             <h2 className="mt-12 text-xl font-semibold">How it works</h2>
             <ol className="mt-6 space-y-4">
               {feature.workflow.map((w, i) => (

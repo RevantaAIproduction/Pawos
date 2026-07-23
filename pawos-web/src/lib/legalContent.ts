@@ -4,7 +4,7 @@ import {
   CONTACT_SECTION,
   DATA_HANDLING_SECTION,
   DEFINITIONS_SECTION,
-  ENTITY_PLACEHOLDER,
+  ENTITY_NAME,
   PAYMENTS_SECTION,
   SEVERABILITY_SECTION,
   TERMINATION_SECTION,
@@ -61,7 +61,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         heading: "Acceptance of terms",
         paragraphs: [
-          `By installing or using PawOS, you agree to these Terms of Service and to ${ENTITY_PLACEHOLDER}'s other policies referenced here.`,
+          `By installing or using PawOS, you agree to these Terms of Service and to ${ENTITY_NAME}'s other policies referenced here.`,
         ],
       },
       {
@@ -274,7 +274,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         heading: "Roles",
         paragraphs: [
-          `For Organization Workspace data, ${ENTITY_PLACEHOLDER} acts as a data processor on behalf of the Organization, which acts as data controller for its members' personal data, in each case subject to applicable data protection law.`,
+          `For Organization Workspace data, ${ENTITY_NAME} acts as a data processor on behalf of the Organization, which acts as data controller for its members' personal data, in each case subject to applicable data protection law.`,
         ],
       },
       DATA_HANDLING_SECTION,
@@ -390,7 +390,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         heading: "Our marks",
         paragraphs: [
-          `"PawOS" and associated logos are trademarks of ${ENTITY_PLACEHOLDER}. You may refer to PawOS by name to describe genuine compatibility or integration, but may not use our marks in a way that implies endorsement, sponsorship, or affiliation without permission.`,
+          `"PawOS" and associated logos are trademarks of ${ENTITY_NAME}. You may refer to PawOS by name to describe genuine compatibility or integration, but may not use our marks in a way that implies endorsement, sponsorship, or affiliation without permission.`,
         ],
       },
       {
@@ -429,7 +429,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         heading: "Notice",
         paragraphs: [
-          `© ${new Date().getFullYear()} ${ENTITY_PLACEHOLDER}. All rights reserved. PawOS's software, documentation, and this website's original content may not be reproduced, distributed, or used to train machine learning models without prior written permission, except as permitted by the open source licenses of individually-licensed components.`,
+          `© ${new Date().getFullYear()} ${ENTITY_NAME}. All rights reserved. PawOS's software, documentation, and this website's original content may not be reproduced, distributed, or used to train machine learning models without prior written permission, except as permitted by the open source licenses of individually-licensed components.`,
         ],
       },
       {

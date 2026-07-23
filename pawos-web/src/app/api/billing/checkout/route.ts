@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     body: JSON.stringify({
       plan_id: planId,
       customer_notify: 1,
-      total_count: 12, // 12 billing cycles, then Razorpay stops auto-renewing — a placeholder cycle count until a real renewal policy is decided.
+      total_count: 100, // Razorpay requires a finite cycle count; 100 monthly cycles (~8 years) is the standard way integrations express "renews indefinitely" rather than silently lapsing after a year.
     }),
   });
 

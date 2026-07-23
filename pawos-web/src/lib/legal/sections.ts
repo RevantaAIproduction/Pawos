@@ -1,13 +1,13 @@
 /**
  * Reusable legal-document building blocks. Every PawOS legal page is
  * "Draft — Pending Legal Review": original text drafted from common SaaS/AI
- * industry practice, not copied from any other company's documents, and
- * deliberately structured so jurisdiction, entity name, and effective dates
- * can be filled in by counsel without rewriting the document from scratch.
+ * industry practice, not copied from any other company's documents. The
+ * entity name below is real (Revanta AI); jurisdiction of incorporation and
+ * effective dates are still for counsel to finalize before this stops being
+ * a draft.
  */
 
-export const ENTITY_PLACEHOLDER =
-  "[Legal entity name and jurisdiction to be finalized by counsel — operated in connection with the PawOS product]";
+export const ENTITY_NAME = "Revanta AI";
 
 export const DEFINITIONS_SECTION = {
   heading: "Definitions",
@@ -16,7 +16,7 @@ export const DEFINITIONS_SECTION = {
     '"You" or "User" means the individual or organization using PawOS.',
     '"Organization Workspace" means a shared Team or Enterprise environment scoped to a verified email domain.',
     '"Autonomous Engineering Task" means one completed cycle of investigation, planning, implementation, testing, and delivery for a real engineering ticket, as described in our Autonomous Ticket Resolution documentation.',
-    `"We," "us," or "our" refers to ${ENTITY_PLACEHOLDER}.`,
+    `"We," "us," or "our" refers to ${ENTITY_NAME}.`,
   ],
 };
 
