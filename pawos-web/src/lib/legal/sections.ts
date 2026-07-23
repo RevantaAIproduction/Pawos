@@ -22,9 +22,7 @@ export const DEFINITIONS_SECTION = {
 
 export const CONTACT_SECTION = {
   heading: "Contact",
-  paragraphs: [
-    "Questions about this document can be raised via GitHub Issues on the PawOS repository (github.com/RevantaAIproduction/Pawos) until a dedicated legal contact channel is published on our Support page.",
-  ],
+  paragraphs: ["Questions about this document can be raised at legal@revantaai.com."],
 };
 
 export const CHANGES_SECTION = {

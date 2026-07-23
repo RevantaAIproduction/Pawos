@@ -41,6 +41,29 @@ export class AssetManager {
     return this.fbxLoader.loadAsync(url);
   }
 
+  /**
+   * The "walking" clip's own root-motion translation would carry the
+   * companion straight out of the small preview canvas. Rather than build a
+   * full root-motion-extraction system for one clip, this zeroes the
+   * horizontal (X/Z) component of the root bone's position track so the
+   * walk cycle plays in place — legs and vertical bob untouched, no
+   * fabricated data, just the same clip minus the part that doesn't fit a
+   * fixed-camera preview.
+   */
+  private stripHorizontalRootMotion(clip: THREE.AnimationClip): void {
+    const rootTrack = clip.tracks.find(
+      (t): t is THREE.VectorKeyframeTrack => t instanceof THREE.VectorKeyframeTrack && /hips\.position$/i.test(t.name)
+    );
+    if (!rootTrack) return;
+    const values = rootTrack.values;
+    const firstX = values[0];
+    const firstZ = values[2];
+    for (let i = 0; i < values.length; i += 3) {
+      values[i] = firstX;
+      values[i + 2] = firstZ;
+    }
+  }
+
   private applyBodyColor(group: THREE.Group): void {
     const material = new THREE.MeshStandardMaterial({
       color: new THREE.Color(BODY_COLOR),
@@ -72,8 +95,10 @@ export class AssetManager {
         try {
           const group = await this.loadFbx(ANIMATION_FILES[name]);
           const clip = group.animations[0];
-          if (clip) clips.set(name, clip);
-          else failures.set(name, new Error(`${ANIMATION_FILES[name]} has no embedded animation clip.`));
+          if (clip) {
+            if (name === 'walking') this.stripHorizontalRootMotion(clip);
+            clips.set(name, clip);
+          } else failures.set(name, new Error(`${ANIMATION_FILES[name]} has no embedded animation clip.`));
         } catch (error) {
           failures.set(name, error instanceof Error ? error : new Error(`Failed to load ${ANIMATION_FILES[name]}.`));
         }

@@ -4,12 +4,13 @@
  * FBX library as the desktop app (assets/animations/), copied verbatim into
  * public/assets/companion/. Not modified, not regenerated, not duplicated.
  */
-export type AnimationName = 'neutral' | 'talking' | 'salute';
+export type AnimationName = 'neutral' | 'talking' | 'salute' | 'walking';
 
 export const ANIMATION_FILES: Record<AnimationName, string> = {
   neutral: 'Neutral Idle.fbx',
   talking: 'Talking.fbx',
   salute: 'Salute.fbx',
+  walking: 'Start Walking.fbx',
 };
 
 export const ANIMATION_NAMES = Object.keys(ANIMATION_FILES) as AnimationName[];
@@ -18,4 +19,4 @@ export const ANIMATION_NAMES = Object.keys(ANIMATION_FILES) as AnimationName[];
 export const BASE_MESH_ANIMATION: AnimationName = 'neutral';
 
 /** Clips that should loop continuously rather than play once. */
-export const LOOPING_ANIMATIONS: ReadonlySet<AnimationName> = new Set<AnimationName>(['neutral', 'talking']);
+export const LOOPING_ANIMATIONS: ReadonlySet<AnimationName> = new Set<AnimationName>(['neutral', 'talking', 'walking']);

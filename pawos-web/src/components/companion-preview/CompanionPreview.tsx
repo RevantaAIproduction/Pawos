@@ -7,6 +7,8 @@ import { NARRATION_LINES } from "../../lib/companion-preview/script";
 type Phase = "gate" | "loading" | "greeting" | "narrating" | "done" | "error";
 
 const ASSET_BASE_URL = "/assets/companion/";
+/** The narration line index where the companion walks (in place) instead of just talking. */
+const WALK_LINE_INDEX = 1;
 
 export function CompanionPreview() {
   const [phase, setPhase] = useState<Phase>("gate");
@@ -74,6 +76,7 @@ export function CompanionPreview() {
             return;
           }
           setLineIndex(i);
+          c.play(i === WALK_LINE_INDEX ? "walking" : "talking");
           window.setTimeout(advance, NARRATION_LINES[i].durationMs);
         };
         window.setTimeout(advance, NARRATION_LINES[0].durationMs);
@@ -182,6 +185,18 @@ export function CompanionPreview() {
               Paw Go is free. Pro, Pro Max, Team, and Enterprise unlock real AI conversations and autonomous engineering.
             </p>
           </div>
+        </div>
+
+        <div className="mt-4 rounded-lg border border-neutral-800 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Make it yours</p>
+          <p className="mt-1 text-sm text-neutral-400">
+            In the desktop app, Companion Studio lets you upload your own 3D model (GLB, GLTF, VRM, FBX, or OBJ) to
+            replace this one entirely. There&apos;s no photo-to-3D generation yet — turning a 2D photo into a real,
+            rigged character is a genuinely hard problem we haven&apos;t solved, so we don&apos;t pretend to.
+          </p>
+          <Link href="/features/companions" className="mt-2 inline-block text-sm font-medium text-blue-400 hover:underline">
+            See how companions work →
+          </Link>
         </div>
 
         {phase === "done" && (

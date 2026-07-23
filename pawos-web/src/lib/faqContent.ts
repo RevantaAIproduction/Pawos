@@ -20,8 +20,8 @@ export const FAQ_ITEMS: FaqItem[] = [
   { category: "Deployments", q: "Do I need to give PawOS my cloud credentials?", a: "No — connectors use your machine's own already-authenticated CLI/API sessions for each provider. PawOS never manages your cloud credentials on your behalf." },
   { category: "Deployments", q: "What happens if a deploy breaks production?", a: "Deploys can run an automatic post-deploy health check with rollback to the last good deployment." },
   { category: "Updates", q: "How often does PawOS update?", a: "See the Changelog for the real, chronological history of what's shipped." },
-  { category: "Downloads", q: "Are public installers available yet?", a: "Not yet — see the Download page for current status per platform, and the GitHub repository for progress." },
+  { category: "Downloads", q: "Are public installers available yet?", a: "See the Download page for current status per platform." },
   { category: "Licensing", q: "Is PawOS open source?", a: "See our Licensing and Third-Party Licenses pages for the current, accurate answer rather than an assumption either way." },
-  { category: "Support", q: "How do I report a bug?", a: "Through GitHub Issues on the PawOS repository — see the Support page for the direct link." },
-  { category: "Support", q: "How do I request a feature?", a: "Also through GitHub Issues, tagged as a feature request — see the Support page." },
+  { category: "Support", q: "How do I report a bug?", a: "Email support@revantaai.com with steps to reproduce — see the Support page." },
+  { category: "Support", q: "How do I request a feature?", a: "Email support@revantaai.com — see the Support page." },
 ];

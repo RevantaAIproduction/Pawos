@@ -442,7 +442,7 @@ export const DOCS: DocPage[] = [
     body: [
       {
         paragraphs: [
-          "PawOS's source lives at github.com/RevantaAIproduction/Pawos. There is no separate SDK yet — see Architecture Overview for the high-level system design, and the repository itself for implementation detail.",
+          "There is no separate public SDK yet — see Architecture Overview for the high-level system design. For anything not covered there, reach the team directly through Support.",
         ],
       },
     ],

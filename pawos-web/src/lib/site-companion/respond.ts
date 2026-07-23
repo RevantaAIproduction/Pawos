@@ -131,7 +131,7 @@ const NAV_INTENTS: NavIntent[] = [
   {
     id: "support",
     keywords: ["support", "contact", "report a bug", "talk to a human", "feature request"],
-    text: "Bugs and feature requests go through GitHub Issues on the PawOS repository — the Support page has the direct link.",
+    text: "Bugs and feature requests go straight to support@revantaai.com — the Support page has more detail.",
     href: "/support",
     linkLabel: "Go to Support",
   },
@@ -278,7 +278,7 @@ export function getCompanionReply(input: string): CompanionReply {
 
   return {
     text:
-      "I don't have a scripted answer for that yet — I'm a simple guide, not the full desktop companion. Try the FAQ, or reach Support through GitHub Issues.",
+      "I don't have a scripted answer for that yet — I'm a simple guide, not the full desktop companion. Try the FAQ, or reach Support at support@revantaai.com.",
     href: "/faq",
     linkLabel: "Open the FAQ",
     suggestions: DEFAULT_SUGGESTIONS,

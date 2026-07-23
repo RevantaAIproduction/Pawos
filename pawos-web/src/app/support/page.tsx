@@ -2,32 +2,33 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Section } from "../../components/ui/Section";
 import { Button } from "../../components/ui/Button";
+import { mailto } from "../../lib/config/contactConfig";
 
 export const metadata: Metadata = {
   title: "Support",
-  description: "Get help with PawOS: bug reports, feature requests, and community support.",
+  description: "Get help with PawOS: bug reports, feature requests, and support.",
 };
 
 const CHANNELS = [
   {
     title: "Bug reports",
-    body: "Found something broken? File it on GitHub Issues with steps to reproduce.",
-    href: "https://github.com/RevantaAIproduction/Pawos/issues/new",
+    body: "Found something broken? Email us with steps to reproduce.",
+    href: mailto("support", "PawOS bug report"),
     cta: "Report a bug",
     external: true,
   },
   {
     title: "Feature requests",
-    body: "Have an idea? Open a GitHub Issue tagged as a feature request.",
-    href: "https://github.com/RevantaAIproduction/Pawos/issues/new",
+    body: "Have an idea? Send it to us and we'll take a look.",
+    href: mailto("support", "PawOS feature request"),
     cta: "Request a feature",
     external: true,
   },
   {
-    title: "Community",
-    body: "Browse existing issues and discussions on the PawOS repository.",
-    href: "https://github.com/RevantaAIproduction/Pawos",
-    cta: "View on GitHub",
+    title: "General questions",
+    body: "Anything else about PawOS — reach the team directly.",
+    href: mailto("hello"),
+    cta: "Email us",
     external: true,
   },
 ];
@@ -35,7 +36,7 @@ const CHANNELS = [
 export default function SupportPage() {
   return (
     <>
-      <Section title="Support" subtitle="PawOS support currently runs through GitHub — dedicated email support channels are being set up.">
+      <Section title="Support" subtitle="Reach the PawOS team directly by email.">
         <div className="mt-12 grid gap-6 sm:grid-cols-3">
           {CHANNELS.map((c) => (
             <div key={c.title} className="rounded-xl border border-neutral-800 p-6">

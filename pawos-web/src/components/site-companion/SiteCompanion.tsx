@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { getCompanionReply } from "../../lib/site-companion/respond";
 import { trackEvent } from "../analytics/Analytics";
 import { getStoredConsent } from "../analytics/CookieConsent";
+import { MiniCompanionCanvas } from "../companion-preview/MiniCompanionCanvas";
 
 type Message = {
   role: "assistant" | "user";
@@ -83,7 +84,9 @@ export function SiteCompanion() {
         <div className="flex h-[28rem] w-[22rem] max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950 shadow-2xl">
           <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/60 px-4 py-3">
             <div className="flex items-center gap-2.5">
-              <Image src="/logo-icon.png" alt="" width={28} height={28} className="rounded-md" />
+              <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-neutral-900">
+                <MiniCompanionCanvas />
+              </div>
               <div>
                 <p className="text-sm font-semibold text-neutral-100">Paw</p>
                 <p className="text-xs text-neutral-500">PawOS website guide</p>
@@ -172,9 +175,9 @@ export function SiteCompanion() {
           type="button"
           onClick={handleOpen}
           aria-label="Chat with Paw"
-          className="flex h-14 w-14 items-center justify-center rounded-full border border-neutral-800 bg-neutral-900 shadow-xl transition hover:scale-105 hover:border-blue-500/50"
+          className="paw-breathe flex h-14 w-14 items-center justify-center rounded-full border border-neutral-800 bg-neutral-900 shadow-xl transition hover:scale-105 hover:border-blue-500/50"
         >
-          <Image src="/logo-icon.png" alt="" width={36} height={36} className="rounded-full" />
+          <Image src="/logo-icon.png" alt="" width={36} height={36} className="paw-blink rounded-full" />
         </button>
       )}
     </div>

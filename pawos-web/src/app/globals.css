@@ -42,3 +42,31 @@ body {
   outline: 2px solid #60a5fa;
   outline-offset: 2px;
 }
+
+/* Ambient companion launcher — CSS-only idle "breathing" glow, no JS/3D cost while collapsed. */
+@keyframes paw-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(96, 165, 250, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(96, 165, 250, 0);
+  }
+}
+.paw-breathe {
+  animation: paw-breathe 3.6s ease-in-out infinite;
+}
+@keyframes paw-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  96% {
+    transform: scaleY(0.1);
+  }
+}
+.paw-blink {
+  animation: paw-blink 4.5s ease-in-out infinite;
+  transform-origin: center;
+}
