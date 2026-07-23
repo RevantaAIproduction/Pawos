@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Container } from "../ui/Container";
 
@@ -64,7 +65,10 @@ export function Footer() {
           ))}
         </div>
         <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-neutral-900 pt-8 text-sm text-neutral-500 sm:flex-row">
-          <p>© {new Date().getFullYear()} PawOS. All rights reserved.</p>
+          <div className="flex items-center gap-2">
+            <Image src="/logo-icon.png" alt="" width={20} height={20} className="rounded-md" />
+            <p>© {new Date().getFullYear()} PawOS. All rights reserved.</p>
+          </div>
           <p>Built for people who want their desktop to do more.</p>
         </div>
       </Container>

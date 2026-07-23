@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { Button } from "../ui/Button";
@@ -18,7 +19,8 @@ export function Nav() {
   return (
     <header className="sticky top-0 z-50 border-b border-neutral-800/80 bg-neutral-950/80 backdrop-blur">
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-        <Link href="/" className="font-semibold text-lg" aria-label="PawOS home">
+        <Link href="/" className="flex items-center gap-2.5 font-semibold text-lg" aria-label="PawOS home">
+          <Image src="/logo-icon.png" alt="" width={32} height={32} className="rounded-lg" priority />
           Paw<span className="text-blue-400">OS</span>
         </Link>
 

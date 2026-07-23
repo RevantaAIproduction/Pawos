@@ -4,8 +4,8 @@
     {
       "name": "pawos-web-dev",
       "runtimeExecutable": "cmd",
-      "runtimeArgs": ["/c", "cd /d C:\\Users\\APPLE\\Downloads\\PawOS\\pawos-web && npm run dev"],
-      "port": 3000
+      "runtimeArgs": ["/c", "cd /d C:\\Users\\APPLE\\Downloads\\PawOS\\pawos-web && npm run dev -- -p 3001"],
+      "port": 3001
     }
   ]
 }
