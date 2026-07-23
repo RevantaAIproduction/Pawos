@@ -1,0 +1,27 @@
+export type FaqItem = { category: string; q: string; a: string };
+
+export const FAQ_ITEMS: FaqItem[] = [
+  { category: "Installation", q: "What platforms does PawOS support?", a: "Windows, macOS, and Linux — see the Download page for current build availability per platform." },
+  { category: "Installation", q: "Do I need to install anything else first?", a: "No. PawOS ships as a self-contained Electron application; no separate runtime installation is required." },
+  { category: "Billing", q: "Is there a free plan?", a: "Yes — Paw Go is free, with local runtime features and no AI model access. See Pricing for the full tier ladder." },
+  { category: "Billing", q: "How is Autonomous Ticket Resolution billed?", a: "As a completed Autonomous Engineering Task, billed only once a real pull request is opened and the ticket is updated — never for a failed, cancelled, or denied run." },
+  { category: "Billing", q: "Can I cancel anytime?", a: "Yes, subscriptions are self-serve — upgrade, downgrade, or cancel from Settings → Billing without a sales call." },
+  { category: "Providers", q: "Which AI models power PawOS?", a: "You interact with named Paw models (Flash, Swift, Core, Creative, Vision, Voice); the underlying provider is routed internally and matched to your tier." },
+  { category: "Providers", q: "Which hosting providers can I deploy to?", a: "20+, including Vercel, Netlify, Railway, Render, Fly.io, GitHub Pages, Hostinger, Google Cloud Run, AWS, Azure, Kubernetes, DigitalOcean, Linode, Vultr, Hetzner, and Oracle Cloud." },
+  { category: "Enterprise", q: "What's the difference between Team and Enterprise?", a: "Team is $20/seat/mo for 2–150 seats with shared workspaces and admin controls. Enterprise is $100/seat/mo starting at 20 seats, adding advanced security, custom limits, and dedicated support." },
+  { category: "Enterprise", q: "Can anyone join our organization workspace?", a: "No — organization membership is restricted to a verified, shared email domain, by design." },
+  { category: "Enterprise", q: "Do you support SSO?", a: "SSO enablement is in progress — see the Security page for current, honest status rather than a roadmap promise." },
+  { category: "Companions", q: "Can I upload my own 3D model?", a: "Yes — GLB, GLTF, VRM, and FBX are supported directly; OBJ files are automatically rigged." },
+  { category: "Companions", q: "Can I generate an avatar from a photo?", a: "Not yet — AI-generated avatar creation isn't available. Upload-your-own-model is the current path to a fully custom look." },
+  { category: "Privacy", q: "Does my data leave my device?", a: "Most data (companion memory, conversation history, workspace memory) stays local unless you explicitly share it into an Organization Workspace. See the Privacy Policy for full detail." },
+  { category: "Privacy", q: "Does PawOS record my meetings without asking?", a: "No — recording only ever starts after explicit, informed consent." },
+  { category: "Security", q: "How are organization credentials stored?", a: "In an encrypted credential vault, never in plain text, accessed only through gated actions." },
+  { category: "Security", q: "Can risky actions run without my approval?", a: "No — destructive actions always require your explicit confirmation, and organizations can additionally require approval before production-impacting actions run at all." },
+  { category: "Deployments", q: "Do I need to give PawOS my cloud credentials?", a: "No — connectors use your machine's own already-authenticated CLI/API sessions for each provider. PawOS never manages your cloud credentials on your behalf." },
+  { category: "Deployments", q: "What happens if a deploy breaks production?", a: "Deploys can run an automatic post-deploy health check with rollback to the last good deployment." },
+  { category: "Updates", q: "How often does PawOS update?", a: "See the Changelog for the real, chronological history of what's shipped." },
+  { category: "Downloads", q: "Are public installers available yet?", a: "Not yet — see the Download page for current status per platform, and the GitHub repository for progress." },
+  { category: "Licensing", q: "Is PawOS open source?", a: "See our Licensing and Third-Party Licenses pages for the current, accurate answer rather than an assumption either way." },
+  { category: "Support", q: "How do I report a bug?", a: "Through GitHub Issues on the PawOS repository — see the Support page for the direct link." },
+  { category: "Support", q: "How do I request a feature?", a: "Also through GitHub Issues, tagged as a feature request — see the Support page." },
+];
