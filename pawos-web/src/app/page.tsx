@@ -4,6 +4,7 @@ import { Button } from "../components/ui/Button";
 import { Badge } from "../components/ui/Badge";
 import { FeatureCard } from "../components/ui/FeatureCard";
 import { FEATURES } from "../lib/featuresContent";
+import { CompanionPreview } from "../components/companion-preview/CompanionPreview";
 
 const HIGHLIGHT_SLUGS = [
   "desktop-ai",
@@ -59,6 +60,13 @@ export default function Home() {
           <p className="mt-6 text-xs text-neutral-500">Free to start on Paw Go · Windows, macOS, and Linux</p>
         </Container>
       </section>
+
+      {/* Meet Paw */}
+      <Section eyebrow="Meet Paw" title="Not a mockup — the real companion">
+        <div className="mt-10">
+          <CompanionPreview />
+        </div>
+      </Section>
 
       {/* Value proposition */}
       <Section

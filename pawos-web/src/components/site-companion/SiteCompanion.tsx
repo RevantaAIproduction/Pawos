@@ -45,6 +45,13 @@ export function SiteCompanion() {
     return () => window.removeEventListener("pawos-consent-changed", sync);
   }, []);
 
+  useEffect(() => {
+    const openFromExternal = () => handleOpen();
+    window.addEventListener("pawos-open-site-companion", openFromExternal);
+    return () => window.removeEventListener("pawos-open-site-companion", openFromExternal);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function handleOpen() {
     setOpen(true);
     if (messages.length === 0) {
