@@ -1,7 +1,5 @@
 import { relayToDesktop } from "../../../../lib/desktopRelay";
 
-const DESKTOP_GITHUB_RELAY_PORT = 51898;
-
 /**
  * Desktop-only relay — this is the GITHUB_REDIRECT_URI Electron's renderer
  * passes as `redirectTo` to supabase.auth.signInWithOAuth(), so it's what
@@ -13,5 +11,5 @@ const DESKTOP_GITHUB_RELAY_PORT = 51898;
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const error = searchParams.get("error_description") ?? searchParams.get("error");
-  return relayToDesktop(DESKTOP_GITHUB_RELAY_PORT, searchParams.get("code"), error);
+  return relayToDesktop("github-auth-callback", searchParams.get("code"), error);
 }

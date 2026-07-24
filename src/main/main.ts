@@ -7,6 +7,7 @@ import { readEnvFile } from './env/readEnvFile';
 import { startForegroundWindowWatcher, getForegroundWindowInfo } from './system/ForegroundWindowWatcher';
 import { startGoogleSignIn } from './auth/GoogleOAuthFlow';
 import { waitForGitHubOAuthCallback } from './auth/GitHubOAuthFlow';
+import { handleOAuthProtocolUrl, extractProtocolUrlFromArgv } from './auth/OAuthProtocolBridge';
 import { emailService } from './mail/EmailService';
 import { getDevWindowIconPath } from './assets/AssetPathResolver';
 import { conversationSessionStore } from './conversation/ConversationSessionStore';
@@ -56,12 +57,75 @@ let tray: Tray | null = null;
 let companionEnabled = false;
 let envVars: Record<string, string> = {};
 
+// Real OAuth deep-link delivery (see OAuthProtocolBridge.ts): pawos-web's
+// hosted /auth/google/callback and /auth/github/callback routes redirect the
+// browser to pawos://google-auth-callback / pawos://github-auth-callback
+// rather than relaying to a local port, since a remote server can't reach
+// one on this machine. Registering as the pawos:// handler must happen
+// before app.whenReady(). The unpackaged (`electron .`) form needs the exe
+// path + script arg explicitly — Windows can't otherwise reconstruct how to
+// relaunch a dev build from a protocol click.
+if (process.defaultApp) {
+  const scriptArg = process.argv[1];
+  if (scriptArg) {
+    app.setAsDefaultProtocolClient('pawos', process.execPath, [path.resolve(scriptArg)]);
+  }
+} else {
+  app.setAsDefaultProtocolClient('pawos');
+}
+
+// Windows/Linux deliver a protocol click as a brand-new process launch with
+// the URL in argv — without a single-instance lock, that would open a
+// second, redundant copy of PawOS instead of handing the URL to the one
+// already running (and already holding the pending OAuth promise).
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (_event, argv) => {
+    const url = extractProtocolUrlFromArgv(argv);
+    if (url) handleOAuthProtocolUrl(url);
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
+// macOS delivers a protocol click via this event instead of argv/second-instance.
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  handleOAuthProtocolUrl(url);
+});
+
 app.disableHardwareAcceleration();
 app.commandLine.appendSwitch('disable-background-networking');
 // Hardware acceleration is off (no GPU on this machine), so WebGL (used by
 // the 3D companion avatar) falls back to software rendering. Chromium logs
 // that automatic fallback as deprecated and asks for this flag explicitly.
 app.commandLine.appendSwitch('enable-unsafe-swiftshader');
+
+/**
+ * Renderer console output and crashes are otherwise invisible from the main
+ * process's own stdout, which made "the companion didn't appear" reports
+ * impossible to diagnose — this makes the actual JS error (if any) show up
+ * right here instead of silently vanishing.
+ */
+function attachDiagnostics(win: BrowserWindow, label: string) {
+  win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    if (level >= 2) console.error(`[${label} console]`, message, `(${sourceId}:${line})`);
+  });
+  win.webContents.on('render-process-gone', (_event, details) => {
+    console.error(`[${label} render-process-gone]`, details.reason);
+  });
+  win.webContents.on('unresponsive', () => {
+    console.error(`[${label}] webContents became unresponsive`);
+  });
+  win.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+    console.error(`[${label} did-fail-load]`, errorCode, errorDescription);
+  });
+}
 
 function getOverlayBoundsCentered() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
@@ -103,6 +167,7 @@ function createMainWindow() {
     },
   });
 
+  attachDiagnostics(mainWindow, 'main');
   mainWindow.loadURL(`file://${path.join(__dirname, '../renderer/index.html')}?window=main`);
 
   mainWindow.once('ready-to-show', () => mainWindow?.show());
@@ -133,6 +198,7 @@ function createOverlayWindow() {
     },
   });
 
+  attachDiagnostics(overlayWindow, 'companion');
   overlayWindow.loadURL(`file://${path.join(__dirname, '../renderer/index.html')}?window=companion`);
 
   // Click-through by default (see setOverlayInteractive) — the transparent

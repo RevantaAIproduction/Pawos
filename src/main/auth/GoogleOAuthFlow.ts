@@ -1,31 +1,16 @@
 import { randomBytes, createHash } from 'crypto';
-import * as http from 'http';
 import { shell } from 'electron';
 import type { GoogleProfile, GoogleSignInResult } from '../../shared/auth/AccountTypes';
+import { registerPendingOAuth, unregisterPendingOAuth } from './OAuthProtocolBridge';
 
 export type { GoogleProfile, GoogleSignInResult };
 
 export type GoogleOAuthConfig = {
   clientId: string;
   clientSecret?: string;
-  /** Must exactly match a redirect URI registered on this OAuth client in Google Cloud Console — now the hosted pawos-web route (e.g. https://pawos.revantaai.com/auth/google/callback), which relays the code back to this process (see LOCAL_RELAY_PORT below) rather than a loopback URL Google would redirect to directly. */
+  /** Must exactly match a redirect URI registered on this OAuth client in Google Cloud Console — the hosted pawos-web route (e.g. https://pawos.revantaai.com/auth/google/callback), which redirects the browser into this app via the pawos:// custom protocol (see OAuthProtocolBridge.ts) rather than a loopback URL Google would redirect to directly. */
   redirectUri: string;
 };
-
-/**
- * Google (and GitHub's) OAuth apps are registered with a public, hosted
- * redirect URI (pawos-web's /auth/google/callback) rather than a bare
- * loopback URL — a public HTTPS URL is what OAuth providers expect, and it
- * lets the browser complete the redirect even if this desktop process's
- * dynamic port isn't reachable from wherever the system browser runs.
- * pawos-web's callback route (src/app/auth/google/callback/route.ts) relays
- * the resulting `code` to this fixed local port so this process — the one
- * that actually holds the PKCE verifier / does the token exchange — can
- * pick it up. Fixed (not OS-assigned) so the hosted route has something
- * stable to target.
- */
-const LOCAL_RELAY_PORT = 51899;
-const LOCAL_RELAY_PATH = '/relay';
 
 function base64url(buf: Buffer): string {
   return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -39,12 +24,13 @@ function base64url(buf: Buffer): string {
  * pawos-web's hosted /auth/google/callback route, not a loopback URL, so
  * Google always has somewhere real to redirect the system browser to
  * regardless of this process's local network state. That hosted route
- * relays the resulting code back to LOCAL_RELAY_PORT above, which is what
- * this function actually listens on. The token exchange still includes
- * the client secret.
+ * redirects the browser into this app via the pawos:// custom protocol
+ * (see OAuthProtocolBridge.ts) rather than relaying to a local port — a
+ * remote server has no network path to a port on this machine. The token
+ * exchange still includes the client secret.
  *
- * Opens the system browser (shell.openExternal), waits for the hosted
- * callback to relay Google's code to the local server, exchanges the code
+ * Opens the system browser (shell.openExternal), waits for the OS to
+ * deliver Google's code back via the pawos:// protocol, exchanges the code
  * for tokens, then fetches the profile. Requires GOOGLE_CLIENT_ID/
  * GOOGLE_REDIRECT_URI (and GOOGLE_CLIENT_SECRET, for this client type) in
  * .env — there is no fallback/fake profile if these aren't configured.
@@ -63,16 +49,6 @@ export async function startGoogleSignIn(config: GoogleOAuthConfig): Promise<Goog
   const codeVerifier = base64url(randomBytes(32));
   const codeChallenge = base64url(createHash('sha256').update(codeVerifier).digest());
 
-  const server = http.createServer();
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(LOCAL_RELAY_PORT, '127.0.0.1', () => resolve());
-  }).catch((err) => {
-    throw new Error(
-      `Couldn't start the local sign-in relay on port ${LOCAL_RELAY_PORT} (${err instanceof Error ? err.message : err}). Is another PawOS sign-in already in progress?`
-    );
-  });
-
   const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
   authUrl.searchParams.set('client_id', clientId);
   authUrl.searchParams.set('redirect_uri', redirectUri);
@@ -85,36 +61,27 @@ export async function startGoogleSignIn(config: GoogleOAuthConfig): Promise<Goog
 
   let timeoutHandle: ReturnType<typeof setTimeout>;
   const codePromise = new Promise<string>((resolve, reject) => {
-    timeoutHandle = setTimeout(() => reject(new Error('Google sign-in timed out.')), 120000);
-    server.on('request', (req, res) => {
-      const url = new URL(req.url ?? '/', `http://127.0.0.1:${LOCAL_RELAY_PORT}`);
-      if (url.pathname !== LOCAL_RELAY_PATH) {
-        res.writeHead(404);
-        res.end();
-        return;
-      }
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      const authCode = url.searchParams.get('code');
-      const error = url.searchParams.get('error');
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(
-        error
-          ? `<html><body style="font-family:sans-serif;padding:40px;">Sign-in failed: ${error}. You can close this window.</body></html>`
-          : `<html><body style="font-family:sans-serif;padding:40px;">Signed in — you can close this window and return to PawOS.</body></html>`
-      );
-      if (error) reject(new Error(error));
-      else if (authCode) resolve(authCode);
+    timeoutHandle = setTimeout(() => {
+      unregisterPendingOAuth('google');
+      reject(new Error('Google sign-in timed out.'));
+    }, 120000);
+    registerPendingOAuth('google', {
+      resolve: (c) => {
+        clearTimeout(timeoutHandle);
+        resolve(c);
+      },
+      reject: (e) => {
+        clearTimeout(timeoutHandle);
+        reject(e);
+      },
     });
   });
 
-  // Only open the browser once the server is already listening for the
-  // redirect — opening it any later risks missing a very fast redirect.
+  // Registering the pending resolver before opening the browser avoids
+  // missing a very fast redirect back into the app.
   await shell.openExternal(authUrl.toString());
 
-  const code = await codePromise.finally(() => {
-    clearTimeout(timeoutHandle);
-    server.close();
-  });
+  const code = await codePromise;
 
   const tokenBody: Record<string, string> = {
     client_id: clientId,
