@@ -6,6 +6,7 @@ import { Footer } from "../components/layout/Footer";
 import { Analytics } from "../components/analytics/Analytics";
 import { CookieConsent } from "../components/analytics/CookieConsent";
 import { SiteCompanion } from "../components/site-companion/SiteCompanion";
+import { createClient } from "../lib/supabase/server";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -44,11 +45,23 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  let userEmail: string | null = null;
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    userEmail = user?.email ?? null;
+  } catch {
+    // Supabase not configured (e.g. local dev without env vars) — Nav just
+    // renders signed-out.
+  }
+
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
@@ -85,7 +98,7 @@ export default function RootLayout({
         >
           Skip to content
         </a>
-        <Nav />
+        <Nav userEmail={userEmail} />
         <main id="main-content" className="flex-1">
           {children}
         </main>

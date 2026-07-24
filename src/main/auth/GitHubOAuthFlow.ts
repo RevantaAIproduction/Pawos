@@ -4,6 +4,15 @@ import { shell } from 'electron';
 export type GitHubOAuthCallbackResult = { code: string };
 
 /**
+ * Fixed local port pawos-web's hosted /auth/github/callback route relays
+ * the code to — see the matching constant/comment in GoogleOAuthFlow.ts for
+ * why this is a public hosted URL + local relay rather than a bare loopback
+ * URL registered directly with the provider.
+ */
+const LOCAL_RELAY_PORT = 51898;
+const LOCAL_RELAY_PATH = '/relay';
+
+/**
  * Unlike GoogleOAuthFlow.ts, this does NOT talk to GitHub's token endpoint
  * directly — GitHub's OAuth is plain OAuth2, not OIDC, so it never returns
  * an id_token, and there is no supabase.auth.signInWithIdToken() bridge for
@@ -13,28 +22,27 @@ export type GitHubOAuthCallbackResult = { code: string };
  *
  * The renderer calls supabase.auth.signInWithOAuth({ provider: 'github' })
  * to get Supabase's own authorize URL, then hands it to this function. This
- * function opens that URL in the system browser and waits on a loopback
- * server bound to the exact host/port/path of GITHUB_REDIRECT_URI (which
- * must also be registered in Supabase's project "Redirect URLs" allowlist)
- * for the final redirect Supabase sends back after completing the GitHub
- * exchange. That redirect carries a PKCE `code` query param, which the
- * renderer then exchanges for a real session via
+ * function opens that URL in the system browser and waits on a local relay
+ * server (LOCAL_RELAY_PORT) for pawos-web's hosted /auth/github/callback
+ * route to forward Supabase's final redirect to it — GITHUB_REDIRECT_URI
+ * (that hosted URL, registered in Supabase's project "Redirect URLs"
+ * allowlist) is what Supabase actually redirects the browser to; this
+ * process never binds to it directly. That redirect carries a PKCE `code`
+ * query param, which the renderer then exchanges for a real session via
  * supabase.auth.exchangeCodeForSession() — using the SAME client instance
  * that started the flow, since the PKCE code_verifier lives in that
  * client's local storage.
  */
 export async function waitForGitHubOAuthCallback(redirectUri: string, authorizeUrl: string): Promise<GitHubOAuthCallbackResult> {
-  const parsedRedirect = new URL(redirectUri);
-  const port = Number(parsedRedirect.port) || (parsedRedirect.protocol === 'https:' ? 443 : 80);
-  const callbackPath = parsedRedirect.pathname;
+  void redirectUri; // kept in the signature for callers/logging context; binding now always targets LOCAL_RELAY_PORT below.
 
   const server = http.createServer();
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
-    server.listen(port, parsedRedirect.hostname, () => resolve());
+    server.listen(LOCAL_RELAY_PORT, '127.0.0.1', () => resolve());
   }).catch((err) => {
     throw new Error(
-      `Couldn't start the local sign-in server on port ${port} (${err instanceof Error ? err.message : err}). Is something else already using it?`
+      `Couldn't start the local sign-in relay on port ${LOCAL_RELAY_PORT} (${err instanceof Error ? err.message : err}). Is another PawOS sign-in already in progress?`
     );
   });
 
@@ -42,12 +50,13 @@ export async function waitForGitHubOAuthCallback(redirectUri: string, authorizeU
   const codePromise = new Promise<string>((resolve, reject) => {
     timeoutHandle = setTimeout(() => reject(new Error('GitHub sign-in timed out.')), 120000);
     server.on('request', (req, res) => {
-      const url = new URL(req.url ?? '/', redirectUri);
-      if (url.pathname !== callbackPath) {
+      const url = new URL(req.url ?? '/', `http://127.0.0.1:${LOCAL_RELAY_PORT}`);
+      if (url.pathname !== LOCAL_RELAY_PATH) {
         res.writeHead(404);
         res.end();
         return;
       }
+      res.setHeader('Access-Control-Allow-Origin', '*');
       const code = url.searchParams.get('code');
       const error = url.searchParams.get('error_description') ?? url.searchParams.get('error');
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });

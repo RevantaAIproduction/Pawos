@@ -8,9 +8,24 @@ export type { GoogleProfile, GoogleSignInResult };
 export type GoogleOAuthConfig = {
   clientId: string;
   clientSecret?: string;
-  /** Must exactly match a redirect URI registered on this OAuth client in Google Cloud Console — e.g. http://localhost:8000/auth/google/callback for local dev. */
+  /** Must exactly match a redirect URI registered on this OAuth client in Google Cloud Console — now the hosted pawos-web route (e.g. https://pawos.revantaai.com/auth/google/callback), which relays the code back to this process (see LOCAL_RELAY_PORT below) rather than a loopback URL Google would redirect to directly. */
   redirectUri: string;
 };
+
+/**
+ * Google (and GitHub's) OAuth apps are registered with a public, hosted
+ * redirect URI (pawos-web's /auth/google/callback) rather than a bare
+ * loopback URL — a public HTTPS URL is what OAuth providers expect, and it
+ * lets the browser complete the redirect even if this desktop process's
+ * dynamic port isn't reachable from wherever the system browser runs.
+ * pawos-web's callback route (src/app/auth/google/callback/route.ts) relays
+ * the resulting `code` to this fixed local port so this process — the one
+ * that actually holds the PKCE verifier / does the token exchange — can
+ * pick it up. Fixed (not OS-assigned) so the hosted route has something
+ * stable to target.
+ */
+const LOCAL_RELAY_PORT = 51899;
+const LOCAL_RELAY_PATH = '/relay';
 
 function base64url(buf: Buffer): string {
   return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -18,18 +33,21 @@ function base64url(buf: Buffer): string {
 
 /**
  * Real Google sign-in: Authorization Code flow (+ PKCE for defense in
- * depth) via a loopback HTTP server bound to the exact host/port/path of
- * the configured redirect URI — this client is registered as a "Web
- * application" type (it has a client secret), not a PKCE-only "Desktop
- * app" client, so the redirect URI must match one registered in Google
- * Cloud Console exactly (no dynamic port) and the token exchange includes
+ * depth). This client is registered as a "Web application" type (it has a
+ * client secret), not a PKCE-only "Desktop app" client, so `redirectUri`
+ * must match one registered in Google Cloud Console exactly — that's now
+ * pawos-web's hosted /auth/google/callback route, not a loopback URL, so
+ * Google always has somewhere real to redirect the system browser to
+ * regardless of this process's local network state. That hosted route
+ * relays the resulting code back to LOCAL_RELAY_PORT above, which is what
+ * this function actually listens on. The token exchange still includes
  * the client secret.
  *
- * Opens the system browser (shell.openExternal), waits for Google's
- * redirect to hit the local server, exchanges the code for tokens, then
- * fetches the profile. Requires GOOGLE_CLIENT_ID/GOOGLE_REDIRECT_URI (and
- * GOOGLE_CLIENT_SECRET, for this client type) in .env — there is no
- * fallback/fake profile if these aren't configured.
+ * Opens the system browser (shell.openExternal), waits for the hosted
+ * callback to relay Google's code to the local server, exchanges the code
+ * for tokens, then fetches the profile. Requires GOOGLE_CLIENT_ID/
+ * GOOGLE_REDIRECT_URI (and GOOGLE_CLIENT_SECRET, for this client type) in
+ * .env — there is no fallback/fake profile if these aren't configured.
  *
  * The authorize request already includes the 'openid' scope, so Google's
  * token endpoint already returns a real id_token alongside the access
@@ -41,9 +59,6 @@ function base64url(buf: Buffer): string {
  */
 export async function startGoogleSignIn(config: GoogleOAuthConfig): Promise<GoogleSignInResult> {
   const { clientId, clientSecret, redirectUri } = config;
-  const parsedRedirect = new URL(redirectUri);
-  const port = Number(parsedRedirect.port) || (parsedRedirect.protocol === 'https:' ? 443 : 80);
-  const callbackPath = parsedRedirect.pathname;
 
   const codeVerifier = base64url(randomBytes(32));
   const codeChallenge = base64url(createHash('sha256').update(codeVerifier).digest());
@@ -51,10 +66,10 @@ export async function startGoogleSignIn(config: GoogleOAuthConfig): Promise<Goog
   const server = http.createServer();
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
-    server.listen(port, parsedRedirect.hostname, () => resolve());
+    server.listen(LOCAL_RELAY_PORT, '127.0.0.1', () => resolve());
   }).catch((err) => {
     throw new Error(
-      `Couldn't start the local sign-in server on port ${port} (${err instanceof Error ? err.message : err}). Is something else already using it?`
+      `Couldn't start the local sign-in relay on port ${LOCAL_RELAY_PORT} (${err instanceof Error ? err.message : err}). Is another PawOS sign-in already in progress?`
     );
   });
 
@@ -72,12 +87,13 @@ export async function startGoogleSignIn(config: GoogleOAuthConfig): Promise<Goog
   const codePromise = new Promise<string>((resolve, reject) => {
     timeoutHandle = setTimeout(() => reject(new Error('Google sign-in timed out.')), 120000);
     server.on('request', (req, res) => {
-      const url = new URL(req.url ?? '/', redirectUri);
-      if (url.pathname !== callbackPath) {
+      const url = new URL(req.url ?? '/', `http://127.0.0.1:${LOCAL_RELAY_PORT}`);
+      if (url.pathname !== LOCAL_RELAY_PATH) {
         res.writeHead(404);
         res.end();
         return;
       }
+      res.setHeader('Access-Control-Allow-Origin', '*');
       const authCode = url.searchParams.get('code');
       const error = url.searchParams.get('error');
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });

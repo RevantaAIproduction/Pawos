@@ -13,7 +13,7 @@ const LINKS = [
   { href: "/blog", label: "Blog" },
 ];
 
-export function Nav() {
+export function Nav({ userEmail }: { userEmail: string | null }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -32,7 +32,22 @@ export function Nav() {
           ))}
         </div>
 
-        <div className="hidden md:block">
+        <div className="hidden items-center gap-3 md:flex">
+          {userEmail ? (
+            <Link
+              href="/dashboard"
+              className="flex items-center gap-2 rounded-full border border-neutral-700 px-3 py-1.5 text-sm text-neutral-200 transition hover:bg-neutral-900"
+            >
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-neutral-800 text-xs font-semibold">
+                {userEmail.slice(0, 1).toUpperCase()}
+              </span>
+              Dashboard
+            </Link>
+          ) : (
+            <Link href="/login" className="text-sm text-neutral-300 transition hover:text-white">
+              Log in
+            </Link>
+          )}
           <Button href="/download" variant="primary" className="px-5 py-2">
             Download
           </Button>
@@ -65,6 +80,15 @@ export function Nav() {
                 {l.label}
               </Link>
             ))}
+            {userEmail ? (
+              <Link href="/dashboard" className="hover:text-white" onClick={() => setOpen(false)}>
+                Dashboard
+              </Link>
+            ) : (
+              <Link href="/login" className="hover:text-white" onClick={() => setOpen(false)}>
+                Log in
+              </Link>
+            )}
             <Button href="/download" variant="primary" className="mt-2 w-full">
               Download
             </Button>
