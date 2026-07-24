@@ -10,6 +10,8 @@ import {
   type SessionContinuationCandidate,
   type SessionContinuationDecision,
 } from './SessionClassifier';
+import { resolveReasoningModel } from './PawModelRegistry';
+import { PAW_MODEL_CATALOG, getPawModel, type PawModelId, type PawModelDescriptor } from '../../shared/ai/PawModelTypes';
 
 /**
  * The single entry point for AI capability in PawOS. The UI and the
@@ -21,15 +23,35 @@ import {
 export class AIRouter {
   getReasoningProvider(): ReasoningProvider {
     const config = aiProviderConfigStore.get();
+    const resolvedModel = resolveReasoningModel(config.activeProviderId, config.activePawModelId);
     return createReasoningProvider({
       id: config.activeProviderId,
       apiKey: config.apiKeys[config.activeProviderId],
-      model: config.models[config.activeProviderId],
+      model: resolvedModel ?? config.models[config.activeProviderId],
     });
   }
 
   getActiveProviderId(): ReasoningProviderId {
     return aiProviderConfigStore.get().activeProviderId;
+  }
+
+  /** The Paw-branded model catalog — the only model identity ever surfaced to the UI. */
+  getModelCatalog(): PawModelDescriptor[] {
+    return PAW_MODEL_CATALOG;
+  }
+
+  getActivePawModel(): PawModelDescriptor {
+    return getPawModel(aiProviderConfigStore.getActivePawModel());
+  }
+
+  /**
+   * Explicit, user-initiated model switch only — never called automatically
+   * by any runtime. Returns the descriptor so the caller can show its
+   * informational switchMessage (never a blocking confirmation).
+   */
+  setActivePawModel(id: PawModelId): PawModelDescriptor {
+    aiProviderConfigStore.setActivePawModel(id);
+    return getPawModel(id);
   }
 
   isConfigured(providerId: ReasoningProviderId): boolean {

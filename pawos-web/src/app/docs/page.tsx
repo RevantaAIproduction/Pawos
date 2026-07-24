@@ -12,6 +12,7 @@ export const metadata: Metadata = {
 
 const CATEGORY_ORDER: DocCategory[] = [
   "Getting Started",
+  "AI Models",
   "Companion",
   "Collaboration",
   "Configuration",

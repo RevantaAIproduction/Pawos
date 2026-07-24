@@ -33,6 +33,10 @@ export class NetlifyConnector implements HostingConnector {
     return Boolean(this.token);
   }
 
+  setToken(token: string): void {
+    this.token = token;
+  }
+
   private notConfigured(): { ok: false; reason: string } {
     return { ok: false, reason: 'Netlify is not configured. Add NETLIFY_TOKEN to .env to connect it.' };
   }

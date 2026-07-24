@@ -1,7 +1,7 @@
 import type { EngineeringReport } from './EngineeringReportTypes';
 
 /** One entry per engineering event Paw performed or observed — deployment, rollback, incident investigation, a standalone root-cause note, or a full structured Engineering Report. Same "one already-finished record per write" discipline as ExecutionRecord. */
-export type EngineeringMemoryEntryKind = 'deployment' | 'rollback' | 'incident' | 'rootCause' | 'engineeringReport';
+export type EngineeringMemoryEntryKind = 'deployment' | 'rollback' | 'incident' | 'rootCause' | 'engineeringReport' | 'pullRequestReview';
 
 export type EngineeringMemoryEntry = {
   id: string;

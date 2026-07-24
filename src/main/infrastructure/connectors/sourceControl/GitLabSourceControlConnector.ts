@@ -1,4 +1,4 @@
-import type { ConnectorResult, InfraCommit, InfraRepository, SourceControlConnector } from '../../../../shared/infrastructure/InfrastructureTypes';
+import type { ConnectorResult, InfraCommit, InfraPullRequest, InfraRepository, SourceControlConnector } from '../../../../shared/infrastructure/InfrastructureTypes';
 
 /** Real GitLab REST API connector (gitlab.com or a self-managed instance via GITLAB_URL). */
 export class GitLabSourceControlConnector implements SourceControlConnector {
@@ -9,6 +9,10 @@ export class GitLabSourceControlConnector implements SourceControlConnector {
 
   isConfigured(): boolean {
     return Boolean(this.token);
+  }
+
+  setToken(token: string): void {
+    this.token = token;
   }
 
   private api(): string {
@@ -65,6 +69,72 @@ export class GitLabSourceControlConnector implements SourceControlConnector {
       const first = data[0];
       if (!first) return { ok: false, reason: `${repo} has no commits on ${branch ?? 'its default branch'}.` };
       return { ok: true, sha: first.id, message: first.message, author: first.author_name, date: first.authored_date };
+    } catch (error) {
+      return { ok: false, reason: `Failed to reach GitLab: ${error instanceof Error ? error.message : String(error)}` };
+    }
+  }
+
+  async listPullRequests(repo: string): Promise<ConnectorResult<{ pullRequests: InfraPullRequest[] }>> {
+    if (!this.isConfigured()) return this.notConfigured();
+    try {
+      const projectId = encodeURIComponent(repo);
+      const res = await fetch(`${this.api()}/projects/${projectId}/merge_requests?scope=all&per_page=50&order_by=updated_at`, {
+        headers: this.headers(),
+      });
+      if (!res.ok) return { ok: false, reason: `GitLab API returned ${res.status} for ${repo} merge requests` };
+      const data = (await res.json()) as Array<{
+        iid: number;
+        title: string;
+        author: { username: string } | null;
+        source_branch: string;
+        target_branch: string;
+        web_url: string;
+        state: 'opened' | 'closed' | 'merged' | 'locked';
+      }>;
+      const pullRequests: InfraPullRequest[] = data.map((mr) => ({
+        number: mr.iid,
+        title: mr.title,
+        author: mr.author?.username ?? 'unknown',
+        headBranch: mr.source_branch,
+        baseBranch: mr.target_branch,
+        url: mr.web_url,
+        state: mr.state === 'merged' ? 'merged' : mr.state === 'closed' ? 'closed' : 'open',
+      }));
+      return { ok: true, pullRequests };
+    } catch (error) {
+      return { ok: false, reason: `Failed to reach GitLab: ${error instanceof Error ? error.message : String(error)}` };
+    }
+  }
+
+  async getPullRequestDiff(repo: string, prNumber: number): Promise<ConnectorResult<{ diff: string }>> {
+    if (!this.isConfigured()) return this.notConfigured();
+    try {
+      const projectId = encodeURIComponent(repo);
+      const res = await fetch(`${this.api()}/projects/${projectId}/merge_requests/${prNumber}/diffs?per_page=100`, {
+        headers: this.headers(),
+      });
+      if (!res.ok) return { ok: false, reason: `GitLab API returned ${res.status} for ${repo}!${prNumber} diffs` };
+      const data = (await res.json()) as Array<{ old_path: string; new_path: string; diff: string }>;
+      const diff = data
+        .map((d) => `diff --git a/${d.old_path} b/${d.new_path}\n${d.diff}`)
+        .join('\n');
+      return { ok: true, diff };
+    } catch (error) {
+      return { ok: false, reason: `Failed to reach GitLab: ${error instanceof Error ? error.message : String(error)}` };
+    }
+  }
+
+  async createPullRequestComment(repo: string, prNumber: number, body: string): Promise<ConnectorResult<{ commentUrl?: string }>> {
+    if (!this.isConfigured()) return this.notConfigured();
+    try {
+      const projectId = encodeURIComponent(repo);
+      const res = await fetch(`${this.api()}/projects/${projectId}/merge_requests/${prNumber}/notes`, {
+        method: 'POST',
+        headers: { ...this.headers(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body }),
+      });
+      if (!res.ok) return { ok: false, reason: `GitLab API returned ${res.status} posting a comment on ${repo}!${prNumber}` };
+      return { ok: true };
     } catch (error) {
       return { ok: false, reason: `Failed to reach GitLab: ${error instanceof Error ? error.message : String(error)}` };
     }

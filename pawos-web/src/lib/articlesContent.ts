@@ -208,7 +208,7 @@ export const ARTICLES: Article[] = [
     body: [
       "Autonomous Engineering Task billing is now fully success-gated at the database level: two separate functions handle marking a run \"completed\" (which requires a real PR and an updated ticket) versus \"terminal\" (failed, cancelled, or retry-limit-reached) — deliberately two functions rather than one with a client-settable flag, so no client call can ever mark a run both terminal and billable at once.",
       "Completion deliberately never requires a deploy to have happened — only a real PR and a real ticket update — closing a loophole where teams that gate their own deploys separately would otherwise never get billed for genuinely completed engineering work.",
-      "Every plan now includes a real monthly allowance before metered billing starts, visible in-app with full billing history export.",
+      "Autonomous Engineering Tasks now run on prepaid task credits ($5/credit, $30 minimum) rather than a monthly allowance — credits don't expire, and balance, purchase history, and usage history are all visible in-app with full CSV export.",
     ],
   },
   {

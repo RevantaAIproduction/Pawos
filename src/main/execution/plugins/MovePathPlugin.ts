@@ -5,6 +5,7 @@ import { BasePlugin } from '../BasePlugin';
 import { describeFailure } from '../describeFailure';
 import { copyWithVerify } from './pathCopy';
 import { onFileMoved, onFileRenamed } from '../../memory/entities/fileEntities';
+import { recoverByRetry } from '../RecoverByRetry';
 
 /** Covers both rename and move — fs.rename handles both identically. Destructive at the type level (DESTRUCTIVE_ACTION_TYPES) since a wrong move can silently break references. */
 export class MovePathPlugin extends BasePlugin {
@@ -51,6 +52,10 @@ export class MovePathPlugin extends BasePlugin {
       return { ok: false, reason: 'failed', message: "The move reported success, but the destination doesn't exist — something went wrong." };
     }
     return result;
+  }
+
+  async recover(request: ActionRequest, result: ActionResult): Promise<ActionResult> {
+    return recoverByRetry(request, result, (r) => this.execute(r));
   }
 
   describeInProgress(request: ActionRequest): string {

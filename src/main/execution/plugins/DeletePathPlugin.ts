@@ -5,6 +5,7 @@ import { BasePlugin } from '../BasePlugin';
 import { describeFailure } from '../describeFailure';
 import { trashStore } from './recycleBin';
 import { onFileDeleted } from '../../memory/entities/fileEntities';
+import { recoverByRetry } from '../RecoverByRetry';
 
 /**
  * Deletes a file or folder (recursively). Always destructive —
@@ -50,6 +51,10 @@ export class DeletePathPlugin extends BasePlugin {
       return { ok: false, reason: 'failed', message: 'The delete reported success, but the path still exists.' };
     }
     return result;
+  }
+
+  async recover(request: ActionRequest, result: ActionResult): Promise<ActionResult> {
+    return recoverByRetry(request, result, (r) => this.execute(r));
   }
 
   describeInProgress(request: ActionRequest): string {

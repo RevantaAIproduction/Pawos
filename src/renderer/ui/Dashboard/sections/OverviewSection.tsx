@@ -1,47 +1,141 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
 import type { SectionId } from './index';
+import { useIpcBridge } from '../../../services/ipc/useIpcBridge';
+import type { ExecutionRecord } from '../../../../shared/actions/ExecutionRecordTypes';
+import type { EntitlementSnapshot } from '../../../../shared/billing/BillingTypes';
+import { PAW_MODEL_CATALOG } from '../../../../shared/ai/PawModelTypes';
 
-const CARDS: { title: string; body: string; goto?: SectionId }[] = [
-  { title: "Today's overview", body: 'No activity yet — enable your companion to start building a history.' },
-  { title: 'Companion status', body: 'Not enabled. Turn it on from Talk with Paw.', goto: 'talk' },
-  { title: 'Companion Studio', body: 'Customize your companion, or upload a 3D model of your own.', goto: 'companionLab' },
-  { title: 'Desktop actions', body: 'Open apps, websites, folders, or search files by hand right from here.', goto: 'desktop' },
-  { title: 'System status', body: 'Running on local CPU rendering. All systems normal.' },
-];
+function timeAgo(ts: number): string {
+  const diffMs = Date.now() - ts;
+  const min = Math.floor(diffMs / 60000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  return `${Math.floor(hr / 24)}d ago`;
+}
 
-const QUICK_ACTIONS: { label: string; goto: SectionId }[] = [
-  { label: 'Enable companion', goto: 'talk' },
-  { label: 'Companion Studio', goto: 'companionLab' },
-  { label: 'Desktop actions', goto: 'desktop' },
-  { label: 'Settings', goto: 'settings' },
-];
+/**
+ * Layout only, per Phase 1: one clear primary action (enable/talk to the
+ * companion), a compact status strip, and a single merged activity feed —
+ * no runtime shortcuts here (that's what Apps is for) and no invented
+ * notifications section. Same real data sources as before this pass.
+ */
+export function OverviewSection({
+  onNavigate,
+  companionEnabled,
+  companionPending,
+  onEnableCompanion,
+  onDisableCompanion,
+}: {
+  onNavigate: (id: SectionId) => void;
+  companionEnabled: boolean;
+  companionPending: boolean;
+  onEnableCompanion: () => void;
+  onDisableCompanion: () => void;
+}) {
+  const ipc = useIpcBridge();
+  const [executions, setExecutions] = useState<ExecutionRecord[] | null>(null);
+  const [entitlement, setEntitlement] = useState<EntitlementSnapshot | null>(null);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
 
-export function OverviewSection({ onNavigate }: { onNavigate: (id: SectionId) => void }) {
+  const refreshExecutions = () => {
+    ipc.listExecutions().then(setExecutions).catch(() => setExecutions([]));
+  };
+
+  useEffect(() => {
+    refreshExecutions();
+    ipc.entitlementGetSnapshot().then(setEntitlement).catch(() => {});
+    ipc.getAppVersion().then(setAppVersion).catch(() => {});
+    return ipc.onExecutionUpdated(refreshExecutions);
+  }, []);
+
+  const active = (executions ?? []).filter((e) => e.status === 'in_progress').sort((a, b) => b.startedAt - a.startedAt);
+  const recent = (executions ?? [])
+    .filter((e) => e.status !== 'in_progress')
+    .sort((a, b) => b.startedAt - a.startedAt)
+    .slice(0, 6);
+
+  const activeModel = entitlement ? PAW_MODEL_CATALOG.find((m) => entitlement.models.includes(m.id)) : undefined;
+  const aiUsageText = entitlement
+    ? entitlement.models.length === 0
+      ? 'Paw Go — no AI models on this plan'
+      : `${entitlement.creditsUsedThisPeriod} credits used${entitlement.creditLimit === null ? '' : ` / ${entitlement.creditLimit}`}${activeModel ? ` · ${activeModel.label}` : ''}`
+    : '…';
+
   return (
     <div>
-      <div className={styles.grid}>
-        {CARDS.map((card) => (
-          <div
-            key={card.title}
-            className={styles.card}
-            onClick={card.goto ? () => onNavigate(card.goto!) : undefined}
-            style={card.goto ? { cursor: 'pointer' } : undefined}
+      <div className={styles.companionPanel} style={{ padding: '32px 24px' }}>
+        <div className={styles.companionOrbWrap} style={{ width: 72, height: 72, marginBottom: 14 }}>
+          <div className={styles.companionOrbGlow} data-on={companionEnabled} />
+          <div className={styles.companionOrb} data-on={companionEnabled} />
+        </div>
+        <h3 className={styles.companionState} style={{ fontSize: 16 }}>
+          {companionEnabled ? 'Your companion is active' : 'Your companion is off'}
+        </h3>
+        <p className={styles.cardBody}>
+          {companionEnabled ? 'Ask it to do something, or open Talk with Paw to continue a conversation.' : 'Enable it to start working with Paw.'}
+        </p>
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          <button
+            type="button"
+            className={companionEnabled ? styles.dangerButton : styles.primaryButton}
+            disabled={companionPending}
+            onClick={companionEnabled ? onDisableCompanion : onEnableCompanion}
           >
-            <h3 className={styles.cardTitle}>{card.title}</h3>
-            <p className={styles.cardBody}>{card.body}</p>
-          </div>
-        ))}
+            {companionPending ? 'Working…' : companionEnabled ? 'Disable' : 'Enable companion'}
+          </button>
+          {companionEnabled && (
+            <button type="button" className={styles.chip} onClick={() => onNavigate('talk')}>
+              Talk with Paw
+            </button>
+          )}
+        </div>
       </div>
 
-      <h3 className={styles.subheading}>Quick actions</h3>
-      <div className={styles.quickActions}>
-        {QUICK_ACTIONS.map((action) => (
-          <button key={action.label} type="button" className={styles.chip} onClick={() => onNavigate(action.goto)}>
-            {action.label}
-          </button>
-        ))}
+      <div className={styles.statusStrip}>
+        <div className={styles.statusStripItem} onClick={() => onNavigate('analytics')} style={{ cursor: 'pointer' }}>
+          <span className={styles.statusStripLabel}>AI usage</span>
+          <span className={styles.statusStripValue}>{aiUsageText}</span>
+        </div>
+        <div className={styles.statusStripItem}>
+          <span className={styles.statusStripLabel}>Version</span>
+          <span className={styles.statusStripValue}>{appVersion ?? '…'}</span>
+        </div>
+        <div className={styles.statusStripItem} onClick={() => onNavigate('projects')} style={{ cursor: 'pointer' }}>
+          <span className={styles.statusStripLabel}>Projects</span>
+          <span className={styles.statusStripValue}>View recent →</span>
+        </div>
       </div>
+
+      <h3 className={styles.subheading}>Recent activity</h3>
+      {active.length === 0 && recent.length === 0 ? (
+        <div className={styles.compactEmptyState}>
+          No activity yet — enable your companion and ask it to do something to start building a history.
+        </div>
+      ) : (
+        <div className={styles.activityList}>
+          {active.map((e) => (
+            <div key={e.id} className={styles.activityRow}>
+              <span className={styles.statusBadge} data-status={e.status}>
+                Running
+              </span>
+              <span className={styles.activityGoal}>{e.goal}</span>
+              <span className={styles.activityMeta}>{timeAgo(e.startedAt)}</span>
+            </div>
+          ))}
+          {recent.map((e) => (
+            <div key={e.id} className={styles.activityRow}>
+              <span className={styles.statusBadge} data-status={e.status}>
+                {e.status === 'completed' ? 'Done' : e.status === 'failed' ? 'Failed' : 'Stopped'}
+              </span>
+              <span className={styles.activityGoal}>{e.goal}</span>
+              <span className={styles.activityMeta}>{timeAgo(e.startedAt)}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,9 +1,9 @@
 import { randomBytes, createHash } from 'crypto';
 import * as http from 'http';
 import { shell } from 'electron';
-import type { GoogleProfile } from '../../shared/auth/AccountTypes';
+import type { GoogleProfile, GoogleSignInResult } from '../../shared/auth/AccountTypes';
 
-export type { GoogleProfile };
+export type { GoogleProfile, GoogleSignInResult };
 
 export type GoogleOAuthConfig = {
   clientId: string;
@@ -30,8 +30,16 @@ function base64url(buf: Buffer): string {
  * fetches the profile. Requires GOOGLE_CLIENT_ID/GOOGLE_REDIRECT_URI (and
  * GOOGLE_CLIENT_SECRET, for this client type) in .env — there is no
  * fallback/fake profile if these aren't configured.
+ *
+ * The authorize request already includes the 'openid' scope, so Google's
+ * token endpoint already returns a real id_token alongside the access
+ * token — this function now returns it (see GoogleSignInResult) so the
+ * renderer can bridge into a real Supabase session via
+ * supabase.auth.signInWithIdToken(), which every Supabase-backed feature
+ * (Organizations, RLS) requires. Without this, a Google-signed-in PawOS
+ * user is fully authenticated locally but invisible to Supabase.
  */
-export async function startGoogleSignIn(config: GoogleOAuthConfig): Promise<GoogleProfile> {
+export async function startGoogleSignIn(config: GoogleOAuthConfig): Promise<GoogleSignInResult> {
   const { clientId, clientSecret, redirectUri } = config;
   const parsedRedirect = new URL(redirectUri);
   const port = Number(parsedRedirect.port) || (parsedRedirect.protocol === 'https:' ? 443 : 80);
@@ -109,11 +117,17 @@ export async function startGoogleSignIn(config: GoogleOAuthConfig): Promise<Goog
   if (!tokenResponse.ok) {
     throw new Error(`Google token exchange failed (${tokenResponse.status}): ${await tokenResponse.text()}`);
   }
-  const tokens = (await tokenResponse.json()) as { access_token: string };
+  const tokens = (await tokenResponse.json()) as { access_token: string; id_token?: string };
+  if (!tokens.id_token) {
+    // Shouldn't happen given the 'openid' scope above, but fail loudly
+    // rather than silently skipping the Supabase bridge.
+    throw new Error('Google did not return an ID token — sign-in cannot be linked to a cloud session.');
+  }
 
   const profileResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
     headers: { Authorization: `Bearer ${tokens.access_token}` },
   });
   if (!profileResponse.ok) throw new Error(`Google profile fetch failed (${profileResponse.status}).`);
-  return (await profileResponse.json()) as GoogleProfile;
+  const profile = (await profileResponse.json()) as GoogleProfile;
+  return { profile, idToken: tokens.id_token, accessToken: tokens.access_token };
 }

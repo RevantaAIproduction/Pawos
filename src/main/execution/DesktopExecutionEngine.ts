@@ -5,7 +5,9 @@ import { codingModeStore } from './CodingModeStore';
 import { infraModeStore } from '../infrastructure/InfraModeStore';
 import { pendingApprovalStore, deriveApprovalKey } from '../infrastructure/PendingApprovalStore';
 import type { ExecutionTrail, ObservationEvent } from '../../shared/actions/ExecutionLifecycle';
+import { NOT_AUTO_RECOVERABLE, classifyFailure, recoveryNarrationFor, RECOVERY_SUCCESS_NARRATION } from '../../shared/execution/RecoveryNarration';
 import type { DesktopPlugin } from './DesktopPlugin';
+import { BasePlugin } from './BasePlugin';
 import { openAppPlugin } from './plugins/OpenAppPlugin';
 import { openUrlPlugin } from './plugins/OpenUrlPlugin';
 import { openFolderPlugin } from './plugins/OpenFolderPlugin';
@@ -152,11 +154,14 @@ import { listEngineeringMemoryPlugin } from './plugins/infrastructure/ListEngine
 import { getInfrastructureGraphSummaryPlugin } from './plugins/infrastructure/GetInfrastructureGraphSummaryPlugin';
 import { getDeploymentStatusPlugin } from './plugins/infrastructure/GetDeploymentStatusPlugin';
 import { listConfiguredInfraConnectorsPlugin } from './plugins/infrastructure/ListConfiguredInfraConnectorsPlugin';
+import { applyOrganizationCredentialPlugin } from './plugins/infrastructure/ApplyOrganizationCredentialPlugin';
 import { investigateTicketPlugin } from './plugins/infrastructure/InvestigateTicketPlugin';
 import { investigateProductionIssuePlugin } from './plugins/infrastructure/InvestigateProductionIssuePlugin';
 import { compareDeploymentsPlugin } from './plugins/infrastructure/CompareDeploymentsPlugin';
 import { discoverInfrastructurePlugin } from './plugins/infrastructure/DiscoverInfrastructurePlugin';
 import { searchInfrastructurePlugin } from './plugins/infrastructure/SearchInfrastructurePlugin';
+import { listPullRequestsPlugin } from './plugins/infrastructure/ListPullRequestsPlugin';
+import { aiReviewPullRequestPlugin } from './plugins/infrastructure/AiReviewPullRequestPlugin';
 import { mergePdfsPlugin } from './plugins/office/MergePdfsPlugin';
 import { createDocxPlugin } from './plugins/office/CreateDocxPlugin';
 import { createSpreadsheetPlugin } from './plugins/office/CreateSpreadsheetPlugin';
@@ -329,6 +334,7 @@ export class DesktopExecutionEngine extends EventEmitter {
     promoteDeploymentPlugin,
     getDeploymentStatusPlugin,
     listConfiguredInfraConnectorsPlugin,
+    applyOrganizationCredentialPlugin,
     getApprovalQueuePlugin,
     listEngineeringMemoryPlugin,
     getInfrastructureGraphSummaryPlugin,
@@ -337,6 +343,8 @@ export class DesktopExecutionEngine extends EventEmitter {
     compareDeploymentsPlugin,
     discoverInfrastructurePlugin,
     searchInfrastructurePlugin,
+    listPullRequestsPlugin,
+    aiReviewPullRequestPlugin,
     mergePdfsPlugin,
     createDocxPlugin,
     createSpreadsheetPlugin,
@@ -431,12 +439,29 @@ export class DesktopExecutionEngine extends EventEmitter {
     // A pending confirmation isn't a failure to repair — some plugins are
     // conditionally destructive (writeFile/browseWeb) and signal this
     // themselves rather than through the global DESTRUCTIVE_ACTION_TYPES
-    // gate above; retrying would risk silently bypassing that gate.
-    while (!result.ok && result.reason !== 'requires-confirmation' && attempts < MAX_RECOVERY_ATTEMPTS) {
+    // gate above; retrying would risk silently bypassing that gate. A
+    // failure classified as NOT_AUTO_RECOVERABLE (a real merge conflict, a
+    // missing permission) also skips the loop entirely — see
+    // RecoveryNarration.ts: retrying those can't possibly help, so the
+    // model gets the honest failure immediately instead of 3 futile
+    // attempts dressed up as "fixing it." Likewise, a plugin that never
+    // overrode recover() (still BasePlugin's no-op pass-through) has no
+    // real remediation to attempt — looping and narrating "I'm fixing
+    // that" 3 times when nothing is actually happening would be dishonest,
+    // so those plugins fail immediately too.
+    const initialFailureClass = !result.ok ? classifyFailure(result.message) : undefined;
+    const hasRealRecovery = plugin.recover !== BasePlugin.prototype.recover;
+    const autoRecoverable = hasRealRecovery && (!initialFailureClass || !NOT_AUTO_RECOVERABLE.has(initialFailureClass));
+    while (!result.ok && result.reason !== 'requires-confirmation' && autoRecoverable && attempts < MAX_RECOVERY_ATTEMPTS) {
       attempts += 1;
+      const narration = recoveryNarrationFor(result.message, attempts);
+      this.emit('observation', { actionType: request.type, event: { at: Date.now(), message: narration } });
       const recoveredResult = await plugin.recover(request, result);
       result = await plugin.verify(request, recoveredResult);
       if (result.ok) recovered = true;
+    }
+    if (recovered && attempts > 0) {
+      this.emit('observation', { actionType: request.type, event: { at: Date.now(), message: RECOVERY_SUCCESS_NARRATION } });
     }
 
     const trail: ExecutionTrail = { attempts, recovered, observations };

@@ -440,6 +440,7 @@ export type ActionRequest =
   // Read-only status/health checks — never gated.
   | { type: 'getDeploymentStatus'; serviceName: string; repo?: string; branch?: string }
   | { type: 'listConfiguredInfraConnectors' }
+  | { type: 'applyOrganizationCredential'; connectorKind: string; connectorId: string; secret: string }
   | { type: 'getApprovalQueue' }
   | { type: 'listEngineeringMemory' }
   | { type: 'getInfrastructureGraphSummary'; serviceName: string }
@@ -453,10 +454,35 @@ export type ActionRequest =
   // is failing" — the same real evidence-gathering pipeline as
   // investigateTicket, just without a ticket to read first. Read-only, never gated.
   | { type: 'investigateProductionIssue'; description: string; cwd?: string }
+  // Autonomous Engineering Task billing (PAWOS_PRICING_AUDIT.md) — these
+  // three never touch the local filesystem or run any code themselves;
+  // they only report the lifecycle of an autonomous, org-scoped ticket
+  // workflow to Organization Runtime for billing. Handled entirely in the
+  // renderer (direct-Supabase, like every other org action) rather than by
+  // any DesktopExecutionEngine plugin — see AutonomousTaskBillingGate.ts.
+  // Never gated as destructive: starting/failing/cancelling a billing
+  // record has no real-world side effect, and completing one only ever
+  // fires after the model has already done the actual (separately gated)
+  // work — writeFile/gitCommit/deployProject each already required their
+  // own confirmation before this is ever called.
+  // organizationId is optional — omit it for an individual (Pro/Pro Max,
+  // no organization) prepaid task credit run; see AutonomousTaskBillingGate.ts.
+  | { type: 'startAutonomousEngineeringTask'; organizationId?: string; workspaceId?: string; ticketSource?: 'jira' | 'github' | 'linear' | 'azureDevOps'; ticketId?: string; repository?: string }
+  | { type: 'completeAutonomousEngineeringTask'; runId: string; prUrl?: string; clientReplySent?: boolean; deployCompleted?: boolean }
+  | { type: 'endAutonomousEngineeringTask'; runId: string; status: 'failed' | 'cancelled' | 'retry_limit_reached' }
   // Read-only Deployment Intelligence helpers — never gated.
   | { type: 'compareDeployments'; serviceName: string }
   | { type: 'discoverInfrastructure' }
   | { type: 'searchInfrastructure'; query: string }
+  // Team & Enterprise Phase 3 — Git Collaboration. Reading PRs is investigation,
+  // never gated, same as getDeploymentStatus/investigateTicket above. AI review
+  // itself is also read-only (fetch diff, generate a structured review) unless
+  // postComment is set, in which case it follows writeFile's own precedent:
+  // conditional destructiveness checked by the plugin at execute time, not a
+  // blanket DESTRUCTIVE_ACTION_TYPES entry, since only the plugin knows whether
+  // this particular call will actually write an external comment.
+  | { type: 'listPullRequests'; repo: string; provider?: 'github' | 'gitlab' }
+  | { type: 'aiReviewPullRequest'; repo: string; prNumber: number; provider?: 'github' | 'gitlab'; postComment?: boolean; confirmed?: boolean }
   // Office Intelligence Runtime — Document Intelligence. Both create a new
   // file, so they share writeFile's "confirm only when overwriting an
   // existing path" discipline, checked per-request, not a blanket gate.

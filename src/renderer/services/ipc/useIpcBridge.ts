@@ -16,6 +16,7 @@ import type { WorkspaceObservationEvent } from '../../../shared/actions/Executio
 import type { ExecutionRecord } from '../../../shared/actions/ExecutionRecordTypes';
 import type { BrowserCapabilityReport } from '../../../shared/actions/BrowserCapabilityTypes';
 import type { CommunicationRuntimeEvent } from '../../../shared/communication/CommunicationTypes';
+import type { CreditBalance, EntitlementSnapshot, SubscriptionState } from '../../../shared/billing/BillingTypes';
 
 export function useIpcBridge() {
   const ipc = useMemo(() => getIpcBridge(), []);
@@ -48,6 +49,8 @@ export function useIpcBridge() {
 
       onSettingsUpdated: (cb: (s: SettingsState) => void) => ipc.onSettingsUpdated(cb),
       onUiOpenSettings: (cb: () => void) => ipc.onUiOpenSettings(cb),
+      onTaskCreditsPurchased: (cb: (payload: { credits: number; organizationId?: string }) => void) =>
+        ipc.onTaskCreditsPurchased(cb),
 
       moveOverlayWindow: async (x: number, y: number): Promise<boolean> => ipc.overlayMoveWindow(x, y),
       getOverlayWindowBounds: async (): Promise<{ x: number; y: number; width: number; height: number } | null> =>
@@ -58,6 +61,7 @@ export function useIpcBridge() {
       getEnvApiKeys: async (): Promise<{ gemini?: string }> => ipc.envGetApiKeys(),
 
       getForegroundWindowInfo: async (): Promise<ForegroundWindowInfo> => ipc.systemGetForegroundWindowInfo(),
+      getAppVersion: async (): Promise<string> => ipc.systemGetAppVersion(),
 
       sendMail: async (method: string, to: string, params: unknown): Promise<boolean> => ipc.mailSend(method, to, params),
       listMailTemplates: async (): Promise<{ key: string; label: string }[]> => ipc.mailListTemplates(),
@@ -88,6 +92,11 @@ export function useIpcBridge() {
       onWorkspaceFileChanged: (cb: (event: WorkspaceFileChangeEvent) => void) => ipc.onWorkspaceFileChanged(cb),
       onWorkspaceObservation: (cb: (event: WorkspaceObservationEvent) => void) => ipc.onWorkspaceObservation(cb),
       onCommunicationEvent: (cb: (event: CommunicationRuntimeEvent) => void) => ipc.onCommunicationEvent(cb),
+
+      entitlementGetSnapshot: async (): Promise<EntitlementSnapshot> => ipc.entitlementGetSnapshot(),
+      billingGetSubscription: async (): Promise<SubscriptionState> => ipc.billingGetSubscription(),
+      billingConsumeCredit: async (amount: number, reason: string): Promise<CreditBalance> =>
+        ipc.billingConsumeCredit(amount, reason),
     }),
     [ipc]
   );

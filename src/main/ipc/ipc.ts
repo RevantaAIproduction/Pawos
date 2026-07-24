@@ -9,19 +9,24 @@ import { fileWatcherManager } from '../execution/FileWatcher';
 import { workspaceMemoryStore } from '../execution/WorkspaceMemoryStore';
 import { getAnimationsDir, getCharactersDir, getPetsDir } from '../assets/AssetPathResolver';
 import type { ForegroundWindowInfo } from '../../shared/system/ForegroundWindowInfo';
-import type { GoogleProfile } from '../../shared/auth/AccountTypes';
+import type { GoogleSignInResult } from '../../shared/auth/AccountTypes';
 import { emailService } from '../mail/EmailService';
 import { listMailTemplates, renderMailPreview } from '../mail/preview';
 import { createOtp, verifyOtp } from '../mail/otp';
 import { createPasswordResetToken, verifyPasswordResetToken } from '../mail/passwordResetToken';
 import { platformPairingStore } from '../pairing/PlatformPairingStore';
+import { deviceIdentityStore } from '../device/DeviceIdentityStore';
 import { exportCompanionPackage, importCompanionPackage } from '../companion/CompanionPackageFormat';
 import type { CompanionPackageInput } from '../../shared/companion/CompanionPackageTypes';
 import { pricingConfigStore } from '../billing/PricingConfigStore';
 import { subscriptionStore } from '../billing/SubscriptionStore';
 import { creditStore } from '../billing/CreditStore';
 import { createBillingProvider } from '../billing/BillingProviderRegistry';
-import type { SubscriptionTierId } from '../../shared/billing/BillingTypes';
+import { createCreditsCheckoutUrl } from '../billing/providers/RazorpayBillingProvider';
+import { entitlementService } from '../billing/EntitlementService';
+import { startCheckoutCallbackServer } from '../billing/CheckoutSyncServer';
+import type { SubscriptionTierId, FeatureId, CheckoutOptions } from '../../shared/billing/BillingTypes';
+import type { PawModelId } from '../../shared/ai/PawModelTypes';
 import { onboardingStore } from '../onboarding/OnboardingStore';
 import { conversationSessionStore } from '../conversation/ConversationSessionStore';
 import type { ConversationSessionTurn, SessionContinuationHint } from '../../shared/conversation/ConversationSessionTypes';
@@ -30,6 +35,12 @@ import type { ExecutionRecord } from '../../shared/actions/ExecutionRecordTypes'
 import { browserRuntime } from '../execution/browser/BrowserRuntime';
 import { communicationRuntime } from '../communication/CommunicationRuntime';
 import type { CommunicationRuntimeEvent } from '../../shared/communication/CommunicationTypes';
+import { helpActivityStore } from '../help/HelpActivityStore';
+import { supportConversationStore } from '../help/SupportConversationStore';
+import type { SupportConversationTurn } from '../help/SupportConversationTypes';
+import { ratingPromptStore } from '../feedback/RatingPromptStore';
+import { feedbackStore } from '../feedback/FeedbackStore';
+import type { FeedbackSubmission } from '../../renderer/services/ipc/ipcTypes';
 
 function toFileUrl(dir: string): string {
   return `file://${dir.replace(/\\/g, '/')}/`;
@@ -46,7 +57,7 @@ export function registerIpc(opts: {
   getEnvApiKeys: () => { gemini?: string; supabaseUrl?: string; supabasePublishableKey?: string };
   getForegroundWindowInfo: () => ForegroundWindowInfo;
   isGoogleSignInConfigured: () => boolean;
-  startGoogleSignIn: () => Promise<GoogleProfile>;
+  startGoogleSignIn: () => Promise<GoogleSignInResult>;
   getEmailSigningSecret: () => string | undefined;
 }) {
   ipcMain.handle('companion:enable', () => {
@@ -80,6 +91,22 @@ export function registerIpc(opts: {
     desktopExecutionEngine.describeDone(request, result)
   );
 
+  // Phase 5 shared terminal: relays a remote helper's typed input into the
+  // host's real local shell process, gated entirely client-side by the
+  // `terminal` control grant before this is ever called.
+  ipcMain.handle('process:writeStdin', (_evt, processId: string, data: string) => processManager.writeStdin(processId, data));
+
+  // Phase 5 shared terminal: spawns a real persistent interactive shell,
+  // deliberately outside the AI-action allowlist (see ProcessManager's
+  // startInteractiveShell doc comment) — gated by human-to-human Remote
+  // Assistance consent, not the AI command allowlist.
+  ipcMain.handle('remoteAssistance:startSharedTerminal', (_evt, cwd: string, label: string) => processManager.startInteractiveShell(cwd, label));
+
+  // Phase 5 shared terminal: the host's own home directory as the default
+  // starting cwd for a remote-assistance shared shell (the renderer has no
+  // Node `process.cwd()`/`os.homedir()` under contextIsolation).
+  ipcMain.handle('system:getHomeDir', () => app.getPath('home'));
+
   // Live output from anything started via startProcess — broadcast to every
   // window (same shape as sessions:updated) so the conversation panel can
   // keep updating one message as a dev server/build tool produces output.
@@ -111,10 +138,70 @@ export function registerIpc(opts: {
   ipcMain.handle('settings:get', () => SettingsStore.getState());
   ipcMain.handle('settings:set', async (_evt, partial: any) => {
     SettingsStore.update(partial);
-    const win = opts.overlayWindowProvider();
-    win?.webContents.send('settings:updated', SettingsStore.getState());
-    return SettingsStore.getState();
+    const state = SettingsStore.getState();
+    for (const win of BrowserWindow.getAllWindows()) win.webContents.send('settings:updated', state);
+    return state;
   });
+
+  ipcMain.handle('feedback:submit', async (_evt, submission: FeedbackSubmission) => {
+    const entry = feedbackStore.append({
+      rating: submission.rating,
+      comment: submission.comment,
+      submittedAt: Date.now(),
+      appVersion: app.getVersion(),
+    });
+    ratingPromptStore.markRated();
+    try {
+      await emailService.sendFeedbackReceived('founder@revantaai.com', {
+        rating: entry.rating,
+        comment: entry.comment,
+        fromName: 'A PawOS user',
+        appVersion: entry.appVersion,
+      });
+    } catch (err) {
+      // Best-effort only — SMTP may not be configured; the feedback is
+      // already saved locally above regardless of whether the email sends.
+      console.error('Failed to send feedback notification email', err);
+    }
+    return true;
+  });
+
+  ipcMain.handle('feedback:dismiss', (_evt, opts: { dontAskAgain: boolean }) => {
+    if (opts.dontAskAgain) ratingPromptStore.setDontAskAgain(true);
+    return true;
+  });
+
+  ipcMain.handle(
+    'mail:sendOrganizationInvite',
+    async (_evt, params: { to: string; organizationName: string; role: string; inviterName: string }) => {
+      await emailService.sendOrganizationInvite(params.to, {
+        organizationName: params.organizationName,
+        role: params.role,
+        inviterName: params.inviterName,
+        openUrl: 'https://revantaai.com',
+      });
+      return true;
+    }
+  );
+
+  ipcMain.handle('help:getActivity', () => helpActivityStore.get());
+  ipcMain.handle('help:recordArticleView', (_evt, articleId: string) => helpActivityStore.recordView(articleId));
+
+  ipcMain.handle('help:listConversations', () => supportConversationStore.list());
+  ipcMain.handle('help:getConversation', (_evt, id: string) => supportConversationStore.get(id) ?? null);
+  ipcMain.handle('help:createConversation', (_evt, problemSummary: string) => supportConversationStore.create(problemSummary));
+  ipcMain.handle('help:addTurn', (_evt, id: string, turn: SupportConversationTurn) => supportConversationStore.addTurn(id, turn) ?? null);
+  ipcMain.handle(
+    'help:updateConversation',
+    (
+      _evt,
+      id: string,
+      patch: { status?: string; diagnosis?: string; currentState?: string; needsPermission?: boolean; actionsTaken?: string[] }
+    ) => supportConversationStore.update(id, patch as never) ?? null
+  );
+  ipcMain.handle('help:setConversationRating', (_evt, id: string, rating: 'up' | 'down', detail?: string) =>
+    supportConversationStore.setRating(id, rating, detail) ?? null
+  );
 
   ipcMain.handle('pets:list', async () => {
     const pets = await CompanionLoader.listCompanions(getPetsDir());
@@ -164,6 +251,7 @@ export function registerIpc(opts: {
   // Polled by the companion's environment-awareness behavior — see
   // src/main/system/ForegroundWindowWatcher.ts and ActionController.
   ipcMain.handle('system:getForegroundWindowInfo', () => opts.getForegroundWindowInfo());
+  ipcMain.handle('system:getAppVersion', () => app.getVersion());
 
   ipcMain.handle('auth:isGoogleSignInConfigured', () => opts.isGoogleSignInConfigured());
   ipcMain.handle('auth:startGoogleSignIn', () => opts.startGoogleSignIn());
@@ -214,17 +302,42 @@ export function registerIpc(opts: {
     return true;
   });
 
+  // This device's own local identity — see src/main/device/DeviceIdentityStore.ts.
+  ipcMain.handle('device:getLocalIdentity', () => deviceIdentityStore.getIdentity());
+
   // Account-level billing — subscription tier, pricing config, and AI
   // credit tracking. See src/main/billing/*.ts. Distinct from
   // CodingModeStore's own local Coding Runtime Go/Pro toggle.
   ipcMain.handle('billing:getPricing', () => pricingConfigStore.get());
   ipcMain.handle('billing:getSubscription', () => subscriptionStore.get());
   ipcMain.handle('billing:setSubscriptionTier', (_evt, tier: SubscriptionTierId) => subscriptionStore.setTier(tier));
-  ipcMain.handle('billing:getCreditBalance', () => creditStore.getBalance());
-  ipcMain.handle('billing:createCheckoutSession', (_evt, tier: SubscriptionTierId) => {
-    const provider = createBillingProvider(pricingConfigStore.get().billingProvider);
-    return provider.createCheckoutSession(tier);
+  ipcMain.handle('billing:syncFromOrganization', (_evt, orgTier: SubscriptionTierId) => subscriptionStore.syncFromOrganization(orgTier));
+  ipcMain.handle('billing:getCreditBalance', () => ({ ...creditStore.getBalance(), limit: entitlementService.getCreditLimit() }));
+  ipcMain.handle('billing:consumeCredit', (_evt, amount: number, reason: string) => {
+    creditStore.consume(amount, reason);
+    return { ...creditStore.getBalance(), limit: entitlementService.getCreditLimit() };
   });
+  ipcMain.handle('billing:createCheckoutSession', (_evt, tier: SubscriptionTierId, callbackUrl?: string, options?: CheckoutOptions) => {
+    const provider = createBillingProvider(pricingConfigStore.get().billingProvider);
+    return provider.createCheckoutSession(tier, callbackUrl, options);
+  });
+  // Starts the loopback server the checkout page pings after a real payment
+  // completes — see CheckoutSyncServer.ts for why this is the honest sync
+  // mechanism available without a shared account/subscription backend.
+  ipcMain.handle('billing:startCheckoutSync', () => startCheckoutCallbackServer());
+  // Prepaid Autonomous Engineering Task credit purchases — a one-time
+  // Razorpay Order, not a subscription-tier checkout, so it's a standalone
+  // function rather than part of the BillingProvider interface (see
+  // RazorpayBillingProvider.ts).
+  ipcMain.handle('billing:createCreditsCheckoutSession', (_evt, credits: number, organizationId?: string, callbackUrl?: string) =>
+    createCreditsCheckoutUrl(credits, organizationId, callbackUrl)
+  );
+
+  // Central entitlement queries — every runtime asks these instead of
+  // hard-coding a tier check. See src/main/billing/EntitlementService.ts.
+  ipcMain.handle('entitlement:getSnapshot', () => entitlementService.getSnapshot());
+  ipcMain.handle('entitlement:isModelAvailable', (_evt, modelId: PawModelId) => entitlementService.isModelAvailable(modelId));
+  ipcMain.handle('entitlement:isFeatureAvailable', (_evt, featureId: FeatureId) => entitlementService.isFeatureAvailable(featureId));
 
   // First-run onboarding — resumable step tracking + a real folder picker
   // for the default workspace step. See src/main/onboarding/OnboardingStore.ts.
@@ -350,5 +463,15 @@ export function registerIpc(opts: {
   communicationRuntime.subscribe((event: CommunicationRuntimeEvent) => {
     for (const win of BrowserWindow.getAllWindows()) win.webContents.send('communication:event', event);
   });
+
+  // Phase 1 org-share bridge — read-only local lookups so the renderer can
+  // let a member pick which local contact/company/summary/follow-up to
+  // share into an organization's CRM (see OrgSyncBridge.ts). Never writes
+  // back; the actual org-shared write goes straight to Supabase via
+  // CrmService, not through these channels.
+  ipcMain.handle('communication:listLocalParticipants', () => communicationRuntime.listLocalParticipants());
+  ipcMain.handle('communication:listLocalCompanies', () => communicationRuntime.listLocalCompanies());
+  ipcMain.handle('communication:listLocalSummaries', () => communicationRuntime.listLocalSummaries());
+  ipcMain.handle('communication:listLocalFollowUps', () => communicationRuntime.listLocalFollowUps());
 }
 

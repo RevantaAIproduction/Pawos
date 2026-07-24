@@ -1,0 +1,56 @@
+/*
+ * App-wide theme tokens. Dark is the default/original PawOS look — every
+ * value here matches what was previously hardcoded. The [data-theme="light"]
+ * block is the only themed override; document.documentElement.dataset.theme
+ * is set at runtime from SettingsState.themeMode (see AppRoot.tsx), resolving
+ * 'system' to 'dark' or 'light' via prefers-color-scheme before writing it,
+ * so this file itself never needs a media query.
+ */
+
+:root {
+  --pawos-bg: #08080a;
+  --pawos-bg-elevated: #17171b;
+  --pawos-bg-well: #0b1020;
+
+  --pawos-fg: #f5f5f7;
+  --pawos-text-body: #c2c2c8;
+  --pawos-text-item: #d5d5da;
+  --pawos-text-secondary: #96969e;
+  --pawos-text-tertiary: #7a7a82;
+  --pawos-text-quaternary: #6f6f78;
+  --pawos-text-faint: #5f5f68;
+
+  --pawos-overlay-rgb: 255, 255, 255;
+
+  --pawos-accent: #8b7bff;
+  --pawos-accent-rgb: 139, 123, 255;
+  --pawos-accent-2: #4dd0ff;
+  --pawos-accent-2-rgb: 77, 208, 255;
+
+  --pawos-button-primary-bg: #f5f5f7;
+  --pawos-button-primary-fg: #08080a;
+}
+
+:root[data-theme='light'] {
+  --pawos-bg: #f6f6f9;
+  --pawos-bg-elevated: #ffffff;
+  --pawos-bg-well: #eef0f6;
+
+  --pawos-fg: #17171c;
+  --pawos-text-body: #40404a;
+  --pawos-text-item: #2b2b33;
+  --pawos-text-secondary: #63636e;
+  --pawos-text-tertiary: #75757f;
+  --pawos-text-quaternary: #82828c;
+  --pawos-text-faint: #96969e;
+
+  --pawos-overlay-rgb: 10, 10, 20;
+
+  --pawos-accent: #6c56ff;
+  --pawos-accent-rgb: 108, 86, 255;
+  --pawos-accent-2: #1aa8e0;
+  --pawos-accent-2-rgb: 26, 168, 224;
+
+  --pawos-button-primary-bg: #17171c;
+  --pawos-button-primary-fg: #f6f6f9;
+}

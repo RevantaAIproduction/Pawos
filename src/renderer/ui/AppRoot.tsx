@@ -5,13 +5,50 @@ import { Dashboard } from './Dashboard/Dashboard';
 import { OnboardingWizard } from './Onboarding/OnboardingWizard';
 import { useAuth } from '../auth/useAuth';
 import { ipc } from '../services/ipc/ipcBridgeImplementation';
+import type { ThemeMode } from '../services/ipc/ipcTypes';
 
 type Stage = 'splash' | 'auth' | 'onboarding' | 'dashboard';
+
+function resolveTheme(mode: ThemeMode, systemPrefersDark: boolean): 'dark' | 'light' {
+  if (mode === 'system') return systemPrefersDark ? 'dark' : 'light';
+  return mode;
+}
+
+/** Applies SettingsState.themeMode to the document root as data-theme, reacting
+ * to both local changes and the 'settings:updated' push (e.g. set from another
+ * window) and OS-level scheme changes while in 'system' mode. */
+function useThemeSync() {
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    let mode: ThemeMode = 'dark';
+
+    const apply = () => {
+      document.documentElement.dataset.theme = resolveTheme(mode, media.matches);
+    };
+
+    ipc.settingsGet().then((s) => {
+      mode = s.themeMode ?? 'dark';
+      apply();
+    }).catch(() => {});
+
+    const onMediaChange = () => apply();
+    media.addEventListener('change', onMediaChange);
+
+    ipc.onSettingsUpdated((s) => {
+      mode = s.themeMode ?? 'dark';
+      apply();
+    });
+
+    return () => media.removeEventListener('change', onMediaChange);
+  }, []);
+}
 
 export default function AppRoot() {
   const auth = useAuth();
   const [stage, setStage] = useState<Stage>('splash');
   const [splashDone, setSplashDone] = useState(false);
+
+  useThemeSync();
 
   const decidePostAuthStage = useCallback(async () => {
     const onboarding = await ipc.onboardingGet().catch(() => ({ completed: true, step: 0, defaultWorkspacePath: null }));
@@ -77,6 +114,9 @@ export default function AppRoot() {
       onUpgradeGuestWithGoogle={auth.upgradeGuestWithGoogle}
       onUpgradeGuestWithEmail={auth.upgradeGuestWithEmail}
       isGoogleSignInAvailable={auth.isGoogleSignInAvailable}
+      onRequestPasswordReset={auth.requestPasswordReset}
+      onVerifyPasswordResetCode={auth.verifyPasswordResetCode}
+      onCompletePasswordReset={auth.completePasswordReset}
     />
   );
 }

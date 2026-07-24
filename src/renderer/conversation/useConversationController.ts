@@ -7,9 +7,12 @@ import type { ReasoningProvider } from '../reasoning/ReasoningProvider';
 import { aiRouter } from '../ai/AIRouter';
 import { aiProviderConfigStore } from '../ai/AIProviderConfigStore';
 import { useIpcBridge } from '../services/ipc/useIpcBridge';
+import { withGovernanceGate } from '../organization/GovernanceGate';
+import { withAutonomousTaskBilling } from '../organization/AutonomousTaskBillingGate';
 import type { VisemeFrame } from './LipSyncTypes';
 import type { SubmittedInputContext } from './ConversationTypes';
 import { PAW_SYSTEM_PROMPT } from './systemPrompt';
+import type { EntitlementSnapshot, SubscriptionTierId } from '../../shared/billing/BillingTypes';
 
 export function useConversationController(args?: {
   onStateChange?: (state: ConversationSnapshot['state']) => void;
@@ -32,6 +35,25 @@ export function useConversationController(args?: {
   onVisemeFrameRef.current = args?.onVisemeFrame;
   const ipc = useIpcBridge();
 
+  // Entitlement/credit gate — Runtime -> Entitlement Service -> Available
+  // Models -> Credits -> Execute. Checked before every submit so Paw Go (no
+  // AI models) and an exhausted credit pool never reach the reasoning
+  // provider at all; nothing here ever switches models automatically.
+  const [entitlement, setEntitlement] = useState<EntitlementSnapshot | null>(null);
+  const [creditsNoticeTier, setCreditsNoticeTier] = useState<SubscriptionTierId | null>(null);
+  const entitlementRef = useRef(entitlement);
+  entitlementRef.current = entitlement;
+
+  const refreshEntitlement = useCallback(() => {
+    ipc.entitlementGetSnapshot().then(setEntitlement).catch(() => {});
+  }, [ipc]);
+
+  useEffect(() => {
+    refreshEntitlement();
+  }, [refreshEntitlement]);
+
+  const dismissCreditsNotice = useCallback(() => setCreditsNoticeTier(null), []);
+
   useEffect(() => {
     // Electron's built-in webkitSpeechRecognition ('browser') cannot
     // actually work here — Chromium's speech backend needs a Google API
@@ -42,6 +64,24 @@ export function useConversationController(args?: {
     // key already configured for reasoning. TTS still uses the browser —
     // speech *synthesis* works fine in Electron, only recognition doesn't.
     const speechRecognitionProvider = createSttProvider({ id: 'gemini', apiKey: aiProviderConfigStore.getApiKey('gemini') });
+    // Real speech-recognition language, persisted from the profile menu's
+    // Language picker — read once here (async, so it swaps in the moment it
+    // resolves rather than blocking construction) and re-applied instantly
+    // whenever the user changes it, via the window event ProfileMenu fires.
+    ipc.getSettings().then((s) => {
+      if (s.speechLanguage && s.speechLanguage !== 'en-US') {
+        runtimeRef.current?.setSpeechRecognitionProvider(
+          createSttProvider({ id: 'gemini', apiKey: aiProviderConfigStore.getApiKey('gemini'), language: s.speechLanguage })
+        );
+      }
+    }).catch(() => {});
+    const onLanguageChanged = (e: Event) => {
+      const code = (e as CustomEvent<string>).detail;
+      runtimeRef.current?.setSpeechRecognitionProvider(
+        createSttProvider({ id: 'gemini', apiKey: aiProviderConfigStore.getApiKey('gemini'), language: code })
+      );
+    };
+    window.addEventListener('pawos-speech-language-changed', onLanguageChanged);
     const speechSynthesisProvider = createTtsProvider({ id: 'browser' });
     const reasoningRuntime = new ReasoningRuntime(aiRouter.getReasoningProvider(), PAW_SYSTEM_PROMPT);
 
@@ -50,7 +90,7 @@ export function useConversationController(args?: {
       speechSynthesis: speechSynthesisProvider,
       reasoningRuntime,
       onStateChange: (state) => onStateChangeRef.current?.(state),
-      executeAction: (request) => ipc.executeAction(request),
+      executeAction: withAutonomousTaskBilling(withGovernanceGate((request) => ipc.executeAction(request))),
       checkActionRequirements: (request) => ipc.checkActionRequirements(request),
       describeAction: (request) => ipc.describeAction(request),
       reportActionResult: (request, result) => ipc.reportActionResult(request, result),
@@ -100,6 +140,7 @@ export function useConversationController(args?: {
     return () => {
       unsubscribe();
       unsubscribeConfig();
+      window.removeEventListener('pawos-speech-language-changed', onLanguageChanged);
       runtimeRef.current?.close();
       runtimeRef.current = null;
     };
@@ -110,9 +151,25 @@ export function useConversationController(args?: {
   const toggle = useCallback(() => runtimeRef.current?.toggle(), []);
   const cancel = useCallback(() => runtimeRef.current?.cancel(), []);
   const submitTranscript = useCallback(
-    (text: string, context?: SubmittedInputContext) => runtimeRef.current?.submitTranscript(text, context),
+    (text: string, context?: SubmittedInputContext) => {
+      const current = entitlementRef.current;
+      if (current && (current.models.length === 0 || !current.hasCreditsRemaining)) {
+        setCreditsNoticeTier(current.tier);
+        return;
+      }
+      runtimeRef.current?.submitTranscript(text, context);
+    },
     []
   );
+
+  // A turn only reaches 'completed' after a real reasoning call succeeded
+  // (Go-tier/exhausted-credit turns are stopped above and never reach the
+  // runtime), so this is the one honest point to record usage.
+  useEffect(() => {
+    if (snapshot.state === 'completed') {
+      ipc.billingConsumeCredit(1, 'conversation-turn').then(() => refreshEntitlement()).catch(() => {});
+    }
+  }, [snapshot.state, ipc, refreshEntitlement]);
   const speak = useCallback((text: string) => runtimeRef.current?.speak(text), []);
 
   const setReasoningProvider = useCallback((provider: ReasoningProvider) => {
@@ -151,5 +208,8 @@ export function useConversationController(args?: {
     setSpeechSynthesisProvider,
     retryAction,
     openPath,
+    creditsNoticeTier,
+    dismissCreditsNotice,
+    refreshEntitlement,
   };
 }

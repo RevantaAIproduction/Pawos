@@ -20,6 +20,7 @@ import { browserPreferences } from './execution/browser/browserPreferences';
 import { browserCapabilityStatus } from './execution/browser/browserCapabilityStatus';
 import { codingModeStore } from './execution/CodingModeStore';
 import { platformPairingStore } from './pairing/PlatformPairingStore';
+import { deviceIdentityStore } from './device/DeviceIdentityStore';
 import { pricingConfigStore } from './billing/PricingConfigStore';
 import { subscriptionStore } from './billing/SubscriptionStore';
 import { creditStore } from './billing/CreditStore';
@@ -27,6 +28,12 @@ import { onboardingStore } from './onboarding/OnboardingStore';
 import { initInfrastructureConnectors } from './infrastructure/bootstrap';
 import { engineeringMemoryStore } from './infrastructure/EngineeringMemoryStore';
 import { infraModeStore } from './infrastructure/InfraModeStore';
+import { provisionedInstanceStore } from './infrastructure/ProvisionedInstanceStore';
+import { ratingPromptStore } from './feedback/RatingPromptStore';
+import { feedbackStore } from './feedback/FeedbackStore';
+import { helpActivityStore } from './help/HelpActivityStore';
+import { supportConversationStore } from './help/SupportConversationStore';
+import { startRatingPromptScheduler } from './feedback/RatingPromptScheduler';
 // One constant size, always — the overlay window itself never resizes at
 // runtime. A native window resize inherently reads as "an application
 // window resizing," which is exactly the feel the Workspace Runtime must
@@ -223,12 +230,18 @@ app.whenReady().then(async () => {
   codingModeStore.init();
   communicationRuntime.init();
   platformPairingStore.init();
+  deviceIdentityStore.init();
   pricingConfigStore.init();
   subscriptionStore.init();
   creditStore.init();
   onboardingStore.init();
   engineeringMemoryStore.init();
   infraModeStore.init();
+  provisionedInstanceStore.init();
+  ratingPromptStore.init();
+  feedbackStore.init();
+  helpActivityStore.init();
+  supportConversationStore.init();
 
   // .env next to the installed exe (packaged) or at the repo root (dev
   // checkout, cwd when running `electron .`) — lets the user drop keys in a
@@ -251,6 +264,7 @@ app.whenReady().then(async () => {
   createMainWindow();
   createAppTray();
   startForegroundWindowWatcher();
+  startRatingPromptScheduler(() => mainWindow);
   registerIpc({
     app,
     overlayWindowProvider: () => overlayWindow,

@@ -1,4 +1,4 @@
-import type { ConnectorResult, InfraCommit, InfraRepository, SourceControlConnector } from '../../../../shared/infrastructure/InfrastructureTypes';
+import type { ConnectorResult, InfraCommit, InfraPullRequest, InfraRepository, SourceControlConnector } from '../../../../shared/infrastructure/InfrastructureTypes';
 
 const GITHUB_API = 'https://api.github.com';
 
@@ -11,6 +11,13 @@ export class GitHubSourceControlConnector implements SourceControlConnector {
 
   isConfigured(): boolean {
     return Boolean(this.token);
+  }
+
+  /** Phase 6: lets an org-scoped credential (decrypted via
+   * read_organization_credential) override the local .env token at
+   * runtime, without changing anything else about how this connector works. */
+  setToken(token: string): void {
+    this.token = token;
   }
 
   private headers(): Record<string, string> {
@@ -63,6 +70,66 @@ export class GitHubSourceControlConnector implements SourceControlConnector {
       const first = data[0];
       if (!first) return { ok: false, reason: `${repo} has no commits on ${branch ?? 'its default branch'}.` };
       return { ok: true, sha: first.sha, message: first.commit.message, author: first.commit.author.name, date: first.commit.author.date };
+    } catch (error) {
+      return { ok: false, reason: `Failed to reach GitHub: ${error instanceof Error ? error.message : String(error)}` };
+    }
+  }
+
+  async listPullRequests(repo: string): Promise<ConnectorResult<{ pullRequests: InfraPullRequest[] }>> {
+    if (!this.isConfigured()) return this.notConfigured();
+    try {
+      const res = await fetch(`${GITHUB_API}/repos/${repo}/pulls?state=all&per_page=50&sort=updated`, { headers: this.headers() });
+      if (!res.ok) return { ok: false, reason: `GitHub API returned ${res.status} for ${repo} pulls` };
+      const data = (await res.json()) as Array<{
+        number: number;
+        title: string;
+        user: { login: string } | null;
+        head: { ref: string };
+        base: { ref: string };
+        html_url: string;
+        state: 'open' | 'closed';
+        merged_at: string | null;
+      }>;
+      const pullRequests: InfraPullRequest[] = data.map((pr) => ({
+        number: pr.number,
+        title: pr.title,
+        author: pr.user?.login ?? 'unknown',
+        headBranch: pr.head.ref,
+        baseBranch: pr.base.ref,
+        url: pr.html_url,
+        state: pr.merged_at ? 'merged' : pr.state,
+      }));
+      return { ok: true, pullRequests };
+    } catch (error) {
+      return { ok: false, reason: `Failed to reach GitHub: ${error instanceof Error ? error.message : String(error)}` };
+    }
+  }
+
+  async getPullRequestDiff(repo: string, prNumber: number): Promise<ConnectorResult<{ diff: string }>> {
+    if (!this.isConfigured()) return this.notConfigured();
+    try {
+      const res = await fetch(`${GITHUB_API}/repos/${repo}/pulls/${prNumber}`, {
+        headers: { ...this.headers(), Accept: 'application/vnd.github.v3.diff' },
+      });
+      if (!res.ok) return { ok: false, reason: `GitHub API returned ${res.status} for ${repo}#${prNumber} diff` };
+      const diff = await res.text();
+      return { ok: true, diff };
+    } catch (error) {
+      return { ok: false, reason: `Failed to reach GitHub: ${error instanceof Error ? error.message : String(error)}` };
+    }
+  }
+
+  async createPullRequestComment(repo: string, prNumber: number, body: string): Promise<ConnectorResult<{ commentUrl?: string }>> {
+    if (!this.isConfigured()) return this.notConfigured();
+    try {
+      const res = await fetch(`${GITHUB_API}/repos/${repo}/issues/${prNumber}/comments`, {
+        method: 'POST',
+        headers: { ...this.headers(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body }),
+      });
+      if (!res.ok) return { ok: false, reason: `GitHub API returned ${res.status} posting a comment on ${repo}#${prNumber}` };
+      const data = (await res.json()) as { html_url?: string };
+      return { ok: true, commentUrl: data.html_url };
     } catch (error) {
       return { ok: false, reason: `Failed to reach GitHub: ${error instanceof Error ? error.message : String(error)}` };
     }

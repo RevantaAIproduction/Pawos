@@ -1,0 +1,11 @@
+{
+  "selectedPetId": "cat",
+  "animationSpeed": 1.15,
+  "soundVolume": 0.6,
+  "startWithWindows": true,
+  "enableKeyboardReactions": true,
+  "enableMouseReactions": true,
+  "muted": false,
+  "notifyOnTaskComplete": true,
+  "themeMode": "dark"
+}

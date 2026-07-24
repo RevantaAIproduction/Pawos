@@ -33,6 +33,10 @@ export class VercelConnector implements HostingConnector {
     return Boolean(this.token);
   }
 
+  setToken(token: string): void {
+    this.token = token;
+  }
+
   private notConfigured(): { ok: false; reason: string } {
     return { ok: false, reason: 'Vercel is not configured. Add VERCEL_TOKEN to .env to connect it.' };
   }

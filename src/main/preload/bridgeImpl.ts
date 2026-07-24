@@ -4,7 +4,14 @@ import {
   webUtils,
 } from "electron";
 
-import type { SettingsState } from "../../renderer/services/ipc/ipcTypes";
+import type {
+  SettingsState,
+  FeedbackSubmission,
+  HelpActivityState,
+  SupportConversation,
+  SupportConversationTurn,
+  SupportConversationStatus,
+} from "../../renderer/services/ipc/ipcTypes";
 import type { CompanionCommand } from "../../shared/companion/CompanionCommand";
 import type { CompanionPackageInput, ImportedCompanionPackage } from "../../shared/companion/CompanionPackageTypes";
 import type { ActionRequest, ActionRequirement, ActionResult } from "../../shared/actions/ActionTypes";
@@ -13,17 +20,22 @@ import type { WorkspaceFileChangeEvent } from "../../shared/actions/WorkspaceFil
 import type { WorkspaceObservationEvent } from "../../shared/actions/ExecutionLifecycle";
 import type { ExecutionRecord } from "../../shared/actions/ExecutionRecordTypes";
 import type { BrowserCapabilityReport } from "../../shared/actions/BrowserCapabilityTypes";
-import type { CommunicationRuntimeEvent } from "../../shared/communication/CommunicationTypes";
+import type { CommunicationRuntimeEvent, ParticipantRecord, CompanyRecord, CommunicationSummary, FollowUp } from "../../shared/communication/CommunicationTypes";
 import type { ForegroundWindowInfo } from "../../shared/system/ForegroundWindowInfo";
-import type { GoogleProfile } from "../../shared/auth/AccountTypes";
+import type { GoogleSignInResult } from "../../shared/auth/AccountTypes";
 import type { PairedDevice } from "../../shared/pairing/PairingTypes";
+import type { LocalDeviceIdentity } from "../../shared/device/DeviceTypes";
 import type {
   PricingConfig,
   SubscriptionState,
   SubscriptionTierId,
   CreditBalance,
   BillingCheckoutResult,
+  CheckoutOptions,
+  FeatureId,
+  EntitlementSnapshot,
 } from "../../shared/billing/BillingTypes";
+import type { PawModelId } from "../../shared/ai/PawModelTypes";
 import type { OnboardingState } from "../../shared/onboarding/OnboardingTypes";
 import type {
   ConversationSession,
@@ -35,6 +47,13 @@ import type {
 export function contextBridge() {
   const api = {
     actionExecute: (request: ActionRequest) => ipcRenderer.invoke("action:execute", request) as Promise<ActionResult>,
+    processWriteStdin: (processId: string, data: string) =>
+      ipcRenderer.invoke("process:writeStdin", processId, data) as Promise<{ ok: true } | { ok: false; message: string }>,
+    systemGetHomeDir: () => ipcRenderer.invoke("system:getHomeDir") as Promise<string>,
+    remoteAssistanceStartSharedTerminal: (cwd: string, label: string) =>
+      ipcRenderer.invoke("remoteAssistance:startSharedTerminal", cwd, label) as Promise<
+        { ok: true; info: { id: string; pid: number | null } } | { ok: false; message: string }
+      >,
     actionCheckRequirements: (request: ActionRequest) =>
       ipcRenderer.invoke("action:checkRequirements", request) as Promise<ActionRequirement[]>,
     actionDescribe: (request: ActionRequest) => ipcRenderer.invoke("action:describe", request) as Promise<string>,
@@ -61,6 +80,26 @@ export function contextBridge() {
       ipcRenderer.on("settings:updated", (_: any, payload: SettingsState) => cb(payload));
     },
 
+    feedbackSubmit: (submission: FeedbackSubmission) => ipcRenderer.invoke("feedback:submit", submission) as Promise<boolean>,
+    feedbackDismiss: (opts: { dontAskAgain: boolean }) => ipcRenderer.invoke("feedback:dismiss", opts) as Promise<boolean>,
+    onShowRatingPrompt: (cb: () => void) => {
+      ipcRenderer.on("feedback:showRatingPrompt", () => cb());
+    },
+    mailSendOrganizationInvite: (params: { to: string; organizationName: string; role: string; inviterName: string }) =>
+      ipcRenderer.invoke("mail:sendOrganizationInvite", params) as Promise<boolean>,
+    helpGetActivity: () => ipcRenderer.invoke("help:getActivity") as Promise<HelpActivityState>,
+    helpRecordArticleView: (articleId: string) => ipcRenderer.invoke("help:recordArticleView", articleId) as Promise<HelpActivityState>,
+    helpListConversations: () => ipcRenderer.invoke("help:listConversations") as Promise<SupportConversation[]>,
+    helpGetConversation: (id: string) => ipcRenderer.invoke("help:getConversation", id) as Promise<SupportConversation | null>,
+    helpCreateConversation: (problemSummary: string) => ipcRenderer.invoke("help:createConversation", problemSummary) as Promise<SupportConversation>,
+    helpAddTurn: (id: string, turn: SupportConversationTurn) => ipcRenderer.invoke("help:addTurn", id, turn) as Promise<SupportConversation | null>,
+    helpUpdateConversation: (
+      id: string,
+      patch: { status?: SupportConversationStatus; diagnosis?: string; currentState?: string; needsPermission?: boolean; actionsTaken?: string[] }
+    ) => ipcRenderer.invoke("help:updateConversation", id, patch) as Promise<SupportConversation | null>,
+    helpSetConversationRating: (id: string, rating: "up" | "down", detail?: string) =>
+      ipcRenderer.invoke("help:setConversationRating", id, rating, detail) as Promise<SupportConversation | null>,
+
     onUiOpenSettings: (cb: () => void) => {
       ipcRenderer.on("ui:open-settings", () => cb());
     },
@@ -75,9 +114,10 @@ export function contextBridge() {
       ipcRenderer.invoke("env:getApiKeys") as Promise<{ gemini?: string; supabaseUrl?: string; supabasePublishableKey?: string }>,
 
     systemGetForegroundWindowInfo: () => ipcRenderer.invoke("system:getForegroundWindowInfo") as Promise<ForegroundWindowInfo>,
+    systemGetAppVersion: () => ipcRenderer.invoke("system:getAppVersion") as Promise<string>,
 
     authIsGoogleSignInConfigured: () => ipcRenderer.invoke("auth:isGoogleSignInConfigured") as Promise<boolean>,
-    authStartGoogleSignIn: () => ipcRenderer.invoke("auth:startGoogleSignIn") as Promise<GoogleProfile>,
+    authStartGoogleSignIn: () => ipcRenderer.invoke("auth:startGoogleSignIn") as Promise<GoogleSignInResult>,
     authSendOtp: (email: string) => ipcRenderer.invoke("auth:sendOtp", email) as Promise<{ expiresInMinutes: number }>,
     authVerifyOtp: (email: string, code: string) =>
       ipcRenderer.invoke("auth:verifyOtp", email, code) as Promise<{ valid: boolean; reason?: string }>,
@@ -97,13 +137,35 @@ export function contextBridge() {
     pairingList: (userId?: string) => ipcRenderer.invoke("pairing:list", userId) as Promise<PairedDevice[]>,
     pairingRevoke: (deviceId: string) => ipcRenderer.invoke("pairing:revoke", deviceId) as Promise<boolean>,
 
+    deviceGetLocalIdentity: () => ipcRenderer.invoke("device:getLocalIdentity") as Promise<LocalDeviceIdentity>,
+
     billingGetPricing: () => ipcRenderer.invoke("billing:getPricing") as Promise<PricingConfig>,
     billingGetSubscription: () => ipcRenderer.invoke("billing:getSubscription") as Promise<SubscriptionState>,
     billingSetSubscriptionTier: (tier: SubscriptionTierId) =>
       ipcRenderer.invoke("billing:setSubscriptionTier", tier) as Promise<SubscriptionState>,
+    billingSyncTierFromOrganization: (orgTier: SubscriptionTierId) =>
+      ipcRenderer.invoke("billing:syncFromOrganization", orgTier) as Promise<SubscriptionState>,
     billingGetCreditBalance: () => ipcRenderer.invoke("billing:getCreditBalance") as Promise<CreditBalance>,
-    billingCreateCheckoutSession: (tier: SubscriptionTierId) =>
-      ipcRenderer.invoke("billing:createCheckoutSession", tier) as Promise<BillingCheckoutResult>,
+    billingConsumeCredit: (amount: number, reason: string) =>
+      ipcRenderer.invoke("billing:consumeCredit", amount, reason) as Promise<CreditBalance>,
+
+    entitlementGetSnapshot: () => ipcRenderer.invoke("entitlement:getSnapshot") as Promise<EntitlementSnapshot>,
+    entitlementIsModelAvailable: (modelId: PawModelId) =>
+      ipcRenderer.invoke("entitlement:isModelAvailable", modelId) as Promise<boolean>,
+    entitlementIsFeatureAvailable: (featureId: FeatureId) =>
+      ipcRenderer.invoke("entitlement:isFeatureAvailable", featureId) as Promise<boolean>,
+
+    billingCreateCheckoutSession: (tier: SubscriptionTierId, callbackUrl?: string, options?: CheckoutOptions) =>
+      ipcRenderer.invoke("billing:createCheckoutSession", tier, callbackUrl, options) as Promise<BillingCheckoutResult>,
+    billingStartCheckoutSync: () => ipcRenderer.invoke("billing:startCheckoutSync") as Promise<string>,
+    billingCreateCreditsCheckoutSession: (credits: number, organizationId?: string, callbackUrl?: string) =>
+      ipcRenderer.invoke("billing:createCreditsCheckoutSession", credits, organizationId, callbackUrl) as Promise<BillingCheckoutResult>,
+    onSubscriptionUpdated: (cb: () => void) => {
+      ipcRenderer.on("billing:subscriptionUpdated", () => cb());
+    },
+    onTaskCreditsPurchased: (cb: (payload: { credits: number; organizationId?: string }) => void) => {
+      ipcRenderer.on("billing:taskCreditsPurchased", (_evt, payload) => cb(payload));
+    },
 
     onboardingGet: () => ipcRenderer.invoke("onboarding:get") as Promise<OnboardingState>,
     onboardingSetStep: (step: number) => ipcRenderer.invoke("onboarding:setStep", step) as Promise<OnboardingState>,
@@ -170,6 +232,10 @@ export function contextBridge() {
     onCommunicationEvent: (cb: (event: CommunicationRuntimeEvent) => void) => {
       ipcRenderer.on("communication:event", (_: any, payload: CommunicationRuntimeEvent) => cb(payload));
     },
+    communicationListLocalParticipants: () => ipcRenderer.invoke("communication:listLocalParticipants") as Promise<ParticipantRecord[]>,
+    communicationListLocalCompanies: () => ipcRenderer.invoke("communication:listLocalCompanies") as Promise<CompanyRecord[]>,
+    communicationListLocalSummaries: () => ipcRenderer.invoke("communication:listLocalSummaries") as Promise<CommunicationSummary[]>,
+    communicationListLocalFollowUps: () => ipcRenderer.invoke("communication:listLocalFollowUps") as Promise<FollowUp[]>,
   };
 
   electronContextBridge.exposeInMainWorld("__pawos_ipc__", api);

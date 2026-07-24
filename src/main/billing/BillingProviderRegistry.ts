@@ -1,19 +1,19 @@
 import type { BillingProviderId } from '../../shared/billing/BillingTypes';
 import type { BillingProvider } from './BillingProvider';
 import { noOpBillingProvider } from './providers/NoOpBillingProvider';
+import { razorpayBillingProvider } from './providers/RazorpayBillingProvider';
 
 /**
  * Same registry pattern as ReasoningProviderRegistry — the rest of PawOS
  * asks for "the active billing provider" and never names one directly.
- * Only 'none' is implemented today; 'stripe' is reserved so
- * PricingConfig.billingProvider can already reference it without this
- * registry needing to change shape once a real Stripe integration exists.
+ * RazorpayBillingProvider is real once RAZORPAY_KEY_ID/RAZORPAY_KEY_SECRET
+ * are configured server-side; until then it honestly reports itself as
+ * unconfigured (Business Configuration Required), same as NoOpBillingProvider.
  */
 export function createBillingProvider(id: BillingProviderId): BillingProvider {
   switch (id) {
-    case 'stripe':
-      // Not implemented — no processor is configured yet (Business Configuration Required).
-      return noOpBillingProvider;
+    case 'razorpay':
+      return razorpayBillingProvider;
     case 'none':
     default:
       return noOpBillingProvider;

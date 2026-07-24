@@ -1,15 +1,52 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
-import { SkinManagerPanel } from './SkinManagerPanel';
-import { UpgradeGuestPanel } from './UpgradeGuestPanel';
-import { AccountSection } from './AccountSection';
-import { MailPreviewSection } from './MailPreviewSection';
-import { PairedDevicesPanel } from './PairedDevicesPanel';
+import {
+  AccountIcon,
+  DesktopIcon,
+  SettingsIcon,
+  AIIcon,
+  ShieldIcon,
+  SecurityIcon,
+  BrowserToolsIcon,
+  CardIcon,
+  TerminalIcon,
+} from '../NavIcons';
+import { AccountSettingsPage } from './AccountSettingsPage';
+import { DevicesSettingsPage } from './DevicesSettingsPage';
+import { PreferencesSettingsPage } from './PreferencesSettingsPage';
+import { AISettingsPage } from './AISettingsPage';
+import { PrivacySection } from './PrivacySection';
+import { SecuritySettingsPage } from './SecuritySettingsPage';
+import { BrowserToolsSettingsPage } from './BrowserToolsSettingsPage';
+import { BillingSettingsPage } from './BillingSettingsPage';
+import { DevelopersSettingsPage } from './DevelopersSettingsPage';
 import type { AuthUser, EmailCreateAccountOptions } from '../../../auth/AuthTypes';
 
-const TABS = ['Appearance', 'Account', 'Devices', 'Mail Preview'] as const;
+const SETTINGS_TABS = [
+  'Account',
+  'Devices',
+  'Preferences',
+  'AI',
+  'Privacy',
+  'Security',
+  'Browser Tools',
+  'Billing',
+  'Developers',
+] as const;
 
-type Tab = (typeof TABS)[number];
+export type SettingsTab = (typeof SETTINGS_TABS)[number];
+
+const CATEGORY_ICONS: Record<SettingsTab, React.ComponentType> = {
+  Account: AccountIcon,
+  Devices: DesktopIcon,
+  Preferences: SettingsIcon,
+  AI: AIIcon,
+  Privacy: ShieldIcon,
+  Security: SecurityIcon,
+  'Browser Tools': BrowserToolsIcon,
+  Billing: CardIcon,
+  Developers: TerminalIcon,
+};
 
 export function SettingsSection({
   user,
@@ -17,47 +54,79 @@ export function SettingsSection({
   onUpgradeGuestWithGoogle,
   onUpgradeGuestWithEmail,
   isGoogleSignInAvailable,
+  initialTab,
+  onUpgrade,
+  onOpenCompanionStudio,
+  onRequestPasswordReset,
+  onVerifyPasswordResetCode,
+  onCompletePasswordReset,
 }: {
   user: AuthUser;
   onSignOut: () => void;
   onUpgradeGuestWithGoogle: () => Promise<unknown>;
   onUpgradeGuestWithEmail: (options: EmailCreateAccountOptions) => Promise<unknown>;
   isGoogleSignInAvailable: () => Promise<boolean>;
+  /** Set when arriving from the profile menu's shortcuts — otherwise defaults to Account. */
+  initialTab?: SettingsTab;
+  /** Navigates to the dedicated plan-comparison page — not a Settings tab itself. */
+  onUpgrade: () => void;
+  onOpenCompanionStudio: () => void;
+  onRequestPasswordReset: (email: string) => Promise<{ expiresInMinutes: number }>;
+  onVerifyPasswordResetCode: (email: string, code: string) => Promise<{ valid: boolean; reason?: string; resetToken?: string }>;
+  onCompletePasswordReset: (resetToken: string, newPassword: string) => Promise<{ ok: boolean; reason?: string }>;
 }) {
-  const [tab, setTab] = useState<Tab>('Appearance');
+  const [tab, setTab] = useState<SettingsTab>(initialTab ?? 'Account');
+
+  useEffect(() => {
+    if (initialTab) setTab(initialTab);
+  }, [initialTab]);
+
+  const goToAccount = () => setTab('Account');
+  const goToDevices = () => setTab('Devices');
 
   return (
-    <div>
-      <div className={styles.tabRow} style={{ flexWrap: 'wrap' }}>
-        {TABS.map((t) => (
-          <button
-            key={t}
-            type="button"
-            className={`${styles.tabButton} ${tab === t ? styles.tabButtonActive : ''}`}
-            onClick={() => setTab(t)}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
+    <div className={styles.settingsLayout}>
+      <nav className={styles.settingsNav}>
+        {SETTINGS_TABS.map((c) => {
+          const Icon = CATEGORY_ICONS[c];
+          return (
+            <button
+              key={c}
+              type="button"
+              className={`${styles.settingsNavItem} ${tab === c ? styles.settingsNavItemActive : ''}`}
+              onClick={() => setTab(c)}
+            >
+              <span className={styles.settingsNavIcon}>
+                <Icon />
+              </span>
+              {c}
+            </button>
+          );
+        })}
+      </nav>
 
-      {tab === 'Appearance' && <SkinManagerPanel />}
-      {tab === 'Account' && (
-        <div>
-          <AccountSection user={user} onSignOut={onSignOut} />
-          {user.isGuest && (
-            <div style={{ marginTop: 14 }}>
-              <UpgradeGuestPanel
-                onUpgradeGuestWithGoogle={onUpgradeGuestWithGoogle}
-                onUpgradeGuestWithEmail={onUpgradeGuestWithEmail}
-                isGoogleSignInAvailable={isGoogleSignInAvailable}
-              />
-            </div>
-          )}
-        </div>
-      )}
-      {tab === 'Devices' && <PairedDevicesPanel userId={user.isGuest ? undefined : user.id} />}
-      {tab === 'Mail Preview' && <MailPreviewSection />}
+      <div className={styles.settingsContent}>
+        {tab === 'Account' && (
+          <AccountSettingsPage
+            user={user}
+            onSignOut={onSignOut}
+            onUpgradeGuestWithGoogle={onUpgradeGuestWithGoogle}
+            onUpgradeGuestWithEmail={onUpgradeGuestWithEmail}
+            isGoogleSignInAvailable={isGoogleSignInAvailable}
+            onRequestPasswordReset={onRequestPasswordReset}
+            onVerifyPasswordResetCode={onVerifyPasswordResetCode}
+            onCompletePasswordReset={onCompletePasswordReset}
+          />
+        )}
+        {tab === 'Devices' && <DevicesSettingsPage user={user} onSignOut={onSignOut} />}
+        {tab === 'Preferences' && <PreferencesSettingsPage onOpenCompanionStudio={onOpenCompanionStudio} />}
+        {tab === 'AI' && <AISettingsPage />}
+        {tab === 'Privacy' && <PrivacySection />}
+        {tab === 'Security' && <SecuritySettingsPage onGoToAccount={goToAccount} onGoToDevices={goToDevices} />}
+        {tab === 'Browser Tools' && <BrowserToolsSettingsPage />}
+        {tab === 'Billing' && <BillingSettingsPage user={user} onGoToAccount={goToAccount} onUpgrade={onUpgrade} />}
+        {tab === 'Developers' && <DevelopersSettingsPage />}
+      </div>
     </div>
   );
 }

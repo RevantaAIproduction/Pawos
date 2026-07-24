@@ -3,12 +3,17 @@
 import { useState } from "react";
 
 /**
- * Mirrors the shape (not necessarily every value) of PawOS's own
- * src/shared/billing/BillingTypes.ts PricingPlan. Go/Pro/Pro Max carry
- * real, finalized flat prices. Team and Enterprise are seat-based — no
- * per-seat rate has been finalized yet, so priceCents stays null
- * ("Business Configuration Required"), never a fabricated number.
+ * Mirrors PawOS's own src/shared/billing/BillingTypes.ts PricingPlan.
+ * Go/Pro/Pro Max carry real, finalized flat prices. Team is seat-based with
+ * two finalized seat rates (Standard $20/seat, Premium $100/seat) — a
+ * member's seat tier is chosen when they're invited (see Organization
+ * settings in the desktop app). Enterprise is seat-based at a finalized
+ * $20/seat base fee plus prepaid Autonomous Engineering Task credits, billed
+ * through the same success-gated prepaid credit system already used for
+ * individual Pro/Pro Max accounts — never a flat per-seat rate.
  */
+type SeatOption = { seatTier: "standard" | "premium"; label: string; priceCents: number; description: string };
+
 type Plan = {
   id: string;
   label: string;
@@ -17,6 +22,8 @@ type Plan = {
   seatBased?: boolean;
   minSeats?: number;
   maxSeats?: number;
+  seatOptions?: SeatOption[];
+  usageBilling?: { label: string; description: string };
   features: string[];
 };
 
@@ -69,27 +76,38 @@ const TEAM_ENTERPRISE_PLANS: Plan[] = [
     seatBased: true,
     minSeats: 2,
     maxSeats: 150,
+    seatOptions: [
+      { seatTier: "standard", label: "Standard", priceCents: 2000, description: "Everything in Paw Pro Max, shared across your organization." },
+      { seatTier: "premium", label: "Premium", priceCents: 10000, description: "Same organization features, at Pro Max-equivalent usage headroom." },
+    ],
     features: [
       "Everything in Paw Pro Max",
-      "Shared Workspaces & Companions",
-      "Organization Members",
-      "Shared Credits",
-      "Admin Controls & Team Billing",
+      "Shared Workspaces & Shared Companions",
+      "Organization Members & Admin Controls",
+      "Shared Credits (Credit Pool)",
+      "Task Management & Assignment",
+      "AI-Assisted Git Collaboration (PR Review)",
+      "Remote Assistance (Screen Share & Control)",
+      "CRM Projection",
+      "Credential Vault, Approval Queue & Audit Log",
+      "SSO Configuration (Policy-Level)",
     ],
   },
   {
     id: "enterprise",
     label: "Paw Enterprise",
-    priceCents: 10000,
+    priceCents: 2000,
     period: "month",
     seatBased: true,
     minSeats: 20,
+    usageBilling: {
+      label: "+ prepaid Autonomous Engineering Task credits",
+      description: "One prepaid credit ($5) consumed per genuinely completed task, on top of the seat base fee — never for a failed, cancelled, retry-limit-reached, or approval-denied run.",
+    },
     features: [
       "Everything in Paw Team",
-      "Unlimited Organizations",
-      "Advanced Security & Custom Limits",
-      "Custom Billing",
-      "Priority Support & Dedicated Features",
+      "Prepaid Autonomous Engineering Task Credits",
+      "Richer Enterprise RBAC roles (IT Admin, Security Admin, Department Manager)",
     ],
   },
 ];
@@ -108,7 +126,32 @@ function PlanCard({ plan }: { plan: Plan }) {
   return (
     <div className="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-8">
       <h2 className="text-xl font-semibold">{plan.label}</h2>
-      <p className="mt-2 text-3xl font-bold">{formatPrice(plan)}</p>
+
+      {plan.seatOptions ? (
+        <div className="mt-4 space-y-3">
+          {plan.seatOptions.map((seat) => (
+            <div key={seat.seatTier} className="rounded-xl border border-neutral-800 p-4">
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm font-semibold text-neutral-200">{seat.label}</span>
+                <span className="text-lg font-bold">${(seat.priceCents / 100).toFixed(0)}/seat/mo</span>
+              </div>
+              <p className="mt-1 text-xs text-neutral-500">{seat.description}</p>
+            </div>
+          ))}
+          <p className="text-xs text-neutral-500">{plan.minSeats}–{plan.maxSeats} members · mix seat tiers freely across your organization</p>
+        </div>
+      ) : (
+        <>
+          <p className="mt-2 text-3xl font-bold">{formatPrice(plan)}</p>
+          {plan.usageBilling && (
+            <>
+              <p className="mt-2 text-sm font-medium text-blue-300">{plan.usageBilling.label}</p>
+              <p className="mt-1 text-xs text-neutral-500">{plan.usageBilling.description}</p>
+            </>
+          )}
+        </>
+      )}
+
       <ul className="mt-6 space-y-2 text-sm text-neutral-400">
         {plan.features.map((f) => (
           <li key={f}>• {f}</li>

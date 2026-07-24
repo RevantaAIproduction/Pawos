@@ -1,4 +1,4 @@
-import type { BillingCheckoutResult, BillingProviderId, SubscriptionTierId } from '../../shared/billing/BillingTypes';
+import type { BillingCheckoutResult, BillingProviderId, CheckoutOptions, SubscriptionTierId } from '../../shared/billing/BillingTypes';
 
 /**
  * Payment provider abstraction — mirrors the existing
@@ -13,5 +13,11 @@ import type { BillingCheckoutResult, BillingProviderId, SubscriptionTierId } fro
 export interface BillingProvider {
   readonly id: BillingProviderId;
   isConfigured(): boolean;
-  createCheckoutSession(tier: SubscriptionTierId): Promise<BillingCheckoutResult>;
+  /**
+   * callbackUrl, when provided, is a local loopback URL (see
+   * CheckoutSyncServer.ts) the checkout page pings after a real payment
+   * completes. `options` carries seat-tier/seat-count for Team's
+   * Standard/Premium split — see CheckoutOptions.
+   */
+  createCheckoutSession(tier: SubscriptionTierId, callbackUrl?: string, options?: CheckoutOptions): Promise<BillingCheckoutResult>;
 }

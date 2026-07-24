@@ -141,8 +141,43 @@ export function createBrowserSpeechRecognitionProvider(): SpeechRecognitionProvi
   };
 }
 
-/** rate is the Web Speech API's own real playback-speed control (SpeechSynthesisUtterance.rate, 0.1-10, 1 = normal) — clamped to a sane 0.5-2 range here since that's what the Companion Editor's speed slider offers. */
-export function createBrowserSpeechSynthesisProvider(rate?: number): TextToSpeechProvider {
+/** Real, live system voices — this is dynamic per OS/browser, never a hardcoded list, since Web Speech API voices vary by machine. Chromium loads voices asynchronously on first access, hence the 'voiceschanged' fallback. */
+export function listBrowserVoices(): Promise<SpeechSynthesisVoice[]> {
+  return new Promise((resolve) => {
+    const synthesis = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
+    if (!synthesis) {
+      resolve([]);
+      return;
+    }
+    const existing = synthesis.getVoices();
+    if (existing.length > 0) {
+      resolve(existing);
+      return;
+    }
+    const handler = () => {
+      synthesis.removeEventListener('voiceschanged', handler);
+      resolve(synthesis.getVoices());
+    };
+    synthesis.addEventListener('voiceschanged', handler);
+    // Some browsers never fire voiceschanged if voices were already
+    // available at addEventListener time — a short timeout resolves with
+    // whatever's there rather than hanging forever on an event that won't come.
+    window.setTimeout(() => {
+      synthesis.removeEventListener('voiceschanged', handler);
+      resolve(synthesis.getVoices());
+    }, 500);
+  });
+}
+
+/**
+ * rate/pitch are the Web Speech API's own real controls
+ * (SpeechSynthesisUtterance.rate 0.1-10, .pitch 0-2) — rate is clamped to
+ * 0.5-2 to match the Companion Editor's speed slider; pitch to its own 0-2
+ * range. voiceName, when it matches a real system voice from
+ * listBrowserVoices(), selects that exact voice; otherwise the OS default
+ * voice for the utterance's language is used, same as before this existed.
+ */
+export function createBrowserSpeechSynthesisProvider(rate?: number, pitch?: number, voiceName?: string): TextToSpeechProvider {
   return {
     name: 'browser-speech-synthesis',
     supportsVisemes: false,
@@ -159,6 +194,11 @@ export function createBrowserSpeechSynthesisProvider(rate?: number): TextToSpeec
 
         const utterance = new SpeechSynthesisUtterance(text);
         if (rate !== undefined) utterance.rate = Math.max(0.5, Math.min(2, rate));
+        if (pitch !== undefined) utterance.pitch = Math.max(0, Math.min(2, pitch));
+        if (voiceName) {
+          const match = synthesis.getVoices().find((v) => v.name === voiceName);
+          if (match) utterance.voice = match;
+        }
         utterance.onstart = () => callbacks?.onStart?.();
         utterance.onend = () => {
           callbacks?.onEnd?.();

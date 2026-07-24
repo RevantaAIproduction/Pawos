@@ -1,17 +1,29 @@
-import type { SettingsState } from './ipcTypes';
+import type {
+  SettingsState,
+  FeedbackSubmission,
+  HelpActivityState,
+  SupportConversation,
+  SupportConversationTurn,
+  SupportConversationStatus,
+} from './ipcTypes';
 import type { CompanionCommand } from '../../../shared/companion/CompanionCommand';
 import type { CompanionPackageInput, ImportedCompanionPackage } from '../../../shared/companion/CompanionPackageTypes';
 import type { ActionRequest, ActionRequirement, ActionResult } from '../../../shared/actions/ActionTypes';
 import type { ForegroundWindowInfo } from '../../../shared/system/ForegroundWindowInfo';
-import type { GoogleProfile } from '../../../shared/auth/AccountTypes';
+import type { GoogleSignInResult } from '../../../shared/auth/AccountTypes';
 import type { PairedDevice } from '../../../shared/pairing/PairingTypes';
+import type { LocalDeviceIdentity } from '../../../shared/device/DeviceTypes';
 import type {
   PricingConfig,
   SubscriptionState,
   SubscriptionTierId,
   CreditBalance,
   BillingCheckoutResult,
+  CheckoutOptions,
+  FeatureId,
+  EntitlementSnapshot,
 } from '../../../shared/billing/BillingTypes';
+import type { PawModelId } from '../../../shared/ai/PawModelTypes';
 import type { OnboardingState } from '../../../shared/onboarding/OnboardingTypes';
 import type {
   ConversationSession,
@@ -24,7 +36,7 @@ import type { WorkspaceFileChangeEvent } from '../../../shared/actions/Workspace
 import type { WorkspaceObservationEvent } from '../../../shared/actions/ExecutionLifecycle';
 import type { ExecutionRecord } from '../../../shared/actions/ExecutionRecordTypes';
 import type { BrowserCapabilityReport } from '../../../shared/actions/BrowserCapabilityTypes';
-import type { CommunicationRuntimeEvent } from '../../../shared/communication/CommunicationTypes';
+import type { CommunicationRuntimeEvent, ParticipantRecord, CompanyRecord, CommunicationSummary, FollowUp } from '../../../shared/communication/CommunicationTypes';
 
 export function contextBridge() {
   if (typeof window === 'undefined') {
@@ -40,6 +52,14 @@ export function contextBridge() {
 
   return {
     actionExecute: async (request: ActionRequest): Promise<ActionResult> => ipcApi.invoke('action:execute', request),
+    processWriteStdin: async (processId: string, data: string): Promise<{ ok: true } | { ok: false; message: string }> =>
+      ipcApi.invoke('process:writeStdin', processId, data),
+    systemGetHomeDir: async (): Promise<string> => ipcApi.invoke('system:getHomeDir'),
+    remoteAssistanceStartSharedTerminal: async (
+      cwd: string,
+      label: string
+    ): Promise<{ ok: true; info: { id: string; pid: number | null } } | { ok: false; message: string }> =>
+      ipcApi.invoke('remoteAssistance:startSharedTerminal', cwd, label),
     actionCheckRequirements: async (request: ActionRequest): Promise<ActionRequirement[]> =>
       ipcApi.invoke('action:checkRequirements', request),
     actionDescribe: async (request: ActionRequest): Promise<string> => ipcApi.invoke('action:describe', request),
@@ -63,6 +83,24 @@ export function contextBridge() {
     onSettingsUpdated: (cb: (s: SettingsState) => void) => on('settings:updated', cb),
     onUiOpenSettings: (cb: () => void) => on('ui:open-settings', cb),
 
+    feedbackSubmit: async (submission: FeedbackSubmission): Promise<boolean> => ipcApi.invoke('feedback:submit', submission),
+    feedbackDismiss: async (opts: { dontAskAgain: boolean }): Promise<boolean> => ipcApi.invoke('feedback:dismiss', opts),
+    onShowRatingPrompt: (cb: () => void) => on('feedback:showRatingPrompt', cb),
+    mailSendOrganizationInvite: async (params: { to: string; organizationName: string; role: string; inviterName: string }): Promise<boolean> =>
+      ipcApi.invoke('mail:sendOrganizationInvite', params),
+    helpGetActivity: async (): Promise<HelpActivityState> => ipcApi.invoke('help:getActivity'),
+    helpRecordArticleView: async (articleId: string): Promise<HelpActivityState> => ipcApi.invoke('help:recordArticleView', articleId),
+    helpListConversations: async (): Promise<SupportConversation[]> => ipcApi.invoke('help:listConversations'),
+    helpGetConversation: async (id: string): Promise<SupportConversation | null> => ipcApi.invoke('help:getConversation', id),
+    helpCreateConversation: async (problemSummary: string): Promise<SupportConversation> => ipcApi.invoke('help:createConversation', problemSummary),
+    helpAddTurn: async (id: string, turn: SupportConversationTurn): Promise<SupportConversation | null> => ipcApi.invoke('help:addTurn', id, turn),
+    helpUpdateConversation: async (
+      id: string,
+      patch: { status?: SupportConversationStatus; diagnosis?: string; currentState?: string; needsPermission?: boolean; actionsTaken?: string[] }
+    ): Promise<SupportConversation | null> => ipcApi.invoke('help:updateConversation', id, patch),
+    helpSetConversationRating: async (id: string, rating: 'up' | 'down', detail?: string): Promise<SupportConversation | null> =>
+      ipcApi.invoke('help:setConversationRating', id, rating, detail),
+
     overlayMoveWindow: async (x: number, y: number): Promise<boolean> => ipcApi.invoke('overlay:moveWindow', x, y),
     overlayGetWindowBounds: async (): Promise<{ x: number; y: number; width: number; height: number } | null> =>
       ipcApi.invoke('overlay:getWindowBounds'),
@@ -73,9 +111,10 @@ export function contextBridge() {
       ipcApi.invoke('env:getApiKeys'),
 
     systemGetForegroundWindowInfo: async (): Promise<ForegroundWindowInfo> => ipcApi.invoke('system:getForegroundWindowInfo'),
+    systemGetAppVersion: async (): Promise<string> => ipcApi.invoke('system:getAppVersion'),
 
     authIsGoogleSignInConfigured: async (): Promise<boolean> => ipcApi.invoke('auth:isGoogleSignInConfigured'),
-    authStartGoogleSignIn: async (): Promise<GoogleProfile> => ipcApi.invoke('auth:startGoogleSignIn'),
+    authStartGoogleSignIn: async (): Promise<GoogleSignInResult> => ipcApi.invoke('auth:startGoogleSignIn'),
     authSendOtp: async (email: string): Promise<{ expiresInMinutes: number }> => ipcApi.invoke('auth:sendOtp', email),
     authVerifyOtp: async (email: string, code: string): Promise<{ valid: boolean; reason?: string }> =>
       ipcApi.invoke('auth:verifyOtp', email, code),
@@ -97,13 +136,31 @@ export function contextBridge() {
     pairingList: async (userId?: string): Promise<PairedDevice[]> => ipcApi.invoke('pairing:list', userId),
     pairingRevoke: async (deviceId: string): Promise<boolean> => ipcApi.invoke('pairing:revoke', deviceId),
 
+    deviceGetLocalIdentity: async (): Promise<LocalDeviceIdentity> => ipcApi.invoke('device:getLocalIdentity'),
+
     billingGetPricing: async (): Promise<PricingConfig> => ipcApi.invoke('billing:getPricing'),
     billingGetSubscription: async (): Promise<SubscriptionState> => ipcApi.invoke('billing:getSubscription'),
     billingSetSubscriptionTier: async (tier: SubscriptionTierId): Promise<SubscriptionState> =>
       ipcApi.invoke('billing:setSubscriptionTier', tier),
+    billingSyncTierFromOrganization: async (orgTier: SubscriptionTierId): Promise<SubscriptionState> =>
+      ipcApi.invoke('billing:syncFromOrganization', orgTier),
     billingGetCreditBalance: async (): Promise<CreditBalance> => ipcApi.invoke('billing:getCreditBalance'),
-    billingCreateCheckoutSession: async (tier: SubscriptionTierId): Promise<BillingCheckoutResult> =>
-      ipcApi.invoke('billing:createCheckoutSession', tier),
+    billingConsumeCredit: async (amount: number, reason: string): Promise<CreditBalance> =>
+      ipcApi.invoke('billing:consumeCredit', amount, reason),
+    entitlementGetSnapshot: async (): Promise<EntitlementSnapshot> => ipcApi.invoke('entitlement:getSnapshot'),
+    entitlementIsModelAvailable: async (modelId: PawModelId): Promise<boolean> =>
+      ipcApi.invoke('entitlement:isModelAvailable', modelId),
+    entitlementIsFeatureAvailable: async (featureId: FeatureId): Promise<boolean> =>
+      ipcApi.invoke('entitlement:isFeatureAvailable', featureId),
+
+    billingCreateCheckoutSession: async (tier: SubscriptionTierId, callbackUrl?: string, options?: CheckoutOptions): Promise<BillingCheckoutResult> =>
+      ipcApi.invoke('billing:createCheckoutSession', tier, callbackUrl, options),
+    billingStartCheckoutSync: async (): Promise<string> => ipcApi.invoke('billing:startCheckoutSync'),
+    billingCreateCreditsCheckoutSession: async (credits: number, organizationId?: string, callbackUrl?: string): Promise<BillingCheckoutResult> =>
+      ipcApi.invoke('billing:createCreditsCheckoutSession', credits, organizationId, callbackUrl),
+    onSubscriptionUpdated: (cb: () => void) => on('billing:subscriptionUpdated', cb),
+    onTaskCreditsPurchased: (cb: (payload: { credits: number; organizationId?: string }) => void) =>
+      on('billing:taskCreditsPurchased', cb),
 
     onboardingGet: async (): Promise<OnboardingState> => ipcApi.invoke('onboarding:get'),
     onboardingSetStep: async (step: number): Promise<OnboardingState> => ipcApi.invoke('onboarding:setStep', step),
@@ -150,6 +207,10 @@ export function contextBridge() {
     communicationSaveAudio: async (communicationId: string, base64Data: string, mimeType: string): Promise<{ ok: boolean; data?: { audioPath: string }; message?: string }> =>
       ipcApi.invoke('communication:saveAudio', communicationId, base64Data, mimeType),
     onCommunicationEvent: (cb: (event: CommunicationRuntimeEvent) => void) => on('communication:event', cb),
+    communicationListLocalParticipants: async (): Promise<ParticipantRecord[]> => ipcApi.invoke('communication:listLocalParticipants'),
+    communicationListLocalCompanies: async (): Promise<CompanyRecord[]> => ipcApi.invoke('communication:listLocalCompanies'),
+    communicationListLocalSummaries: async (): Promise<CommunicationSummary[]> => ipcApi.invoke('communication:listLocalSummaries'),
+    communicationListLocalFollowUps: async (): Promise<FollowUp[]> => ipcApi.invoke('communication:listLocalFollowUps'),
   };
 }
 

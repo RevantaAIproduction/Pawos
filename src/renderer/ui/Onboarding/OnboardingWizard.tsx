@@ -4,6 +4,7 @@ import { ipc } from '../../services/ipc/ipcBridgeImplementation';
 import { aiProviderConfigStore } from '../../ai/AIProviderConfigStore';
 import type { AuthUser } from '../../auth/AuthTypes';
 import type { SubscriptionTierId } from '../../../shared/billing/BillingTypes';
+import { PAW_MODEL_CATALOG, getPawModel, type PawModelId } from '../../../shared/ai/PawModelTypes';
 
 /**
  * First-run onboarding — a resumable multi-step wizard shown once after a
@@ -19,18 +20,14 @@ import type { SubscriptionTierId } from '../../../shared/billing/BillingTypes';
  */
 const STEP_COUNT = 15;
 
-const MODEL_OPTIONS: { id: string; label: string; description: string }[] = [
-  { id: '', label: 'Auto', description: "Let Paw choose the right model for each task." },
-  { id: 'gemini-flash-lite-latest', label: 'Paw Swift', description: 'Fastest responses, lighter reasoning.' },
-  { id: 'gemini-flash-latest', label: 'Paw Flash', description: 'Balanced speed and capability — the default.' },
-  { id: 'gemini-pro-latest', label: 'Paw Core', description: 'Deepest reasoning for hard problems, slower.' },
-];
+const MODEL_OPTIONS = PAW_MODEL_CATALOG.filter((m) => m.category === 'reasoning');
 
 export function OnboardingWizard({ user, onFinish }: { user: AuthUser; onFinish: () => void }) {
   const [step, setStep] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [tier, setTier] = useState<SubscriptionTierId>('go');
-  const [model, setModel] = useState('');
+  const [model, setModel] = useState<PawModelId>(getPawModel(aiProviderConfigStore.getActivePawModel()).id);
+  const [modelSwitchNote, setModelSwitchNote] = useState<string | null>(null);
   const [micStatus, setMicStatus] = useState<'unrequested' | 'granted' | 'denied'>('unrequested');
   const [notifStatus, setNotifStatus] = useState<'unrequested' | 'granted' | 'denied'>('unrequested');
   const [workspacePath, setWorkspacePath] = useState<string | null>(null);
@@ -44,7 +41,7 @@ export function OnboardingWizard({ user, onFinish }: { user: AuthUser; onFinish:
       setLoaded(true);
     });
     ipc.billingGetSubscription().then((s) => setTier(s.tier)).catch(() => {});
-    setModel(aiProviderConfigStore.get().models.gemini ?? '');
+    setModel(aiProviderConfigStore.getActivePawModel());
   }, []);
 
   const goTo = async (next: number) => {
@@ -70,9 +67,10 @@ export function OnboardingWizard({ user, onFinish }: { user: AuthUser; onFinish:
     }
   };
 
-  const chooseModel = (id: string) => {
+  const chooseModel = (id: PawModelId) => {
     setModel(id);
-    if (id) aiProviderConfigStore.setModel('gemini', id);
+    aiProviderConfigStore.setActivePawModel(id);
+    setModelSwitchNote(getPawModel(id).switchMessage);
   };
 
   const requestMic = async () => {
@@ -147,11 +145,12 @@ export function OnboardingWizard({ user, onFinish }: { user: AuthUser; onFinish:
 
         {step === 2 && (
           <section>
-            <h1 className={styles.title}>Choose your mode</h1>
+            <h1 className={styles.title}>Choose your plan</h1>
             <p className={styles.body}>
-              Paw Go is planning &amp; analysis only. Paw Pro unlocks full code generation, terminal
-              execution, and build/test automation. This is just a local preference — no payment is
-              taken, and you can change it anytime in Settings.
+              Paw Go has no AI — just Companion Studio, your desktop companion, and local workspace
+              features. Paw Pro unlocks Paw's AI models (Flash, Swift, Core, Creative, Vision, Voice)
+              and higher runtime limits. You can preview either now for free; real billing is set up
+              from Settings whenever you're ready.
             </p>
             <div className={styles.optionRow}>
               <button
@@ -176,12 +175,15 @@ export function OnboardingWizard({ user, onFinish }: { user: AuthUser; onFinish:
 
         {step === 3 && (
           <section>
-            <h1 className={styles.title}>Pick a reasoning speed</h1>
-            <p className={styles.body}>Auto is recommended — Paw will pick the right depth for each task automatically.</p>
+            <h1 className={styles.title}>Choose your model</h1>
+            <p className={styles.body}>
+              Paw Core is the default — highest reasoning quality. You can switch anytime in Settings;
+              Paw never switches models for you.
+            </p>
             <div className={styles.stack}>
               {MODEL_OPTIONS.map((m) => (
                 <button
-                  key={m.id || 'auto'}
+                  key={m.id}
                   type="button"
                   className={model === m.id ? styles.optionActive : styles.option}
                   onClick={() => chooseModel(m.id)}
@@ -191,6 +193,7 @@ export function OnboardingWizard({ user, onFinish }: { user: AuthUser; onFinish:
                 </button>
               ))}
             </div>
+            {modelSwitchNote && <p className={styles.hint}>{modelSwitchNote}</p>}
           </section>
         )}
 

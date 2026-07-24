@@ -11,4 +11,5 @@ export type CompanionCommand =
   | { type: 'playAnimation'; clip: AnimClip }
   | { type: 'lookAt'; target: { x: number; y: number } | null }
   | { type: 'setMood'; mood: string }
-  | { type: 'setContext'; context: Record<string, unknown> };
+  | { type: 'setContext'; context: Record<string, unknown> }
+  | { type: 'openConversation'; prefill?: string };

@@ -25,6 +25,8 @@ import { MemoryBackupComplete } from './emails/MemoryBackupComplete';
 import { PeriodSummary, type SummaryStat } from './emails/PeriodSummary';
 import { ProductUpdate, type ProductUpdateVariant } from './emails/ProductUpdate';
 import { Newsletter, type NewsletterSection } from './emails/Newsletter';
+import { FeedbackReceived } from './emails/FeedbackReceived';
+import { OrganizationInvite } from './emails/OrganizationInvite';
 
 export type SmtpConfig = {
   host: string;
@@ -194,6 +196,24 @@ export class EmailService {
     params: { variant: ProductUpdateVariant; title: string; body: string; learnMoreUrl: string }
   ): Promise<void> {
     await this.send(to, params.title, React.createElement(ProductUpdate, { ...params, ...this.branding() }));
+  }
+
+  async sendFeedbackReceived(
+    to: string,
+    params: { rating: number; comment?: string; fromName: string; appVersion: string }
+  ): Promise<void> {
+    await this.send(to, `New PawOS feedback: ${params.rating}/5 stars`, React.createElement(FeedbackReceived, { ...params, ...this.branding() }));
+  }
+
+  async sendOrganizationInvite(
+    to: string,
+    params: { organizationName: string; role: string; inviterName: string; openUrl: string }
+  ): Promise<void> {
+    await this.send(
+      to,
+      `You've been invited to ${params.organizationName} on PawOS`,
+      React.createElement(OrganizationInvite, { ...params, ...this.branding() })
+    );
   }
 
   async sendNewsletter(

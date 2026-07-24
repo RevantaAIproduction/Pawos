@@ -6,6 +6,8 @@ export type ElevenLabsTtsConfig = {
   voiceId: string;
   modelId?: string;
   baseUrl?: string;
+  /** ElevenLabs' own real voice_settings.style parameter (0-1) — higher exaggerates the voice's natural style/expressiveness. Sent only when set, so an unconfigured value falls back to the voice's own account-level default rather than a fabricated one. */
+  style?: number;
 };
 
 function base64ToBlob(base64: string, mime: string): Blob {
@@ -47,6 +49,7 @@ export function createElevenLabsTtsProvider(config: ElevenLabsTtsConfig): TextTo
         body: JSON.stringify({
           text,
           model_id: config.modelId ?? 'eleven_turbo_v2_5',
+          ...(config.style !== undefined ? { voice_settings: { style: Math.max(0, Math.min(1, config.style)) } } : {}),
         }),
       });
 

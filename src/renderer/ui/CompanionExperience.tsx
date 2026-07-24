@@ -60,9 +60,9 @@ export default function CompanionExperience() {
   // that hook) since there's no separate per-feature key store.
   useEffect(() => {
     if (!activeProfile) return;
-    const { ttsProvider, voiceId, speed } = activeProfile.voice;
+    const { ttsProvider, voiceId, speed, pitch, style } = activeProfile.voice;
     const apiKey = ttsProvider === 'openai' ? aiProviderConfigStore.getApiKey('openai') : undefined;
-    conversation.setSpeechSynthesisProvider({ id: ttsProvider, voiceId, speed, apiKey });
+    conversation.setSpeechSynthesisProvider({ id: ttsProvider, voiceId, speed, pitch, style, apiKey });
   }, [activeProfile, conversation.setSpeechSynthesisProvider]);
 
   // Workspace Runtime — the currently-running task, if any, is the same
@@ -79,6 +79,7 @@ export default function CompanionExperience() {
   }, [conversationSnapshot.messages]);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const notifyOnTaskCompleteRef = useRef(true);
 
   const FIRST_LAUNCH_KEY = 'pawos:firstLaunchCompleted';
   const welcomeMessage =
@@ -120,15 +121,25 @@ export default function CompanionExperience() {
         case 'setContext':
           c.setContext(command.context);
           break;
+        case 'openConversation':
+          conversation.open();
+          if (command.prefill) conversation.submitTranscript(command.prefill);
+          break;
       }
     });
-  }, [ipc]);
+  }, [ipc, conversation.open, conversation.submitTranscript]);
 
   useEffect(() => {
     ipc.onUiOpenSettings(() => setSettingsOpen(true));
-    ipc.onSettingsUpdated((s) => controller.applySettings(s));
+    ipc.onSettingsUpdated((s) => {
+      controller.applySettings(s);
+      notifyOnTaskCompleteRef.current = s.notifyOnTaskComplete;
+    });
 
-    ipc.getSettings().then((s) => controller.applySettings(s));
+    ipc.getSettings().then((s) => {
+      controller.applySettings(s);
+      notifyOnTaskCompleteRef.current = s.notifyOnTaskComplete;
+    });
     ipc.petsList().then((list) => controller.setPetList(list));
 
     // First launch welcome experience:
@@ -181,7 +192,7 @@ export default function CompanionExperience() {
         // actually looking at this window — document.hasFocus() is real,
         // not simulated. Never fires while the user is already watching
         // the companion celebrate.
-        if (!document.hasFocus()) {
+        if (!document.hasFocus() && notifyOnTaskCompleteRef.current) {
           void ipc.showCompanionNotification('Paw finished a task', task.goal);
         }
       }
@@ -264,6 +275,8 @@ export default function CompanionExperience() {
             onSendTranscript={(text, context) => conversation.submitTranscript(text, context)}
             onRetryAction={(taskId, actionId) => conversation.retryAction(taskId, actionId)}
             onOpenPath={(path, kind) => conversation.openPath(path, kind)}
+            creditsNoticeTier={conversation.creditsNoticeTier}
+            onDismissCreditsNotice={() => conversation.dismissCreditsNotice()}
           />
         </div>
       )}

@@ -6,23 +6,25 @@ import { Button } from "../../components/ui/Button";
 
 export const metadata: Metadata = {
   title: "Pricing",
-  description: "PawOS pricing: Go, Pro, Pro Max, Team, and Enterprise plans, plus Autonomous Engineering Task pricing.",
+  description: "PawOS pricing: Go, Pro, Pro Max, Team, and Enterprise plans, plus prepaid Autonomous Engineering Task credit pricing.",
 };
 
 const COMPARISON_ROWS: { feature: string; go: string; pro: string; proMax: string; team: string; enterprise: string }[] = [
   { feature: "Companion Studio & Desktop Companion", go: "✓", pro: "✓", proMax: "✓", team: "✓", enterprise: "✓" },
   { feature: "AI models & reasoning runtimes", go: "—", pro: "✓", proMax: "✓", team: "✓", enterprise: "✓" },
-  { feature: "Autonomous Ticket Resolution", go: "—", pro: "Metered", proMax: "Metered", team: "Included allowance + metered", enterprise: "Included allowance + custom metered" },
-  { feature: "Shared Organization Workspaces", go: "—", pro: "—", proMax: "—", team: "✓", enterprise: "✓" },
-  { feature: "Admin controls & credential vault", go: "—", pro: "—", proMax: "—", team: "✓", enterprise: "✓" },
-  { feature: "Governance policies & audit log", go: "—", pro: "—", proMax: "—", team: "Basic", enterprise: "Advanced" },
-  { feature: "Support", go: "Community", pro: "Standard", proMax: "Priority", team: "Priority", enterprise: "Dedicated" },
+  { feature: "Autonomous Engineering Task billing", go: "—", pro: "Prepaid credits", proMax: "Prepaid credits", team: "Prepaid credits (per member)", enterprise: "Seat fee + prepaid credits" },
+  { feature: "Shared Workspaces, Companions & Credit Pool", go: "—", pro: "—", proMax: "—", team: "✓", enterprise: "✓" },
+  { feature: "Task Management & Git Collaboration (PR Review)", go: "—", pro: "—", proMax: "—", team: "✓", enterprise: "✓" },
+  { feature: "Remote Assistance & CRM Projection", go: "—", pro: "—", proMax: "—", team: "✓", enterprise: "✓" },
+  { feature: "Credential Vault, Approval Queue & Audit Log", go: "—", pro: "—", proMax: "—", team: "✓", enterprise: "✓" },
+  { feature: "Seat rates", go: "—", pro: "—", proMax: "—", team: "Standard $20 / Premium $100", enterprise: "$20 base + credits" },
+  { feature: "RBAC roles", go: "—", pro: "—", proMax: "—", team: "Owner, Billing/Workspace Admin, Member", enterprise: "+ IT Admin, Security Admin, Dept. Manager" },
 ];
 
 const FAQS = [
   {
     q: "How does Autonomous Engineering Task billing work?",
-    a: "Each plan includes a real monthly allowance of Autonomous Engineering Tasks. Once that allowance is used, additional completed tasks are billed at a flat per-task rate. You're only ever charged once a task genuinely completes — a real pull request is opened and the ticket is updated. A task that fails, is cancelled, hits a retry limit, or is denied approval is never billed.",
+    a: "Autonomous Engineering Tasks are prepaid. Buy task credits upfront ($5 per credit, $30 minimum — 6 credits) from inside the app, and each completed task consumes exactly one credit. You're only ever charged a credit once a task genuinely completes — a real pull request is opened and the ticket is updated. A task that fails, is cancelled, hits a retry limit, or is denied approval never consumes a credit. Run out of credits and PawOS simply prompts you to buy more before starting a new task.",
   },
   {
     q: "Can I change plans anytime?",
@@ -30,11 +32,11 @@ const FAQS = [
   },
   {
     q: "What counts as a 'seat' on Team or Enterprise?",
-    a: "One seat is one member of your organization workspace. Seats are billed monthly per the plan's per-seat rate; Team supports 2–150 seats, Enterprise starts at 20 seats with custom terms above that.",
+    a: "One seat is one member of your organization workspace. Team seats come in two rates — Standard ($20/seat/mo) and Premium ($100/seat/mo) — mixed freely across your 2–150 members. Enterprise seats are uniform at a $20/seat/mo base fee (20+ seats), with Autonomous Engineering Task usage billed separately via the same prepaid credit model.",
   },
   {
     q: "Do unused Autonomous Engineering Task credits roll over?",
-    a: "No — the included monthly allowance resets each billing period and does not carry over, consistent with how the allowance is designed to cover typical monthly usage rather than accumulate.",
+    a: "Yes — prepaid credits don't expire and roll over indefinitely. You're buying a balance, not a monthly allowance, so unused credits simply stay in your account until you use them.",
   },
   {
     q: "What's your refund policy?",
@@ -82,14 +84,15 @@ export default function PricingPage() {
         <div className="mx-auto mt-8 max-w-2xl space-y-4 text-neutral-400">
           <p>
             Autonomous Ticket Resolution is billed as a completed <strong className="text-neutral-200">Autonomous Engineering Task</strong> —
-            never as chat, tokens, or time. A task only counts, and only bills, once Paw has genuinely opened a
-            real pull request and updated the originating ticket.
+            never as chat, tokens, or time. Task credits are prepaid: buy them upfront, and one credit is consumed
+            only once Paw has genuinely opened a real pull request and updated the originating ticket.
           </p>
           <ul className="space-y-2">
-            <li>• Every plan includes a real monthly allowance before metered billing starts.</li>
-            <li>• Additional completed tasks beyond your allowance are billed at a flat per-task rate.</li>
-            <li>• A task that fails, is cancelled, hits its retry limit, or is denied approval is <strong className="text-neutral-200">never</strong> billed.</li>
-            <li>• Enterprise plans can negotiate custom per-task rates at volume.</li>
+            <li>• $5 per task credit, $30 minimum purchase (6 credits) — buy more anytime from inside the app.</li>
+            <li>• Credits don't expire and roll over indefinitely — you're buying a balance, not a monthly allowance.</li>
+            <li>• A task that fails, is cancelled, hits its retry limit, or is denied approval <strong className="text-neutral-200">never</strong> consumes a credit.</li>
+            <li>• Out of credits? PawOS prompts you to buy more before starting a new task — nothing runs on an empty balance.</li>
+            <li>• Enterprise plans can negotiate custom per-credit rates at volume.</li>
           </ul>
         </div>
       </Section>

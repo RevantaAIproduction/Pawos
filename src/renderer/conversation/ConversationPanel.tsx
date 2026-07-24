@@ -3,6 +3,8 @@ import styles from './conversationPanel.module.css';
 import type { ConversationSnapshot, SubmittedInputContext } from './ConversationTypes';
 import { conversationStateLabels } from './ConversationTypes';
 import { TaskCard } from './TaskCard';
+import { CreditsRequiredNotice } from '../ui/billing/CreditsRequiredNotice';
+import type { SubscriptionTierId } from '../../shared/billing/BillingTypes';
 
 /** Below this, a paste is probably just a short phrase someone copied — above it, it reads as reference material to skim/summarize rather than a spoken command. */
 const PASTE_LENGTH_THRESHOLD = 200;
@@ -34,6 +36,8 @@ export function ConversationPanel({
   onSendTranscript,
   onRetryAction,
   onOpenPath,
+  creditsNoticeTier,
+  onDismissCreditsNotice,
 }: {
   snapshot: ConversationSnapshot;
   onClose: () => void;
@@ -43,6 +47,9 @@ export function ConversationPanel({
   onRetryAction?: (taskId: string, actionId: string) => void;
   /** "Open" next to a file/folder a Task Card touched. */
   onOpenPath?: (path: string, kind: 'file' | 'folder') => void;
+  /** Set when the last submit was blocked by the entitlement/credit gate (see useConversationController). */
+  creditsNoticeTier?: SubscriptionTierId | null;
+  onDismissCreditsNotice?: () => void;
 }) {
   const [draft, setDraft] = useState('');
   const [wasPasted, setWasPasted] = useState(false);
@@ -170,6 +177,10 @@ export function ConversationPanel({
         <span>{snapshot.supportsSpeechRecognition ? 'Speech recognition ready' : 'Type mode fallback'}</span>
         <span>{snapshot.supportsSpeechSynthesis ? 'Speech synthesis ready' : 'Speech output fallback'}</span>
       </div>
+
+      {creditsNoticeTier && onDismissCreditsNotice && (
+        <CreditsRequiredNotice tier={creditsNoticeTier} onDismiss={onDismissCreditsNotice} />
+      )}
 
       <div ref={transcriptRef} className={styles.transcript} role="log" aria-live="polite" aria-relevant="additions text">
         {snapshot.messages.length === 0 && (

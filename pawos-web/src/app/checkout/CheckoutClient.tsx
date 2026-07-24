@@ -33,10 +33,17 @@ function loadRazorpayScript(): Promise<boolean> {
   });
 }
 
+const SEAT_TIER_LABELS: Record<string, string> = { standard: "Standard ($20/seat/mo)", premium: "Premium ($100/seat/mo)" };
+
 export function CheckoutClient() {
   const searchParams = useSearchParams();
   const plan = searchParams.get("plan") ?? "pro";
   const callback = searchParams.get("callback");
+  const seatCountParam = searchParams.get("seatCount");
+  const seatCount = seatCountParam ? Number(seatCountParam) : undefined;
+  const [seatTier, setSeatTier] = useState<"standard" | "premium">(
+    searchParams.get("seatTier") === "premium" ? "premium" : "standard"
+  );
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
 
@@ -47,7 +54,11 @@ export function CheckoutClient() {
       const response = await fetch("/api/billing/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan }),
+        body: JSON.stringify({
+          plan,
+          ...(plan === "team" ? { seatTier } : {}),
+          ...(seatCount ? { seatCount } : {}),
+        }),
       });
       const result = await response.json();
 
@@ -99,6 +110,28 @@ export function CheckoutClient() {
         Payment is handled securely by Razorpay. After payment, your PawOS desktop app will refresh
         automatically — no need to enter anything back into Electron.
       </p>
+      {plan === "team" && (
+        <div className="mt-6 text-left">
+          <p className="text-sm font-medium text-neutral-300">Seat rate for this purchase</p>
+          <div className="mt-2 flex gap-2">
+            {(["standard", "premium"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setSeatTier(t)}
+                className={`flex-1 rounded-lg border px-3 py-2 text-sm ${
+                  seatTier === t ? "border-blue-400 bg-blue-500/10 text-blue-200" : "border-neutral-800 text-neutral-400 hover:text-neutral-200"
+                }`}
+              >
+                {SEAT_TIER_LABELS[t]}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-neutral-500">
+            Buying mixed seats? Standard and Premium checkouts are separate — repeat this for each rate.
+          </p>
+        </div>
+      )}
       <button
         type="button"
         onClick={startCheckout}

@@ -4,7 +4,9 @@ import type {
   AdapterResult,
   CommunicationRecord,
   CommunicationRuntimeEvent,
+  CommunicationSummary,
   CompanyWorkspace,
+  FollowUp,
   PairedDeviceRecord,
   RecordingMode,
   SearchQuery,
@@ -280,6 +282,30 @@ class CommunicationRuntime extends EventEmitter {
 
   getCompanyWorkspace(companyId: string): CompanyWorkspace | null {
     return communicationTimelineStore.getCompanyWorkspace(companyId);
+  }
+
+  // -- Phase 1 org-share bridge: read-only local lookups so a member can
+  // pick which local contact/company/summary/follow-up to share into an
+  // organization. Never writes back, never touches Supabase itself — the
+  // renderer's OrgSyncBridge does the actual write via CrmService.
+
+  listLocalParticipants() {
+    return communicationMemoryStore.listParticipants();
+  }
+
+  listLocalCompanies() {
+    return communicationMemoryStore.listCompanies();
+  }
+
+  listLocalSummaries(): CommunicationSummary[] {
+    return communicationSessionStore
+      .list()
+      .map((record) => communicationIntelligenceStore.getSummary(record.id))
+      .filter((summary): summary is CommunicationSummary => Boolean(summary));
+  }
+
+  listLocalFollowUps(): FollowUp[] {
+    return communicationIntelligenceStore.listFollowUps();
   }
 
   async search(query: SearchQuery, apiKey?: string): Promise<SearchResult[]> {

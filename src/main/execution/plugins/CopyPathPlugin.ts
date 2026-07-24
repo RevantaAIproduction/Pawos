@@ -5,6 +5,7 @@ import { BasePlugin } from '../BasePlugin';
 import { describeFailure } from '../describeFailure';
 import { copyWithVerify } from './pathCopy';
 import { onFileCreated, onFileModified } from '../../memory/entities/fileEntities';
+import { recoverByRetry } from '../RecoverByRetry';
 
 /** Copies a file or folder. Destructiveness is conditional (only when `to` already exists) — self-checks like WriteFilePlugin, not the global DESTRUCTIVE_ACTION_TYPES gate. */
 export class CopyPathPlugin extends BasePlugin {
@@ -46,6 +47,10 @@ export class CopyPathPlugin extends BasePlugin {
       return { ok: false, reason: 'failed', message: "The copy reported success, but the destination doesn't exist — something went wrong." };
     }
     return result;
+  }
+
+  async recover(request: ActionRequest, result: ActionResult): Promise<ActionResult> {
+    return recoverByRetry(request, result, (r) => this.execute(r));
   }
 
   describeInProgress(request: ActionRequest): string {

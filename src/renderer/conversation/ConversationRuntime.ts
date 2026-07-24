@@ -30,6 +30,7 @@ import type { WorkspaceObservationEvent } from '../../shared/actions/ExecutionLi
 import type { CommunicationRuntimeEvent } from '../../shared/communication/CommunicationTypes';
 import type { ExecutionRecord } from '../../shared/actions/ExecutionRecordTypes';
 import { ExecutionSupervisor } from './ExecutionSupervisor';
+import { classifyFailure, NOT_AUTO_RECOVERABLE } from '../../shared/execution/RecoveryNarration';
 
 const MAX_LOG_ENTRIES = 200;
 const MAX_TURN_RECORDS = 50;
@@ -739,8 +740,31 @@ export class ConversationRuntime {
       if (this.closed || currentTurn !== this.turnId || turnFailed) {
         return;
       }
-      this.failTurn(error instanceof Error ? error.message : 'Failed to compose a response.');
-      return;
+      const message = error instanceof Error ? error.message : 'Failed to compose a response.';
+      // Self-heal, extending the same Recovery Policy this runtime already
+      // applies to tool calls (see MAX_SAME_FAILURE_ATTEMPTS above): a
+      // transient reasoning-provider error (rate limit, network blip) gets
+      // one silent automatic retry before the user ever sees an error —
+      // but only if nothing has streamed yet, since retrying after partial
+      // speech/text output would risk garbled, duplicated narration.
+      const failureClass = classifyFailure(message);
+      const nothingStreamedYet = turnContext.ttsBuffer === '' && turnContext.finalResponse === '';
+      if (nothingStreamedYet && !NOT_AUTO_RECOVERABLE.has(failureClass)) {
+        this.log('recovering-turn', { failureClass, message });
+        try {
+          turnHandle = this.args.reasoningRuntime.runTurn(reasoningInput, this.buildStreamCallbacks(currentTurn, turnContext));
+          this.reasoningTurn = turnHandle;
+          const retryResult = await turnHandle.completed;
+          turnContext.finalResponse = retryResult.response || retryResult.assistantMessage?.content || turnContext.finalResponse;
+        } catch (retryError) {
+          if (this.closed || currentTurn !== this.turnId || turnFailed) return;
+          this.failTurn(retryError instanceof Error ? retryError.message : message);
+          return;
+        }
+      } else {
+        this.failTurn(message);
+        return;
+      }
     }
 
     if (this.closed || currentTurn !== this.turnId) {

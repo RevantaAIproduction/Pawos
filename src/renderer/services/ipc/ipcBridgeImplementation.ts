@@ -1,10 +1,15 @@
-import type { SettingsState } from './ipcTypes';
+import type {
+  SettingsState,
+  FeedbackSubmission,
+  SupportConversationTurn,
+  SupportConversationStatus,
+} from './ipcTypes';
 import { getIpcBridge } from './ipcBridge';
 import type { CompanionCommand } from '../../../shared/companion/CompanionCommand';
 import type { CompanionPackageInput, ImportedCompanionPackage } from '../../../shared/companion/CompanionPackageTypes';
 import type { ActionRequest, ActionRequirement, ActionResult } from '../../../shared/actions/ActionTypes';
 import type { ForegroundWindowInfo } from '../../../shared/system/ForegroundWindowInfo';
-import type { GoogleProfile } from '../../../shared/auth/AccountTypes';
+import type { GoogleSignInResult } from '../../../shared/auth/AccountTypes';
 import type {
   ConversationSession,
   ConversationSessionSummary,
@@ -16,15 +21,20 @@ import type { WorkspaceFileChangeEvent } from '../../../shared/actions/Workspace
 import type { WorkspaceObservationEvent } from '../../../shared/actions/ExecutionLifecycle';
 import type { ExecutionRecord } from '../../../shared/actions/ExecutionRecordTypes';
 import type { BrowserCapabilityReport } from '../../../shared/actions/BrowserCapabilityTypes';
-import type { CommunicationRuntimeEvent } from '../../../shared/communication/CommunicationTypes';
+import type { CommunicationRuntimeEvent, ParticipantRecord, CompanyRecord, CommunicationSummary, FollowUp } from '../../../shared/communication/CommunicationTypes';
 import type { PairedDevice } from '../../../shared/pairing/PairingTypes';
+import type { LocalDeviceIdentity } from '../../../shared/device/DeviceTypes';
 import type {
   PricingConfig,
   SubscriptionState,
   SubscriptionTierId,
   CreditBalance,
   BillingCheckoutResult,
+  CheckoutOptions,
+  FeatureId,
+  EntitlementSnapshot,
 } from '../../../shared/billing/BillingTypes';
+import type { PawModelId } from '../../../shared/ai/PawModelTypes';
 import type { OnboardingState } from '../../../shared/onboarding/OnboardingTypes';
 
 // Lazy initialization - access the bridge only when first needed
@@ -43,6 +53,18 @@ function getBridge() {
 export const ipc = {
   async actionExecute(request: ActionRequest): Promise<ActionResult> {
     return getBridge().actionExecute(request);
+  },
+  async processWriteStdin(processId: string, data: string): Promise<{ ok: true } | { ok: false; message: string }> {
+    return getBridge().processWriteStdin(processId, data);
+  },
+  async systemGetHomeDir(): Promise<string> {
+    return getBridge().systemGetHomeDir();
+  },
+  async remoteAssistanceStartSharedTerminal(
+    cwd: string,
+    label: string
+  ): Promise<{ ok: true; info: { id: string; pid: number | null } } | { ok: false; message: string }> {
+    return getBridge().remoteAssistanceStartSharedTerminal(cwd, label);
   },
   async actionCheckRequirements(request: ActionRequest): Promise<ActionRequirement[]> {
     return getBridge().actionCheckRequirements(request);
@@ -92,6 +114,51 @@ export const ipc = {
   onUiOpenSettings(cb: () => void) {
     getBridge().onUiOpenSettings(cb);
   },
+  async feedbackSubmit(submission: FeedbackSubmission): Promise<boolean> {
+    return getBridge().feedbackSubmit(submission);
+  },
+  async feedbackDismiss(opts: { dontAskAgain: boolean }): Promise<boolean> {
+    return getBridge().feedbackDismiss(opts);
+  },
+  onShowRatingPrompt(cb: () => void) {
+    getBridge().onShowRatingPrompt(cb);
+  },
+  async mailSendOrganizationInvite(params: { to: string; organizationName: string; role: string; inviterName: string }): Promise<boolean> {
+    return getBridge().mailSendOrganizationInvite(params);
+  },
+  async helpGetActivity() {
+    return getBridge().helpGetActivity();
+  },
+  async helpRecordArticleView(articleId: string) {
+    return getBridge().helpRecordArticleView(articleId);
+  },
+  async helpListConversations() {
+    return getBridge().helpListConversations();
+  },
+  async helpGetConversation(id: string) {
+    return getBridge().helpGetConversation(id);
+  },
+  async helpCreateConversation(problemSummary: string) {
+    return getBridge().helpCreateConversation(problemSummary);
+  },
+  async helpAddTurn(id: string, turn: SupportConversationTurn) {
+    return getBridge().helpAddTurn(id, turn);
+  },
+  async helpUpdateConversation(
+    id: string,
+    patch: {
+      status?: SupportConversationStatus;
+      diagnosis?: string;
+      currentState?: string;
+      needsPermission?: boolean;
+      actionsTaken?: string[];
+    }
+  ) {
+    return getBridge().helpUpdateConversation(id, patch);
+  },
+  async helpSetConversationRating(id: string, rating: 'up' | 'down', detail?: string) {
+    return getBridge().helpSetConversationRating(id, rating, detail);
+  },
   async overlayMoveWindow(x: number, y: number): Promise<boolean> {
     return getBridge().overlayMoveWindow(x, y);
   },
@@ -107,13 +174,16 @@ export const ipc = {
   async envGetApiKeys(): Promise<{ gemini?: string; supabaseUrl?: string; supabasePublishableKey?: string }> {
     return getBridge().envGetApiKeys();
   },
+  async systemGetAppVersion(): Promise<string> {
+    return getBridge().systemGetAppVersion();
+  },
   async systemGetForegroundWindowInfo(): Promise<ForegroundWindowInfo> {
     return getBridge().systemGetForegroundWindowInfo();
   },
   async authIsGoogleSignInConfigured(): Promise<boolean> {
     return getBridge().authIsGoogleSignInConfigured();
   },
-  async authStartGoogleSignIn(): Promise<GoogleProfile> {
+  async authStartGoogleSignIn(): Promise<GoogleSignInResult> {
     return getBridge().authStartGoogleSignIn();
   },
   async authSendOtp(email: string): Promise<{ expiresInMinutes: number }> {
@@ -147,6 +217,9 @@ export const ipc = {
   async pairingRevoke(deviceId: string): Promise<boolean> {
     return getBridge().pairingRevoke(deviceId);
   },
+  async deviceGetLocalIdentity(): Promise<LocalDeviceIdentity> {
+    return getBridge().deviceGetLocalIdentity();
+  },
   async billingGetPricing(): Promise<PricingConfig> {
     return getBridge().billingGetPricing();
   },
@@ -156,11 +229,38 @@ export const ipc = {
   async billingSetSubscriptionTier(tier: SubscriptionTierId): Promise<SubscriptionState> {
     return getBridge().billingSetSubscriptionTier(tier);
   },
+  async billingSyncTierFromOrganization(orgTier: SubscriptionTierId): Promise<SubscriptionState> {
+    return getBridge().billingSyncTierFromOrganization(orgTier);
+  },
   async billingGetCreditBalance(): Promise<CreditBalance> {
     return getBridge().billingGetCreditBalance();
   },
-  async billingCreateCheckoutSession(tier: SubscriptionTierId): Promise<BillingCheckoutResult> {
-    return getBridge().billingCreateCheckoutSession(tier);
+  async billingConsumeCredit(amount: number, reason: string): Promise<CreditBalance> {
+    return getBridge().billingConsumeCredit(amount, reason);
+  },
+  async entitlementGetSnapshot(): Promise<EntitlementSnapshot> {
+    return getBridge().entitlementGetSnapshot();
+  },
+  async entitlementIsModelAvailable(modelId: PawModelId): Promise<boolean> {
+    return getBridge().entitlementIsModelAvailable(modelId);
+  },
+  async entitlementIsFeatureAvailable(featureId: FeatureId): Promise<boolean> {
+    return getBridge().entitlementIsFeatureAvailable(featureId);
+  },
+  async billingCreateCheckoutSession(tier: SubscriptionTierId, callbackUrl?: string, options?: CheckoutOptions): Promise<BillingCheckoutResult> {
+    return getBridge().billingCreateCheckoutSession(tier, callbackUrl, options);
+  },
+  async billingStartCheckoutSync(): Promise<string> {
+    return getBridge().billingStartCheckoutSync();
+  },
+  async billingCreateCreditsCheckoutSession(credits: number, organizationId?: string, callbackUrl?: string): Promise<BillingCheckoutResult> {
+    return getBridge().billingCreateCreditsCheckoutSession(credits, organizationId, callbackUrl);
+  },
+  onSubscriptionUpdated(cb: () => void) {
+    return getBridge().onSubscriptionUpdated(cb);
+  },
+  onTaskCreditsPurchased(cb: (payload: { credits: number; organizationId?: string }) => void) {
+    return getBridge().onTaskCreditsPurchased(cb);
   },
   async onboardingGet(): Promise<OnboardingState> {
     return getBridge().onboardingGet();
@@ -257,6 +357,18 @@ export const ipc = {
   },
   onCommunicationEvent(cb: (event: CommunicationRuntimeEvent) => void) {
     getBridge().onCommunicationEvent(cb);
+  },
+  async communicationListLocalParticipants(): Promise<ParticipantRecord[]> {
+    return getBridge().communicationListLocalParticipants();
+  },
+  async communicationListLocalCompanies(): Promise<CompanyRecord[]> {
+    return getBridge().communicationListLocalCompanies();
+  },
+  async communicationListLocalSummaries(): Promise<CommunicationSummary[]> {
+    return getBridge().communicationListLocalSummaries();
+  },
+  async communicationListLocalFollowUps(): Promise<FollowUp[]> {
+    return getBridge().communicationListLocalFollowUps();
   },
 };
 

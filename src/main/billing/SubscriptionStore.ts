@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { app } from 'electron';
-import type { SubscriptionState, SubscriptionTierId } from '../../shared/billing/BillingTypes';
+import { SUBSCRIPTION_TIER_ORDER, type SeatTier, type SubscriptionState, type SubscriptionTierId } from '../../shared/billing/BillingTypes';
 
 const FILE_NAME = 'subscription.json';
 
@@ -44,6 +44,34 @@ class SubscriptionStore {
   setTier(tier: SubscriptionTierId): SubscriptionState {
     this.state = { tier, status: 'none' };
     this.save();
+    return this.state;
+  }
+
+  /** Called only from CheckoutSyncServer's verified local callback after a real Razorpay payment completed — the one path where status legitimately becomes 'active'. */
+  confirmPurchase(tier: SubscriptionTierId): SubscriptionState {
+    this.state = { tier, status: 'active', renewsAt: Date.now() + 30 * 24 * 60 * 60 * 1000 };
+    this.save();
+    return this.state;
+  }
+
+  /**
+   * Called when this account becomes an active member of a Team/Enterprise
+   * organization (see acceptInvite() in OrganizationSection.tsx) — a
+   * teammate never pays individually, the org owner's seats cover them, so
+   * accepting the invite itself is what grants access. Only ever raises the
+   * tier: never downgrades an account that already has an equal-or-higher
+   * personal subscription of its own. `seatTier` is only meaningful for
+   * 'team' (Standard/Premium); Enterprise seats are uniform, so it's
+   * omitted there.
+   */
+  syncFromOrganization(orgTier: SubscriptionTierId, seatTier?: SeatTier): SubscriptionState {
+    if (SUBSCRIPTION_TIER_ORDER.indexOf(orgTier) > SUBSCRIPTION_TIER_ORDER.indexOf(this.state.tier)) {
+      this.state = { tier: orgTier, status: 'active', seatTier: orgTier === 'team' ? seatTier : undefined };
+      this.save();
+    } else if (orgTier === this.state.tier && orgTier === 'team' && seatTier) {
+      this.state = { ...this.state, seatTier };
+      this.save();
+    }
     return this.state;
   }
 }

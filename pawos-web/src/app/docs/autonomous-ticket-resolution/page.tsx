@@ -80,9 +80,10 @@ export default function AutonomousTicketResolutionPage() {
       <Section eyebrow="Billing" title="Success-gated, by design" className="border-t border-neutral-900 bg-neutral-900/30">
         <div className="mx-auto mt-6 max-w-2xl space-y-4 text-neutral-400">
           <p>
-            An Autonomous Engineering Task is billed once — when it genuinely completes. Every plan includes a real
-            monthly allowance before metered billing starts; Enterprise plans can negotiate custom per-task rates at
-            volume. Full detail lives on the <Link href="/pricing#autonomous-engineering" className="text-blue-400 hover:underline">Pricing page</Link>.
+            An Autonomous Engineering Task consumes one prepaid credit — only when it genuinely completes. Buy
+            credits upfront ($5 each, $30 minimum) from inside the app; they never expire. Enterprise plans can
+            negotiate custom per-credit rates at volume. Full detail lives on the{" "}
+            <Link href="/pricing#autonomous-engineering" className="text-blue-400 hover:underline">Pricing page</Link>.
           </p>
         </div>
       </Section>

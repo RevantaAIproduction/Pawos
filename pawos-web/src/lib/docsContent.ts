@@ -1,5 +1,6 @@
 export type DocCategory =
   | "Getting Started"
+  | "AI Models"
   | "Companion"
   | "Collaboration"
   | "Configuration"
@@ -99,16 +100,95 @@ export const DOCS: DocPage[] = [
     slug: "companions",
     title: "Companions",
     category: "Companion",
-    summary: "Creating, customizing, uploading, and managing your companion.",
+    summary: "Creating, customizing, uploading, and managing your companion — including exactly how upload, rigging, lipsync, and expressions work.",
     body: [
       {
         paragraphs: [
-          "Every PawOS install includes Companion Studio — where you customize appearance, voice, behavior, personality, and memory for your companion, or upload your own 3D model (GLB, GLTF, VRM, FBX, or OBJ, which is automatically rigged).",
+          "Every PawOS install includes Companion Studio — where you customize appearance, voice, behavior, personality, and memory for your companion, or upload your own 3D model (GLB, GLTF, VRM, FBX, or OBJ).",
           "Companions can be exported and imported as a portable .paw package, so a customized companion can be backed up or shared.",
         ],
       },
+      {
+        heading: "What happens when you upload a model",
+        paragraphs: [
+          "Companion Studio is upload-first — there's no photo-to-3D generation, because turning a 2D photo into a real, rigged character is a genuinely hard problem PawOS doesn't pretend to have solved. Instead, you bring a real 3D file, and PawOS runs it through three real steps:",
+        ],
+        list: [
+          "Validate — a real file-extension and parse check (glb/gltf/vrm/fbx/obj). A malformed file fails here with a real error, not a silent guess.",
+          "Detect rig — PawOS loads the file and checks whether it already contains a skinned mesh with a real skeleton. VRM and most rigged FBX/GLB exports pass this; a plain OBJ never can, since that format has no skeleton concept at all.",
+          "Rig — if your model already has its own skeleton, PawOS imports it as-is. If it doesn't, PawOS automatically binds your mesh onto its own shared skeleton: for every point on your model, it finds the closest point on a professionally-weighted reference body and copies that point's bone influence, so the result moves naturally without you doing any manual weight painting.",
+        ],
+      },
+      {
+        heading: "How lipsync, facial expressions, and eye look-at actually work",
+        paragraphs: [
+          "This is worth explaining precisely, because it's not what most people expect from a 3D character system. PawOS does not read or bake anything into your model's own texture, and it does not drive your model's own facial blend shapes/morph targets (even if your rig has them from Blender, Mixamo, or a VRM export).",
+          "Instead, eyes, eyebrows, and mouth shape are drawn live onto a small transparent canvas that floats just in front of your companion's head bone, redrawn every frame. When PawOS is speaking, real viseme (mouth-shape) timing from the active voice provider drives the mouth shape directly; if the current voice provider can't supply that timing, a believable approximate mouth movement is used instead — and PawOS doesn't pretend that fallback is real lipsync. Head look-at works the same way: it's a real-time rotation applied to your companion's head bone toward whatever it's looking at, plus a matching pupil-position nudge on the drawn overlay — not a separate 3D eye rig.",
+          "This approach is why expressions and lipsync work identically regardless of what your uploaded model looks like — there's no dependency on your model's own texture layout or face rig at all.",
+        ],
+      },
+      {
+        heading: "The one real limitation today",
+        paragraphs: [
+          "If your uploaded model already came with its own skeleton (the \"detect rig\" step above found one), PawOS's animations, breathing, and head look-at keep targeting PawOS's own built-in skeleton rather than your model's bones — unless your rig happens to use identical Mixamo bone names, they won't be recognized automatically, and your model may appear to hold a static pose while the expression overlay floats near where PawOS's own reference character's head would be.",
+          "Models that don't already have their own skeleton don't have this limitation — the auto-rig step binds them directly onto PawOS's own skeleton, so animation, breathing, look-at, and lipsync all work exactly as with the built-in companion. If you want the most reliable result today, an unrigged export (or a model you're not attached to keeping its own skeleton for) currently gives the more complete experience.",
+        ],
+      },
     ],
-    related: ["voice", "runtime-configuration"],
+    related: ["voice", "models", "runtime-configuration"],
+  },
+  {
+    slug: "models",
+    title: "Paw AI Models",
+    category: "AI Models",
+    summary: "What each Paw model actually does, and when PawOS uses it — no raw provider names, just real capabilities.",
+    body: [
+      {
+        paragraphs: [
+          "You never pick a raw AI provider in PawOS — you pick a Paw model. Behind the scenes, each one routes to a real underlying provider (matched to your subscription tier and the task at hand), but that routing is an internal detail; the identity you see and configure is always one of the models below.",
+        ],
+      },
+      {
+        heading: "Reasoning models — Flash, Swift, Core",
+        paragraphs: [
+          "These three power ordinary conversation and task execution. You can switch between them any time from Companion Studio; switching shows a short informational note, never a blocking dialog, and never changes automatically on its own.",
+        ],
+        list: [
+          "Paw Flash — fastest and cheapest, with a smaller context window. Best for quick questions and simple, low-stakes requests where speed matters more than depth.",
+          "Paw Swift — balanced speed and reasoning quality for everyday tasks. A reasonable default if you're not sure which to pick.",
+          "Paw Core — the highest reasoning quality and largest context window, and PawOS's default model. Best for anything genuinely complex: multi-step execution, real engineering work, or long conversations that need to remember a lot of prior context.",
+        ],
+      },
+      {
+        heading: "Paw Vision",
+        paragraphs: [
+          "Image understanding — OCR, reading screenshots, and analyzing documents. This runs automatically whenever you paste or upload an image or screenshot; you don't need to switch models manually for it.",
+        ],
+      },
+      {
+        heading: "Paw Voice",
+        paragraphs: [
+          "Powers spoken conversation — both text-to-speech (what you hear) and speech-to-text (push-to-talk). See the dedicated Voice doc for how synthesis, viseme-driven lipsync, and voice selection work.",
+        ],
+      },
+      {
+        heading: "Paw Memory",
+        paragraphs: [
+          "Long-term recall across your conversations, projects, and work — this is what lets PawOS reference something from a past session or a different project without you having to re-explain it. It draws on the same Memory Graph that powers Project Understanding in the Coding Canvas.",
+        ],
+      },
+      {
+        heading: "Reserved for a future release — Creative and Motion",
+        paragraphs: [
+          "Two models are named in the catalog but not available yet — PawOS shows them as \"coming soon\" rather than quietly hiding them, so the roadmap is visible:",
+        ],
+        list: [
+          "Paw Creative — reserved for image, UI, and logo generation, concept art, and design assistance. Not available yet.",
+          "Paw Motion — reserved for companion motion generation. Not available yet.",
+        ],
+      },
+    ],
+    related: ["companions", "voice", "providers"],
   },
   {
     slug: "voice",
@@ -172,7 +252,7 @@ export const DOCS: DocPage[] = [
         ],
       },
     ],
-    related: ["billing-and-usage", "enterprise-deployment"],
+    related: ["billing-and-usage", "referrals", "enterprise-deployment"],
   },
   {
     slug: "providers",
@@ -182,12 +262,12 @@ export const DOCS: DocPage[] = [
     body: [
       {
         paragraphs: [
-          "You interact with named Paw models (Flash, Swift, Core, Creative, Vision, Voice) rather than choosing a raw provider — the underlying reasoning/speech provider is an internal routing detail, matched to your tier and the task at hand.",
+          "You interact with named Paw models (Flash, Swift, Core, Creative, Vision, Voice, Motion, Memory) rather than choosing a raw provider — the underlying reasoning/speech provider is an internal routing detail, matched to your tier and the task at hand. See Paw AI Models for what each one actually does.",
           "For infrastructure and integrations (hosting, source control, ticket trackers), PawOS connects to your own already-authenticated CLI or API sessions for each real provider — see Runtime Configuration and Deployments.",
         ],
       },
     ],
-    related: ["runtime-configuration", "deployments"],
+    related: ["models", "runtime-configuration", "deployments"],
   },
   {
     slug: "runtime-configuration",
@@ -217,7 +297,35 @@ export const DOCS: DocPage[] = [
         ],
       },
     ],
-    related: ["plans", "autonomous-ticket-resolution"],
+    related: ["plans", "referrals", "autonomous-ticket-resolution"],
+  },
+  {
+    slug: "referrals",
+    title: "Referrals",
+    category: "Billing & Enterprise",
+    summary: "How the referral program works, and how the reward is paid out.",
+    body: [
+      {
+        paragraphs: [
+          "Every signed-in account has its own shareable referral code, visible in Settings → Billing. Share it with anyone — a referral is created the moment they apply your code to their account (one-time, from their own Settings → Billing).",
+          "A referral only counts once it converts: the referred account has to genuinely subscribe to Pro or Pro Max. Signing up alone, staying on Go, or using Guest mode never counts — this is enforced server-side at the moment their own subscription purchase is confirmed, not self-reported.",
+        ],
+      },
+      {
+        heading: "The reward",
+        paragraphs: [
+          "Every 5 referrals that convert to Pro or Pro Max earns you $70 — paid as 14 bonus Autonomous Engineering Task credits, added directly to your own prepaid task-credit balance (see Billing). There's no separate referral wallet or cash payout: the reward is the same task-credit balance every other purchased credit sits in, so it's usable the moment you'd otherwise run out.",
+          "Rewards are granted automatically the instant your 5th, 10th, 15th (and so on) referral converts — there's nothing to claim.",
+        ],
+      },
+      {
+        heading: "Why task credits, not general usage",
+        paragraphs: [
+          "PawOS's general AI usage (chat, reasoning) has no fixed monthly cap on Pro, Pro Max, Team, or Enterprise today — so there's no real \"ran out, top up with a reward\" moment to plug a referral bonus into there. Autonomous Engineering Task credits are the one usage limit in PawOS that's actually real and enforced, which is why that's where the referral reward lands.",
+        ],
+      },
+    ],
+    related: ["plans", "billing-and-usage"],
   },
   {
     slug: "enterprise-deployment",

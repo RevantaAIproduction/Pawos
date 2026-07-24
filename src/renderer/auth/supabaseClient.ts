@@ -14,12 +14,21 @@ let clientPromise: Promise<SupabaseClient> | null = null;
  */
 export function getSupabaseClient(): Promise<SupabaseClient> {
   if (!clientPromise) {
-    clientPromise = ipc.envGetApiKeys().then(({ supabaseUrl, supabasePublishableKey }) => {
+    clientPromise = ipc.envGetApiKeys().then(async ({ supabaseUrl, supabasePublishableKey }) => {
       if (!supabaseUrl || !supabasePublishableKey) {
         clientPromise = null; // let a future call retry once configured, instead of caching a permanent failure
         throw new Error('Supabase isn’t configured yet — add SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY to your .env.');
       }
-      return createClient(supabaseUrl, supabasePublishableKey);
+      const client = createClient(supabaseUrl, supabasePublishableKey);
+      // Wait for the client's internal session restoration (from persisted
+      // storage) to finish before handing it out. Without this, a caller
+      // that queries a table immediately after the client is created (e.g.
+      // OrganizationService.getMyOrganizations() on first mount) can race
+      // ahead of the restored auth token — the request goes out
+      // effectively unauthenticated, RLS returns zero rows, and real data
+      // silently disappears behind an empty-state UI.
+      await client.auth.getSession();
+      return client;
     });
   }
   return clientPromise;

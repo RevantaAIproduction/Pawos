@@ -4,6 +4,7 @@ import type { ActionRequest, ActionResult } from '../../../shared/actions/Action
 import { BasePlugin } from '../BasePlugin';
 import { describeFailure } from '../describeFailure';
 import { onFileCreated, onFileModified } from '../../memory/entities/fileEntities';
+import { recoverByRetry } from '../RecoverByRetry';
 
 /**
  * Writing a brand-new file is low-risk; overwriting one that already exists
@@ -48,6 +49,10 @@ export class WriteFilePlugin extends BasePlugin {
     } catch (error) {
       return { ok: false, reason: 'failed', message: `I wrote the file but couldn't confirm it afterward: ${(error as Error).message}` };
     }
+  }
+
+  async recover(request: ActionRequest, result: ActionResult): Promise<ActionResult> {
+    return recoverByRetry(request, result, (r) => this.execute(r));
   }
 
   describeInProgress(request: ActionRequest): string {

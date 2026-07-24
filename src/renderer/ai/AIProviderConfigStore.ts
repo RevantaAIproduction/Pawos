@@ -1,4 +1,5 @@
 import type { ReasoningProviderId } from '../reasoning/ReasoningProviderRegistry';
+import { DEFAULT_PAW_MODEL_ID, type PawModelId } from '../../shared/ai/PawModelTypes';
 
 const STORAGE_KEY = 'pawos:ai:provider-config:v1';
 
@@ -6,10 +7,12 @@ export type AIProviderConfig = {
   activeProviderId: ReasoningProviderId;
   apiKeys: Partial<Record<ReasoningProviderId, string>>;
   models: Partial<Record<ReasoningProviderId, string>>;
+  /** The user's explicitly-selected Paw-branded model. Never changed automatically. */
+  activePawModelId: PawModelId;
 };
 
 function defaultConfig(): AIProviderConfig {
-  return { activeProviderId: 'local', apiKeys: {}, models: {} };
+  return { activeProviderId: 'local', apiKeys: {}, models: {}, activePawModelId: DEFAULT_PAW_MODEL_ID };
 }
 
 function load(): AIProviderConfig {
@@ -73,6 +76,16 @@ export class AIProviderConfigStore {
 
   getApiKey(providerId: ReasoningProviderId): string | undefined {
     return this.config.apiKeys[providerId];
+  }
+
+  getActivePawModel(): PawModelId {
+    return this.config.activePawModelId;
+  }
+
+  /** Explicit, user-initiated only — never called automatically. */
+  setActivePawModel(id: PawModelId) {
+    this.config = { ...this.config, activePawModelId: id };
+    this.persist();
   }
 }
 

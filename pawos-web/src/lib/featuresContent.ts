@@ -475,27 +475,27 @@ export const FEATURES: FeatureContent[] = [
   {
     slug: "billing",
     title: "Billing",
-    tagline: "Transparent tiers, real credits, and success-only metered billing.",
+    tagline: "Transparent tiers, prepaid task credits, and success-only billing.",
     category: "Platform",
     summary:
-      "PawOS's pricing is a real, published tier ladder — not usage-metered chat. Autonomous Engineering Tasks are billed only when they genuinely complete successfully, never for chat, research, or manual coding help, and never for a run that fails, is cancelled, or is denied approval.",
+      "PawOS's pricing is a real, published tier ladder — not usage-metered chat. Autonomous Engineering Tasks run on prepaid credits and are billed only when they genuinely complete successfully, never for chat, research, or manual coding help, and never for a run that fails, is cancelled, or is denied approval.",
     capabilities: [
       "A real tier ladder: Go (free), Pro, Pro Max, and per-seat Team and Enterprise plans",
       "Instant self-serve upgrade, downgrade, and renewal — no sales call required",
-      "A real included monthly allowance for Autonomous Engineering Tasks before metered charges begin",
-      "A full billing history export with per-run detail",
+      "Prepaid Autonomous Engineering Task credits ($5/credit, $30 minimum) that never expire",
+      "A full purchase and usage history export with per-run detail",
     ],
     workflow: [
       { step: "Pick a plan", detail: "Choose the tier that matches your usage — upgrade or downgrade anytime." },
-      { step: "Use your allowance", detail: "Included Autonomous Engineering Tasks draw from your monthly allowance first." },
-      { step: "Pay only for completed work", detail: "Metered charges only ever apply to tasks that genuinely finished successfully." },
+      { step: "Buy task credits", detail: "Purchase prepaid Autonomous Engineering Task credits upfront, anytime, from inside the app." },
+      { step: "Pay only for completed work", detail: "A credit is consumed only for a task that genuinely finished successfully." },
     ],
     useCases: [
       "Predictable monthly cost for individual and team use",
       "Scaling autonomous engineering work without per-token billing surprises",
     ],
     limitations: [
-      "Metered Autonomous Engineering Task pricing applies once your included allowance is used for the month",
+      "Starting a new Autonomous Engineering Task requires at least 1 remaining prepaid credit",
     ],
   },
   {

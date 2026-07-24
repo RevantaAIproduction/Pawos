@@ -168,6 +168,101 @@ class ProcessManager extends EventEmitter {
     return managed ? this.toInfo(managed) : undefined;
   }
 
+  /**
+   * Spawns a real, persistent interactive shell (not a one-shot command) —
+   * the mechanism behind Phase 5's shared terminal. Deliberately bypasses
+   * `withShell()`'s `-NonInteractive`/single-command wrapping (built for
+   * AI-driven one-shot commands) and the AI-action command allowlist
+   * entirely: this path is gated by explicit human-to-human consent (an
+   * approved `terminal` control grant in a Remote Assistance session), a
+   * fundamentally different trust boundary than "can the AI autonomously
+   * run this command," so it is intentionally a separate method rather than
+   * a new bypass flag threaded through the existing allowlisted start().
+   */
+  startInteractiveShell(cwd: string, label: string): Promise<{ ok: true; info: ManagedProcessInfo } | { ok: false; message: string }> {
+    return new Promise((resolve) => {
+      let settled = false;
+      const id = uuidv4();
+      const isWindows = process.platform === 'win32';
+      const command = isWindows ? 'powershell.exe -NoLogo' : (process.env.SHELL || 'bash') + ' -i';
+
+      let child: ChildProcess;
+      try {
+        child = spawn(command, { cwd, shell: true, windowsHide: true });
+      } catch (error) {
+        resolve({ ok: false, message: error instanceof Error ? error.message : 'Failed to start the shared terminal.' });
+        return;
+      }
+
+      const managed: ManagedProcess = {
+        id,
+        pid: child.pid ?? null,
+        command,
+        cwd,
+        label,
+        status: 'starting',
+        startedAt: Date.now(),
+        child,
+        outputBuffer: '',
+      };
+      this.processes.set(id, managed);
+      this.prune();
+
+      const appendOutput = (chunk: string, stream: 'stdout' | 'stderr') => {
+        managed.outputBuffer = (managed.outputBuffer + chunk).slice(-RING_BUFFER_MAX_CHARS);
+        this.emit('output', { processId: id, chunk, stream } satisfies ProcessOutputEvent);
+      };
+      child.stdout?.on('data', (data) => appendOutput(data.toString(), 'stdout'));
+      child.stderr?.on('data', (data) => appendOutput(data.toString(), 'stderr'));
+
+      child.once('spawn', () => {
+        managed.pid = child.pid ?? managed.pid;
+        managed.status = 'running';
+        if (!settled) {
+          settled = true;
+          resolve({ ok: true, info: this.toInfo(managed) });
+        }
+      });
+
+      child.once('error', (error) => {
+        managed.status = 'crashed';
+        managed.exitedAt = Date.now();
+        if (!settled) {
+          settled = true;
+          resolve({ ok: false, message: error.message });
+        } else {
+          this.emit('exit', { processId: id, code: null, signal: null, status: 'crashed' } satisfies ProcessExitEvent);
+        }
+      });
+
+      child.once('exit', (code, signal) => {
+        managed.status = code === 0 ? 'exited' : managed.status === 'killed' ? 'killed' : 'crashed';
+        managed.exitedAt = Date.now();
+        managed.exitCode = code;
+        managed.signal = signal;
+        this.emit('exit', { processId: id, code, signal, status: managed.status } satisfies ProcessExitEvent);
+      });
+
+      setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          if (managed.status === 'starting') managed.status = 'running';
+          resolve({ ok: true, info: this.toInfo(managed) });
+        }
+      }, START_GRACE_MS);
+    });
+  }
+
+  /** Feeds data into a running process's stdin — the mechanism Phase 5's shared terminal uses to relay a remote helper's typed input into the host's real local shell. */
+  writeStdin(processId: string, data: string): { ok: true } | { ok: false; message: string } {
+    const managed = this.processes.get(processId);
+    if (!managed) return { ok: false, message: `No tracked process with id "${processId}".` };
+    if (managed.status !== 'running') return { ok: false, message: `Process is not running (status: ${managed.status}).` };
+    if (!managed.child.stdin?.writable) return { ok: false, message: 'This process has no writable stdin.' };
+    managed.child.stdin.write(data);
+    return { ok: true };
+  }
+
   getOutput(processId: string, maxChars = 4000): { ok: true; output: string; info: ManagedProcessInfo } | { ok: false; message: string } {
     const managed = this.processes.get(processId);
     if (!managed) return { ok: false, message: `No tracked process with id "${processId}".` };

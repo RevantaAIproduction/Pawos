@@ -3,10 +3,27 @@ import styles from '../dashboard.module.css';
 import { useCompanionProfiles } from '../../../companion/manager/useCompanionProfiles';
 import { PERSONALITY_PRESETS } from '../../../companion/manager/CompanionProfileTypes';
 import type { CompanionProfile, GreetingStyle, IdleBehaviorPreset, PersonalityPreset } from '../../../companion/manager/CompanionProfileTypes';
-import { TTS_PROVIDER_CATALOG } from '../../../conversation/SpeechProviderRegistry';
+import { TTS_PROVIDER_CATALOG, OPENAI_VOICE_PRESETS, type TtsProviderId } from '../../../conversation/SpeechProviderRegistry';
+import { listBrowserVoices } from '../../../conversation/SpeechProviders';
+import { voiceCloningProviderRegistry } from '../../../companion/voiceCloning/VoiceCloningProviderRegistry';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 
 type EditorTab = 'appearance' | 'voice' | 'behavior' | 'personality' | 'memory';
+
+/**
+ * Paw Voice is the only voice identity ever shown to a user — the real
+ * underlying TTS provider (OpenAI, ElevenLabs, etc.) stays internal, same
+ * as PawModelRegistry does for reasoning providers. This only renames the
+ * displayed label; TtsProviderId and the actual provider switch untouched.
+ */
+const PAW_VOICE_LABELS: Record<TtsProviderId, string> = {
+  browser: 'Paw Voice — Standard',
+  openai: 'Paw Voice — Natural',
+  elevenlabs: 'Paw Voice — Expressive',
+  azure: 'Paw Voice — Clear',
+  kokoro: 'Paw Voice — Warm',
+  piper: 'Paw Voice — Local',
+};
 
 const PERSONALITY_PRESET_IDS: Exclude<PersonalityPreset, 'custom'>[] = ['friendly', 'professional', 'creative', 'teacher', 'assistant'];
 
@@ -119,6 +136,21 @@ function PersonalityTab({
   );
 }
 
+/** Real, live system voices for the browser provider — fetched once per mount, never hardcoded (varies by OS). */
+function useBrowserVoices(): SpeechSynthesisVoice[] {
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    listBrowserVoices().then((v) => {
+      if (!cancelled) setVoices(v);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return voices;
+}
+
 function VoiceTab({
   profile,
   onUpdate,
@@ -126,37 +158,101 @@ function VoiceTab({
   profile: CompanionProfile;
   onUpdate: (patch: Partial<CompanionProfile['voice']>) => void;
 }) {
+  const browserVoices = useBrowserVoices();
+  const provider = profile.voice.ttsProvider;
+
   return (
     <div>
       <label className={styles.cardBody} style={{ display: 'block' }}>
-        Voice provider
+        Voice
       </label>
       <select
-        value={profile.voice.ttsProvider}
-        onChange={(e) => onUpdate({ ttsProvider: e.target.value as CompanionProfile['voice']['ttsProvider'] })}
+        value={provider}
+        onChange={(e) => onUpdate({ ttsProvider: e.target.value as CompanionProfile['voice']['ttsProvider'], voiceId: undefined })}
         style={{ marginTop: 4 }}
       >
         {TTS_PROVIDER_CATALOG.map((p) => (
           <option key={p.id} value={p.id} disabled={p.status === 'planned'}>
-            {p.label}
-            {p.status === 'planned' ? ' (not wired up yet)' : ''}
+            {PAW_VOICE_LABELS[p.id]}
+            {p.status === 'planned' ? ' (coming soon)' : ''}
           </option>
         ))}
       </select>
 
-      <label className={styles.cardBody} style={{ display: 'block', marginTop: 12 }}>
-        Voice id (provider-specific, optional)
-      </label>
-      <input
-        type="text"
-        defaultValue={profile.voice.voiceId ?? ''}
-        onBlur={(e) => onUpdate({ voiceId: e.target.value || undefined })}
-        style={{ marginTop: 4 }}
-      />
+      {provider === 'openai' && (
+        <>
+          <label className={styles.cardBody} style={{ display: 'block', marginTop: 12 }}>
+            Voice
+          </label>
+          <select value={profile.voice.voiceId ?? 'alloy'} onChange={(e) => onUpdate({ voiceId: e.target.value })} style={{ marginTop: 4 }}>
+            {OPENAI_VOICE_PRESETS.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.label}
+              </option>
+            ))}
+          </select>
+        </>
+      )}
+
+      {provider === 'browser' && (
+        <>
+          <label className={styles.cardBody} style={{ display: 'block', marginTop: 12 }}>
+            Voice
+          </label>
+          <select value={profile.voice.voiceId ?? ''} onChange={(e) => onUpdate({ voiceId: e.target.value || undefined })} style={{ marginTop: 4 }}>
+            <option value="">System default</option>
+            {browserVoices.map((v) => (
+              <option key={v.name} value={v.name}>
+                {v.name} ({v.lang})
+              </option>
+            ))}
+          </select>
+
+          <label className={styles.cardBody} style={{ display: 'block', marginTop: 12 }}>
+            Pitch: {(profile.voice.pitch ?? 1).toFixed(2)}
+          </label>
+          <input
+            type="range"
+            min={0}
+            max={2}
+            step={0.05}
+            value={profile.voice.pitch ?? 1}
+            onChange={(e) => onUpdate({ pitch: Number(e.target.value) })}
+            style={{ width: '100%' }}
+          />
+        </>
+      )}
+
+      {provider === 'elevenlabs' && (
+        <>
+          <label className={styles.cardBody} style={{ display: 'block', marginTop: 12 }}>
+            Voice ID (from your ElevenLabs account)
+          </label>
+          <input
+            type="text"
+            defaultValue={profile.voice.voiceId ?? ''}
+            onBlur={(e) => onUpdate({ voiceId: e.target.value || undefined })}
+            style={{ marginTop: 4 }}
+          />
+
+          <label className={styles.cardBody} style={{ display: 'block', marginTop: 12 }}>
+            Speaking style: {(profile.voice.style ?? 0).toFixed(2)}
+          </label>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={profile.voice.style ?? 0}
+            onChange={(e) => onUpdate({ style: Number(e.target.value) })}
+            style={{ width: '100%' }}
+          />
+        </>
+      )}
 
       <label className={styles.cardBody} style={{ display: 'block', marginTop: 12 }}>
         Speed: {(profile.voice.speed ?? 1).toFixed(2)}x
-        {profile.voice.ttsProvider === 'elevenlabs' && ' (not applied — ElevenLabs has no speed parameter)'}
+        {provider === 'elevenlabs' && ' (not applied — this voice has no speed control)'}
       </label>
       <input
         type="range"
@@ -168,15 +264,82 @@ function VoiceTab({
         style={{ width: '100%' }}
       />
 
+      <VoiceCloningSection />
+    </div>
+  );
+}
+
+type VoiceCloningStatus = 'idle' | 'processing' | 'ready' | 'error';
+
+/**
+ * Real upload + consent UI wired to voiceCloningProviderRegistry — but no
+ * provider is registered anywhere yet (see VoiceCloningProviderRegistry.ts),
+ * so this honestly reports "Coming Soon" the moment Clone Voice is pressed
+ * rather than faking a training progress bar. The moment a real provider is
+ * registered, this same code path calls it for real — no UI change needed.
+ */
+function VoiceCloningSection() {
+  const [file, setFile] = useState<File | null>(null);
+  const [consentGiven, setConsentGiven] = useState(false);
+  const [status, setStatus] = useState<VoiceCloningStatus>('idle');
+  const [message, setMessage] = useState<string | null>(null);
+
+  const hasProvider = voiceCloningProviderRegistry.listConfigured().length > 0;
+
+  async function cloneVoice() {
+    if (!file || !consentGiven) return;
+    setStatus('processing');
+    setMessage(null);
+    const provider = voiceCloningProviderRegistry.firstConfigured();
+    if (!provider) {
+      setStatus('error');
+      setMessage('Custom Voice Cloning — Coming Soon. Requires a supported voice cloning provider.');
+      return;
+    }
+    const result = await provider.cloneVoice({ sampleAudio: file, consentGiven });
+    if (result.ok) {
+      setStatus('ready');
+      setMessage(`Voice cloned — id ${result.voiceId}.`);
+    } else {
+      setStatus('error');
+      setMessage(result.message);
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+      <p className={styles.cardBody} style={{ fontWeight: 600 }}>Custom voice (advanced)</p>
+      <p className={styles.cardBody} style={{ marginTop: 4 }}>
+        {hasProvider
+          ? 'Upload a sample of a voice to create a custom cloned voice for this companion.'
+          : "Custom Voice Cloning — Coming Soon. Requires a supported voice cloning provider. You can still upload a sample now; it won't be sent anywhere until a provider is configured."}
+      </p>
+
       <label className={styles.cardBody} style={{ display: 'block', marginTop: 12 }}>
-        Emotion (stored only — no current provider applies this yet)
+        Voice sample (audio file)
       </label>
-      <input
-        type="text"
-        defaultValue={profile.voice.emotion ?? ''}
-        onBlur={(e) => onUpdate({ emotion: e.target.value || undefined })}
-        style={{ marginTop: 4 }}
-      />
+      <input type="file" accept="audio/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} style={{ marginTop: 4 }} />
+
+      <label className={styles.cardBody} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+        <input type="checkbox" checked={consentGiven} onChange={(e) => setConsentGiven(e.target.checked)} />
+        I own the rights to this voice and consent to it being used to create a synthetic voice.
+      </label>
+
+      <button
+        type="button"
+        className={styles.chip}
+        style={{ marginTop: 12 }}
+        disabled={!file || !consentGiven || status === 'processing'}
+        onClick={cloneVoice}
+      >
+        {status === 'processing' ? 'Processing…' : 'Clone voice'}
+      </button>
+
+      {message && (
+        <p className={styles.cardBody} style={{ marginTop: 8, color: status === 'error' ? '#e08c8c' : undefined }}>
+          {message}
+        </p>
+      )}
     </div>
   );
 }

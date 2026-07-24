@@ -26,6 +26,10 @@ export class LinearConnector implements ProjectManagementConnector {
     return Boolean(this.apiKey);
   }
 
+  setToken(token: string): void {
+    this.apiKey = token;
+  }
+
   private notConfigured(): { ok: false; reason: string } {
     return { ok: false, reason: 'Linear is not configured. Add LINEAR_API_KEY to .env to connect it.' };
   }

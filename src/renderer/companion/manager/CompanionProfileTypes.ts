@@ -5,11 +5,16 @@ export const DEFAULT_PAW_ID = 'paw-default';
 
 export type CompanionVoiceConfig = {
   ttsProvider: TtsProviderId;
+  /** For 'openai': one of the fixed named voice presets. For 'browser': a system voice name from listBrowserVoices(). For 'elevenlabs': a real voice_id from your ElevenLabs account. */
   voiceId?: string;
   /** Real playback-speed control (0.5-2, 1 = normal) — genuinely applied for browser/openai providers; honestly ignored by providers with no speed parameter (elevenlabs/azure/kokoro/piper). */
   speed?: number;
-  /** Reserved for a future provider that actually supports an emotion/style parameter — stored here but not applied by any current provider (interface-ready, same as azure/kokoro/piper). */
-  emotion?: string;
+  /** Real pitch control (0-2, 1 = normal) — the Web Speech API's own SpeechSynthesisUtterance.pitch. Only applied by the browser provider; honestly ignored elsewhere (no other wired provider's API takes a pitch parameter). */
+  pitch?: number;
+  /** Real expressiveness control (0-1) — ElevenLabs' own voice_settings.style parameter. Only applied by the elevenlabs provider; honestly ignored elsewhere. */
+  style?: number;
+  /** Language selection for the browser provider's system voice search (BCP-47, e.g. 'en-US'). Reserved for other providers until they expose real per-language voices. */
+  language?: string;
 };
 
 /**

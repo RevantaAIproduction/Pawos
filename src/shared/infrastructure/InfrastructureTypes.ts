@@ -21,7 +21,21 @@ export type HostingProviderId =
   | 'flyio'
   | 'cloudflare'
   | 'firebaseHosting'
-  | 'githubPages';
+  | 'githubPages'
+  | 'googleCloudRun'
+  | 'awsElasticBeanstalk'
+  | 'dockerVps'
+  | 'awsEc2'
+  | 'googleComputeEngine'
+  | 'azureVm'
+  | 'digitalOcean'
+  | 'linode'
+  | 'vultr'
+  | 'hetzner'
+  | 'oracleCloud'
+  | 'hostingerVps'
+  | 'kubernetes'
+  | 'azureAppService';
 export type ContainerProviderId = 'docker' | 'dockerCompose' | 'kubernetes' | 'openshift' | 'rancher';
 export type CiCdProviderId =
   | 'githubActions'
@@ -58,6 +72,15 @@ export type InfraTicket = {
 
 export type InfraRepository = { name: string; fullName: string; defaultBranch: string; url: string };
 export type InfraCommit = { sha: string; message: string; author: string; date: string };
+export type InfraPullRequest = {
+  number: number;
+  title: string;
+  author: string;
+  headBranch: string;
+  baseBranch: string;
+  url: string;
+  state: 'open' | 'closed' | 'merged';
+};
 export type InfraCiCdRun = {
   status: 'success' | 'failure' | 'running' | 'pending' | 'cancelled' | 'unknown';
   url?: string;
@@ -73,6 +96,9 @@ export interface SourceControlConnector {
   listRepositories(): Promise<ConnectorResult<{ repos: InfraRepository[] }>>;
   getFileContent(repo: string, path: string, ref?: string): Promise<ConnectorResult<{ content: string }>>;
   getLatestCommit(repo: string, branch?: string): Promise<ConnectorResult<InfraCommit>>;
+  listPullRequests(repo: string): Promise<ConnectorResult<{ pullRequests: InfraPullRequest[] }>>;
+  getPullRequestDiff(repo: string, prNumber: number): Promise<ConnectorResult<{ diff: string }>>;
+  createPullRequestComment(repo: string, prNumber: number, body: string): Promise<ConnectorResult<{ commentUrl?: string }>>;
 }
 
 export interface ProjectManagementConnector {

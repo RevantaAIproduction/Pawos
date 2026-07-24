@@ -1703,6 +1703,50 @@ export const ACTION_TOOL_DEFINITIONS: ReasoningToolDefinition[] = [
     },
   },
   {
+    name: 'start_autonomous_engineering_task',
+    description:
+      "Marks the beginning of an autonomous engineering workflow billed as an Autonomous Engineering Task (Pro, Pro Max, Team, and Enterprise — never call this for ordinary chat-assisted coding help). This is billed against a real prepaid task-credit balance: if there are no credits left, this call fails and you should tell the user to purchase more before continuing. Call this once, right after the user asks you to autonomously investigate-and-fix a ticket or production issue — before you start investigating. Returns a runId you must pass to complete_autonomous_engineering_task or end_autonomous_engineering_task later. Never gated — this only creates a tracking record, it has no effect on the local machine.",
+    parameters: {
+      type: 'object',
+      properties: {
+        organizationId: { type: 'string', description: "The organization this task belongs to, if the user is working within a Team/Enterprise organization. Omit entirely for an individual Pro/Pro Max account with no organization — it's billed against that account's own credit balance instead." },
+        workspaceId: { type: 'string', description: 'Optional workspace id, if the task is scoped to a specific workspace.' },
+        ticketSource: { type: 'string', enum: ['jira', 'github', 'linear', 'azureDevOps'], description: 'Which tracker the ticket came from, if any. Omit entirely if there is no ticket — this workflow never requires one.' },
+        ticketId: { type: 'string', description: 'The ticket identifier, if this task started from a real ticket.' },
+        repository: { type: 'string', description: 'The repository this task is expected to touch, if known.' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'complete_autonomous_engineering_task',
+    description:
+      "Marks an autonomous engineering task as successfully COMPLETED and triggers its billing event — call this ONLY once a pull request has genuinely been created AND the ticket (or the user) has genuinely been updated/informed of the result. Never call this speculatively, never call it before the PR actually exists, and never call it if the workflow only partially finished — this is the one action in the whole product that must never claim success without real evidence, since it directly causes a charge. Deploying is NOT required to call this — deploy is a separate, optional, human-approved step and completing the engineering work itself is what this marks.",
+    parameters: {
+      type: 'object',
+      properties: {
+        runId: { type: 'string', description: 'The runId returned by start_autonomous_engineering_task.' },
+        prUrl: { type: 'string', description: 'The URL of the pull request that was actually created.' },
+        clientReplySent: { type: 'boolean', description: 'Whether a reply was actually sent to a client/requester as part of this task.' },
+        deployCompleted: { type: 'boolean', description: 'Whether a deploy was also actually performed as part of this task (optional — never required for completion).' },
+      },
+      required: ['runId'],
+    },
+  },
+  {
+    name: 'end_autonomous_engineering_task',
+    description:
+      'Marks an autonomous engineering task as ended WITHOUT success — call this if the workflow failed, was cancelled by the user, or hit its retry limit. This never creates a billing charge, unlike complete_autonomous_engineering_task. Always call one of complete_autonomous_engineering_task or end_autonomous_engineering_task to close out every task started with start_autonomous_engineering_task — never leave one open.',
+    parameters: {
+      type: 'object',
+      properties: {
+        runId: { type: 'string', description: 'The runId returned by start_autonomous_engineering_task.' },
+        status: { type: 'string', enum: ['failed', 'cancelled', 'retry_limit_reached'], description: 'Why the task ended without completing.' },
+      },
+      required: ['runId', 'status'],
+    },
+  },
+  {
     name: 'investigate_production_issue',
     description:
       'The Autonomous Engineering Loop\'s entry point for a reported issue with no ticket — "Fix production," "Production is slow," "Users cannot login," "Payment is failing," "Rollback production" (investigate first, before deciding to roll back). Same real evidence-gathering and Root Cause Engine correlation as investigate_ticket, just starting from a free-text description. Never proposes a fix itself. Read-only, never gated.',
@@ -1737,6 +1781,31 @@ export const ACTION_TOOL_DEFINITIONS: ReasoningToolDefinition[] = [
       type: 'object',
       properties: { query: { type: 'string' } },
       required: ['query'],
+    },
+  },
+  {
+    name: 'list_pull_requests',
+    description: 'Team & Enterprise Git Collaboration — lists real open/closed/merged pull requests on a repo via the configured GitHub/GitLab connector. Read-only, never gated.',
+    parameters: {
+      type: 'object',
+      properties: { repo: { type: 'string' }, provider: { type: 'string', enum: ['github', 'gitlab'] } },
+      required: ['repo'],
+    },
+  },
+  {
+    name: 'ai_review_pull_request',
+    description:
+      'Team & Enterprise Git Collaboration — fetches a real PR/MR diff and generates a structured AI code review (summary, risks, suggestions, verdict). Read-only unless postComment is true, in which case it posts the review as a real comment on the PR/MR and requires confirmation first.',
+    parameters: {
+      type: 'object',
+      properties: {
+        repo: { type: 'string' },
+        prNumber: { type: 'number' },
+        provider: { type: 'string', enum: ['github', 'gitlab'] },
+        postComment: { type: 'boolean', description: 'Set true to post the review as a real comment on the PR/MR.' },
+        confirmed: { type: 'boolean', description: CONFIRMED_PARAM_DESCRIPTION },
+      },
+      required: ['repo', 'prNumber'],
     },
   },
   {
@@ -2777,6 +2846,32 @@ export function toolCallToActionRequest(toolCall: ReasoningToolCall): ActionRequ
     case 'investigate_production_issue':
       return typeof args.description === 'string' && typeof args.cwd === 'string' ? { type: 'investigateProductionIssue', description: args.description, cwd: args.cwd } : null;
 
+    case 'start_autonomous_engineering_task':
+      return {
+        type: 'startAutonomousEngineeringTask',
+        organizationId: typeof args.organizationId === 'string' ? args.organizationId : undefined,
+        workspaceId: typeof args.workspaceId === 'string' ? args.workspaceId : undefined,
+        ticketSource: typeof args.ticketSource === 'string' ? (args.ticketSource as 'jira' | 'github' | 'linear' | 'azureDevOps') : undefined,
+        ticketId: typeof args.ticketId === 'string' ? args.ticketId : undefined,
+        repository: typeof args.repository === 'string' ? args.repository : undefined,
+      };
+
+    case 'complete_autonomous_engineering_task':
+      return typeof args.runId === 'string'
+        ? {
+            type: 'completeAutonomousEngineeringTask',
+            runId: args.runId,
+            prUrl: typeof args.prUrl === 'string' ? args.prUrl : undefined,
+            clientReplySent: typeof args.clientReplySent === 'boolean' ? args.clientReplySent : undefined,
+            deployCompleted: typeof args.deployCompleted === 'boolean' ? args.deployCompleted : undefined,
+          }
+        : null;
+
+    case 'end_autonomous_engineering_task':
+      return typeof args.runId === 'string' && (args.status === 'failed' || args.status === 'cancelled' || args.status === 'retry_limit_reached')
+        ? { type: 'endAutonomousEngineeringTask', runId: args.runId, status: args.status }
+        : null;
+
     case 'compare_deployments':
       return typeof args.serviceName === 'string' ? { type: 'compareDeployments', serviceName: args.serviceName } : null;
 
@@ -2785,6 +2880,23 @@ export function toolCallToActionRequest(toolCall: ReasoningToolCall): ActionRequ
 
     case 'search_infrastructure':
       return typeof args.query === 'string' ? { type: 'searchInfrastructure', query: args.query } : null;
+
+    case 'list_pull_requests':
+      return typeof args.repo === 'string'
+        ? { type: 'listPullRequests', repo: args.repo, provider: args.provider === 'github' || args.provider === 'gitlab' ? args.provider : undefined }
+        : null;
+
+    case 'ai_review_pull_request':
+      return typeof args.repo === 'string' && typeof args.prNumber === 'number'
+        ? {
+            type: 'aiReviewPullRequest',
+            repo: args.repo,
+            prNumber: args.prNumber,
+            provider: args.provider === 'github' || args.provider === 'gitlab' ? args.provider : undefined,
+            postComment: args.postComment === true,
+            confirmed: args.confirmed === true,
+          }
+        : null;
 
     case 'get_infra_mode':
       return { type: 'getInfraMode' };
