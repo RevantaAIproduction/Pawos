@@ -6,6 +6,7 @@ import { SettingsStore } from '../shared/settings/SettingsStore';
 import { readEnvFile } from './env/readEnvFile';
 import { startForegroundWindowWatcher, getForegroundWindowInfo } from './system/ForegroundWindowWatcher';
 import { startGoogleSignIn } from './auth/GoogleOAuthFlow';
+import { waitForGitHubOAuthCallback } from './auth/GitHubOAuthFlow';
 import { emailService } from './mail/EmailService';
 import { getDevWindowIconPath } from './assets/AssetPathResolver';
 import { conversationSessionStore } from './conversation/ConversationSessionStore';
@@ -277,6 +278,7 @@ app.whenReady().then(async () => {
       gemini: envVars.GEMINI_API_KEY,
       supabaseUrl: envVars.SUPABASE_URL,
       supabasePublishableKey: envVars.SUPABASE_PUBLISHABLE_KEY,
+      githubRedirectUri: envVars.GITHUB_REDIRECT_URI,
     }),
     getForegroundWindowInfo,
     getEmailSigningSecret: () => envVars.EMAIL_SIGNING_SECRET,
@@ -292,6 +294,21 @@ app.whenReady().then(async () => {
         clientSecret: envVars.GOOGLE_CLIENT_SECRET,
         redirectUri: envVars.GOOGLE_REDIRECT_URI,
       });
+    },
+    // GitHub sign-in goes through Supabase's own hosted OAuth (GitHub's
+    // OAuth2 has no id_token to bridge with, unlike Google) — see
+    // GitHubOAuthFlow.ts. The renderer builds the authorize URL via
+    // supabase.auth.signInWithOAuth() and hands it here; this only needs
+    // GITHUB_REDIRECT_URI (the loopback callback), since the Client
+    // ID/Secret live in the Supabase project's provider settings, not here.
+    isGithubSignInConfigured: () => Boolean(envVars.GITHUB_REDIRECT_URI),
+    startGithubSignIn: (authorizeUrl: string) => {
+      if (!envVars.GITHUB_REDIRECT_URI) {
+        return Promise.reject(
+          new Error('GitHub sign-in isn’t configured yet — add GITHUB_REDIRECT_URI to your .env.')
+        );
+      }
+      return waitForGitHubOAuthCallback(envVars.GITHUB_REDIRECT_URI, authorizeUrl);
     },
   });
 

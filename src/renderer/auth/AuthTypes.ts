@@ -1,7 +1,7 @@
 export type AuthProviderId = 'google' | 'github' | 'microsoft' | 'apple' | 'email' | 'guest';
 
-/** Providers wired up and working in this version. GitHub/Microsoft/Apple are visible in the UI as "Coming soon" but have no IdentityProvider behind them yet. */
-export const SUPPORTED_PROVIDERS: ReadonlySet<AuthProviderId> = new Set(['google', 'email', 'guest']);
+/** Providers wired up and working in this version. Microsoft/Apple are visible in the UI as "Coming soon" but have no IdentityProvider behind them yet. */
+export const SUPPORTED_PROVIDERS: ReadonlySet<AuthProviderId> = new Set(['google', 'github', 'email', 'guest']);
 
 export type AuthUser = {
   id: string;
@@ -24,6 +24,7 @@ export type EmailCreateAccountOptions = { name: string; email: string; password:
  */
 export interface AuthService {
   signInWithGoogle(): Promise<AuthUser>;
+  signInWithGithub(): Promise<AuthUser>;
   signInWithEmail(options: EmailSignInOptions): Promise<AuthUser>;
   createEmailAccount(options: EmailCreateAccountOptions): Promise<AuthUser>;
   continueAsGuest(): Promise<AuthUser>;
@@ -51,4 +52,5 @@ export interface AuthService {
   signOut(): Promise<void>;
   getCurrentUser(): Promise<AuthUser | null>;
   isGoogleSignInAvailable(): Promise<boolean>;
+  isGithubSignInAvailable(): Promise<boolean>;
 }

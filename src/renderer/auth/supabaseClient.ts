@@ -19,7 +19,11 @@ export function getSupabaseClient(): Promise<SupabaseClient> {
         clientPromise = null; // let a future call retry once configured, instead of caching a permanent failure
         throw new Error('Supabase isn’t configured yet — add SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY to your .env.');
       }
-      const client = createClient(supabaseUrl, supabasePublishableKey);
+      // flowType: 'pkce' is required for GitHub sign-in (GitHubAuthProvider.ts)
+      // — its OAuth redirect must come back as a `?code=` query param that a
+      // plain Node loopback server can read, not a `#access_token=` URL
+      // fragment (which never reaches a server at all, only browser JS).
+      const client = createClient(supabaseUrl, supabasePublishableKey, { auth: { flowType: 'pkce' } });
       // Wait for the client's internal session restoration (from persisted
       // storage) to finish before handing it out. Without this, a caller
       // that queries a table immediately after the client is created (e.g.

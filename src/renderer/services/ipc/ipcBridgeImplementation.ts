@@ -171,7 +171,7 @@ export const ipc = {
   async overlaySetInteractive(active: boolean): Promise<boolean> {
     return getBridge().overlaySetInteractive(active);
   },
-  async envGetApiKeys(): Promise<{ gemini?: string; supabaseUrl?: string; supabasePublishableKey?: string }> {
+  async envGetApiKeys(): Promise<{ gemini?: string; supabaseUrl?: string; supabasePublishableKey?: string; githubRedirectUri?: string }> {
     return getBridge().envGetApiKeys();
   },
   async systemGetAppVersion(): Promise<string> {
@@ -185,6 +185,12 @@ export const ipc = {
   },
   async authStartGoogleSignIn(): Promise<GoogleSignInResult> {
     return getBridge().authStartGoogleSignIn();
+  },
+  async authIsGithubSignInConfigured(): Promise<boolean> {
+    return getBridge().authIsGithubSignInConfigured();
+  },
+  async authStartGithubSignIn(authorizeUrl: string): Promise<{ code: string }> {
+    return getBridge().authStartGithubSignIn(authorizeUrl);
   },
   async authSendOtp(email: string): Promise<{ expiresInMinutes: number }> {
     return getBridge().authSendOtp(email);

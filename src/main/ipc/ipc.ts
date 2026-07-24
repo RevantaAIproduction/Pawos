@@ -54,10 +54,12 @@ export function registerIpc(opts: {
   enableCompanion: () => void;
   disableCompanion: () => void;
   isCompanionEnabled: () => boolean;
-  getEnvApiKeys: () => { gemini?: string; supabaseUrl?: string; supabasePublishableKey?: string };
+  getEnvApiKeys: () => { gemini?: string; supabaseUrl?: string; supabasePublishableKey?: string; githubRedirectUri?: string };
   getForegroundWindowInfo: () => ForegroundWindowInfo;
   isGoogleSignInConfigured: () => boolean;
   startGoogleSignIn: () => Promise<GoogleSignInResult>;
+  isGithubSignInConfigured: () => boolean;
+  startGithubSignIn: (authorizeUrl: string) => Promise<{ code: string }>;
   getEmailSigningSecret: () => string | undefined;
 }) {
   ipcMain.handle('companion:enable', () => {
@@ -255,6 +257,8 @@ export function registerIpc(opts: {
 
   ipcMain.handle('auth:isGoogleSignInConfigured', () => opts.isGoogleSignInConfigured());
   ipcMain.handle('auth:startGoogleSignIn', () => opts.startGoogleSignIn());
+  ipcMain.handle('auth:isGithubSignInConfigured', () => opts.isGithubSignInConfigured());
+  ipcMain.handle('auth:startGithubSignIn', (_evt, authorizeUrl: string) => opts.startGithubSignIn(authorizeUrl));
 
   // Email-ownership verification for account creation — generates and
   // hashes a real 6-digit code (src/main/mail/otp.ts) and sends it via the

@@ -87,6 +87,7 @@ export default function AppRoot() {
     return (
       <AuthScreen
         onSignInWithGoogle={() => goToDashboardAfter(auth.signInWithGoogle())}
+        onSignInWithGithub={() => goToDashboardAfter(auth.signInWithGithub())}
         onSignInWithEmail={(options) => goToDashboardAfter(auth.signInWithEmail(options))}
         onCreateEmailAccount={(options) => goToDashboardAfter(auth.createEmailAccount(options))}
         onContinueAsGuest={() => goToDashboardAfter(auth.continueAsGuest())}
@@ -96,6 +97,7 @@ export default function AppRoot() {
         onSendVerificationCode={auth.sendVerificationCode}
         onVerifyEmailCode={auth.verifyEmailCode}
         isGoogleSignInAvailable={auth.isGoogleSignInAvailable}
+        isGithubSignInAvailable={auth.isGithubSignInAvailable}
       />
     );
   }

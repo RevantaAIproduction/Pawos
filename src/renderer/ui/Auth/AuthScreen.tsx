@@ -31,7 +31,6 @@ const OTP_LENGTH = 6;
 const COMING_SOON: { label: string; icon: React.ReactNode }[] = [
   { label: 'Microsoft', icon: <MicrosoftGlyph /> },
   { label: 'Apple', icon: <AppleGlyph /> },
-  { label: 'GitHub', icon: <GitHubGlyph /> },
 ];
 
 const FEATURES = [
@@ -43,6 +42,7 @@ const FEATURES = [
 
 export function AuthScreen({
   onSignInWithGoogle,
+  onSignInWithGithub,
   onSignInWithEmail,
   onCreateEmailAccount,
   onContinueAsGuest,
@@ -52,8 +52,10 @@ export function AuthScreen({
   onSendVerificationCode,
   onVerifyEmailCode,
   isGoogleSignInAvailable,
+  isGithubSignInAvailable,
 }: {
   onSignInWithGoogle: () => Promise<unknown>;
+  onSignInWithGithub: () => Promise<unknown>;
   onSignInWithEmail: (options: EmailSignInOptions) => Promise<unknown>;
   onCreateEmailAccount: (options: EmailCreateAccountOptions) => Promise<unknown>;
   onContinueAsGuest: () => Promise<unknown>;
@@ -63,6 +65,7 @@ export function AuthScreen({
   onSendVerificationCode: (email: string) => Promise<{ expiresInMinutes: number }>;
   onVerifyEmailCode: (email: string, code: string) => Promise<{ valid: boolean; reason?: string }>;
   isGoogleSignInAvailable: () => Promise<boolean>;
+  isGithubSignInAvailable: () => Promise<boolean>;
 }) {
   const [mode, setMode] = useState<Mode>('signin');
   const [step, setStep] = useState<Step>('form');
@@ -75,8 +78,9 @@ export function AuthScreen({
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState<'google' | 'email' | 'guest' | null>(null);
+  const [pending, setPending] = useState<'google' | 'github' | 'email' | 'guest' | null>(null);
   const [googleAvailable, setGoogleAvailable] = useState(true);
+  const [githubAvailable, setGithubAvailable] = useState(true);
 
   const [otpCode, setOtpCode] = useState('');
   const [verifyError, setVerifyError] = useState<string | null>(null);
@@ -91,6 +95,10 @@ export function AuthScreen({
   useEffect(() => {
     isGoogleSignInAvailable().then(setGoogleAvailable);
   }, [isGoogleSignInAvailable]);
+
+  useEffect(() => {
+    isGithubSignInAvailable().then(setGithubAvailable);
+  }, [isGithubSignInAvailable]);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -111,6 +119,7 @@ export function AuthScreen({
   };
 
   const handleGoogle = () => runGuarded('google', onSignInWithGoogle);
+  const handleGithub = () => runGuarded('github', onSignInWithGithub);
   const handleGuest = () => runGuarded('guest', onContinueAsGuest);
 
   /** Sends (or resends) the verification code and moves to the code-entry step. Doesn't create the account yet — that only happens once the code is proven. */
@@ -462,6 +471,16 @@ export function AuthScreen({
               {!googleAvailable && (
                 <p className={styles.hint}>
                   Google sign-in needs a GOOGLE_CLIENT_ID configured in .env before this will work.
+                </p>
+              )}
+
+              <button type="button" className={styles.providerButton} onClick={handleGithub} disabled={busy}>
+                <GitHubGlyph size={18} />
+                {pending === 'github' ? 'Opening GitHub sign-in…' : 'Continue with GitHub'}
+              </button>
+              {!githubAvailable && (
+                <p className={styles.hint}>
+                  GitHub sign-in needs GITHUB_REDIRECT_URI configured in .env before this will work.
                 </p>
               )}
 

@@ -107,7 +107,7 @@ export function contextBridge() {
     overlayGetScreenWorkArea: async (): Promise<{ width: number; height: number }> => ipcApi.invoke('overlay:getScreenWorkArea'),
     overlaySetInteractive: async (active: boolean): Promise<boolean> => ipcApi.invoke('overlay:setInteractive', active),
 
-    envGetApiKeys: async (): Promise<{ gemini?: string; supabaseUrl?: string; supabasePublishableKey?: string }> =>
+    envGetApiKeys: async (): Promise<{ gemini?: string; supabaseUrl?: string; supabasePublishableKey?: string; githubRedirectUri?: string }> =>
       ipcApi.invoke('env:getApiKeys'),
 
     systemGetForegroundWindowInfo: async (): Promise<ForegroundWindowInfo> => ipcApi.invoke('system:getForegroundWindowInfo'),
@@ -115,6 +115,9 @@ export function contextBridge() {
 
     authIsGoogleSignInConfigured: async (): Promise<boolean> => ipcApi.invoke('auth:isGoogleSignInConfigured'),
     authStartGoogleSignIn: async (): Promise<GoogleSignInResult> => ipcApi.invoke('auth:startGoogleSignIn'),
+    authIsGithubSignInConfigured: async (): Promise<boolean> => ipcApi.invoke('auth:isGithubSignInConfigured'),
+    authStartGithubSignIn: async (authorizeUrl: string): Promise<{ code: string }> =>
+      ipcApi.invoke('auth:startGithubSignIn', authorizeUrl),
     authSendOtp: async (email: string): Promise<{ expiresInMinutes: number }> => ipcApi.invoke('auth:sendOtp', email),
     authVerifyOtp: async (email: string, code: string): Promise<{ valid: boolean; reason?: string }> =>
       ipcApi.invoke('auth:verifyOtp', email, code),

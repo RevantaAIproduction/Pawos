@@ -29,6 +29,12 @@ export function useAuth() {
     return signedInUser;
   }, []);
 
+  const signInWithGithub = useCallback(async () => {
+    const signedInUser = await authService.signInWithGithub();
+    setUser(signedInUser);
+    return signedInUser;
+  }, []);
+
   const signInWithEmail = useCallback(async (options: EmailSignInOptions) => {
     const signedInUser = await authService.signInWithEmail(options);
     setUser(signedInUser);
@@ -84,12 +90,14 @@ export function useAuth() {
   }, []);
 
   const isGoogleSignInAvailable = useCallback(() => authService.isGoogleSignInAvailable(), []);
+  const isGithubSignInAvailable = useCallback(() => authService.isGithubSignInAvailable(), []);
 
   return {
     user,
     isAuthenticated: !!user,
     isLoadingUser,
     signInWithGoogle,
+    signInWithGithub,
     signInWithEmail,
     createEmailAccount,
     continueAsGuest,
@@ -102,5 +110,6 @@ export function useAuth() {
     verifyEmailCode,
     signOut,
     isGoogleSignInAvailable,
+    isGithubSignInAvailable,
   };
 }

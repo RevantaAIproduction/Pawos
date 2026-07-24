@@ -6,6 +6,7 @@ import type {
 } from './AuthTypes';
 import { EmailAuthProvider } from './providers/EmailAuthProvider';
 import { GoogleAuthProvider } from './providers/GoogleAuthProvider';
+import { GitHubAuthProvider } from './providers/GitHubAuthProvider';
 import { GuestAuthProvider } from './providers/GuestAuthProvider';
 import { ipc } from '../services/ipc/ipcBridgeImplementation';
 
@@ -32,6 +33,7 @@ const REMEMBER_KEY = 'pawos:auth:rememberMe';
 export class AuthenticationProvider implements AuthService {
   private emailProvider = new EmailAuthProvider();
   private googleProvider = new GoogleAuthProvider();
+  private githubProvider = new GitHubAuthProvider();
   private guestProvider = new GuestAuthProvider();
 
   private setSession(user: AuthUser, rememberMe = true): void {
@@ -41,6 +43,12 @@ export class AuthenticationProvider implements AuthService {
 
   async signInWithGoogle(): Promise<AuthUser> {
     const user = await this.googleProvider.signIn();
+    this.setSession(user);
+    return user;
+  }
+
+  async signInWithGithub(): Promise<AuthUser> {
+    const user = await this.githubProvider.signIn();
     this.setSession(user);
     return user;
   }
@@ -147,6 +155,10 @@ export class AuthenticationProvider implements AuthService {
 
   async isGoogleSignInAvailable(): Promise<boolean> {
     return this.googleProvider.isAvailable();
+  }
+
+  async isGithubSignInAvailable(): Promise<boolean> {
+    return this.githubProvider.isAvailable();
   }
 }
 
