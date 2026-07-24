@@ -4,6 +4,7 @@ import { createTray } from './tray/trayManager';
 import { registerIpc } from './ipc/ipc';
 import { SettingsStore } from '../shared/settings/SettingsStore';
 import { readEnvFile } from './env/readEnvFile';
+import { PUBLIC_ENV_DEFAULTS } from './env/publicEnvDefaults';
 import { startForegroundWindowWatcher, getForegroundWindowInfo } from './system/ForegroundWindowWatcher';
 import { startGoogleSignIn } from './auth/GoogleOAuthFlow';
 import { waitForGitHubOAuthCallback } from './auth/GitHubOAuthFlow';
@@ -65,25 +66,36 @@ let envVars: Record<string, string> = {};
 // before app.whenReady(). The unpackaged (`electron .`) form needs the exe
 // path + script arg explicitly — Windows can't otherwise reconstruct how to
 // relaunch a dev build from a protocol click.
+// [DEBUG-TEMP] verbose logging while verifying the pawos:// handoff end-to-end — remove once confirmed working live.
+console.log('[protocol] process.defaultApp:', process.defaultApp, 'argv:', JSON.stringify(process.argv));
 if (process.defaultApp) {
   const scriptArg = process.argv[1];
   if (scriptArg) {
-    app.setAsDefaultProtocolClient('pawos', process.execPath, [path.resolve(scriptArg)]);
+    const registered = app.setAsDefaultProtocolClient('pawos', process.execPath, [path.resolve(scriptArg)]);
+    console.log('[protocol] setAsDefaultProtocolClient (dev mode) ->', registered, 'exe:', process.execPath, 'arg:', path.resolve(scriptArg));
+  } else {
+    console.log('[protocol] no scriptArg in argv, could not register protocol client');
   }
 } else {
-  app.setAsDefaultProtocolClient('pawos');
+  const registered = app.setAsDefaultProtocolClient('pawos');
+  console.log('[protocol] setAsDefaultProtocolClient (packaged) ->', registered);
 }
+console.log('[protocol] isDefaultProtocolClient("pawos") ->', app.isDefaultProtocolClient('pawos'));
 
 // Windows/Linux deliver a protocol click as a brand-new process launch with
 // the URL in argv — without a single-instance lock, that would open a
 // second, redundant copy of PawOS instead of handing the URL to the one
 // already running (and already holding the pending OAuth promise).
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
+console.log('[protocol] gotSingleInstanceLock:', gotSingleInstanceLock);
 if (!gotSingleInstanceLock) {
+  console.log('[protocol] this instance did not get the lock — quitting (a primary instance should already be running)');
   app.quit();
 } else {
   app.on('second-instance', (_event, argv) => {
+    console.log('[protocol] second-instance event, argv:', JSON.stringify(argv));
     const url = extractProtocolUrlFromArgv(argv);
+    console.log('[protocol] extracted url from second-instance argv:', url);
     if (url) handleOAuthProtocolUrl(url);
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
@@ -95,6 +107,7 @@ if (!gotSingleInstanceLock) {
 
 // macOS delivers a protocol click via this event instead of argv/second-instance.
 app.on('open-url', (event, url) => {
+  console.log('[protocol] open-url event:', url);
   event.preventDefault();
   handleOAuthProtocolUrl(url);
 });
@@ -312,8 +325,11 @@ app.whenReady().then(async () => {
 
   // .env next to the installed exe (packaged) or at the repo root (dev
   // checkout, cwd when running `electron .`) — lets the user drop keys in a
-  // file instead of typing them into the app.
-  envVars = readEnvFile([path.dirname(app.getPath('exe')), process.cwd(), app.getAppPath()]);
+  // file instead of typing them into the app. PUBLIC_ENV_DEFAULTS covers the
+  // non-secret OAuth/Supabase config every install needs (see its own
+  // comments for why these specific values are safe to ship); a real .env
+  // still overrides them for anyone pointing at a different backend.
+  envVars = { ...PUBLIC_ENV_DEFAULTS, ...readEnvFile([path.dirname(app.getPath('exe')), process.cwd(), app.getAppPath()]) };
 
   if (envVars.SMTP_HOST && envVars.SMTP_USER && envVars.SMTP_PASS && envVars.EMAIL_FROM) {
     emailService.init({
@@ -357,7 +373,6 @@ app.whenReady().then(async () => {
       }
       return startGoogleSignIn({
         clientId: envVars.GOOGLE_CLIENT_ID,
-        clientSecret: envVars.GOOGLE_CLIENT_SECRET,
         redirectUri: envVars.GOOGLE_REDIRECT_URI,
       });
     },

@@ -8,10 +8,20 @@ files:
   - dist/preload/**/*
   - dist/renderer/**/*
   - src/pets/**/*
-  - "!node_modules/**/*"
+  # webpack.main.config.js deliberately leaves sharp/docx/xlsx unbundled
+  # (native binary + real Node-behavior-detection quirks — see its own
+  # comments), so they must actually be resolvable from node_modules at
+  # runtime. electron-builder's own default dependency-tree walk (not a
+  # blanket exclusion) is what correctly includes exactly those packages
+  # and their own transitive deps.
 
 directories:
   buildResources: build
+
+protocols:
+  name: "PawOS Protocol"
+  schemes:
+    - pawos
 
 win:
   target:

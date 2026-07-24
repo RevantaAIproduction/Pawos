@@ -16,8 +16,80 @@ export function relayToDesktop(scheme: "google-auth-callback" | "github-auth-cal
   const params = new URLSearchParams();
   if (code) params.set("code", code);
   if (error) params.set("error", error);
-  const deepLink = `pawos://${scheme}?${params.toString()}`;
+  return buildRelayResponse(`pawos://${scheme}?${params.toString()}`, error);
+}
 
+/**
+ * Google-specific: this app's OAuth client is a "Web application" type,
+ * meaning the token exchange requires GOOGLE_CLIENT_SECRET. That secret
+ * must never be bundled into the publicly-distributed desktop installer
+ * (an asar archive is trivially extractable, so shipping it there would
+ * leak it to every download). Instead, the exchange happens right here,
+ * server-side, using this server's own environment — the desktop app never
+ * sees the code or the secret, only the finished tokens/profile, relayed
+ * onward via the same pawos:// handoff as everything else.
+ */
+export async function relayGoogleToDesktop(code: string | null, error: string | null): Promise<Response> {
+  if (error) return buildRelayResponse(`pawos://google-auth-callback?${new URLSearchParams({ error }).toString()}`, error);
+  if (!code) {
+    const missing = "missing_code";
+    return buildRelayResponse(`pawos://google-auth-callback?${new URLSearchParams({ error: missing }).toString()}`, missing);
+  }
+
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI;
+  if (!clientId || !clientSecret || !redirectUri) {
+    const notConfigured = "server_not_configured";
+    return buildRelayResponse(`pawos://google-auth-callback?${new URLSearchParams({ error: notConfigured }).toString()}`, notConfigured);
+  }
+
+  try {
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code,
+        grant_type: "authorization_code",
+        redirect_uri: redirectUri,
+      }),
+    });
+    if (!tokenResponse.ok) {
+      const failed = `token_exchange_failed_${tokenResponse.status}`;
+      return buildRelayResponse(`pawos://google-auth-callback?${new URLSearchParams({ error: failed }).toString()}`, failed);
+    }
+    const tokens = (await tokenResponse.json()) as { access_token: string; id_token?: string };
+    if (!tokens.id_token) {
+      const missing = "no_id_token";
+      return buildRelayResponse(`pawos://google-auth-callback?${new URLSearchParams({ error: missing }).toString()}`, missing);
+    }
+
+    const profileResponse = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${tokens.access_token}` },
+    });
+    if (!profileResponse.ok) {
+      const failed = "profile_fetch_failed";
+      return buildRelayResponse(`pawos://google-auth-callback?${new URLSearchParams({ error: failed }).toString()}`, failed);
+    }
+    const profile = (await profileResponse.json()) as { sub: string; email: string; name?: string; picture?: string };
+
+    const params = new URLSearchParams();
+    params.set("id_token", tokens.id_token);
+    params.set("access_token", tokens.access_token);
+    params.set("sub", profile.sub);
+    params.set("email", profile.email);
+    if (profile.name) params.set("name", profile.name);
+    if (profile.picture) params.set("picture", profile.picture);
+    return buildRelayResponse(`pawos://google-auth-callback?${params.toString()}`, null);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "unknown_error";
+    return buildRelayResponse(`pawos://google-auth-callback?${new URLSearchParams({ error: message }).toString()}`, message);
+  }
+}
+
+function buildRelayResponse(deepLink: string, error: string | null): Response {
   const body = error
     ? `<html><body style="font-family:sans-serif;padding:40px;">
         <p>Sign-in failed: ${escapeHtml(error)}.</p>

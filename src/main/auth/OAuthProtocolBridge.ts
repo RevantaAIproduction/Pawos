@@ -22,6 +22,7 @@ const pending = new Map<OAuthProvider, PendingResolver>();
 
 /** Called by GoogleOAuthFlow.ts/GitHubOAuthFlow.ts before opening the system browser. */
 export function registerPendingOAuth(provider: OAuthProvider, resolver: PendingResolver): void {
+  console.log('[protocol] registerPendingOAuth:', provider); // [DEBUG-TEMP]
   pending.set(provider, resolver);
 }
 
@@ -37,25 +38,62 @@ const PROTOCOL_HOST_TO_PROVIDER: Record<string, OAuthProvider> = {
 
 /** Called from main.ts with the raw pawos:// URL, from whichever OS mechanism delivered it. */
 export function handleOAuthProtocolUrl(rawUrl: string): void {
+  // [DEBUG-TEMP] verbose logging while verifying the pawos:// handoff end-to-end — remove once confirmed working live.
+  console.log('[protocol] handleOAuthProtocolUrl called with:', rawUrl);
   let parsed: URL;
   try {
     parsed = new URL(rawUrl);
-  } catch {
+  } catch (e) {
+    console.log('[protocol] failed to parse URL:', e);
     return;
   }
-  if (parsed.protocol !== 'pawos:') return;
+  if (parsed.protocol !== 'pawos:') {
+    console.log('[protocol] ignoring non-pawos protocol:', parsed.protocol);
+    return;
+  }
 
   const provider = PROTOCOL_HOST_TO_PROVIDER[parsed.hostname];
+  console.log('[protocol] hostname:', parsed.hostname, '-> provider:', provider);
   if (!provider) return;
 
   const resolver = pending.get(provider);
+  console.log('[protocol] pending resolver for', provider, ':', Boolean(resolver), '(pending keys:', Array.from(pending.keys()), ')');
   if (!resolver) return;
   pending.delete(provider);
 
   const error = parsed.searchParams.get('error_description') ?? parsed.searchParams.get('error');
+  if (error) {
+    resolver.reject(new Error(error));
+    return;
+  }
+
+  if (provider === 'google') {
+    // pawos-web's callback already exchanged the code for tokens
+    // server-side (see relayGoogleToDesktop) — this app never sees a raw
+    // authorization code or the client secret, only the finished result.
+    const idToken = parsed.searchParams.get('id_token');
+    const accessToken = parsed.searchParams.get('access_token');
+    const sub = parsed.searchParams.get('sub');
+    const email = parsed.searchParams.get('email');
+    if (!idToken || !accessToken || !sub || !email) {
+      resolver.reject(new Error('Google sign-in callback was missing required fields.'));
+      return;
+    }
+    const name = parsed.searchParams.get('name');
+    const picture = parsed.searchParams.get('picture');
+    resolver.resolve(
+      JSON.stringify({
+        idToken,
+        accessToken,
+        profile: { sub, email, name: name ?? email, picture: picture ?? undefined },
+      })
+    );
+    return;
+  }
+
   const code = parsed.searchParams.get('code');
-  if (error) resolver.reject(new Error(error));
-  else if (code) resolver.resolve(code);
+  console.log('[protocol] resolving with code present:', Boolean(code));
+  if (code) resolver.resolve(code);
   else resolver.reject(new Error('Sign-in callback was missing an authorization code.'));
 }
 
