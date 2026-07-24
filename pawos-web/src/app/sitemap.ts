@@ -5,6 +5,8 @@ import { RUNTIMES } from "../lib/runtimesContent";
 import { ARTICLES } from "../lib/articlesContent";
 import { LEGAL_DOCS } from "../lib/legalContent";
 
+export const dynamic = "force-static";
+
 const SITE_URL = "https://pawos.app";
 
 const STATIC_ROUTES = [
