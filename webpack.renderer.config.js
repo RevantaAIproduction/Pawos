@@ -3,6 +3,16 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 module.exports = {
   target: 'electron-renderer',
+  // The 'electron-renderer' target auto-externalizes Node built-ins
+  // (require('events') etc. left untouched, assuming Electron will supply
+  // them) — correct only if nodeIntegration is on. This app's windows are
+  // created with nodeIntegration:false (see main.ts), so any dependency
+  // that needs a Node built-in (e.g. @supabase/realtime-js needs 'events')
+  // would otherwise crash at runtime with "X is not defined". Disabling
+  // just the auto-externalization lets webpack bundle the real userland
+  // polyfill packages (e.g. the 'events' npm package) already in
+  // node_modules instead.
+  externalsPresets: { node: false },
   mode: 'production',
   entry: './src/renderer/index.tsx',
   devtool: 'source-map',

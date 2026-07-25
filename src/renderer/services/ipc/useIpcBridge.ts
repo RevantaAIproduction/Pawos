@@ -37,6 +37,8 @@ export function useIpcBridge() {
       isCompanionEnabled: async (): Promise<boolean> => ipc.companionIsEnabled(),
       sendCompanionCommand: async (command: CompanionCommand): Promise<boolean> => ipc.companionSendCommand(command),
       onCompanionCommand: (cb: (command: CompanionCommand) => void) => ipc.onCompanionCommand(cb),
+      notifyCompanionReady: (): void => ipc.companionNotifyReady(),
+      onCompanionReady: (cb: () => void) => ipc.onCompanionReady(cb),
       showCompanionNotification: async (title: string, body: string): Promise<boolean> =>
         ipc.companionShowNotification(title, body),
 

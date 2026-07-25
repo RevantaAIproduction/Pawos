@@ -5,11 +5,14 @@ import { AvatarPreview } from './AvatarPreview';
 export function TalkSection({
   enabled,
   pending,
+  waking,
   onEnable,
   onDisable,
 }: {
   enabled: boolean;
   pending: boolean;
+  /** True from the moment Enable resolves until the overlay's 3D asset actually finishes loading — the companion isn't really ready yet even though the IPC call already returned. */
+  waking?: boolean;
   onEnable: () => void;
   onDisable: () => void;
 }) {
@@ -24,11 +27,15 @@ export function TalkSection({
             <div className={styles.companionOrb} data-on={enabled} />
           </div>
         )}
-        <h3 className={styles.companionState}>{enabled ? 'Your companion is active' : 'Your companion is off'}</h3>
+        <h3 className={styles.companionState}>
+          {waking ? 'Waking up your companion…' : enabled ? 'Your companion is active' : 'Your companion is off'}
+        </h3>
         <p className={styles.cardBody}>
-          {enabled
-            ? 'It is running as a desktop overlay — animated, listening for input, and ready to talk.'
-            : 'Enable it to bring your animated desktop companion to life. It will appear as a small always-on-top overlay.'}
+          {waking
+            ? 'Loading its animations and voice — this only takes a few seconds.'
+            : enabled
+              ? 'It is running as a desktop overlay — animated, listening for input, and ready to talk.'
+              : 'Enable it to bring your animated desktop companion to life. It will appear as a small always-on-top overlay.'}
         </p>
         <button
           type="button"

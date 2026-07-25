@@ -255,6 +255,7 @@ export default function CompanionExperience() {
           behavior={activeProfile?.behavior}
           uploadedFilePath={activeProfile?.avatarSource?.mode === 'upload' ? activeProfile.avatarSource.uploadedFilePath : undefined}
           onUploadRigged={(rigged) => activeProfile && markUploadRigged(activeProfile.id, rigged)}
+          onReady={() => ipc.notifyCompanionReady()}
         />
         {!conversationSnapshot.panelOpen && (
           <button
@@ -301,7 +302,9 @@ export default function CompanionExperience() {
         </div>
       )}
       {/* [DEBUG-TEMP] remove once real-mic verification is done */}
-      <VoiceDebugPanel snapshot={conversationSnapshot} />
+      <div data-interactive="true">
+        <VoiceDebugPanel snapshot={conversationSnapshot} />
+      </div>
     </div>
   );
 }

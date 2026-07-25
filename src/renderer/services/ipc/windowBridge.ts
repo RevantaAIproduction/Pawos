@@ -37,6 +37,16 @@ import type { WorkspaceObservationEvent } from '../../../shared/actions/Executio
 import type { ExecutionRecord } from '../../../shared/actions/ExecutionRecordTypes';
 import type { BrowserCapabilityReport } from '../../../shared/actions/BrowserCapabilityTypes';
 import type { CommunicationRuntimeEvent, ParticipantRecord, CompanyRecord, CommunicationSummary, FollowUp } from '../../../shared/communication/CommunicationTypes';
+import type {
+  ConnectivityScope,
+  ConnectorDefinition,
+  ConnectorConnection,
+  DeploymentProfile,
+  DeploymentProfileConfig,
+  ConnectivityIpcResult,
+  ApiTokenValidationResult,
+  OAuthBeginResult,
+} from '../../../shared/connectivity/ConnectivityTypes';
 
 export function contextBridge() {
   if (typeof window === 'undefined') {
@@ -73,6 +83,8 @@ export function contextBridge() {
     companionIsEnabled: async (): Promise<boolean> => ipcApi.invoke('companion:isEnabled'),
     companionSendCommand: async (command: CompanionCommand): Promise<boolean> => ipcApi.invoke('companion:command', command),
     onCompanionCommand: (cb: (command: CompanionCommand) => void) => on('companion:command', cb),
+    companionNotifyReady: () => ipcApi?.send('companion:ready'),
+    onCompanionReady: (cb: () => void) => on('companion:ready:broadcast', cb),
 
     settingsGet: async (): Promise<SettingsState> => ipcApi.invoke('settings:get'),
     settingsSet: async (partial: Partial<SettingsState>) => ipcApi.invoke('settings:set', partial),
@@ -214,6 +226,42 @@ export function contextBridge() {
     communicationListLocalCompanies: async (): Promise<CompanyRecord[]> => ipcApi.invoke('communication:listLocalCompanies'),
     communicationListLocalSummaries: async (): Promise<CommunicationSummary[]> => ipcApi.invoke('communication:listLocalSummaries'),
     communicationListLocalFollowUps: async (): Promise<FollowUp[]> => ipcApi.invoke('communication:listLocalFollowUps'),
+
+    connectivityListConnectors: async (): Promise<ConnectivityIpcResult<ConnectorDefinition[]>> => ipcApi.invoke('connectivity:listConnectors'),
+    connectivityListConnections: async (scope: ConnectivityScope): Promise<ConnectivityIpcResult<ConnectorConnection[]>> =>
+      ipcApi.invoke('connectivity:listConnections', scope),
+    connectivityConnect: async (connectorId: string, scope: ConnectivityScope): Promise<ConnectivityIpcResult<ConnectorConnection>> =>
+      ipcApi.invoke('connectivity:connect', connectorId, scope),
+    connectivityDisconnect: async (connectionId: string): Promise<ConnectivityIpcResult<void>> =>
+      ipcApi.invoke('connectivity:disconnect', connectionId),
+    connectivityCheckHealth: async (connectionId: string): Promise<ConnectivityIpcResult<ConnectorConnection>> =>
+      ipcApi.invoke('connectivity:checkHealth', connectionId),
+    connectivityRefreshDiscovery: async (): Promise<ConnectivityIpcResult<void>> => ipcApi.invoke('connectivity:refreshDiscovery'),
+    connectivityDeploymentProfilesCreate: async (
+      scope: ConnectivityScope,
+      name: string,
+      config: DeploymentProfileConfig
+    ): Promise<ConnectivityIpcResult<DeploymentProfile>> => ipcApi.invoke('connectivity:deploymentProfiles:create', scope, name, config),
+    connectivityDeploymentProfilesGet: async (profileId: string): Promise<ConnectivityIpcResult<DeploymentProfile | undefined>> =>
+      ipcApi.invoke('connectivity:deploymentProfiles:get', profileId),
+    connectivityDeploymentProfilesList: async (scope: ConnectivityScope): Promise<ConnectivityIpcResult<DeploymentProfile[]>> =>
+      ipcApi.invoke('connectivity:deploymentProfiles:list', scope),
+    connectivityDeploymentProfilesUpdate: async (
+      profileId: string,
+      patch: Partial<Pick<DeploymentProfile, 'name' | 'config' | 'isDefault'>>
+    ): Promise<ConnectivityIpcResult<DeploymentProfile>> => ipcApi.invoke('connectivity:deploymentProfiles:update', profileId, patch),
+    connectivityDeploymentProfilesRemove: async (profileId: string): Promise<ConnectivityIpcResult<void>> =>
+      ipcApi.invoke('connectivity:deploymentProfiles:remove', profileId),
+    connectivityApiTokensValidate: async (connectorId: string, token: string): Promise<ConnectivityIpcResult<ApiTokenValidationResult>> =>
+      ipcApi.invoke('connectivity:apiTokens:validate', connectorId, token),
+    connectivityApiTokensSave: async (connectorId: string, scope: ConnectivityScope, token: string): Promise<ConnectivityIpcResult<void>> =>
+      ipcApi.invoke('connectivity:apiTokens:save', connectorId, scope, token),
+    connectivityOAuthBegin: async (connectorId: string, scope: ConnectivityScope): Promise<ConnectivityIpcResult<OAuthBeginResult>> =>
+      ipcApi.invoke('connectivity:oauth:begin', connectorId, scope),
+    connectivityOAuthCancel: async (requestId: string): Promise<ConnectivityIpcResult<void>> =>
+      ipcApi.invoke('connectivity:oauth:cancel', requestId),
+    connectivityDeploymentProfilesHydrate: async (profile: DeploymentProfile): Promise<ConnectivityIpcResult<void>> =>
+      ipcApi.invoke('connectivity:deploymentProfiles:hydrate', profile),
   };
 }
 

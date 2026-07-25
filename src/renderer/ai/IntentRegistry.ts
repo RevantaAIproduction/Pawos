@@ -1869,7 +1869,7 @@ export const ACTION_TOOL_DEFINITIONS: ReasoningToolDefinition[] = [
             type: 'object',
             properties: {
               name: { type: 'string' },
-              rows: { type: 'array', items: { type: 'array' } },
+              rows: { type: 'array', items: { type: 'array', items: { type: 'string' } } },
               formulas: { type: 'array', items: { type: 'object', properties: { cell: { type: 'string' }, formula: { type: 'string' } }, required: ['cell', 'formula'] } },
             },
             required: ['name', 'rows'],

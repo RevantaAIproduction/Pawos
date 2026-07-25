@@ -41,6 +41,7 @@ import type { SupportConversationTurn } from '../help/SupportConversationTypes';
 import { ratingPromptStore } from '../feedback/RatingPromptStore';
 import { feedbackStore } from '../feedback/FeedbackStore';
 import type { FeedbackSubmission } from '../../renderer/services/ipc/ipcTypes';
+import { registerConnectivityIpc } from './connectivityIpc';
 
 function toFileUrl(dir: string): string {
   return `file://${dir.replace(/\\/g, '/')}/`;
@@ -81,6 +82,15 @@ export function registerIpc(opts: {
   ipcMain.handle('companion:command', (_evt, command: CompanionCommand) => {
     opts.overlayWindowProvider()?.webContents.send('companion:command', command);
     return true;
+  });
+
+  // The overlay window's 3D asset load finishes well after companion:enable
+  // already resolved (that call just creates the window and returns) — this
+  // lets the dashboard's "Enable companion" button keep showing a real
+  // loading state until the companion is actually visually ready, instead of
+  // claiming success the moment the (still-loading) window exists.
+  ipcMain.on('companion:ready', () => {
+    for (const win of BrowserWindow.getAllWindows()) win.webContents.send('companion:ready:broadcast');
   });
 
   // The Desktop Execution Engine's pipeline, one IPC call per stage — lets
@@ -477,5 +487,11 @@ export function registerIpc(opts: {
   ipcMain.handle('communication:listLocalCompanies', () => communicationRuntime.listLocalCompanies());
   ipcMain.handle('communication:listLocalSummaries', () => communicationRuntime.listLocalSummaries());
   ipcMain.handle('communication:listLocalFollowUps', () => communicationRuntime.listLocalFollowUps());
+
+  // Connectivity Runtime — see connectivityIpc.ts. Kept in its own
+  // registration function (rather than inlined here like every feature
+  // above) since every connectivity: handler shares one validation/response
+  // wrapper; nothing about that changes how or when it's registered.
+  registerConnectivityIpc();
 }
 

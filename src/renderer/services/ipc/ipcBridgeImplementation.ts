@@ -25,6 +25,16 @@ import type { CommunicationRuntimeEvent, ParticipantRecord, CompanyRecord, Commu
 import type { PairedDevice } from '../../../shared/pairing/PairingTypes';
 import type { LocalDeviceIdentity } from '../../../shared/device/DeviceTypes';
 import type {
+  ConnectivityScope,
+  ConnectorDefinition,
+  ConnectorConnection,
+  DeploymentProfile,
+  DeploymentProfileConfig,
+  ConnectivityIpcResult,
+  ApiTokenValidationResult,
+  OAuthBeginResult,
+} from '../../../shared/connectivity/ConnectivityTypes';
+import type {
   PricingConfig,
   SubscriptionState,
   SubscriptionTierId,
@@ -95,6 +105,12 @@ export const ipc = {
   },
   onCompanionCommand(cb: (command: CompanionCommand) => void) {
     getBridge().onCompanionCommand(cb);
+  },
+  companionNotifyReady() {
+    getBridge().companionNotifyReady();
+  },
+  onCompanionReady(cb: () => void) {
+    getBridge().onCompanionReady(cb);
   },
   async settingsGet(): Promise<SettingsState> {
     return getBridge().settingsGet();
@@ -375,6 +391,62 @@ export const ipc = {
   },
   async communicationListLocalFollowUps(): Promise<FollowUp[]> {
     return getBridge().communicationListLocalFollowUps();
+  },
+
+  async connectivityListConnectors(): Promise<ConnectivityIpcResult<ConnectorDefinition[]>> {
+    return getBridge().connectivityListConnectors();
+  },
+  async connectivityListConnections(scope: ConnectivityScope): Promise<ConnectivityIpcResult<ConnectorConnection[]>> {
+    return getBridge().connectivityListConnections(scope);
+  },
+  async connectivityConnect(connectorId: string, scope: ConnectivityScope): Promise<ConnectivityIpcResult<ConnectorConnection>> {
+    return getBridge().connectivityConnect(connectorId, scope);
+  },
+  async connectivityDisconnect(connectionId: string): Promise<ConnectivityIpcResult<void>> {
+    return getBridge().connectivityDisconnect(connectionId);
+  },
+  async connectivityCheckHealth(connectionId: string): Promise<ConnectivityIpcResult<ConnectorConnection>> {
+    return getBridge().connectivityCheckHealth(connectionId);
+  },
+  async connectivityRefreshDiscovery(): Promise<ConnectivityIpcResult<void>> {
+    return getBridge().connectivityRefreshDiscovery();
+  },
+  async connectivityDeploymentProfilesCreate(
+    scope: ConnectivityScope,
+    name: string,
+    config: DeploymentProfileConfig
+  ): Promise<ConnectivityIpcResult<DeploymentProfile>> {
+    return getBridge().connectivityDeploymentProfilesCreate(scope, name, config);
+  },
+  async connectivityDeploymentProfilesGet(profileId: string): Promise<ConnectivityIpcResult<DeploymentProfile | undefined>> {
+    return getBridge().connectivityDeploymentProfilesGet(profileId);
+  },
+  async connectivityDeploymentProfilesList(scope: ConnectivityScope): Promise<ConnectivityIpcResult<DeploymentProfile[]>> {
+    return getBridge().connectivityDeploymentProfilesList(scope);
+  },
+  async connectivityDeploymentProfilesUpdate(
+    profileId: string,
+    patch: Partial<Pick<DeploymentProfile, 'name' | 'config' | 'isDefault'>>
+  ): Promise<ConnectivityIpcResult<DeploymentProfile>> {
+    return getBridge().connectivityDeploymentProfilesUpdate(profileId, patch);
+  },
+  async connectivityDeploymentProfilesRemove(profileId: string): Promise<ConnectivityIpcResult<void>> {
+    return getBridge().connectivityDeploymentProfilesRemove(profileId);
+  },
+  async connectivityApiTokensValidate(connectorId: string, token: string): Promise<ConnectivityIpcResult<ApiTokenValidationResult>> {
+    return getBridge().connectivityApiTokensValidate(connectorId, token);
+  },
+  async connectivityApiTokensSave(connectorId: string, scope: ConnectivityScope, token: string): Promise<ConnectivityIpcResult<void>> {
+    return getBridge().connectivityApiTokensSave(connectorId, scope, token);
+  },
+  async connectivityOAuthBegin(connectorId: string, scope: ConnectivityScope): Promise<ConnectivityIpcResult<OAuthBeginResult>> {
+    return getBridge().connectivityOAuthBegin(connectorId, scope);
+  },
+  async connectivityOAuthCancel(requestId: string): Promise<ConnectivityIpcResult<void>> {
+    return getBridge().connectivityOAuthCancel(requestId);
+  },
+  async connectivityDeploymentProfilesHydrate(profile: DeploymentProfile): Promise<ConnectivityIpcResult<void>> {
+    return getBridge().connectivityDeploymentProfilesHydrate(profile);
   },
 };
 

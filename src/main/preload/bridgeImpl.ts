@@ -26,6 +26,16 @@ import type { GoogleSignInResult } from "../../shared/auth/AccountTypes";
 import type { PairedDevice } from "../../shared/pairing/PairingTypes";
 import type { LocalDeviceIdentity } from "../../shared/device/DeviceTypes";
 import type {
+  ConnectivityScope,
+  ConnectorDefinition,
+  ConnectorConnection,
+  DeploymentProfile,
+  DeploymentProfileConfig,
+  ConnectivityIpcResult,
+  ApiTokenValidationResult,
+  OAuthBeginResult,
+} from "../../shared/connectivity/ConnectivityTypes";
+import type {
   PricingConfig,
   SubscriptionState,
   SubscriptionTierId,
@@ -67,6 +77,10 @@ export function contextBridge() {
     companionSendCommand: (command: CompanionCommand) => ipcRenderer.invoke("companion:command", command) as Promise<boolean>,
     onCompanionCommand: (cb: (command: CompanionCommand) => void) => {
       ipcRenderer.on("companion:command", (_: any, payload: CompanionCommand) => cb(payload));
+    },
+    companionNotifyReady: () => ipcRenderer.send("companion:ready"),
+    onCompanionReady: (cb: () => void) => {
+      ipcRenderer.on("companion:ready:broadcast", () => cb());
     },
 
     settingsGet: () => ipcRenderer.invoke("settings:get") as Promise<SettingsState>,
@@ -239,6 +253,42 @@ export function contextBridge() {
     communicationListLocalCompanies: () => ipcRenderer.invoke("communication:listLocalCompanies") as Promise<CompanyRecord[]>,
     communicationListLocalSummaries: () => ipcRenderer.invoke("communication:listLocalSummaries") as Promise<CommunicationSummary[]>,
     communicationListLocalFollowUps: () => ipcRenderer.invoke("communication:listLocalFollowUps") as Promise<FollowUp[]>,
+
+    // Connectivity Runtime — every channel resolves a ConnectivityIpcResult<T>
+    // envelope (see connectivityIpc.ts); this bridge never unwraps it, the
+    // renderer decides how to handle { ok: false, error }.
+    connectivityListConnectors: () =>
+      ipcRenderer.invoke("connectivity:listConnectors") as Promise<ConnectivityIpcResult<ConnectorDefinition[]>>,
+    connectivityListConnections: (scope: ConnectivityScope) =>
+      ipcRenderer.invoke("connectivity:listConnections", scope) as Promise<ConnectivityIpcResult<ConnectorConnection[]>>,
+    connectivityConnect: (connectorId: string, scope: ConnectivityScope) =>
+      ipcRenderer.invoke("connectivity:connect", connectorId, scope) as Promise<ConnectivityIpcResult<ConnectorConnection>>,
+    connectivityDisconnect: (connectionId: string) =>
+      ipcRenderer.invoke("connectivity:disconnect", connectionId) as Promise<ConnectivityIpcResult<void>>,
+    connectivityCheckHealth: (connectionId: string) =>
+      ipcRenderer.invoke("connectivity:checkHealth", connectionId) as Promise<ConnectivityIpcResult<ConnectorConnection>>,
+    connectivityRefreshDiscovery: () =>
+      ipcRenderer.invoke("connectivity:refreshDiscovery") as Promise<ConnectivityIpcResult<void>>,
+    connectivityDeploymentProfilesCreate: (scope: ConnectivityScope, name: string, config: DeploymentProfileConfig) =>
+      ipcRenderer.invoke("connectivity:deploymentProfiles:create", scope, name, config) as Promise<ConnectivityIpcResult<DeploymentProfile>>,
+    connectivityDeploymentProfilesGet: (profileId: string) =>
+      ipcRenderer.invoke("connectivity:deploymentProfiles:get", profileId) as Promise<ConnectivityIpcResult<DeploymentProfile | undefined>>,
+    connectivityDeploymentProfilesList: (scope: ConnectivityScope) =>
+      ipcRenderer.invoke("connectivity:deploymentProfiles:list", scope) as Promise<ConnectivityIpcResult<DeploymentProfile[]>>,
+    connectivityDeploymentProfilesUpdate: (profileId: string, patch: Partial<Pick<DeploymentProfile, "name" | "config" | "isDefault">>) =>
+      ipcRenderer.invoke("connectivity:deploymentProfiles:update", profileId, patch) as Promise<ConnectivityIpcResult<DeploymentProfile>>,
+    connectivityDeploymentProfilesRemove: (profileId: string) =>
+      ipcRenderer.invoke("connectivity:deploymentProfiles:remove", profileId) as Promise<ConnectivityIpcResult<void>>,
+    connectivityApiTokensValidate: (connectorId: string, token: string) =>
+      ipcRenderer.invoke("connectivity:apiTokens:validate", connectorId, token) as Promise<ConnectivityIpcResult<ApiTokenValidationResult>>,
+    connectivityApiTokensSave: (connectorId: string, scope: ConnectivityScope, token: string) =>
+      ipcRenderer.invoke("connectivity:apiTokens:save", connectorId, scope, token) as Promise<ConnectivityIpcResult<void>>,
+    connectivityOAuthBegin: (connectorId: string, scope: ConnectivityScope) =>
+      ipcRenderer.invoke("connectivity:oauth:begin", connectorId, scope) as Promise<ConnectivityIpcResult<OAuthBeginResult>>,
+    connectivityOAuthCancel: (requestId: string) =>
+      ipcRenderer.invoke("connectivity:oauth:cancel", requestId) as Promise<ConnectivityIpcResult<void>>,
+    connectivityDeploymentProfilesHydrate: (profile: DeploymentProfile) =>
+      ipcRenderer.invoke("connectivity:deploymentProfiles:hydrate", profile) as Promise<ConnectivityIpcResult<void>>,
   };
 
   electronContextBridge.exposeInMainWorld("__pawos_ipc__", api);

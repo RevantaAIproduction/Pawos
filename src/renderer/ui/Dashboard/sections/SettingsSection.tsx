@@ -10,6 +10,7 @@ import {
   BrowserToolsIcon,
   CardIcon,
   TerminalIcon,
+  PlugIcon,
 } from '../NavIcons';
 import { AccountSettingsPage } from './AccountSettingsPage';
 import { DevicesSettingsPage } from './DevicesSettingsPage';
@@ -20,6 +21,7 @@ import { SecuritySettingsPage } from './SecuritySettingsPage';
 import { BrowserToolsSettingsPage } from './BrowserToolsSettingsPage';
 import { BillingSettingsPage } from './BillingSettingsPage';
 import { DevelopersSettingsPage } from './DevelopersSettingsPage';
+import { IntegrationsSettingsPage } from './IntegrationsSettingsPage';
 import type { AuthUser, EmailCreateAccountOptions } from '../../../auth/AuthTypes';
 
 const SETTINGS_TABS = [
@@ -30,6 +32,7 @@ const SETTINGS_TABS = [
   'Privacy',
   'Security',
   'Browser Tools',
+  'Integrations',
   'Billing',
   'Developers',
 ] as const;
@@ -44,6 +47,7 @@ const CATEGORY_ICONS: Record<SettingsTab, React.ComponentType> = {
   Privacy: ShieldIcon,
   Security: SecurityIcon,
   'Browser Tools': BrowserToolsIcon,
+  Integrations: PlugIcon,
   Billing: CardIcon,
   Developers: TerminalIcon,
 };
@@ -124,6 +128,7 @@ export function SettingsSection({
         {tab === 'Privacy' && <PrivacySection />}
         {tab === 'Security' && <SecuritySettingsPage onGoToAccount={goToAccount} onGoToDevices={goToDevices} />}
         {tab === 'Browser Tools' && <BrowserToolsSettingsPage />}
+        {tab === 'Integrations' && <IntegrationsSettingsPage scope={{ userId: user.id }} />}
         {tab === 'Billing' && <BillingSettingsPage user={user} onGoToAccount={goToAccount} onUpgrade={onUpgrade} />}
         {tab === 'Developers' && <DevelopersSettingsPage />}
       </div>

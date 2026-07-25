@@ -31,11 +31,11 @@ function toTimelineRows(event: VoiceDebugEvent): { label: string; status: Timeli
     case 'recorded':
       return [{ label: 'Recording captured', status: 'ok', detail: `${event.sizeBytes.toLocaleString()} bytes, ${event.durationMs} ms, ${event.mimeType}` }];
     case 'request':
-      return [{ label: 'Uploading to Gemini', status: 'info', detail: `${event.mimeType} · ${event.audioBytes.toLocaleString()} b64 chars` }];
+      return [{ label: 'Uploading audio', status: 'info', detail: `${event.mimeType} · ${event.audioBytes.toLocaleString()} b64 chars` }];
     case 'response':
       return [
         {
-          label: event.status >= 200 && event.status < 300 ? 'Gemini transcription received' : 'Gemini request failed',
+          label: event.status >= 200 && event.status < 300 ? 'Transcription received' : 'Transcription request failed',
           status: event.status >= 200 && event.status < 300 ? 'ok' : 'error',
           detail: `HTTP ${event.status}`,
         },

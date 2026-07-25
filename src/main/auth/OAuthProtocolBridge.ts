@@ -36,6 +36,21 @@ const PROTOCOL_HOST_TO_PROVIDER: Record<string, OAuthProvider> = {
   'github-auth-callback': 'github',
 };
 
+/**
+ * Separate, additive hook for the Connectivity Runtime's own OAuth flow
+ * (`pawos://connectivity-oauth-callback` — see `connectivity/OAuthManager.ts`).
+ * This is intentionally NOT the `pending`/`PROTOCOL_HOST_TO_PROVIDER` map
+ * above, which exists solely for PawOS's own Google/GitHub sign-in — kept
+ * as a separate callback registration so the sign-in flow's dispatch code
+ * above is never read, written, or branched on behalf of connector OAuth.
+ */
+let connectivityOAuthHandler: ((url: URL) => void) | null = null;
+
+/** Called once by OAuthManager.ts to receive connectivity-oauth-callback deliveries. */
+export function registerConnectivityOAuthHandler(handler: (url: URL) => void): void {
+  connectivityOAuthHandler = handler;
+}
+
 /** Called from main.ts with the raw pawos:// URL, from whichever OS mechanism delivered it. */
 export function handleOAuthProtocolUrl(rawUrl: string): void {
   // [DEBUG-TEMP] verbose logging while verifying the pawos:// handoff end-to-end — remove once confirmed working live.
@@ -49,6 +64,12 @@ export function handleOAuthProtocolUrl(rawUrl: string): void {
   }
   if (parsed.protocol !== 'pawos:') {
     console.log('[protocol] ignoring non-pawos protocol:', parsed.protocol);
+    return;
+  }
+
+  if (parsed.hostname === 'connectivity-oauth-callback') {
+    if (connectivityOAuthHandler) connectivityOAuthHandler(parsed);
+    else console.log('[protocol] connectivity-oauth-callback received but no handler registered');
     return;
   }
 

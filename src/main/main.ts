@@ -36,6 +36,7 @@ import { ratingPromptStore } from './feedback/RatingPromptStore';
 import { feedbackStore } from './feedback/FeedbackStore';
 import { helpActivityStore } from './help/HelpActivityStore';
 import { supportConversationStore } from './help/SupportConversationStore';
+import { discoveryService } from './connectivity/DiscoveryService';
 import { startRatingPromptScheduler } from './feedback/RatingPromptScheduler';
 // One constant size, always — the overlay window itself never resizes at
 // runtime. A native window resize inherently reads as "an application
@@ -322,6 +323,12 @@ app.whenReady().then(async () => {
   feedbackStore.init();
   helpActivityStore.init();
   supportConversationStore.init();
+
+  // Connectivity Runtime — populates the registry with real, locally-
+  // detected tools (Git, Docker, kubectl, VS Code, etc.) so the
+  // Integrations Settings page has real data from first launch, not an
+  // always-empty "Detected on this machine" section.
+  discoveryService.discoverAndRegister().catch((e) => console.error('[connectivity] discoverAndRegister failed:', e));
 
   // .env next to the installed exe (packaged) or at the repo root (dev
   // checkout, cwd when running `electron .`) — lets the user drop keys in a

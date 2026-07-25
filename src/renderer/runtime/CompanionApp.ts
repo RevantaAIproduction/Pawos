@@ -66,8 +66,6 @@ export class CompanionApp {
   }
 
   async init() {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { AnimationPlayer } = require('../animations/AnimationPlayer');
     this.animCtx.animation = new AnimationPlayer(this.runtime.pet.animations) as any;
     await this.animCtx.animation.loadAll(this.args.resourceBaseUrl);
 

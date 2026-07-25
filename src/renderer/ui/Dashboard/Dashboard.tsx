@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import styles from './dashboard.module.css';
 import { Sidebar } from './Sidebar';
 import type { ProfileMenuAction } from './ProfileMenu';
@@ -60,6 +60,21 @@ export function Dashboard({
   const [active, setActive] = useState<SectionId>('home');
   const [companionEnabled, setCompanionEnabled] = useState(false);
   const [pending, setPending] = useState(false);
+  // companion:enable resolves the instant the overlay window is created —
+  // its 3D asset (FBX model, animations) keeps loading for a few more
+  // seconds in that separate window with zero signal back here otherwise,
+  // which is exactly the gap the "nothing happens after Enable" report was
+  // about. This stays true until the overlay's own onReady fires (or a
+  // generous timeout, in case the ready signal is ever missed).
+  const [companionWaking, setCompanionWaking] = useState(false);
+  const wakeTimeoutRef = useRef<number | null>(null);
+
+  const clearWakeTimeout = useCallback(() => {
+    if (wakeTimeoutRef.current !== null) {
+      window.clearTimeout(wakeTimeoutRef.current);
+      wakeTimeoutRef.current = null;
+    }
+  }, []);
   const [tierLabel, setTierLabel] = useState(user.isGuest ? 'Guest Preview' : 'Paw Go');
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('Account');
 
@@ -71,6 +86,13 @@ export function Dashboard({
       ipc.billingGetSubscription().then((s) => setTierLabel(TIER_LABELS[s.tier])).catch(() => {});
     }
   }, [ipc, user.isGuest]);
+
+  useEffect(() => {
+    ipc.onCompanionReady(() => {
+      setCompanionWaking(false);
+      clearWakeTimeout();
+    });
+  }, [ipc, clearWakeTimeout]);
 
   // Guaranteed to fire regardless of which Settings/Organization tab is
   // open — this is the one place that actually calls the security-definer
@@ -107,20 +129,25 @@ export function Dashboard({
     try {
       await ipc.enableCompanion();
       setCompanionEnabled(true);
+      setCompanionWaking(true);
+      clearWakeTimeout();
+      wakeTimeoutRef.current = window.setTimeout(() => setCompanionWaking(false), 20000);
     } finally {
       setPending(false);
     }
-  }, [ipc]);
+  }, [ipc, clearWakeTimeout]);
 
   const handleDisable = useCallback(async () => {
     setPending(true);
     try {
       await ipc.disableCompanion();
       setCompanionEnabled(false);
+      setCompanionWaking(false);
+      clearWakeTimeout();
     } finally {
       setPending(false);
     }
-  }, [ipc]);
+  }, [ipc, clearWakeTimeout]);
 
   const openSettingsTab = (tab: SettingsTab) => {
     setSettingsInitialTab(tab);
@@ -170,12 +197,19 @@ export function Dashboard({
               onNavigate={setActive}
               companionEnabled={companionEnabled}
               companionPending={pending}
+              companionWaking={companionWaking}
               onEnableCompanion={handleEnable}
               onDisableCompanion={handleDisable}
             />
           )}
           {active === 'talk' && (
-            <TalkSection enabled={companionEnabled} pending={pending} onEnable={handleEnable} onDisable={handleDisable} />
+            <TalkSection
+              enabled={companionEnabled}
+              pending={pending}
+              waking={companionWaking}
+              onEnable={handleEnable}
+              onDisable={handleDisable}
+            />
           )}
           {active === 'companionLab' && <CompanionLabSection />}
           {active === 'projects' && (

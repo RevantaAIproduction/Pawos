@@ -15,6 +15,21 @@ import { upsertSpreadsheet } from '../../../memory/entities/officeEntities';
  * plugin never claims to add a chart; that limitation stays honest in
  * describeDone/the system prompt rather than silently doing nothing.
  */
+/**
+ * Gemini's function-calling schema only allows a single primitive type per
+ * array item, so cell values arrive here as strings even for numbers (see
+ * IntentRegistry.ts's create_spreadsheet tool schema). aoa_to_sheet writes a
+ * cell's type from the JS typeof of the value it's given, so a numeric-
+ * looking string would otherwise land as a text cell instead of a real
+ * number Excel can sum/format.
+ */
+function coerceCell(value: string | number): string | number {
+  if (typeof value === 'number') return value;
+  const trimmed = value.trim();
+  if (trimmed !== '' && Number.isFinite(Number(trimmed))) return Number(trimmed);
+  return value;
+}
+
 export class CreateSpreadsheetPlugin extends BasePlugin {
   id = 'createSpreadsheet';
 
@@ -41,7 +56,7 @@ export class CreateSpreadsheetPlugin extends BasePlugin {
     try {
       const workbook = XLSX.utils.book_new();
       for (const sheet of request.sheets) {
-        const worksheet = XLSX.utils.aoa_to_sheet(sheet.rows);
+        const worksheet = XLSX.utils.aoa_to_sheet(sheet.rows.map((row) => row.map(coerceCell)));
         for (const { cell, formula } of sheet.formulas ?? []) {
           worksheet[cell] = { t: 'n', f: formula };
         }

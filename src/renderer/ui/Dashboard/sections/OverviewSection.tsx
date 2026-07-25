@@ -26,12 +26,15 @@ export function OverviewSection({
   onNavigate,
   companionEnabled,
   companionPending,
+  companionWaking,
   onEnableCompanion,
   onDisableCompanion,
 }: {
   onNavigate: (id: SectionId) => void;
   companionEnabled: boolean;
   companionPending: boolean;
+  /** True from the moment Enable resolves until the overlay's 3D asset actually finishes loading. */
+  companionWaking?: boolean;
   onEnableCompanion: () => void;
   onDisableCompanion: () => void;
 }) {
@@ -72,10 +75,14 @@ export function OverviewSection({
           <div className={styles.companionOrb} data-on={companionEnabled} />
         </div>
         <h3 className={styles.companionState} style={{ fontSize: 16 }}>
-          {companionEnabled ? 'Your companion is active' : 'Your companion is off'}
+          {companionWaking ? 'Waking up your companion…' : companionEnabled ? 'Your companion is active' : 'Your companion is off'}
         </h3>
         <p className={styles.cardBody}>
-          {companionEnabled ? 'Ask it to do something, or open Talk with Paw to continue a conversation.' : 'Enable it to start working with Paw.'}
+          {companionWaking
+            ? 'Loading its animations and voice — this only takes a few seconds.'
+            : companionEnabled
+              ? 'Ask it to do something, or open Talk with Paw to continue a conversation.'
+              : 'Enable it to start working with Paw.'}
         </p>
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
           <button
@@ -86,7 +93,7 @@ export function OverviewSection({
           >
             {companionPending ? 'Working…' : companionEnabled ? 'Disable' : 'Enable companion'}
           </button>
-          {companionEnabled && (
+          {companionEnabled && !companionWaking && (
             <button type="button" className={styles.chip} onClick={() => onNavigate('talk')}>
               Talk with Paw
             </button>

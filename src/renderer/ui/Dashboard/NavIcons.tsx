@@ -299,3 +299,14 @@ export function BrowserToolsIcon() {
     </svg>
   );
 }
+
+export function PlugIcon() {
+  return (
+    <svg {...base}>
+      <path d="M9 3.5v5" />
+      <path d="M15 3.5v5" />
+      <path d="M6.5 8.5h11v3a5.5 5.5 0 0 1-11 0z" />
+      <path d="M12 17v3.5" />
+    </svg>
+  );
+}

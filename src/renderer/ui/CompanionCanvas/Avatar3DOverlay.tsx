@@ -36,6 +36,7 @@ export function Avatar3DOverlay({
   behavior,
   uploadedFilePath,
   onUploadRigged,
+  onReady,
 }: {
   controller: CompanionController | null;
   /** Latest lip-sync frame from a viseme-capable TTS provider (e.g. ElevenLabs) — null when none has arrived yet. */
@@ -54,6 +55,8 @@ export function Avatar3DOverlay({
   uploadedFilePath?: string;
   /** Reports whether the upload turned out to already be rigged, once loading actually finishes — real telemetry, not set until the pipeline runs. */
   onUploadRigged?: (rigged: boolean) => void;
+  /** Fires once the 3D asset has actually finished loading and the companion is visible — the real "ready" moment, well after the enable IPC call already resolved. */
+  onReady?: () => void;
 }) {
   const ipc = useIpcBridge();
   const mountRef = useRef<HTMLDivElement>(null);
@@ -149,6 +152,7 @@ export function Avatar3DOverlay({
       // gesture exists today, so 'enthusiastic' and 'calm' are currently
       // indistinguishable; that's an honest limitation, not a bug.
       if ((behavior?.greetingStyle ?? 'enthusiastic') !== 'silent') runtime.performGesture('greeting');
+      onReady?.();
     });
 
     const clock = new THREE.Clock();

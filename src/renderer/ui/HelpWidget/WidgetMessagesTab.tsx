@@ -37,18 +37,37 @@ const STATUS_LABELS: Record<SupportConversationStatus, string> = {
 
 function buildSystemPrompt(articleContext: string): string {
   return (
-    'You are Paw, the AI-first support assistant inside PawOS. Answer the user\'s question using ONLY the ' +
-    'documentation excerpts provided below as grounding context — do not invent features that aren\'t ' +
-    'described there. If the documentation answers the question, say so plainly and concisely. If it does ' +
-    'not, say you don\'t have a documented answer rather than guessing. You do not have access to the ' +
-    'user\'s live logs, system state, or configuration in this conversation — do not claim to have checked ' +
-    'them.\n\nDocumentation context:\n' + articleContext
+    'You are Paw, the AI-first support assistant inside PawOS. If the user is just greeting you or making ' +
+    'small talk, respond warmly and briefly, then ask what they need help with — don\'t treat a greeting as ' +
+    'a documentation question. When they do ask a real question, answer it using ONLY the documentation ' +
+    'excerpts provided below as grounding context — do not invent features that aren\'t described there. If ' +
+    'the documentation answers the question, say so plainly and concisely. If it does not, say you don\'t ' +
+    'have a documented answer rather than guessing. You do not have access to the user\'s live logs, system ' +
+    'state, or configuration in this conversation — do not claim to have checked them.\n\n' +
+    'Documentation context:\n' + articleContext
   );
 }
 
+type QuickReplyCategory = {
+  label: string;
+  placeholder: string;
+};
+
+const QUICK_REPLY_CATEGORIES: QuickReplyCategory[] = [
+  { label: 'Feature question / how-to', placeholder: 'What feature would you like help with?' },
+  { label: 'Billing & subscription', placeholder: "What's your billing question?" },
+  { label: 'Technical issue / error', placeholder: 'Describe the error or issue you’re seeing…' },
+  { label: 'Usage & limits', placeholder: 'What would you like to know about usage or limits?' },
+  { label: 'Something else', placeholder: 'Describe what you need help with…' },
+];
+
+/** Genuinely unfinished business is worth resuming; a resolved/closed ticket isn't — start fresh instead. */
+const UNRESOLVED_STATUSES: SupportConversationStatus[] = ['new', 'investigating', 'aiFixing', 'waitingPermission'];
+
 export function WidgetMessagesTab() {
   const [conversation, setConversation] = useState<SupportConversation | null>(null);
-  const [starting, setStarting] = useState(false);
+  const [stage, setStage] = useState<'empty' | 'consent' | 'categoryPick' | 'composing'>('empty');
+  const [composerPlaceholder, setComposerPlaceholder] = useState('Describe what you need help with…');
   const [problemInput, setProblemInput] = useState('');
   const [messageInput, setMessageInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -59,13 +78,18 @@ export function WidgetMessagesTab() {
   useEffect(() => {
     ipc.helpListConversations().then((list) => {
       const first = list[0];
-      if (first) setConversation(first);
+      if (first && UNRESOLVED_STATUSES.includes(first.status)) setConversation(first);
     });
   }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [conversation?.turns.length]);
+
+  function pickCategory(category: QuickReplyCategory) {
+    setComposerPlaceholder(category.placeholder);
+    setStage('composing');
+  }
 
   async function startConversation() {
     if (!problemInput.trim()) return;
@@ -78,54 +102,72 @@ export function WidgetMessagesTab() {
 
   async function sendToAI(conv: SupportConversation, userText: string) {
     setSending(true);
-    const matches = searchHelpArticles(userText, 3);
-    const context = matches.map((a) => `# ${a.title}\n${a.overview}\n${a.howItWorks}`).join('\n\n');
+    try {
+      const matches = searchHelpArticles(userText, 3);
+      const context = matches.map((a) => `# ${a.title}\n${a.overview}\n${a.howItWorks}`).join('\n\n');
 
-    const afterUserTurn = await ipc.helpAddTurn(conv.id, { role: 'user', content: userText, timestamp: Date.now() });
-    if (afterUserTurn) setConversation(afterUserTurn);
-    await ipc.helpUpdateConversation(conv.id, { status: 'investigating', currentState: 'Reviewing documentation for a match.' });
+      const afterUserTurn = await ipc.helpAddTurn(conv.id, { role: 'user', content: userText, timestamp: Date.now() });
+      if (afterUserTurn) setConversation(afterUserTurn);
+      await ipc.helpUpdateConversation(conv.id, { status: 'investigating', currentState: 'Reviewing documentation for a match.' });
 
-    const provider = aiRouter.getReasoningProvider();
-    if (!provider.isSupported()) {
-      const diagnosis = 'No AI provider is configured yet — please configure one in Settings.';
+      const provider = aiRouter.getReasoningProvider();
+      if (!provider.isSupported()) {
+        const diagnosis = 'No AI provider is configured yet — please configure one in Settings.';
+        const updated = await ipc.helpAddTurn(conv.id, { role: 'assistant', content: diagnosis, timestamp: Date.now() });
+        if (updated) setConversation(updated);
+        await ipc.helpUpdateConversation(conv.id, { status: 'closed', diagnosis, currentState: 'Waiting for an AI provider to be configured.' });
+        return;
+      }
+
+      let full = '';
+      await new Promise<void>((resolve) => {
+        provider.streamResponse(
+          { systemPrompt: buildSystemPrompt(context || 'No matching documentation was found for this question.'), history: [], input: userText, tools: [] },
+          {
+            onDelta: (delta) => {
+              full += delta;
+            },
+            onComplete: async (response) => {
+              try {
+                const finalText = response || full || "I didn't catch that — could you say a bit more about what you need?";
+                const resolved = matches.length > 0;
+                const updated = await ipc.helpAddTurn(conv.id, { role: 'assistant', content: finalText, timestamp: Date.now(), matchedArticleIds: matches.map((m) => m.id) });
+                if (updated) setConversation(updated);
+                await ipc.helpUpdateConversation(conv.id, {
+                  status: resolved ? 'resolved' : 'waitingPermission',
+                  diagnosis: finalText,
+                  currentState: resolved ? 'Answered from documentation.' : 'No documented answer found — consider Report Issue.',
+                  needsPermission: !resolved,
+                });
+                const finalConv = await ipc.helpGetConversation(conv.id);
+                if (finalConv) setConversation(finalConv);
+              } finally {
+                resolve();
+              }
+            },
+            onError: async () => {
+              try {
+                const diagnosis = 'Something went wrong reaching the AI provider. Please try again in a moment.';
+                const updated = await ipc.helpAddTurn(conv.id, { role: 'assistant', content: diagnosis, timestamp: Date.now() });
+                if (updated) setConversation(updated);
+                await ipc.helpUpdateConversation(conv.id, { status: 'closed', diagnosis, currentState: 'AI provider request failed.' });
+              } finally {
+                resolve();
+              }
+            },
+          }
+        );
+      });
+    } catch {
+      // Anything unexpected (search, IPC, or provider throwing synchronously) still
+      // gets a visible reply instead of leaving the UI stuck on "Paw is thinking…".
+      const diagnosis = 'Something went wrong on this end. Please try asking again.';
       const updated = await ipc.helpAddTurn(conv.id, { role: 'assistant', content: diagnosis, timestamp: Date.now() });
       if (updated) setConversation(updated);
-      await ipc.helpUpdateConversation(conv.id, { status: 'closed', diagnosis, currentState: 'Waiting for an AI provider to be configured.' });
+      await ipc.helpUpdateConversation(conv.id, { status: 'closed', diagnosis, currentState: 'Support widget hit an unexpected error.' });
+    } finally {
       setSending(false);
-      return;
     }
-
-    let full = '';
-    provider.streamResponse(
-      { systemPrompt: buildSystemPrompt(context || 'No matching documentation was found for this question.'), history: [], input: userText, tools: [] },
-      {
-        onDelta: (delta) => {
-          full += delta;
-        },
-        onComplete: async (response) => {
-          const finalText = response || full;
-          const resolved = matches.length > 0;
-          const updated = await ipc.helpAddTurn(conv.id, { role: 'assistant', content: finalText, timestamp: Date.now(), matchedArticleIds: matches.map((m) => m.id) });
-          if (updated) setConversation(updated);
-          await ipc.helpUpdateConversation(conv.id, {
-            status: resolved ? 'resolved' : 'waitingPermission',
-            diagnosis: finalText,
-            currentState: resolved ? 'Answered from documentation.' : 'No documented answer found — consider Report Issue.',
-            needsPermission: !resolved,
-          });
-          const finalConv = await ipc.helpGetConversation(conv.id);
-          if (finalConv) setConversation(finalConv);
-          setSending(false);
-        },
-        onError: async () => {
-          const diagnosis = 'Something went wrong reaching the AI provider. Please try again in a moment.';
-          const updated = await ipc.helpAddTurn(conv.id, { role: 'assistant', content: diagnosis, timestamp: Date.now() });
-          if (updated) setConversation(updated);
-          await ipc.helpUpdateConversation(conv.id, { status: 'closed', diagnosis, currentState: 'AI provider request failed.' });
-          setSending(false);
-        },
-      }
-    );
   }
 
   async function sendFollowUp() {
@@ -184,12 +226,46 @@ export function WidgetMessagesTab() {
   }
 
   if (!conversation) {
-    if (starting) {
+    if (stage === 'consent') {
       return (
         <div>
+          <div className={styles.agentBubble}>
+            Hi! I&apos;m Paw, PawOS&apos;s support assistant. To help with your question I&apos;ll search PawOS&apos;s own
+            documentation and send your message to the AI provider you&apos;ve configured in Settings — nothing is sent
+            to a third party beyond that provider. This conversation is saved locally so you can pick it back up later.
+          </div>
+          <button type="button" className={styles.messageCta} onClick={() => setStage('categoryPick')}>
+            Accept
+          </button>
+        </div>
+      );
+    }
+    if (stage === 'categoryPick') {
+      return (
+        <div>
+          <div className={styles.agentBubble}>Hi! I&apos;m Paw. What&apos;s your inquiry about?</div>
+          {QUICK_REPLY_CATEGORIES.map((category) => (
+            <button key={category.label} type="button" className={styles.quickReplyChip} onClick={() => pickCategory(category)}>
+              {category.label}
+            </button>
+          ))}
+        </div>
+      );
+    }
+    if (stage === 'composing') {
+      return (
+        <div>
+          <div className={styles.agentBubble}>Hi! I&apos;m Paw. What&apos;s your inquiry about?</div>
           <h2 style={{ fontSize: 16, fontWeight: 700, margin: '2px 0 10px', color: '#f5f5f7' }}>What's going on?</h2>
           <div style={{ display: 'flex', gap: 8 }}>
-            <input style={inputStyle} placeholder="Describe the issue…" value={problemInput} onChange={(e) => setProblemInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && startConversation()} />
+            <input
+              style={inputStyle}
+              placeholder={composerPlaceholder}
+              value={problemInput}
+              onChange={(e) => setProblemInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && startConversation()}
+              autoFocus
+            />
             <button type="button" style={smallButton} disabled={!problemInput.trim()} onClick={startConversation}>
               Start
             </button>
@@ -202,7 +278,7 @@ export function WidgetMessagesTab() {
         <div style={{ fontSize: 28 }}>💬</div>
         <div style={{ fontSize: 14, fontWeight: 600, color: '#f5f5f7' }}>No messages</div>
         <div style={{ fontSize: 12.5 }}>Messages from Paw will be shown here</div>
-        <button type="button" className={styles.messageCta} style={{ marginTop: 14, maxWidth: 220 }} onClick={() => setStarting(true)}>
+        <button type="button" className={styles.messageCta} style={{ marginTop: 14, maxWidth: 220 }} onClick={() => setStage('consent')}>
           Send us a message
           <span>→</span>
         </button>
