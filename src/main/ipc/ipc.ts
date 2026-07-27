@@ -27,6 +27,7 @@ import { createCreditsCheckoutUrl } from '../billing/providers/RazorpayBillingPr
 import { entitlementService } from '../billing/EntitlementService';
 import { startCheckoutCallbackServer } from '../billing/CheckoutSyncServer';
 import type { SubscriptionTierId, FeatureId, CheckoutOptions } from '../../shared/billing/BillingTypes';
+import type { AiUsageCategory } from '../../shared/billing/AiUsageCategories';
 import type { PawModelId } from '../../shared/ai/PawModelTypes';
 import { onboardingStore } from '../onboarding/OnboardingStore';
 import { conversationSessionStore } from '../conversation/ConversationSessionStore';
@@ -332,10 +333,13 @@ export function registerIpc(opts: {
   ipcMain.handle('billing:setSubscriptionTier', (_evt, tier: SubscriptionTierId) => subscriptionStore.setTier(tier));
   ipcMain.handle('billing:syncFromOrganization', (_evt, orgTier: SubscriptionTierId) => subscriptionStore.syncFromOrganization(orgTier));
   ipcMain.handle('billing:getCreditBalance', () => ({ ...creditStore.getBalance(), limit: entitlementService.getCreditLimit() }));
-  ipcMain.handle('billing:consumeCredit', (_evt, amount: number, reason: string) => {
-    creditStore.consume(amount, reason);
+  ipcMain.handle('billing:consumeCredit', (_evt, amount: number, reason: string, category?: AiUsageCategory) => {
+    creditStore.consume(amount, reason, category);
     return { ...creditStore.getBalance(), limit: entitlementService.getCreditLimit() };
   });
+  // Real per-turn consumption history (up to 200 entries, see CreditStore.ts) — the Analytics
+  // dashboard's usage breakdown/activity feed/insights are all derived from this, never fabricated.
+  ipcMain.handle('billing:getCreditHistory', () => creditStore.getHistory());
   ipcMain.handle('billing:createCheckoutSession', (_evt, tier: SubscriptionTierId, callbackUrl?: string, options?: CheckoutOptions) => {
     const provider = createBillingProvider(pricingConfigStore.get().billingProvider);
     return provider.createCheckoutSession(tier, callbackUrl, options);

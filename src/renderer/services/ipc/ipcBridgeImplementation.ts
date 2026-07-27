@@ -41,11 +41,13 @@ import type {
   SubscriptionState,
   SubscriptionTierId,
   CreditBalance,
+  CreditConsumptionRecord,
   BillingCheckoutResult,
   CheckoutOptions,
   FeatureId,
   EntitlementSnapshot,
 } from '../../../shared/billing/BillingTypes';
+import type { AiUsageCategory } from '../../../shared/billing/AiUsageCategories';
 import type { PawModelId } from '../../../shared/ai/PawModelTypes';
 import type { OnboardingState } from '../../../shared/onboarding/OnboardingTypes';
 
@@ -262,8 +264,11 @@ export const ipc = {
   async billingGetCreditBalance(): Promise<CreditBalance> {
     return getBridge().billingGetCreditBalance();
   },
-  async billingConsumeCredit(amount: number, reason: string): Promise<CreditBalance> {
-    return getBridge().billingConsumeCredit(amount, reason);
+  async billingConsumeCredit(amount: number, reason: string, category?: AiUsageCategory): Promise<CreditBalance> {
+    return getBridge().billingConsumeCredit(amount, reason, category);
+  },
+  async billingGetCreditHistory(): Promise<CreditConsumptionRecord[]> {
+    return getBridge().billingGetCreditHistory();
   },
   async entitlementGetSnapshot(): Promise<EntitlementSnapshot> {
     return getBridge().entitlementGetSnapshot();

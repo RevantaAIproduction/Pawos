@@ -18,6 +18,7 @@ type SeatOption = { seatTier: "standard" | "premium"; label: string; priceCents:
 type Plan = {
   id: string;
   label: string;
+  tagline?: string;
   priceCents: number | null;
   period: "month";
   seatBased?: boolean;
@@ -72,6 +73,7 @@ const TEAM_ENTERPRISE_PLANS: Plan[] = [
   {
     id: "team",
     label: "Paw Team",
+    tagline: "Predictable usage per seat",
     priceCents: 2000,
     period: "month",
     seatBased: true,
@@ -97,26 +99,20 @@ const TEAM_ENTERPRISE_PLANS: Plan[] = [
   {
     id: "enterprise",
     label: "Paw Enterprise",
+    tagline: "Flexible pooled usage",
     priceCents: 2000,
     period: "month",
     seatBased: true,
     minSeats: 20,
     usageBilling: {
-      label: "Flexible pooled usage — seat price + usage at API rates",
+      label: "Seat price + usage at API rates",
       description: "$20/seat + tax. Usage cost scales with model and task. Self-serve — no sales call required, same as Team.",
     },
     features: [
       "Everything in Paw Team",
-      "Admins set user and org spend limits",
-      "Role-based access with fine-grained permissioning",
-      "System for Cross-domain Identity Management (SCIM)",
-      "Compliance API for observability and monitoring",
-      "Custom data retention controls",
-      "Network-level access control",
-      "IP allowlisting",
-      "HIPAA-ready offering available",
-      "Paw Security (beta)",
-      "Richer Enterprise RBAC roles (IT Admin, Security Admin, Department Manager)",
+      "Uniform $20/seat base rate — no Standard/Premium split",
+      "Autonomous Ticket System usage billed at pass-through API rates instead of tiered Ticket Balance pricing",
+      "Additional RBAC roles: IT Administrator, Security Administrator, Department Manager",
     ],
   },
 ];
@@ -135,6 +131,7 @@ function PlanCard({ plan }: { plan: Plan }) {
   return (
     <div className="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-8">
       <h2 className="text-xl font-semibold">{plan.label}</h2>
+      {plan.tagline && <p className="mt-1 text-sm text-neutral-500">{plan.tagline}</p>}
 
       {plan.seatOptions ? (
         <div className="mt-4 space-y-3">
@@ -149,16 +146,13 @@ function PlanCard({ plan }: { plan: Plan }) {
           ))}
           <p className="text-xs text-neutral-500">{plan.minSeats}–{plan.maxSeats} members · mix seat tiers freely across your organization</p>
         </div>
+      ) : plan.usageBilling ? (
+        <div className="mt-4 rounded-xl border border-neutral-800 p-4">
+          <span className="text-sm font-semibold text-neutral-200">{plan.usageBilling.label}</span>
+          <p className="mt-1 text-xs text-neutral-500">{plan.usageBilling.description}</p>
+        </div>
       ) : (
-        <>
-          <p className="mt-2 text-3xl font-bold">{formatPrice(plan)}</p>
-          {plan.usageBilling && (
-            <>
-              <p className="mt-2 text-sm font-medium text-blue-300">{plan.usageBilling.label}</p>
-              <p className="mt-1 text-xs text-neutral-500">{plan.usageBilling.description}</p>
-            </>
-          )}
-        </>
+        <p className="mt-2 text-3xl font-bold">{formatPrice(plan)}</p>
       )}
 
       <ul className="mt-6 space-y-2 text-sm text-neutral-400">

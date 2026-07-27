@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { app } from 'electron';
 import type { CreditBalance, CreditConsumptionRecord } from '../../shared/billing/BillingTypes';
+import type { AiUsageCategory } from '../../shared/billing/AiUsageCategories';
 
 const FILE_NAME = 'credits.json';
 const PERIOD_MS = 30 * 24 * 60 * 60 * 1000;
@@ -39,10 +40,10 @@ class CreditStore {
     fs.writeFileSync(this.file, JSON.stringify(this.state, null, 2), 'utf-8');
   }
 
-  consume(amount: number, reason: string): void {
+  consume(amount: number, reason: string, category?: AiUsageCategory): void {
     if (Date.now() > this.state.periodResetsAt) this.state = freshPeriod();
     this.state.usedThisPeriod += amount;
-    this.state.history.push({ amount, reason, at: Date.now() });
+    this.state.history.push({ amount, reason, at: Date.now(), category });
     if (this.state.history.length > MAX_HISTORY) this.state.history = this.state.history.slice(-MAX_HISTORY);
     this.save();
   }

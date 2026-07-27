@@ -17,6 +17,7 @@ import type { ExecutionRecord } from '../../../shared/actions/ExecutionRecordTyp
 import type { BrowserCapabilityReport } from '../../../shared/actions/BrowserCapabilityTypes';
 import type { CommunicationRuntimeEvent } from '../../../shared/communication/CommunicationTypes';
 import type { CreditBalance, EntitlementSnapshot, SubscriptionState } from '../../../shared/billing/BillingTypes';
+import type { AiUsageCategory } from '../../../shared/billing/AiUsageCategories';
 
 export function useIpcBridge() {
   const ipc = useMemo(() => getIpcBridge(), []);
@@ -97,8 +98,8 @@ export function useIpcBridge() {
 
       entitlementGetSnapshot: async (): Promise<EntitlementSnapshot> => ipc.entitlementGetSnapshot(),
       billingGetSubscription: async (): Promise<SubscriptionState> => ipc.billingGetSubscription(),
-      billingConsumeCredit: async (amount: number, reason: string): Promise<CreditBalance> =>
-        ipc.billingConsumeCredit(amount, reason),
+      billingConsumeCredit: async (amount: number, reason: string, category?: AiUsageCategory): Promise<CreditBalance> =>
+        ipc.billingConsumeCredit(amount, reason, category),
     }),
     [ipc]
   );

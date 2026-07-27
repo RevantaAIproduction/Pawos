@@ -19,11 +19,13 @@ import type {
   SubscriptionState,
   SubscriptionTierId,
   CreditBalance,
+  CreditConsumptionRecord,
   BillingCheckoutResult,
   CheckoutOptions,
   FeatureId,
   EntitlementSnapshot,
 } from '../../../shared/billing/BillingTypes';
+import type { AiUsageCategory } from '../../../shared/billing/AiUsageCategories';
 import type { PawModelId } from '../../../shared/ai/PawModelTypes';
 import type { OnboardingState } from '../../../shared/onboarding/OnboardingTypes';
 import type {
@@ -163,8 +165,9 @@ export function contextBridge() {
     billingSyncTierFromOrganization: async (orgTier: SubscriptionTierId): Promise<SubscriptionState> =>
       ipcApi.invoke('billing:syncFromOrganization', orgTier),
     billingGetCreditBalance: async (): Promise<CreditBalance> => ipcApi.invoke('billing:getCreditBalance'),
-    billingConsumeCredit: async (amount: number, reason: string): Promise<CreditBalance> =>
-      ipcApi.invoke('billing:consumeCredit', amount, reason),
+    billingConsumeCredit: async (amount: number, reason: string, category?: AiUsageCategory): Promise<CreditBalance> =>
+      ipcApi.invoke('billing:consumeCredit', amount, reason, category),
+    billingGetCreditHistory: async (): Promise<CreditConsumptionRecord[]> => ipcApi.invoke('billing:getCreditHistory'),
     entitlementGetSnapshot: async (): Promise<EntitlementSnapshot> => ipcApi.invoke('entitlement:getSnapshot'),
     entitlementIsModelAvailable: async (modelId: PawModelId): Promise<boolean> =>
       ipcApi.invoke('entitlement:isModelAvailable', modelId),

@@ -235,7 +235,7 @@ export function Dashboard({
             <ProjectsSection onOpenFolder={(path) => void ipc.executeAction({ type: 'openFolder', path })} />
           )}
           {active === 'apps' && <AppsHubSection onNavigate={setActive} />}
-          {active === 'analytics' && <AnalyticsSection />}
+          {active === 'analytics' && <AnalyticsSection user={user} />}
           {active === 'history' && <ConversationHistorySection />}
           {active === 'workHistory' && <WorkHistorySection />}
           {active === 'browserCapabilities' && <BrowserCapabilitiesSection />}

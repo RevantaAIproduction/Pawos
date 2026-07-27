@@ -13,6 +13,7 @@ import type { VisemeFrame } from './LipSyncTypes';
 import type { SubmittedInputContext } from './ConversationTypes';
 import { PAW_SYSTEM_PROMPT } from './systemPrompt';
 import type { EntitlementSnapshot, SubscriptionTierId } from '../../shared/billing/BillingTypes';
+import { categorizeTurn } from '../../shared/billing/AiUsageCategories';
 
 export function useConversationController(args?: {
   onStateChange?: (state: ConversationSnapshot['state']) => void;
@@ -150,6 +151,10 @@ export function useConversationController(args?: {
   const close = useCallback(() => runtimeRef.current?.close(), []);
   const toggle = useCallback(() => runtimeRef.current?.toggle(), []);
   const cancel = useCallback(() => runtimeRef.current?.cancel(), []);
+  // Real provenance for the Analytics dashboard's 'voice' category: undefined means the turn came
+  // through the push-to-talk speech pipeline rather than typed/pasted/attached text — see
+  // categorizeTurn in AiUsageCategories.ts.
+  const lastInputSourceRef = useRef<SubmittedInputContext['source']>(undefined);
   const submitTranscript = useCallback(
     (text: string, context?: SubmittedInputContext) => {
       const current = entitlementRef.current;
@@ -157,6 +162,7 @@ export function useConversationController(args?: {
         setCreditsNoticeTier(current.tier);
         return;
       }
+      lastInputSourceRef.current = context?.source;
       runtimeRef.current?.submitTranscript(text, context);
     },
     []
@@ -164,11 +170,17 @@ export function useConversationController(args?: {
 
   // A turn only reaches 'completed' after a real reasoning call succeeded
   // (Go-tier/exhausted-credit turns are stopped above and never reach the
-  // runtime), so this is the one honest point to record usage.
+  // runtime), so this is the one honest point to record usage. The category
+  // is derived from the just-completed turn's real Task Card actions (or its
+  // real input source when no action ran) — never a guessed/fabricated label.
   useEffect(() => {
     if (snapshot.state === 'completed') {
-      ipc.billingConsumeCredit(1, 'conversation-turn').then(() => refreshEntitlement()).catch(() => {});
+      const lastTaskMessage = [...snapshot.messages].reverse().find((m) => m.task);
+      const actionTypes = lastTaskMessage?.task?.actions.map((a) => a.type) ?? [];
+      const category = categorizeTurn(actionTypes, lastInputSourceRef.current);
+      ipc.billingConsumeCredit(1, 'conversation-turn', category).then(() => refreshEntitlement()).catch(() => {});
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snapshot.state, ipc, refreshEntitlement]);
   const speak = useCallback((text: string) => runtimeRef.current?.speak(text), []);
 

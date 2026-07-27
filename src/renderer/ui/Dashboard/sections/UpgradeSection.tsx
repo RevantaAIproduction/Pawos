@@ -126,6 +126,9 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
                 </div>
               )}
               <h3 className={styles.cardTitle}>{plan.label}</h3>
+              {plan.tagline && (
+                <p className={styles.cardBody} style={{ fontSize: 12.5, marginTop: 2 }}>{plan.tagline}</p>
+              )}
 
               {plan.seatOptions ? (
                 <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -147,18 +150,22 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
                     {plan.minSeats}–{plan.maxSeats} members · mix seat types freely across your organization
                   </p>
                 </div>
+              ) : plan.usageBilling ? (
+                <div
+                  style={{
+                    marginTop: 10,
+                    borderRadius: 10,
+                    border: '1px solid rgba(var(--pawos-overlay-rgb), 0.1)',
+                    padding: '8px 10px',
+                  }}
+                >
+                  <span style={{ fontSize: 12.5, fontWeight: 600 }}>{plan.usageBilling.label}</span>
+                  <p className={styles.cardBody} style={{ fontSize: 11.5, marginTop: 2 }}>{plan.usageBilling.description}</p>
+                </div>
               ) : (
-                <>
-                  <p className={styles.cardBody} style={{ fontSize: 20, fontWeight: 700, color: '#f5f5f7', marginTop: 6 }}>
-                    {formatPrice(plan)}
-                  </p>
-                  {plan.usageBilling && (
-                    <>
-                      <p className={styles.cardBody} style={{ fontSize: 12.5, fontWeight: 600, marginTop: 6 }}>{plan.usageBilling.label}</p>
-                      <p className={styles.cardBody} style={{ fontSize: 11.5, marginTop: 2 }}>{plan.usageBilling.description}</p>
-                    </>
-                  )}
-                </>
+                <p className={styles.cardBody} style={{ fontSize: 20, fontWeight: 700, color: '#f5f5f7', marginTop: 6 }}>
+                  {formatPrice(plan)}
+                </p>
               )}
 
               <ul style={{ margin: '14px 0 0', paddingLeft: 18 }}>

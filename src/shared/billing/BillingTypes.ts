@@ -52,6 +52,8 @@ export type UsageBillingDescriptor = {
 export type PricingPlan = {
   id: SubscriptionTierId;
   label: string;
+  /** One-line positioning under the plan name (e.g. "Predictable usage per seat" for Team, "Flexible pooled usage" for Enterprise) — cosmetic only, no pricing logic depends on it. */
+  tagline?: string;
   /** null = price not yet decided — "Business Configuration Required". Never a fabricated number. For Team this is the Standard seat price; see seatOptions for the full breakdown. For Enterprise this is the per-seat base fee (usage is billed separately, see usageBilling). */
   priceCents: number | null;
   currency: string;
@@ -98,6 +100,10 @@ export type CreditConsumptionRecord = {
   amount: number;
   reason: string;
   at: number;
+  /** Absent on records written before category tracking existed — the Analytics dashboard treats
+   *  a missing category as 'chat' rather than fabricating a more specific one. See
+   *  src/shared/billing/AiUsageCategories.ts for how this is derived. */
+  category?: import('./AiUsageCategories').AiUsageCategory;
 };
 
 export type BillingCheckoutResult = { ok: true; checkoutUrl: string } | { ok: false; reason: string };

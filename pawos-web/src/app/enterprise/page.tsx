@@ -17,9 +17,7 @@ const CAPABILITIES = [
   { title: "Audit log", body: "A durable, exportable audit log of infrastructure-affecting actions for compliance evidence." },
   { title: "SSO (in progress)", body: "Single sign-on enablement for organizations — see our security documentation for current status and honest capability notes." },
   { title: "Seat-based billing", body: "Team ($/seat/mo, 2–150 seats) and Enterprise ($20/seat + tax, 20+ seats, usage billed at API rates) — billed per member, not per device, self-serve from inside the app." },
-  { title: "Spend limits & fine-grained RBAC", body: "Enterprise admins set user and org-level spend limits, with role-based access control down to individual permissions." },
-  { title: "SCIM & compliance", body: "System for Cross-domain Identity Management (SCIM), a compliance API for observability and monitoring, and custom data retention controls." },
-  { title: "Network-level access control", body: "IP allowlisting and network-level access control, plus a HIPAA-ready offering where required." },
+  { title: "Spend limits & additional RBAC roles", body: "Admins allocate and cap credit spend per member or department from the shared Credit Pool. Enterprise adds three roles on top of Team's RBAC: IT Administrator, Security Administrator, and Department Manager." },
 ];
 
 const SCALE = [
