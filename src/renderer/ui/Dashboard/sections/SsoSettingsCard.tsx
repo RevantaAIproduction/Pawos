@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
 import { permissionService } from '../../../organization/PermissionService';
+import { Toggle } from '../Toggle';
 
 function getErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -97,12 +98,7 @@ export function SsoSettingsCard({ organizationId, tier }: { organizationId: stri
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
-            <input
-              type="checkbox"
-              checked={config.enabled}
-              disabled={!canManage || saving}
-              onChange={(e) => save({ ...config, enabled: e.target.checked })}
-            />
+            <Toggle checked={config.enabled} disabled={!canManage || saving} onChange={(checked) => save({ ...config, enabled: checked })} />
             <span>We want SSO enabled for this organization</span>
           </label>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

@@ -1,5 +1,6 @@
 import { connectorRegistry } from './ConnectorRegistry';
-import type { ConnectorConnection, ConnectivityScope } from '../../shared/connectivity/ConnectivityTypes';
+import type { ConnectorConnection, ConnectorStatus, ConnectivityScope } from '../../shared/connectivity/ConnectivityTypes';
+import { connectorLifecycleToConnectionStatus } from '../../shared/connectivity/ConnectivityTypes';
 
 function scopeKey(scope: ConnectivityScope): string {
   return `${scope.userId}:${scope.organizationId ?? ''}`;
@@ -31,12 +32,12 @@ class ConnectionManager {
     return `${connectorId}::${scopeKey(scope)}`;
   }
 
-  async connect(connectorId: string, scope: ConnectivityScope): Promise<ConnectorConnection> {
+  async connect(connectorId: string, scope: ConnectivityScope, opts?: { incrementalCapabilities?: string[] }): Promise<ConnectorConnection> {
     const sdk = connectorRegistry.get(connectorId);
     if (!sdk) {
       throw new Error(`Cannot connect — no connector registered with id '${connectorId}'.`);
     }
-    const connection = await sdk.connect(scope);
+    const connection = await sdk.connect(scope, opts);
     this.connections.set(this.connectionId(connectorId, scope), connection);
     return connection;
   }
@@ -51,6 +52,69 @@ class ConnectionManager {
 
   async getStatus(connectionId: string): Promise<ConnectorConnection | undefined> {
     return this.findById(connectionId);
+  }
+
+  /**
+   * Strictly read-only connector-level status discovery — the one method the Connections UI is
+   * allowed to call on mount/repeated visits (see ConnectorSDK.getStatus's own contract). Delegates
+   * straight to `sdk.getStatus()`, then mirrors the result into the in-memory connections map so
+   * `listConnections()`/`getStatus(connectionId)` stay consistent with what was just read.
+   */
+  async getConnectorStatus(connectorId: string, scope: ConnectivityScope): Promise<ConnectorStatus> {
+    const sdk = connectorRegistry.get(connectorId);
+    if (!sdk) {
+      throw new Error(`Cannot get status — no connector registered with id '${connectorId}'.`);
+    }
+    const status = await sdk.getStatus(scope);
+    this.upsertFromStatus(connectorId, scope, status);
+    return status;
+  }
+
+  /**
+   * The one explicit restoration entry point — activates an already-obtained credential into a
+   * connector's in-memory state via its existing `authenticate()` primitive. Never opens OAuth,
+   * never mutates a stored credential (the credential itself was already read elsewhere — by the
+   * renderer from Supabase for a signed-in user, or by main.ts's guest-mode startup code from the
+   * local guest store). Intended to be called once per session (a one-time bootstrap), never from
+   * a page-mount effect — see `useConnectivityBootstrap` on the renderer side.
+   *
+   * After authenticate() activates the credential, this also does one best-effort `sdk.refresh()`
+   * call. This matters for OAuth connectors whose persisted-credential row doesn't carry every
+   * live field the in-memory session normally would (e.g. `grantedScopes` isn't part of the
+   * `connectivity_credentials` Supabase schema today) — refresh() re-derives that live state from
+   * the provider itself using the already-restored refresh token, silently, with no browser
+   * involved. A refresh failure is not fatal to the restore: authenticate() already succeeded, and
+   * getStatus() below reports whatever state refresh() left behind (including `expired`/
+   * `requiresReauth` if the refresh token itself was rejected).
+   */
+  async restore(connectorId: string, scope: ConnectivityScope, credential: unknown): Promise<ConnectorStatus> {
+    const sdk = connectorRegistry.get(connectorId);
+    if (!sdk) {
+      throw new Error(`Cannot restore — no connector registered with id '${connectorId}'.`);
+    }
+    await sdk.authenticate(scope, credential);
+    await sdk.refresh(scope).catch(() => {});
+    const status = await sdk.getStatus(scope);
+    this.upsertFromStatus(connectorId, scope, status);
+    return status;
+  }
+
+  private upsertFromStatus(connectorId: string, scope: ConnectivityScope, status: ConnectorStatus): ConnectorConnection {
+    const key = this.connectionId(connectorId, scope);
+    const existing = this.connections.get(key);
+    const updated: ConnectorConnection = {
+      id: existing?.id ?? `${connectorId}:${scope.userId}`,
+      connectorId,
+      scope,
+      status: connectorLifecycleToConnectionStatus(status.state),
+      grantedPermissions: status.capabilities,
+      lastSyncAt: status.lastSyncAt ? Date.parse(status.lastSyncAt) : existing?.lastSyncAt,
+      lastHealthCheckAt: existing?.lastHealthCheckAt,
+      healthStatus: existing?.healthStatus,
+      metadata: existing?.metadata ?? {},
+    };
+    this.connections.set(key, updated);
+    return updated;
   }
 
   async checkHealth(connectionId: string): Promise<ConnectorConnection> {

@@ -1,6 +1,7 @@
 import { connectorRegistry } from './ConnectorRegistry';
 import { credentialVaultBridge } from './CredentialVaultBridge';
 import type { ConnectivityScope, ApiTokenValidationResult } from '../../shared/connectivity/ConnectivityTypes';
+import type { ConnectorSDK } from '../../shared/connectivity/ConnectorSDK';
 
 /**
  * The API-token counterpart to OAuthManager — for connectors whose
@@ -20,7 +21,7 @@ import type { ConnectivityScope, ApiTokenValidationResult } from '../../shared/c
  * comes from the vault, not reimplemented here).
  */
 
-function requireApiTokenConnector(connectorId: string): ReturnType<typeof connectorRegistry.get> {
+function requireApiTokenConnector(connectorId: string): ConnectorSDK {
   const sdk = connectorRegistry.get(connectorId);
   if (!sdk) {
     throw new Error(`No connector registered with id '${connectorId}'.`);
@@ -66,9 +67,24 @@ class ApiTokenManager {
 
   /** Saving is a real configuration error if the connector isn't registered
    *  or doesn't use API-token auth — unlike validate(), which is answering
-   *  a question, this is performing an action, so it throws. */
+   *  a question, this is performing an action, so it throws.
+   *
+   *  Also drives the connector's own `authenticate()` — previously this method only persisted the
+   *  raw string, so `ConnectionManager.connect()` (which calls `sdk.connect()` directly, never
+   *  `authenticate()`) would fail for any connector whose `connect()` requires a prior authenticate
+   *  call (every real apiToken connector today, e.g. Jira). `token` is parsed as JSON first, since a
+   *  connector whose `apiTokenHelp.additionalFields` is set (Jira's site URL + email) is saved as a
+   *  JSON-encoded credential object; a plain string (a bare token, no additional fields declared)
+   *  falls back to `{ apiToken: token }` — the shape a connector's own `authenticate()` should read. */
   async save(connectorId: string, scope: ConnectivityScope, token: string): Promise<void> {
-    requireApiTokenConnector(connectorId);
+    const sdk = requireApiTokenConnector(connectorId);
+    let credential: unknown;
+    try {
+      credential = JSON.parse(token);
+    } catch {
+      credential = { apiToken: token };
+    }
+    await sdk.authenticate(scope, credential);
     await credentialVaultBridge.store(connectorId, scope, token, 'apiToken');
   }
 

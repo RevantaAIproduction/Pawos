@@ -7,6 +7,7 @@ import { TTS_PROVIDER_CATALOG, OPENAI_VOICE_PRESETS, type TtsProviderId } from '
 import { listBrowserVoices } from '../../../conversation/SpeechProviders';
 import { voiceCloningProviderRegistry } from '../../../companion/voiceCloning/VoiceCloningProviderRegistry';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
+import { Toggle } from '../Toggle';
 
 type EditorTab = 'appearance' | 'voice' | 'behavior' | 'personality' | 'memory';
 
@@ -321,7 +322,7 @@ function VoiceCloningSection() {
       <input type="file" accept="audio/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} style={{ marginTop: 4 }} />
 
       <label className={styles.cardBody} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
-        <input type="checkbox" checked={consentGiven} onChange={(e) => setConsentGiven(e.target.checked)} />
+        <Toggle size="sm" checked={consentGiven} onChange={setConsentGiven} />
         I own the rights to this voice and consent to it being used to create a synthetic voice.
       </label>
 
@@ -444,13 +445,8 @@ function MemoryTab({
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <input
-          id="memory-enabled"
-          type="checkbox"
-          checked={profile.memory.enabled}
-          onChange={(e) => onSetEnabled(e.target.checked)}
-        />
-        <label htmlFor="memory-enabled" className={styles.cardBody}>
+        <Toggle checked={profile.memory.enabled} onChange={onSetEnabled} label="Remember goals and routines for this companion" />
+        <label className={styles.cardBody}>
           Remember goals and routines for this companion
         </label>
       </div>

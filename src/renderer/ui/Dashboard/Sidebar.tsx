@@ -1,8 +1,20 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import styles from './dashboard.module.css';
 import type { SectionId } from './sections';
 import { HomeIcon, TalkIcon, CompanionIcon, HistoryIcon, WorkIcon } from './NavIcons';
 import { ProfileMenu, type ProfileMenuAction } from './ProfileMenu';
+
+const COLLAPSE_STORAGE_KEY = 'pawos.sidebarCollapsed';
+
+function CollapseToggleIcon({ collapsed }: { collapsed: boolean }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
+      <path d="M9.5 4.5v15" />
+      {collapsed ? <path d="M14 9.5 17 12l-3 2.5" /> : <path d="M16 9.5 13 12l3 2.5" />}
+    </svg>
+  );
+}
 
 type NavItem = { id: SectionId; label: string; icon: React.ReactNode };
 
@@ -39,15 +51,28 @@ function AnalyticsIcon() {
   );
 }
 
-function NavButton({ item, active, onSelect, badge }: { item: NavItem; active: SectionId; onSelect: (id: SectionId) => void; badge?: React.ReactNode }) {
+function NavButton({
+  item,
+  active,
+  onSelect,
+  badge,
+  collapsed,
+}: {
+  item: NavItem;
+  active: SectionId;
+  onSelect: (id: SectionId) => void;
+  badge?: React.ReactNode;
+  collapsed: boolean;
+}) {
   return (
     <button
       type="button"
       className={`${styles.navItem} ${active === item.id ? styles.navItemActive : ''}`}
       onClick={() => onSelect(item.id)}
+      title={collapsed ? item.label : undefined}
     >
       <span className={styles.navIcon}>{item.icon}</span>
-      {item.label}
+      {!collapsed && item.label}
       {badge}
     </button>
   );
@@ -72,11 +97,35 @@ export function Sidebar({
   onProfileAction: (action: ProfileMenuAction) => void;
   onOpenUrl: (url: string) => void;
 }) {
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(COLLAPSE_STORAGE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(COLLAPSE_STORAGE_KEY, collapsed ? '1' : '0');
+    } catch {
+      // best-effort — a private/restricted profile just won't remember the preference
+    }
+  }, [collapsed]);
+
   return (
-    <aside className={styles.sidebar}>
+    <aside className={`${styles.sidebar} ${collapsed ? styles.sidebarCollapsed : ''}`}>
       <div className={styles.brand}>
         <span className={styles.brandDot} />
-        PawOS
+        {!collapsed && 'PawOS'}
+        <button
+          type="button"
+          className={styles.sidebarCollapseButton}
+          onClick={() => setCollapsed((v) => !v)}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          <CollapseToggleIcon collapsed={collapsed} />
+        </button>
       </div>
 
       <nav className={styles.nav}>
@@ -86,6 +135,7 @@ export function Sidebar({
             item={item}
             active={active}
             onSelect={onSelect}
+            collapsed={collapsed}
             badge={
               item.id === 'talk' ? (
                 <span
@@ -101,7 +151,7 @@ export function Sidebar({
         <div className={styles.navDivider} />
 
         {SECONDARY_NAV.map((item) => (
-          <NavButton key={item.id} item={item} active={active} onSelect={onSelect} />
+          <NavButton key={item.id} item={item} active={active} onSelect={onSelect} collapsed={collapsed} />
         ))}
       </nav>
 
@@ -112,6 +162,7 @@ export function Sidebar({
           isGuest={isGuest}
           onAction={onProfileAction}
           onOpenUrl={onOpenUrl}
+          compact={collapsed}
         />
       </div>
     </aside>

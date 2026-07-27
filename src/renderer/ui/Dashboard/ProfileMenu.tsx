@@ -1,17 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import styles from './dashboard.module.css';
-import { SettingsIcon, LanguageIcon, HelpIcon, InfoIcon, ChevronRightIcon } from './NavIcons';
+import { SettingsIcon, LanguageIcon, HelpBubbleIcon, InfoIcon, ChevronRightIcon } from './NavIcons';
 import { ipc } from '../../services/ipc/ipcBridgeImplementation';
 
-export type ProfileMenuAction = 'settings' | 'upgrade' | 'logout';
+export type ProfileMenuAction = 'settings' | 'upgrade' | 'logout' | 'help';
 
 /**
  * Real, usable languages — each is a genuine BCP-47 code passed straight to
  * the Web Speech API for push-to-talk speech recognition (see
  * SpeechProviders.ts), persisted via Settings so it survives a restart.
- * This governs speech-to-text language only, not full UI translation
- * (PawOS has no i18n string system yet — every label you see stays
- * English regardless of this setting).
+ * Also editable from Settings → Preferences → General — both surfaces read
+ * and write the same persisted setting, so there's nothing to keep in sync.
  */
 const LANGUAGES: { label: string; code: string }[] = [
   { label: 'English (United States)', code: 'en-US' },
@@ -23,13 +22,13 @@ const LANGUAGES: { label: string; code: string }[] = [
 ];
 
 const LEARN_MORE_LINKS = [
-  { label: 'About PawOS', url: 'https://revantaai.com/about' },
-  { label: 'Documentation', url: 'https://revantaai.com/docs' },
-  { label: 'Privacy Policy', url: 'https://revantaai.com/privacy' },
-  { label: 'Terms of Service', url: 'https://revantaai.com/terms' },
+  { label: 'About PawOS', url: 'https://pawos.revantaai.com/about' },
+  { label: 'Documentation', url: 'https://pawos.revantaai.com/docs' },
+  { label: 'Privacy Policy', url: 'https://pawos.revantaai.com/legal/privacy-policy' },
+  { label: 'Terms of Service', url: 'https://pawos.revantaai.com/legal/terms' },
 ];
 
-type PanelView = 'main' | 'language' | 'learnMore' | 'help';
+type PanelView = 'main' | 'language' | 'learnMore';
 
 /**
  * Bottom-of-sidebar account control, behaving like a desktop app's account
@@ -44,12 +43,15 @@ export function ProfileMenu({
   isGuest,
   onAction,
   onOpenUrl,
+  compact,
 }: {
   userName: string;
   tierLabel: string;
   isGuest: boolean;
   onAction: (action: ProfileMenuAction) => void;
   onOpenUrl: (url: string) => void;
+  /** Sidebar is collapsed to icons-only — show just the avatar in the trigger, no name/tier text. */
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<PanelView>('main');
@@ -112,10 +114,9 @@ export function ProfileMenu({
                 Language
                 <span className={styles.profileMenuItemChevron}><ChevronRightIcon /></span>
               </button>
-              <button type="button" role="menuitem" className={styles.profileMenuItem} onClick={() => setView('help')}>
-                <span className={styles.profileMenuItemIcon}><HelpIcon /></span>
+              <button type="button" role="menuitem" className={styles.profileMenuItem} onClick={() => { close(); onAction('help'); }}>
+                <span className={styles.profileMenuItemIcon}><HelpBubbleIcon /></span>
                 Get help
-                <span className={styles.profileMenuItemChevron}><ChevronRightIcon /></span>
               </button>
 
               <div className={styles.profileMenuDivider} />
@@ -158,33 +159,6 @@ export function ProfileMenu({
             </>
           )}
 
-          {view === 'help' && (
-            <>
-              <button type="button" className={styles.profileMenuBack} onClick={() => setView('main')}>
-                ‹ Get help
-              </button>
-              <div className={styles.profileMenuDivider} />
-              <p className={styles.profileMenuHelpBody}>
-                Need a hand with PawOS? Browse the documentation or reach out — we read every
-                message.
-              </p>
-              <button
-                type="button"
-                className={styles.profileMenuItem}
-                onClick={() => { close(); onOpenUrl('https://revantaai.com/docs'); }}
-              >
-                Documentation
-              </button>
-              <button
-                type="button"
-                className={styles.profileMenuItem}
-                onClick={() => { close(); onOpenUrl('mailto:support@revantaai.com'); }}
-              >
-                Contact support
-              </button>
-            </>
-          )}
-
           {view === 'learnMore' && (
             <>
               <button type="button" className={styles.profileMenuBack} onClick={() => setView('main')}>
@@ -205,12 +179,14 @@ export function ProfileMenu({
           )}
         </div>
       )}
-      <button type="button" className={styles.userChip} onClick={() => setOpen((v) => !v)}>
+      <button type="button" className={styles.userChip} onClick={() => setOpen((v) => !v)} title={compact ? userName : undefined}>
         <span className={styles.userAvatar}>{initial}</span>
-        <div style={{ minWidth: 0 }}>
-          <div className={styles.userName}>{userName}</div>
-          <div className={styles.profileMenuTierInline}>{isGuest ? 'Guest' : tierLabel}</div>
-        </div>
+        {!compact && (
+          <div style={{ minWidth: 0 }}>
+            <div className={styles.userName}>{userName}</div>
+            <div className={styles.profileMenuTierInline}>{isGuest ? 'Guest' : tierLabel}</div>
+          </div>
+        )}
       </button>
     </div>
   );

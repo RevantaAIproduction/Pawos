@@ -7,7 +7,7 @@ type ReferralRow = {
 };
 
 type RewardRow = {
-  id: string; referrer_user_id: string; milestone_index: number; credits_granted: number;
+  id: string; referrer_user_id: string; milestone_index: number;
   amount_usd: number; granted_at: string;
 };
 
@@ -22,7 +22,7 @@ function toReferral(row: ReferralRow): Referral {
 function toReward(row: RewardRow): ReferralReward {
   return {
     id: row.id, referrerUserId: row.referrer_user_id, milestoneIndex: row.milestone_index,
-    creditsGranted: row.credits_granted, amountUsd: row.amount_usd, grantedAt: row.granted_at,
+    amountUsd: row.amount_usd, grantedAt: row.granted_at,
   };
 }
 

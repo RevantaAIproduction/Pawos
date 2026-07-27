@@ -25,10 +25,13 @@ import { codingModeStore } from './execution/CodingModeStore';
 import { platformPairingStore } from './pairing/PlatformPairingStore';
 import { deviceIdentityStore } from './device/DeviceIdentityStore';
 import { pricingConfigStore } from './billing/PricingConfigStore';
+import { ticketPricingConfigStore } from './billing/TicketPricingConfigStore';
 import { subscriptionStore } from './billing/SubscriptionStore';
 import { creditStore } from './billing/CreditStore';
 import { onboardingStore } from './onboarding/OnboardingStore';
 import { initInfrastructureConnectors } from './infrastructure/bootstrap';
+import { requirementGate } from './runtime/RequirementGate';
+import { capabilityRequirementResolver } from './connectivity/CapabilityRequirementResolver';
 import { engineeringMemoryStore } from './infrastructure/EngineeringMemoryStore';
 import { infraModeStore } from './infrastructure/InfraModeStore';
 import { provisionedInstanceStore } from './infrastructure/ProvisionedInstanceStore';
@@ -37,6 +40,10 @@ import { feedbackStore } from './feedback/FeedbackStore';
 import { helpActivityStore } from './help/HelpActivityStore';
 import { supportConversationStore } from './help/SupportConversationStore';
 import { discoveryService } from './connectivity/DiscoveryService';
+import { connectorRegistry } from './connectivity/ConnectorRegistry';
+import { jiraConnectorSDK } from './connectivity/connectors/JiraConnectorSDK';
+import { googleWorkspaceConnectorSDK } from './connectivity/connectors/GoogleWorkspaceConnectorSDK';
+import { guestConnectorCredentialStore } from './infrastructure/GuestConnectorCredentialStore';
 import { startRatingPromptScheduler } from './feedback/RatingPromptScheduler';
 // One constant size, always — the overlay window itself never resizes at
 // runtime. A native window resize inherently reads as "an application
@@ -67,36 +74,25 @@ let envVars: Record<string, string> = {};
 // before app.whenReady(). The unpackaged (`electron .`) form needs the exe
 // path + script arg explicitly — Windows can't otherwise reconstruct how to
 // relaunch a dev build from a protocol click.
-// [DEBUG-TEMP] verbose logging while verifying the pawos:// handoff end-to-end — remove once confirmed working live.
-console.log('[protocol] process.defaultApp:', process.defaultApp, 'argv:', JSON.stringify(process.argv));
 if (process.defaultApp) {
   const scriptArg = process.argv[1];
   if (scriptArg) {
-    const registered = app.setAsDefaultProtocolClient('pawos', process.execPath, [path.resolve(scriptArg)]);
-    console.log('[protocol] setAsDefaultProtocolClient (dev mode) ->', registered, 'exe:', process.execPath, 'arg:', path.resolve(scriptArg));
-  } else {
-    console.log('[protocol] no scriptArg in argv, could not register protocol client');
+    app.setAsDefaultProtocolClient('pawos', process.execPath, [path.resolve(scriptArg)]);
   }
 } else {
-  const registered = app.setAsDefaultProtocolClient('pawos');
-  console.log('[protocol] setAsDefaultProtocolClient (packaged) ->', registered);
+  app.setAsDefaultProtocolClient('pawos');
 }
-console.log('[protocol] isDefaultProtocolClient("pawos") ->', app.isDefaultProtocolClient('pawos'));
 
 // Windows/Linux deliver a protocol click as a brand-new process launch with
 // the URL in argv — without a single-instance lock, that would open a
 // second, redundant copy of PawOS instead of handing the URL to the one
 // already running (and already holding the pending OAuth promise).
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
-console.log('[protocol] gotSingleInstanceLock:', gotSingleInstanceLock);
 if (!gotSingleInstanceLock) {
-  console.log('[protocol] this instance did not get the lock — quitting (a primary instance should already be running)');
   app.quit();
 } else {
   app.on('second-instance', (_event, argv) => {
-    console.log('[protocol] second-instance event, argv:', JSON.stringify(argv));
     const url = extractProtocolUrlFromArgv(argv);
-    console.log('[protocol] extracted url from second-instance argv:', url);
     if (url) handleOAuthProtocolUrl(url);
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
@@ -108,7 +104,6 @@ if (!gotSingleInstanceLock) {
 
 // macOS delivers a protocol click via this event instead of argv/second-instance.
 app.on('open-url', (event, url) => {
-  console.log('[protocol] open-url event:', url);
   event.preventDefault();
   handleOAuthProtocolUrl(url);
 });
@@ -282,6 +277,13 @@ function createAppTray() {
 }
 
 app.whenReady().then(async () => {
+  // Cold start via a pawos:// click (app wasn't already running): Windows/
+  // Linux launch this as a brand-new process with the URL in argv, but that
+  // never fires 'second-instance' (nothing was running to receive it) — only
+  // this process's own process.argv has it.
+  const coldStartUrl = extractProtocolUrlFromArgv(process.argv);
+  if (coldStartUrl) handleOAuthProtocolUrl(coldStartUrl);
+
   // Without an explicit handler, Electron denies 'media' (microphone)
   // permission requests by default for file://-loaded content — which is
   // how every window here loads. That silently breaks SpeechRecognition
@@ -313,6 +315,7 @@ app.whenReady().then(async () => {
   platformPairingStore.init();
   deviceIdentityStore.init();
   pricingConfigStore.init();
+  ticketPricingConfigStore.init();
   subscriptionStore.init();
   creditStore.init();
   onboardingStore.init();
@@ -323,12 +326,43 @@ app.whenReady().then(async () => {
   feedbackStore.init();
   helpActivityStore.init();
   supportConversationStore.init();
+  guestConnectorCredentialStore.init();
 
   // Connectivity Runtime — populates the registry with real, locally-
   // detected tools (Git, Docker, kubectl, VS Code, etc.) so the
   // Integrations Settings page has real data from first launch, not an
   // always-empty "Detected on this machine" section.
   discoveryService.discoverAndRegister().catch((e) => console.error('[connectivity] discoverAndRegister failed:', e));
+
+  // Connector #1: Jira — the first real ConnectorSDK, bridging this previously-empty registry
+  // into the Infrastructure Runtime that InvestigateTicketPlugin actually reads from.
+  connectorRegistry.register(jiraConnectorSDK);
+
+  // Restart durability for Guest-mode sessions (no Supabase session to read a Vault-stored
+  // credential from) — a signed-in user's Jira credential is instead reconnected by the renderer
+  // once it confirms an authenticated session, via the same connectJiraCredential action below.
+  const savedGuestJira = guestConnectorCredentialStore.load('jira');
+  if (savedGuestJira) {
+    jiraConnectorSDK.authenticate({ userId: 'guest' }, savedGuestJira).catch((e) => console.error('[connectivity] Jira reconnect from Guest store failed:', e));
+  }
+
+  // Connector #2: Google Workspace — first OAuth2/PKCE ConnectorSDK, bridging Drive/Gmail/
+  // Calendar/Contacts into the pre-existing officeConnectorRegistry scaffold (OFF-1).
+  connectorRegistry.register(googleWorkspaceConnectorSDK);
+
+  // Guest-mode restart durability, same shape as Jira's above — the credential bundle is
+  // JSON-packed into one field since GuestConnectorCredentialStore is a flat string map.
+  const savedGuestGoogleWorkspace = guestConnectorCredentialStore.load('googleWorkspace');
+  if (savedGuestGoogleWorkspace?.bundle) {
+    try {
+      const credential = JSON.parse(savedGuestGoogleWorkspace.bundle);
+      googleWorkspaceConnectorSDK
+        .authenticate({ userId: 'guest' }, credential)
+        .catch((e) => console.error('[connectivity] Google Workspace reconnect from Guest store failed:', e));
+    } catch (e) {
+      console.error('[connectivity] Google Workspace Guest store credential was corrupt:', e);
+    }
+  }
 
   // .env next to the installed exe (packaged) or at the repo root (dev
   // checkout, cwd when running `electron .`) — lets the user drop keys in a
@@ -337,6 +371,17 @@ app.whenReady().then(async () => {
   // comments for why these specific values are safe to ship); a real .env
   // still overrides them for anyone pointing at a different backend.
   envVars = { ...PUBLIC_ENV_DEFAULTS, ...readEnvFile([path.dirname(app.getPath('exe')), process.cwd(), app.getAppPath()]) };
+
+  // Real bug fix, not a redesign: readEnvFile() only ever returned a plain object — nothing
+  // anywhere copied it into process.env. Every process.env[...] lookup elsewhere in the app
+  // (OAuthManager's clientIdEnvVar, WebhookManager's CONNECTIVITY_PUBLIC_BASE_URL_ENV_VAR,
+  // communication adapters' credentialEnvVar) was silently unreachable via the app's own .env
+  // file convention — it only worked if the value happened to already be a real OS-level
+  // environment variable. This was latent/never-hit until GoogleWorkspaceConnectorSDK became the
+  // first registered connector to actually declare an `oauth.clientIdEnvVar`. `.env` file values
+  // win over whatever the OS process already had, matching this object's own existing precedence
+  // (PUBLIC_ENV_DEFAULTS < .env file).
+  Object.assign(process.env, envVars);
 
   if (envVars.SMTP_HOST && envVars.SMTP_USER && envVars.SMTP_PASS && envVars.EMAIL_FROM) {
     emailService.init({
@@ -350,6 +395,11 @@ app.whenReady().then(async () => {
   }
 
   initInfrastructureConnectors(envVars);
+
+  // RequirementGate — the runtime's general requirement-resolution engine. Only one resolver
+  // exists today (capability access, checked against the Infrastructure Runtime registry above);
+  // future resolver kinds (confirmation/approval/selection/etc.) register here the same way.
+  requirementGate.registerResolver(capabilityRequirementResolver);
 
   createMainWindow();
   createAppTray();

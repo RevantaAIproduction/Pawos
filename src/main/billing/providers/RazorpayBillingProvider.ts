@@ -18,7 +18,7 @@ import type { BillingCheckoutResult, CheckoutOptions, SubscriptionTierId } from 
  * WEB_CHECKOUT_BASE_URL. Flipping it before that would send users to an
  * unreachable domain instead of a clear in-app message, which is worse.
  */
-const WEB_CHECKOUT_BASE_URL = 'https://revantaai.com/checkout';
+const WEB_CHECKOUT_BASE_URL = 'https://pawos.revantaai.com/checkout';
 const CHECKOUT_ROUTE_LIVE = false; // flip true once pawos-web is deployed and reachable at WEB_CHECKOUT_BASE_URL
 
 export class RazorpayBillingProvider implements BillingProvider {
@@ -47,19 +47,19 @@ export class RazorpayBillingProvider implements BillingProvider {
 export const razorpayBillingProvider = new RazorpayBillingProvider();
 
 /**
- * Prepaid Autonomous Engineering Task credit purchases — same
- * deployment-readiness gate as createCheckoutSession above, since it's the
- * same pawos-web deployment (/checkout/credits) that must actually be
- * live. Not part of the BillingProvider interface since it's a one-time
- * purchase, not a subscription-tier checkout — no NoOp/registry indirection
- * needed for a single real provider.
+ * Ticket Balance top-ups — same deployment-readiness gate as
+ * createCheckoutSession above, since it's the same pawos-web deployment
+ * (/checkout/credits) that must actually be live. Not part of the
+ * BillingProvider interface since it's a one-time dollar top-up, not a
+ * subscription-tier checkout — no NoOp/registry indirection needed for a
+ * single real provider.
  */
-export function createCreditsCheckoutUrl(credits: number, organizationId?: string, callbackUrl?: string): BillingCheckoutResult {
+export function createCreditsCheckoutUrl(amountUsd: number, organizationId?: string, callbackUrl?: string): BillingCheckoutResult {
   if (!CHECKOUT_ROUTE_LIVE) {
     return { ok: false, reason: 'Website checkout is not live yet. Business Configuration Required.' };
   }
   const url = new URL(`${WEB_CHECKOUT_BASE_URL}/credits`);
-  url.searchParams.set('credits', String(credits));
+  url.searchParams.set('amountUsd', String(amountUsd));
   if (organizationId) url.searchParams.set('organizationId', organizationId);
   if (callbackUrl) url.searchParams.set('callback', callbackUrl);
   return { ok: true, checkoutUrl: url.toString() };

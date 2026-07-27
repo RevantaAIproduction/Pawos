@@ -268,10 +268,18 @@ export function WorkspaceRuntime({
   task,
   onRetryAction,
   onOpenPath,
+  onConnectCapability,
 }: {
   task: ConversationTaskRecord;
   onRetryAction?: (taskId: string, actionId: string) => void;
   onOpenPath?: (path: string, kind: 'file' | 'folder') => void;
+  onConnectCapability?: (
+    taskId: string,
+    actionId: string,
+    connectorId: string,
+    fields: Record<string, string>,
+    opts?: { incrementalCapability?: string }
+  ) => Promise<{ ok: boolean; message?: string }> | void;
 }) {
   const codingTask = isCodingTask(task);
   const [codingMode, setCodingMode] = useState<'go' | 'pro' | null>(null);
@@ -364,7 +372,7 @@ export function WorkspaceRuntime({
     },
     {
       id: 'liveExecution',
-      render: () => <TaskCard task={task} onRetryAction={onRetryAction} onOpenPath={onOpenPath} />,
+      render: () => <TaskCard task={task} onRetryAction={onRetryAction} onOpenPath={onOpenPath} onConnectCapability={onConnectCapability} />,
     },
     {
       id: 'floatingSurface',

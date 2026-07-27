@@ -5,6 +5,7 @@ import type { EmailDraft, EmailPreferences, EmailProviderKind, CommunicationSumm
 import type { SessionCategory } from '../../../../shared/communication/SessionCategory';
 import { SESSION_CATEGORY_LABELS, SESSION_TIMELINE_KIND_LABELS } from '../../../../shared/communication/SessionCategory';
 import { aiProviderConfigStore } from '../../../ai/AIProviderConfigStore';
+import { Toggle } from '../Toggle';
 
 type TranscriptSegment = { speaker: string; text: string; atSeconds: number };
 
@@ -520,7 +521,7 @@ export function CommunicationDraftsSection() {
                   const status = selected.draft?.recipientStatus?.[r];
                   return (
                     <label key={r} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-                      <input type="checkbox" checked={checked.has(r)} onChange={() => toggleChecked(r)} />
+                      <Toggle size="sm" checked={checked.has(r)} onChange={() => toggleChecked(r)} />
                       <span>{r}</span>
                       <span style={{ fontSize: 11, color: status?.status === 'sent' ? '#7ee787' : '#6c6c74' }}>
                         {status?.status === 'sent' ? `Sent at ${new Date(status.sentAt ?? 0).toLocaleTimeString()}` : 'Pending'}
@@ -541,7 +542,7 @@ export function CommunicationDraftsSection() {
               </div>
 
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: '#96969e', marginBottom: 16 }}>
-                <input type="checkbox" checked={batchMode} onChange={(e) => setBatchMode(e.target.checked)} disabled={(!!sequential && sequential.phase !== 'done') || !!batch} />
+                <Toggle size="sm" checked={batchMode} onChange={setBatchMode} disabled={(!!sequential && sequential.phase !== 'done') || !!batch} />
                 Batch mode — open all compose windows at once instead of one at a time (no per-email confirmation)
               </label>
 
@@ -580,8 +581,8 @@ export function CommunicationDraftsSection() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
                     {batch.opened.map((r) => (
                       <label key={r} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5 }}>
-                        <input
-                          type="checkbox"
+                        <Toggle
+                          size="sm"
                           checked={batchMarkSelected.has(r)}
                           onChange={() => setBatchMarkSelected((prev) => {
                             const next = new Set(prev);

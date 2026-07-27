@@ -28,6 +28,7 @@ import type {
   ConnectivityScope,
   ConnectorDefinition,
   ConnectorConnection,
+  ConnectorStatus,
   DeploymentProfile,
   DeploymentProfileConfig,
   ConnectivityIpcResult,
@@ -36,6 +37,7 @@ import type {
 } from '../../../shared/connectivity/ConnectivityTypes';
 import type {
   PricingConfig,
+  TicketPricingConfig,
   SubscriptionState,
   SubscriptionTierId,
   CreditBalance,
@@ -245,6 +247,9 @@ export const ipc = {
   async billingGetPricing(): Promise<PricingConfig> {
     return getBridge().billingGetPricing();
   },
+  async billingGetTicketPricingConfig(): Promise<TicketPricingConfig> {
+    return getBridge().billingGetTicketPricingConfig();
+  },
   async billingGetSubscription(): Promise<SubscriptionState> {
     return getBridge().billingGetSubscription();
   },
@@ -275,13 +280,13 @@ export const ipc = {
   async billingStartCheckoutSync(): Promise<string> {
     return getBridge().billingStartCheckoutSync();
   },
-  async billingCreateCreditsCheckoutSession(credits: number, organizationId?: string, callbackUrl?: string): Promise<BillingCheckoutResult> {
-    return getBridge().billingCreateCreditsCheckoutSession(credits, organizationId, callbackUrl);
+  async billingCreateCreditsCheckoutSession(amountUsd: number, organizationId?: string, callbackUrl?: string): Promise<BillingCheckoutResult> {
+    return getBridge().billingCreateCreditsCheckoutSession(amountUsd, organizationId, callbackUrl);
   },
   onSubscriptionUpdated(cb: () => void) {
     return getBridge().onSubscriptionUpdated(cb);
   },
-  onTaskCreditsPurchased(cb: (payload: { credits: number; organizationId?: string }) => void) {
+  onTaskCreditsPurchased(cb: (payload: { amountUsd: number; organizationId?: string }) => void) {
     return getBridge().onTaskCreditsPurchased(cb);
   },
   async onboardingGet(): Promise<OnboardingState> {
@@ -401,6 +406,12 @@ export const ipc = {
   },
   async connectivityConnect(connectorId: string, scope: ConnectivityScope): Promise<ConnectivityIpcResult<ConnectorConnection>> {
     return getBridge().connectivityConnect(connectorId, scope);
+  },
+  async connectivityGetStatus(connectorId: string, scope: ConnectivityScope): Promise<ConnectivityIpcResult<ConnectorStatus>> {
+    return getBridge().connectivityGetStatus(connectorId, scope);
+  },
+  async connectivityRestore(connectorId: string, scope: ConnectivityScope, credential: unknown): Promise<ConnectivityIpcResult<ConnectorStatus>> {
+    return getBridge().connectivityRestore(connectorId, scope, credential);
   },
   async connectivityDisconnect(connectionId: string): Promise<ConnectivityIpcResult<void>> {
     return getBridge().connectivityDisconnect(connectionId);

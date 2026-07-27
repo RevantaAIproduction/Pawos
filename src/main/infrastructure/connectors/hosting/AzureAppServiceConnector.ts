@@ -63,7 +63,10 @@ export class AzureAppServiceConnector implements HostingConnector {
       const slot = await runCli('az', ['webapp', 'deployment', 'slot', 'create', '--name', this.appName as string, '--resource-group', this.resourceGroup as string, '--slot', this.stagingSlot, '--output', 'json']);
       if (!slot.ok) return { ok: false, reason: `az webapp deployment slot create failed: ${slot.message}` };
     }
-    return { ok: true };
+    // Object literal assigned/returned as ConnectorResult<Record<string, never>> fails TS's excess
+    // property check against the intersection's never-valued index signature — an assertion (not a
+    // widened type) is the correct escape hatch since the literal genuinely satisfies the shape.
+    return { ok: true } as ConnectorResult<Record<string, never>>;
   }
 
   async deploy(projectPath: string, opts?: { prod?: boolean }): Promise<ConnectorResult<{ deploymentUrl: string; deploymentId: string }>> {

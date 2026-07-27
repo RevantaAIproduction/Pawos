@@ -1,33 +1,9 @@
-.launcher {
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  border: none;
-  background: #8b7bff;
-  color: #0b0b0f;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 8px 24px rgba(139, 123, 255, 0.35);
-  z-index: 1000;
-  transition: transform 0.15s ease;
-}
-
-.launcher:hover {
-  transform: scale(1.06);
-}
-
 .panel {
   position: fixed;
   right: 24px;
   bottom: 90px;
   width: 380px;
-  height: 600px;
-  max-height: calc(100vh - 120px);
+  height: min(600px, calc(100vh - 150px));
   background: #0e0e13;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 18px;

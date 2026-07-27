@@ -51,7 +51,7 @@ export function useIpcBridge() {
 
       onSettingsUpdated: (cb: (s: SettingsState) => void) => ipc.onSettingsUpdated(cb),
       onUiOpenSettings: (cb: () => void) => ipc.onUiOpenSettings(cb),
-      onTaskCreditsPurchased: (cb: (payload: { credits: number; organizationId?: string }) => void) =>
+      onTaskCreditsPurchased: (cb: (payload: { amountUsd: number; organizationId?: string }) => void) =>
         ipc.onTaskCreditsPurchased(cb),
 
       moveOverlayWindow: async (x: number, y: number): Promise<boolean> => ipc.overlayMoveWindow(x, y),

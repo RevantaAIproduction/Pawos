@@ -80,9 +80,11 @@ export default function AutonomousTicketResolutionPage() {
       <Section eyebrow="Billing" title="Success-gated, by design" className="border-t border-neutral-900 bg-neutral-900/30">
         <div className="mx-auto mt-6 max-w-2xl space-y-4 text-neutral-400">
           <p>
-            An Autonomous Engineering Task consumes one prepaid credit — only when it genuinely completes. Buy
-            credits upfront ($5 each, $30 minimum) from inside the app; they never expire. Enterprise plans can
-            negotiate custom per-credit rates at volume. Full detail lives on the{" "}
+            Add funds to a Ticket Balance — any amount, $30 minimum — from inside the app; balance never expires.
+            Completing a ticket deducts a real dollar amount from that balance, only when it genuinely completes.
+            The rate is automatically volume-tiered by your account&apos;s (or organization&apos;s) cumulative ticket
+            count, from $5.00/ticket down to $3.00/ticket at high volume — no negotiation required. Full detail
+            lives on the{" "}
             <Link href="/pricing#autonomous-engineering" className="text-blue-400 hover:underline">Pricing page</Link>.
           </p>
         </div>

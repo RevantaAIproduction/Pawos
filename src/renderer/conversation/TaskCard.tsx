@@ -4,6 +4,7 @@ import type { ConversationTaskAction, ConversationTaskRecord } from './Conversat
 import type { ExecutionTrail, WorkflowMetadata, BuildStatus, VisualEvidence, TodoProgress, TestRunSummary, CodeDiffStat } from '../../shared/actions/ExecutionLifecycle';
 import type { ManagedProcessInfo } from '../../shared/actions/ProcessTypes';
 import type { DevBrowserConsoleEntry } from '../../shared/actions/DevBrowserTypes';
+import type { CapabilityConfirmation } from '../../shared/runtime/RequirementTypes';
 
 /**
  * The universal execution UI for Paw — one Task Card per user request
@@ -223,6 +224,15 @@ function getTodoProgress(action: ConversationTaskAction): TodoProgress | undefin
   return { items };
 }
 
+/** Present only when this action is paused on RequirementGate's capability resolver — distinct
+ *  from a plain `requires-confirmation` (which has no `confirmation` field at all) and from a
+ *  generic failure, so it renders as a neutral "waiting to connect" row instead of an error. */
+function getCapabilityConfirmation(action: ConversationTaskAction): CapabilityConfirmation[] | undefined {
+  const result = action.result;
+  if (!result || result.ok || result.confirmation?.kind !== 'connectCapability') return undefined;
+  return result.confirmation.capabilities;
+}
+
 /** The most recent declared checklist for a task, if any — "latest call wins" precedent, for the Coding Canvas `todoProgress` region. */
 export function getLatestTodoProgress(task: ConversationTaskRecord): TodoProgress | undefined {
   for (const action of [...task.actions].reverse()) {
@@ -434,15 +444,28 @@ export function TaskCard({
   task,
   onRetryAction,
   onOpenPath,
+  onConnectCapability,
+  onNavigateToSettingsConnector,
 }: {
   task: ConversationTaskRecord;
   onRetryAction?: (taskId: string, actionId: string) => void;
   onOpenPath?: (path: string, kind: 'file' | 'folder') => void;
+  onConnectCapability?: (
+    taskId: string,
+    actionId: string,
+    connectorId: string,
+    fields: Record<string, string>,
+    opts?: { incrementalCapability?: string }
+  ) => Promise<{ ok: boolean; message?: string }> | void;
+  onNavigateToSettingsConnector?: (connectorId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const [collapsedStages, setCollapsedStages] = useState<Set<Stage>>(new Set());
   const [expandedOutputs, setExpandedOutputs] = useState<Set<string>>(new Set());
+  const [connectFieldValues, setConnectFieldValues] = useState<Record<string, Record<string, string>>>({});
+  const [connectErrors, setConnectErrors] = useState<Record<string, string>>({});
+  const [connecting, setConnecting] = useState<Set<string>>(new Set());
 
   const toggleStage = (stage: Stage) => {
     setCollapsedStages((prev) => {
@@ -480,14 +503,15 @@ export function TaskCard({
     const appsOpened = task.actions.filter((a) => APP_OPEN_TYPES.has(a.type) && a.result?.ok);
     const envChanges = task.actions.filter((a) => ENV_CHANGE_TYPES.has(a.type));
     const verifications = task.actions.filter((a) => VERIFY_TYPES.has(a.type));
-    const errors = task.actions.filter((a) => a.result && !a.result.ok);
+    const errors = task.actions.filter((a) => a.result && !a.result.ok && !getCapabilityConfirmation(a));
+    const connectRequests = task.actions.filter((a) => getCapabilityConfirmation(a));
     const recoveries = task.actions.filter((a) => (getTrail(a)?.attempts ?? 0) > 1);
     const workflows = task.actions.filter((a) => getWorkflowMetadata(a));
     const buildStatuses = task.actions.filter((a) => getBuildStatus(a));
     const testResultActions = task.actions.filter((a) => getTestResults(a));
     const codeDiffActions = task.actions.filter((a) => getCodeDiffStat(a));
     const todoProgress = getLatestTodoProgress(task);
-    return { commands, filesCreated, filesModified, appsOpened, envChanges, verifications, errors, recoveries, workflows, buildStatuses, testResultActions, codeDiffActions, todoProgress };
+    return { commands, filesCreated, filesModified, appsOpened, envChanges, verifications, errors, connectRequests, recoveries, workflows, buildStatuses, testResultActions, codeDiffActions, todoProgress };
   }, [task.actions]);
 
   const handleCopy = () => {
@@ -817,6 +841,98 @@ export function TaskCard({
                   <span className={styles.filePath}>{a.doneText ?? a.inProgressText}</span>
                 </div>
               ))}
+            </section>
+          )}
+
+          {sections.connectRequests.length > 0 && (
+            <section className={styles.section}>
+              <h4 className={styles.sectionTitle}>Waiting to Connect</h4>
+              {sections.connectRequests.map((a) => {
+                const capabilities = getCapabilityConfirmation(a) ?? [];
+                return capabilities.map((cap) => (
+                  <div key={`${a.id}:${cap.category}`} className={styles.connectRow}>
+                    <div>⏸ {cap.reasonHint ?? (a.result && !a.result.ok ? a.result.message : cap.label)}</div>
+                    {cap.candidateProviders.map((provider) => {
+                      const fieldKey = `${a.id}:${provider.connectorId}`;
+                      const values = connectFieldValues[fieldKey] ?? {};
+                      return (
+                        <div key={fieldKey} className={styles.connectProvider}>
+                          {provider.connectVia === 'inline' ? (
+                            <>
+                              {(provider.fields ?? []).length > 0 && (
+                                <div className={styles.connectFields}>
+                                  {(provider.fields ?? []).map((field) => (
+                                    <input
+                                      key={field.name}
+                                      className={styles.connectInput}
+                                      type={field.secret ? 'password' : 'text'}
+                                      placeholder={field.placeholder ?? field.label}
+                                      aria-label={field.label}
+                                      value={values[field.name] ?? ''}
+                                      onChange={(e) =>
+                                        setConnectFieldValues((prev) => ({
+                                          ...prev,
+                                          [fieldKey]: { ...prev[fieldKey], [field.name]: e.target.value },
+                                        }))
+                                      }
+                                    />
+                                  ))}
+                                </div>
+                              )}
+                              {connectErrors[fieldKey] && <div className={styles.connectError}>{connectErrors[fieldKey]}</div>}
+                              {onConnectCapability && (
+                                <button
+                                  type="button"
+                                  className={styles.connectBtn}
+                                  disabled={connecting.has(fieldKey)}
+                                  onClick={async () => {
+                                    setConnectErrors((prev) => ({ ...prev, [fieldKey]: '' }));
+                                    setConnecting((prev) => new Set(prev).add(fieldKey));
+                                    try {
+                                      const outcome = await onConnectCapability(
+                                        task.id,
+                                        a.id,
+                                        provider.connectorId,
+                                        values,
+                                        provider.grantMode === 'incrementalScope' ? { incrementalCapability: provider.missingCapability } : undefined
+                                      );
+                                      if (outcome && !outcome.ok) {
+                                        setConnectErrors((prev) => ({ ...prev, [fieldKey]: outcome.message ?? 'Could not connect.' }));
+                                      }
+                                    } finally {
+                                      setConnecting((prev) => {
+                                        const next = new Set(prev);
+                                        next.delete(fieldKey);
+                                        return next;
+                                      });
+                                    }
+                                  }}
+                                >
+                                  {connecting.has(fieldKey)
+                                    ? 'Connecting…'
+                                    : provider.grantMode === 'incrementalScope'
+                                      ? `Grant ${provider.missingCapability} access`
+                                      : `Connect ${provider.connectorName}`}
+                                </button>
+                              )}
+                            </>
+                          ) : (
+                            onNavigateToSettingsConnector && (
+                              <button
+                                type="button"
+                                className={styles.connectBtn}
+                                onClick={() => onNavigateToSettingsConnector(provider.connectorId)}
+                              >
+                                Connect {provider.connectorName} in Settings
+                              </button>
+                            )
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ));
+              })}
             </section>
           )}
 

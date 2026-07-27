@@ -27,7 +27,7 @@ export function ArticleDetail({ articleId, onBack, onOpenRelated }: { articleId:
     );
   }
 
-  const openOnline = () => void ipc.actionExecute({ type: 'openUrl', url: `https://revantaai.com/pawos/docs/${article.id}` });
+  const openOnline = () => void ipc.actionExecute({ type: 'openUrl', url: `https://pawos.revantaai.com/help/${article.id}` });
 
   return (
     <div>

@@ -475,27 +475,27 @@ export const FEATURES: FeatureContent[] = [
   {
     slug: "billing",
     title: "Billing",
-    tagline: "Transparent tiers, prepaid task credits, and success-only billing.",
+    tagline: "Transparent tiers, a volume-tiered Ticket Balance, and success-only billing.",
     category: "Platform",
     summary:
-      "PawOS's pricing is a real, published tier ladder — not usage-metered chat. Autonomous Engineering Tasks run on prepaid credits and are billed only when they genuinely complete successfully, never for chat, research, or manual coding help, and never for a run that fails, is cancelled, or is denied approval.",
+      "PawOS's pricing is a real, published tier ladder — not usage-metered chat. The Autonomous Ticket System runs on a separate prepaid Ticket Balance and is billed, at a volume-tiered per-ticket rate, only when a ticket genuinely completes successfully — never for chat, research, or manual coding help, and never for a run that fails, is cancelled, or is denied approval.",
     capabilities: [
       "A real tier ladder: Go (free), Pro, Pro Max, and per-seat Team and Enterprise plans",
       "Instant self-serve upgrade, downgrade, and renewal — no sales call required",
-      "Prepaid Autonomous Engineering Task credits ($5/credit, $30 minimum) that never expire",
+      "A prepaid Ticket Balance (any amount, $30 minimum) that never expires, billed per ticket at a volume-tiered rate from $5.00 down to $3.00",
       "A full purchase and usage history export with per-run detail",
     ],
     workflow: [
       { step: "Pick a plan", detail: "Choose the tier that matches your usage — upgrade or downgrade anytime." },
-      { step: "Buy task credits", detail: "Purchase prepaid Autonomous Engineering Task credits upfront, anytime, from inside the app." },
-      { step: "Pay only for completed work", detail: "A credit is consumed only for a task that genuinely finished successfully." },
+      { step: "Add funds to your Ticket Balance", detail: "Top up any amount upfront, anytime, from inside the app." },
+      { step: "Pay only for completed work", detail: "The current volume-tiered rate is deducted only for a ticket that genuinely finished successfully." },
     ],
     useCases: [
       "Predictable monthly cost for individual and team use",
       "Scaling autonomous engineering work without per-token billing surprises",
     ],
     limitations: [
-      "Starting a new Autonomous Engineering Task requires at least 1 remaining prepaid credit",
+      "Starting a new Autonomous Ticket System run requires a Ticket Balance that can cover the next ticket at its current rate",
     ],
   },
   {

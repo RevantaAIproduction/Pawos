@@ -16,7 +16,10 @@ const CAPABILITIES = [
   { title: "Approval policies", body: "Require explicit approval before specific action types (like production deploys) run, with a real, queryable approval queue." },
   { title: "Audit log", body: "A durable, exportable audit log of infrastructure-affecting actions for compliance evidence." },
   { title: "SSO (in progress)", body: "Single sign-on enablement for organizations — see our security documentation for current status and honest capability notes." },
-  { title: "Seat-based billing", body: "Team ($/seat/mo, 2–150 seats) and Enterprise ($/seat/mo, 20+ seats with custom terms) — billed per member, not per device." },
+  { title: "Seat-based billing", body: "Team ($/seat/mo, 2–150 seats) and Enterprise ($20/seat + tax, 20+ seats, usage billed at API rates) — billed per member, not per device, self-serve from inside the app." },
+  { title: "Spend limits & fine-grained RBAC", body: "Enterprise admins set user and org-level spend limits, with role-based access control down to individual permissions." },
+  { title: "SCIM & compliance", body: "System for Cross-domain Identity Management (SCIM), a compliance API for observability and monitoring, and custom data retention controls." },
+  { title: "Network-level access control", body: "IP allowlisting and network-level access control, plus a HIPAA-ready offering where required." },
 ];
 
 const SCALE = [
@@ -39,7 +42,7 @@ export default function EnterprisePage() {
             architecture, with governance and collaboration layered on top.
           </p>
           <div className="mt-8 flex justify-center gap-4">
-            <Button href="/support/sales">Talk to sales</Button>
+            <Button href="/download">Get started</Button>
             <Button href="/pricing" variant="secondary">See pricing</Button>
           </div>
         </div>
@@ -91,8 +94,11 @@ export default function EnterprisePage() {
 
       <Section className="text-center border-t border-neutral-900">
         <h2 className="text-2xl font-bold">Ready to bring PawOS to your team?</h2>
+        <p className="mx-auto mt-3 max-w-md text-neutral-400">
+          Set up Team or Enterprise directly from the app — 20+ seats, self-serve, no sales call required.
+        </p>
         <div className="mt-6">
-          <Button href="/support/sales">Contact sales</Button>
+          <Button href="/download">Get started</Button>
         </div>
       </Section>
     </>

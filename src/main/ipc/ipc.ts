@@ -19,6 +19,7 @@ import { deviceIdentityStore } from '../device/DeviceIdentityStore';
 import { exportCompanionPackage, importCompanionPackage } from '../companion/CompanionPackageFormat';
 import type { CompanionPackageInput } from '../../shared/companion/CompanionPackageTypes';
 import { pricingConfigStore } from '../billing/PricingConfigStore';
+import { ticketPricingConfigStore } from '../billing/TicketPricingConfigStore';
 import { subscriptionStore } from '../billing/SubscriptionStore';
 import { creditStore } from '../billing/CreditStore';
 import { createBillingProvider } from '../billing/BillingProviderRegistry';
@@ -190,7 +191,7 @@ export function registerIpc(opts: {
         organizationName: params.organizationName,
         role: params.role,
         inviterName: params.inviterName,
-        openUrl: 'https://revantaai.com',
+        openUrl: 'https://pawos.revantaai.com',
       });
       return true;
     }
@@ -323,6 +324,10 @@ export function registerIpc(opts: {
   // credit tracking. See src/main/billing/*.ts. Distinct from
   // CodingModeStore's own local Coding Runtime Go/Pro toggle.
   ipcMain.handle('billing:getPricing', () => pricingConfigStore.get());
+  // Ticket Balance top-up presets/minimum — editable data (see
+  // TicketPricingConfigStore.ts), never a code constant a UI hardcodes, so
+  // new preset amounts can be added later without a redeploy.
+  ipcMain.handle('billing:getTicketPricingConfig', () => ticketPricingConfigStore.get());
   ipcMain.handle('billing:getSubscription', () => subscriptionStore.get());
   ipcMain.handle('billing:setSubscriptionTier', (_evt, tier: SubscriptionTierId) => subscriptionStore.setTier(tier));
   ipcMain.handle('billing:syncFromOrganization', (_evt, orgTier: SubscriptionTierId) => subscriptionStore.syncFromOrganization(orgTier));
@@ -339,12 +344,12 @@ export function registerIpc(opts: {
   // completes — see CheckoutSyncServer.ts for why this is the honest sync
   // mechanism available without a shared account/subscription backend.
   ipcMain.handle('billing:startCheckoutSync', () => startCheckoutCallbackServer());
-  // Prepaid Autonomous Engineering Task credit purchases — a one-time
-  // Razorpay Order, not a subscription-tier checkout, so it's a standalone
+  // Ticket Balance top-ups — a one-time Razorpay Order for an arbitrary
+  // dollar amount, not a subscription-tier checkout, so it's a standalone
   // function rather than part of the BillingProvider interface (see
   // RazorpayBillingProvider.ts).
-  ipcMain.handle('billing:createCreditsCheckoutSession', (_evt, credits: number, organizationId?: string, callbackUrl?: string) =>
-    createCreditsCheckoutUrl(credits, organizationId, callbackUrl)
+  ipcMain.handle('billing:createCreditsCheckoutSession', (_evt, amountUsd: number, organizationId?: string, callbackUrl?: string) =>
+    createCreditsCheckoutUrl(amountUsd, organizationId, callbackUrl)
   );
 
   // Central entitlement queries — every runtime asks these instead of

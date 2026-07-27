@@ -30,11 +30,11 @@ export function Footer({
         </Link>
       </Text>
       <Text style={{ margin: 0, fontFamily: theme.font, fontSize: 11, color: theme.colors.textFaint }}>
-        <Link href="https://revantaai.com/privacy" style={{ color: theme.colors.textFaint }}>
+        <Link href="https://pawos.revantaai.com/legal/privacy-policy" style={{ color: theme.colors.textFaint }}>
           Privacy Policy
         </Link>
         {'  ·  '}
-        <Link href="https://revantaai.com/terms" style={{ color: theme.colors.textFaint }}>
+        <Link href="https://pawos.revantaai.com/legal/terms" style={{ color: theme.colors.textFaint }}>
           Terms
         </Link>
         {isMarketing && unsubscribeUrl && (

@@ -7,6 +7,25 @@
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+/* Every <select> in Settings/Organization is styled inline for the dark
+   surface it sits on (background rgba(255,255,255,0.04), color #e8e8ec),
+   but Chromium renders the native option popup with its own default
+   (white) background regardless of inline styles on the <select> itself —
+   leaving that same light text nearly invisible against it. color-scheme
+   tells Chromium to draw native form-control chrome (including the
+   popup) using its dark palette; the explicit option colors are a
+   fallback for the same #e8e8ec/dark-surface pairing used everywhere
+   else in this file. */
+select {
+  color-scheme: dark;
+}
+
+select option,
+select optgroup {
+  background-color: #1c1c22;
+  color: #e8e8ec;
+}
+
 /* Sidebar */
 
 .sidebar {
@@ -33,6 +52,48 @@
   height: 9px;
   border-radius: 999px;
   background: linear-gradient(135deg, var(--pawos-accent), var(--pawos-accent-2));
+  flex-shrink: 0;
+}
+
+.sidebarCollapsed {
+  width: 68px;
+}
+
+.sidebarCollapsed .brand {
+  justify-content: center;
+}
+
+.sidebarCollapseButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--pawos-text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.sidebarCollapsed .sidebarCollapseButton {
+  margin-left: 0;
+}
+
+.sidebarCollapseButton:hover {
+  color: var(--pawos-fg);
+  background: rgba(var(--pawos-overlay-rgb), 0.06);
+}
+
+.sidebarCollapsed .navItem {
+  justify-content: center;
+  padding: 8px;
+}
+
+.sidebarCollapsed .navFooter {
+  align-items: center;
 }
 
 .nav {
@@ -334,14 +395,294 @@
 
 .card {
   padding: 18px;
-  border-radius: 14px;
+  border-radius: 16px;
   border: 1px solid rgba(var(--pawos-overlay-rgb), 0.08);
   background: rgba(var(--pawos-overlay-rgb), 0.02);
-  transition: border-color 0.15s ease;
+  transition: border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .card:hover {
   border-color: rgba(var(--pawos-overlay-rgb), 0.16);
+}
+
+/* ==========================================================================
+   Settings "AI OS" motion + surface primitives — shared by SettingsHome,
+   ConnectionsPage, SectionHub, and SettingsPageHeader. One system, reused
+   everywhere, rather than a bespoke look per page.
+   ========================================================================== */
+
+@keyframes pawPulseDot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(var(--pawos-live-rgb, 74, 222, 128), 0.5); }
+  50% { box-shadow: 0 0 0 5px rgba(var(--pawos-live-rgb, 74, 222, 128), 0); }
+}
+
+@keyframes pawBreathe {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.06); opacity: 1; }
+}
+
+@keyframes pawFadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liveDot, .heroGlow, .pageFadeIn {
+    animation: none !important;
+  }
+}
+
+.pageFadeIn {
+  animation: pawFadeUp 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* A soft ambient glow, positioned absolutely by the caller — the "alive"
+   backdrop behind the Settings Home hero and page headers. Pure decoration:
+   never carries information, so reduced-motion just freezes it. */
+.heroGlow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(420px circle at 12% 0%, rgba(var(--pawos-accent-rgb), 0.10), transparent 65%),
+    radial-gradient(320px circle at 85% 15%, rgba(var(--pawos-accent-2-rgb), 0.08), transparent 60%);
+  animation: pawBreathe 8s ease-in-out infinite;
+  z-index: 0;
+}
+
+.liveDot {
+  --pawos-live-rgb: 74, 222, 128;
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgb(var(--pawos-live-rgb));
+  flex-shrink: 0;
+  animation: pawPulseDot 2.4s ease-out infinite;
+}
+
+.liveDot[data-state='idle'] {
+  --pawos-live-rgb: 224, 200, 140;
+}
+
+.liveDot[data-state='off'] {
+  --pawos-live-rgb: 150, 150, 158;
+  animation: none;
+  box-shadow: none;
+}
+
+.liveDot[data-state='error'] {
+  --pawos-live-rgb: 224, 140, 140;
+}
+
+.liveStatusRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--pawos-text-secondary);
+}
+
+.liveStatusRow strong {
+  color: var(--pawos-fg);
+  font-weight: 600;
+}
+
+/* Settings page header — Title / description / optional live status, the
+   consistent top-of-page block every Settings sub-page renders. */
+.settingsPageHeader {
+  position: relative;
+  padding-bottom: 18px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid rgba(var(--pawos-overlay-rgb), 0.07);
+}
+
+.settingsPageHeaderTitle {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.settingsPageHeaderDesc {
+  margin: 0;
+  font-size: 13px;
+  color: var(--pawos-text-secondary);
+  max-width: 60ch;
+}
+
+.settingsPageHeaderStatus {
+  margin-top: 10px;
+}
+
+/* Rich connector card grid used by ConnectionsPage. */
+.connectionCardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.connectionCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.08);
+  background: rgba(var(--pawos-overlay-rgb), 0.02);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  transition: border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.connectionCard:hover {
+  border-color: rgba(var(--pawos-overlay-rgb), 0.18);
+  background-color: rgba(var(--pawos-overlay-rgb), 0.045);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+}
+
+.connectionCard:disabled,
+.connectionCard[data-disabled='true'] {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.connectionCard:disabled:hover,
+.connectionCard[data-disabled='true']:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.connectionCardTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.connectionCardTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.connectionCardTitle {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.connectionCardStats {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+.connectionCardStatRow {
+  font-size: 12px;
+  color: var(--pawos-text-secondary);
+}
+
+.connectionCardStatRow strong {
+  color: var(--pawos-fg);
+  font-weight: 600;
+}
+
+.categorySection {
+  margin-bottom: 26px;
+}
+
+.categorySectionTitle {
+  font-size: 13px;
+  font-weight: 650;
+  margin: 0 0 4px;
+}
+
+.categorySectionDesc {
+  font-size: 12px;
+  color: var(--pawos-text-secondary);
+  margin: 0 0 12px;
+}
+
+/* Slide-over drawer — replaces large inline forms for connect/detail flows. */
+.slideOverBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 900;
+  animation: pawFadeUp 0.18s ease-out;
+}
+
+.slideOverPanel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 420px;
+  max-width: calc(100vw - 32px);
+  background: var(--pawos-bg-elevated);
+  border-left: 1px solid rgba(var(--pawos-overlay-rgb), 0.1);
+  box-shadow: -24px 0 60px rgba(0, 0, 0, 0.35);
+  z-index: 901;
+  display: flex;
+  flex-direction: column;
+  animation: slideOverIn 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideOverIn {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.slideOverHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid rgba(var(--pawos-overlay-rgb), 0.08);
+  flex-shrink: 0;
+}
+
+.slideOverTitle {
+  font-size: 16px;
+  font-weight: 650;
+  margin: 0 0 3px;
+}
+
+.slideOverSubtitle {
+  font-size: 12.5px;
+  color: var(--pawos-text-secondary);
+  margin: 0;
+}
+
+.slideOverClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--pawos-text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.slideOverClose:hover {
+  color: var(--pawos-fg);
+  background: rgba(var(--pawos-overlay-rgb), 0.06);
+}
+
+.slideOverBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
 }
 
 .cardTitle {
@@ -355,6 +696,420 @@
   font-size: 12.5px;
   line-height: 1.5;
   color: var(--pawos-text-secondary);
+}
+
+/* Profile / summary header card — a subtle accent wash so the top of a Settings tab reads as a
+   glanceable identity block, not the first paragraph of a document. */
+.profileHeaderCard {
+  position: relative;
+  background: linear-gradient(135deg, rgba(var(--pawos-accent-rgb), 0.14), rgba(var(--pawos-accent-2-rgb), 0.05) 55%, transparent 85%);
+  border-color: rgba(var(--pawos-accent-rgb), 0.16);
+}
+
+/* Settings row — label (+ optional icon/hint) on the left, value/control on the right, with a
+   hairline divider between rows. Used inside .card wherever a settings page would otherwise be a
+   stack of bare <p> tags (Account, Devices, etc.) — the flat text-document look this replaces. */
+.settingsRowGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.settingsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(var(--pawos-overlay-rgb), 0.07);
+}
+
+.settingsRowGroup > .settingsRow:first-child {
+  padding-top: 2px;
+}
+
+.settingsRowGroup > .settingsRow:last-child {
+  border-bottom: none;
+  padding-bottom: 2px;
+}
+
+.settingsRowLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.settingsRowIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: rgba(var(--pawos-overlay-rgb), 0.06);
+  color: var(--pawos-text-secondary);
+}
+
+.settingsRowIcon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.settingsRowLabel {
+  font-size: 13.5px;
+  color: var(--pawos-fg);
+}
+
+.settingsRowHint {
+  font-size: 11.5px;
+  color: var(--pawos-text-secondary);
+  margin-top: 2px;
+}
+
+.settingsRowValue {
+  font-size: 13px;
+  color: var(--pawos-text-secondary);
+  text-align: right;
+  flex-shrink: 0;
+  max-width: 60%;
+}
+
+/* Section hub — clickable tiles replacing a forced-open stack of every panel. Used by
+   Organization, Billing, and any other Settings area with several independent sub-sections. */
+.sectionTileGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
+}
+
+.sectionTile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.08);
+  background: rgba(var(--pawos-overlay-rgb), 0.02);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  transition: border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sectionTile:hover {
+  border-color: rgba(var(--pawos-accent-rgb), 0.4);
+  background-color: rgba(var(--pawos-accent-rgb), 0.06);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+}
+
+.sectionTileIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: rgba(var(--pawos-accent-rgb), 0.12);
+  color: var(--pawos-accent);
+}
+
+.sectionTileIcon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.sectionTileBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sectionTileTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sectionTileTitle {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--pawos-fg);
+}
+
+.sectionTileBadge {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(var(--pawos-accent-rgb), 0.16);
+  color: var(--pawos-accent);
+}
+
+.sectionTileDesc {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--pawos-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.sectionTileChevron {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--pawos-text-quaternary);
+}
+
+.sectionTileChevron svg {
+  width: 14px;
+  height: 14px;
+}
+
+.sectionBackButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px 6px 8px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.1);
+  background: transparent;
+  color: var(--pawos-text-secondary);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.sectionBackButton svg {
+  width: 13px;
+  height: 13px;
+}
+
+.sectionBackButton:hover {
+  color: var(--pawos-fg);
+  border-color: rgba(var(--pawos-overlay-rgb), 0.2);
+}
+
+.sectionDetailTitle {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* Settings Home — search, status strip, category grid, right rail. */
+
+.settingsSearchInput {
+  width: 100%;
+  padding: 10px 64px 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.1);
+  background: rgba(var(--pawos-overlay-rgb), 0.03);
+  color: var(--pawos-fg);
+  font-size: 13px;
+}
+
+.settingsSearchInput:focus {
+  outline: none;
+  border-color: rgba(var(--pawos-accent-rgb), 0.5);
+}
+
+.settingsSearchShortcut {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10.5px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.12);
+  color: var(--pawos-text-quaternary);
+  pointer-events: none;
+}
+
+.settingsStatusStrip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.settingsStatusItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.07);
+  background: rgba(var(--pawos-overlay-rgb), 0.02);
+}
+
+.settingsStatusIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: rgba(var(--pawos-accent-rgb), 0.12);
+  color: var(--pawos-accent);
+}
+
+.settingsStatusIcon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.settingsStatusLabel {
+  font-size: 11px;
+  color: var(--pawos-text-secondary);
+}
+
+.settingsStatusValue {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pawos-fg);
+  margin-top: 1px;
+}
+
+.settingsHomeGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.settingsHomeTile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 20px;
+  border-radius: 16px;
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.08);
+  background-color: rgba(var(--pawos-overlay-rgb), 0.02);
+  background-repeat: no-repeat;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.1s ease;
+}
+
+.settingsHomeTile:hover {
+  border-color: rgba(var(--pawos-overlay-rgb), 0.18);
+  background-color: rgba(var(--pawos-overlay-rgb), 0.045);
+  transform: translateY(-2px);
+}
+
+.settingsHomeTileIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  margin-bottom: 6px;
+  position: relative;
+  z-index: 1;
+}
+
+.settingsHomeTileIcon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.settingsHomeTileLogos {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 6px;
+  position: relative;
+  z-index: 1;
+  height: 30px;
+}
+
+.settingsHomeTileLogos > *:not(:first-child) {
+  margin-left: -10px;
+  box-shadow: 0 0 0 2px var(--pawos-bg);
+  border-radius: 9px;
+}
+
+.settingsHomeTileTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pawos-fg);
+}
+
+.settingsHomeTileDesc {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--pawos-text-secondary);
+}
+
+.settingsHomeTileView {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pawos-accent);
+}
+
+.settingsHomeTileView svg {
+  width: 11px;
+  height: 11px;
+}
+
+.settingsQuickAction {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 4px;
+  border: none;
+  border-bottom: 1px solid rgba(var(--pawos-overlay-rgb), 0.06);
+  background: transparent;
+  color: var(--pawos-fg);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settingsQuickAction:last-child {
+  border-bottom: none;
+}
+
+.settingsQuickAction svg {
+  width: 12px;
+  height: 12px;
+  color: var(--pawos-text-quaternary);
+  flex-shrink: 0;
+}
+
+.settingsQuickActionIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.settingsQuickActionIcon svg {
+  width: 14px;
+  height: 14px;
+  color: inherit;
+}
+
+.settingsQuickAction:hover {
+  color: var(--pawos-accent);
 }
 
 .quickActions {
@@ -941,6 +1696,145 @@
 .settingsSliderRow input[type='range'] {
   width: 100%;
   accent-color: var(--pawos-accent);
+}
+
+/* Toggle switch — replaces checkbox-style settings controls */
+
+.toggleSwitch {
+  position: relative;
+  flex-shrink: 0;
+  width: 40px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: #6b7280;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.toggleSwitch[data-checked='true'] {
+  background: #22c55e;
+}
+
+.toggleSwitch:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.toggleThumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s ease;
+}
+
+.toggleSwitch[data-checked='true'] .toggleThumb {
+  transform: translateX(18px);
+}
+
+.toggleSwitchSm {
+  position: relative;
+  flex-shrink: 0;
+  width: 28px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: #6b7280;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.toggleSwitchSm[data-checked='true'] {
+  background: #22c55e;
+}
+
+.toggleSwitchSm:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.toggleThumbSm {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s ease;
+}
+
+.toggleSwitchSm[data-checked='true'] .toggleThumbSm {
+  transform: translateX(12px);
+}
+
+/* Theme picker — visual light/dark/system swatches */
+
+.themeSwatchRow {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.themeSwatchCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--pawos-text-secondary);
+  font-size: 12.5px;
+}
+
+.themeSwatchPreview {
+  width: 84px;
+  height: 58px;
+  border-radius: 10px;
+  border: 2px solid rgba(var(--pawos-overlay-rgb), 0.14);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.15s ease, transform 0.1s ease;
+}
+
+.themeSwatchCard:hover .themeSwatchPreview {
+  transform: translateY(-1px);
+}
+
+.themeSwatchCardActive .themeSwatchPreview {
+  border-color: var(--pawos-accent);
+}
+
+.themeSwatchCardActive {
+  color: var(--pawos-fg);
+  font-weight: 600;
+}
+
+.themeSwatchBar {
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.themeSwatchBody {
+  flex: 1;
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+}
+
+.themeSwatchLine {
+  border-radius: 3px;
 }
 
 /* Empty state */

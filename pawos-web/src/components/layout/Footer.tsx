@@ -28,6 +28,7 @@ const GROUPS: { title: string; links: { href: string; label: string }[] }[] = [
   {
     title: "Company",
     links: [
+      { href: "/about", label: "About" },
       { href: "/trust", label: "Trust & Transparency" },
       { href: "/support", label: "Support" },
       { href: "/support/contact", label: "Contact" },

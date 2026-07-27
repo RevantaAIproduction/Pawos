@@ -1,8 +1,8 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
-import { MIN_TASK_CREDIT_PURCHASE, TASK_CREDIT_PRICE_USD } from "@/lib/billing/razorpay";
+import { useEffect, useState } from "react";
+import { MIN_TICKET_BALANCE_TOPUP_USD, TICKET_BALANCE_TOPUP_PRESETS_USD, TICKET_PRICING_TIERS } from "@/lib/billing/razorpay";
 
 declare global {
   interface Window {
@@ -26,15 +26,26 @@ function loadRazorpayScript(): Promise<boolean> {
   });
 }
 
-const CREDIT_BUNDLES = [MIN_TASK_CREDIT_PURCHASE, 12, 25, 50];
-
 export function CreditsCheckoutClient() {
   const searchParams = useSearchParams();
   const organizationId = searchParams.get("organizationId") ?? undefined;
   const callback = searchParams.get("callback");
-  const [credits, setCredits] = useState(MIN_TASK_CREDIT_PURCHASE);
+  const [amountUsd, setAmountUsd] = useState(TICKET_BALANCE_TOPUP_PRESETS_USD[0]);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
+  // Seeded from the code defaults, then replaced by the real, env-configurable values (see
+  // getTicketPricingConfig() in razorpay.ts) the moment they load.
+  const [pricingConfig, setPricingConfig] = useState({
+    topupPresetsUsd: [...TICKET_BALANCE_TOPUP_PRESETS_USD],
+    minTopupUsd: MIN_TICKET_BALANCE_TOPUP_USD,
+  });
+
+  useEffect(() => {
+    fetch("/api/billing/ticket-pricing-config")
+      .then((r) => r.json())
+      .then((config) => setPricingConfig(config))
+      .catch(() => {});
+  }, []);
 
   const startCheckout = async () => {
     setStatus("loading");
@@ -43,7 +54,7 @@ export function CreditsCheckoutClient() {
       const response = await fetch("/api/billing/checkout-credits", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ credits, organizationId }),
+        body: JSON.stringify({ amountUsd, organizationId }),
       });
       const result = await response.json();
 
@@ -63,25 +74,25 @@ export function CreditsCheckoutClient() {
       const checkout = new window.Razorpay({
         key: result.keyId,
         order_id: result.orderId,
-        amount: result.amountUsd * 100,
+        amount: Math.round(result.amountUsd * 100),
         currency: "USD",
         name: "PawOS",
-        description: `${credits} Autonomous Engineering Task credits`,
+        description: `Add $${amountUsd} to Ticket Balance`,
         handler: () => {
           // Pings the Electron app's local loopback server (see
-          // CheckoutSyncServer.ts) so it can add the purchased credits
-          // immediately via the security-definer add_task_credits() RPC,
-          // using the purchaser's own Supabase session — same same-machine
-          // trust model already accepted for subscription activation.
+          // CheckoutSyncServer.ts) so it can add the funds immediately via
+          // the security-definer add_ticket_balance() RPC, using the
+          // purchaser's own Supabase session — same same-machine trust
+          // model already accepted for subscription activation.
           if (callback) {
             const url = new URL(callback);
             url.searchParams.set("type", "credits");
-            url.searchParams.set("credits", String(credits));
+            url.searchParams.set("amountUsd", String(amountUsd));
             if (organizationId) url.searchParams.set("organizationId", organizationId);
             fetch(url.toString()).catch(() => {});
           }
           setStatus("idle");
-          setMessage("Payment complete — your PawOS desktop app will add the credits automatically.");
+          setMessage("Payment complete — your PawOS desktop app will add the funds automatically.");
         },
         modal: {
           ondismiss: () => setStatus("idle"),
@@ -96,36 +107,38 @@ export function CreditsCheckoutClient() {
 
   return (
     <div className="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-8 text-center">
-      <h1 className="text-2xl font-bold">Buy Autonomous Engineering Task credits</h1>
+      <h1 className="text-2xl font-bold">Add funds to your Ticket Balance</h1>
       <p className="mt-3 text-neutral-400">
-        ${TASK_CREDIT_PRICE_USD}/credit — one credit is deducted only when a task genuinely completes.
-        Minimum purchase is {MIN_TASK_CREDIT_PURCHASE} credits (${MIN_TASK_CREDIT_PURCHASE * TASK_CREDIT_PRICE_USD}).
+        Top up any amount — funds are deducted per ticket only once an Autonomous Ticket System
+        investigation genuinely completes. The rate per ticket ranges from ${TICKET_PRICING_TIERS[TICKET_PRICING_TIERS.length - 1].pricePerTicketUsd.toFixed(2)}
+        {" "}to ${TICKET_PRICING_TIERS[0].pricePerTicketUsd.toFixed(2)} depending on your account&apos;s cumulative ticket volume.
+        Minimum top-up is ${pricingConfig.minTopupUsd}.
       </p>
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {CREDIT_BUNDLES.map((n) => (
+        {pricingConfig.topupPresetsUsd.map((n) => (
           <button
             key={n}
             type="button"
-            onClick={() => setCredits(n)}
+            onClick={() => setAmountUsd(n)}
             className={`rounded-xl border px-4 py-3 text-sm font-semibold ${
-              credits === n ? "border-blue-400 bg-blue-500/10 text-blue-200" : "border-neutral-800 text-neutral-300 hover:text-neutral-100"
+              amountUsd === n ? "border-blue-400 bg-blue-500/10 text-blue-200" : "border-neutral-800 text-neutral-300 hover:text-neutral-100"
             }`}
           >
-            {n} credits
-            <div className="mt-1 text-xs font-normal text-neutral-500">${n * TASK_CREDIT_PRICE_USD}</div>
+            ${n}
           </button>
         ))}
       </div>
 
       <div className="mt-4 flex items-center justify-center gap-3">
-        <label className="text-sm text-neutral-400" htmlFor="custom-credits">Custom amount</label>
+        <label className="text-sm text-neutral-400" htmlFor="custom-amount">Custom amount</label>
+        <span className="text-neutral-500">$</span>
         <input
-          id="custom-credits"
+          id="custom-amount"
           type="number"
-          min={MIN_TASK_CREDIT_PURCHASE}
-          value={credits}
-          onChange={(e) => setCredits(Math.max(MIN_TASK_CREDIT_PURCHASE, Number(e.target.value) || MIN_TASK_CREDIT_PURCHASE))}
+          min={pricingConfig.minTopupUsd}
+          value={amountUsd}
+          onChange={(e) => setAmountUsd(Math.max(pricingConfig.minTopupUsd, Number(e.target.value) || pricingConfig.minTopupUsd))}
           className="w-24 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-center text-sm"
         />
       </div>
@@ -136,7 +149,7 @@ export function CreditsCheckoutClient() {
         disabled={status === "loading"}
         className="mt-8 rounded-full bg-gradient-to-r from-indigo-500 to-blue-400 px-8 py-3 font-semibold text-black hover:opacity-90 disabled:opacity-50"
       >
-        {status === "loading" ? "Starting…" : `Continue to payment — $${credits * TASK_CREDIT_PRICE_USD}`}
+        {status === "loading" ? "Starting…" : `Continue to payment — $${amountUsd}`}
       </button>
       {message && <p className="mt-6 text-sm text-neutral-400">{message}</p>}
     </div>

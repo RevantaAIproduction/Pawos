@@ -53,10 +53,20 @@ export type ControlGrant = {
   revokedAt: string | null;
 };
 
+/** Mirrors lib.dom's RTCIceCandidateInit shape locally — this file is shared into the main process
+ *  project, which has no "DOM" lib, and this type only ever describes JSON carried over a Supabase
+ *  Realtime broadcast, never an actual browser RTCIceCandidate instance. */
+export type IceCandidateInit = {
+  candidate?: string;
+  sdpMLineIndex?: number | null;
+  sdpMid?: string | null;
+  usernameFragment?: string | null;
+};
+
 /** Signaling payloads exchanged over a Supabase Realtime broadcast channel — reuses the Phase 4 channel pattern as the WebRTC signaling transport instead of standing up a separate signaling service. */
 export type SignalingOfferPayload = { sdp: string; fromUserId: string };
 export type SignalingAnswerPayload = { sdp: string; fromUserId: string };
-export type SignalingIceCandidatePayload = { candidate: RTCIceCandidateInit; fromUserId: string };
+export type SignalingIceCandidatePayload = { candidate: IceCandidateInit; fromUserId: string };
 
 export type RemoteCursorPayload = { xRatio: number; yRatio: number };
 export type RemoteClickPayload = { xRatio: number; yRatio: number; button: 'left' | 'right' | 'middle' };

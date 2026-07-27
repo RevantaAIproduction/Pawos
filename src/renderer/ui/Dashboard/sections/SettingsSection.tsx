@@ -1,17 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
-import {
-  AccountIcon,
-  DesktopIcon,
-  SettingsIcon,
-  AIIcon,
-  ShieldIcon,
-  SecurityIcon,
-  BrowserToolsIcon,
-  CardIcon,
-  TerminalIcon,
-  PlugIcon,
-} from '../NavIcons';
+import { ChevronRightIcon } from '../NavIcons';
+import { SettingsHome } from '../SettingsHome';
+import { SettingsPageHeader } from '../SettingsPageHeader';
 import { AccountSettingsPage } from './AccountSettingsPage';
 import { DevicesSettingsPage } from './DevicesSettingsPage';
 import { PreferencesSettingsPage } from './PreferencesSettingsPage';
@@ -21,10 +12,12 @@ import { SecuritySettingsPage } from './SecuritySettingsPage';
 import { BrowserToolsSettingsPage } from './BrowserToolsSettingsPage';
 import { BillingSettingsPage } from './BillingSettingsPage';
 import { DevelopersSettingsPage } from './DevelopersSettingsPage';
-import { IntegrationsSettingsPage } from './IntegrationsSettingsPage';
+import { ConnectionsPage } from './ConnectionsPage';
+import { useConnectivityBootstrap } from '../../../connectivity/useConnectivityBootstrap';
 import type { AuthUser, EmailCreateAccountOptions } from '../../../auth/AuthTypes';
 
 const SETTINGS_TABS = [
+  'Home',
   'Account',
   'Devices',
   'Preferences',
@@ -32,25 +25,12 @@ const SETTINGS_TABS = [
   'Privacy',
   'Security',
   'Browser Tools',
-  'Integrations',
+  'Connections',
   'Billing',
   'Developers',
 ] as const;
 
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
-
-const CATEGORY_ICONS: Record<SettingsTab, React.ComponentType> = {
-  Account: AccountIcon,
-  Devices: DesktopIcon,
-  Preferences: SettingsIcon,
-  AI: AIIcon,
-  Privacy: ShieldIcon,
-  Security: SecurityIcon,
-  'Browser Tools': BrowserToolsIcon,
-  Integrations: PlugIcon,
-  Billing: CardIcon,
-  Developers: TerminalIcon,
-};
 
 export function SettingsSection({
   user,
@@ -64,6 +44,7 @@ export function SettingsSection({
   onRequestPasswordReset,
   onVerifyPasswordResetCode,
   onCompletePasswordReset,
+  onOpenSupportMessages,
 }: {
   user: AuthUser;
   onSignOut: () => void;
@@ -78,59 +59,103 @@ export function SettingsSection({
   onRequestPasswordReset: (email: string) => Promise<{ expiresInMinutes: number }>;
   onVerifyPasswordResetCode: (email: string, code: string) => Promise<{ valid: boolean; reason?: string; resetToken?: string }>;
   onCompletePasswordReset: (resetToken: string, newPassword: string) => Promise<{ ok: boolean; reason?: string }>;
+  /** Opens the floating Support widget directly on its Messages tab — used by Organization seat-change requests. */
+  onOpenSupportMessages: () => void;
 }) {
-  const [tab, setTab] = useState<SettingsTab>(initialTab ?? 'Account');
+  const [tab, setTab] = useState<SettingsTab>(initialTab ?? 'Home');
 
   useEffect(() => {
     if (initialTab) setTab(initialTab);
   }, [initialTab]);
 
+  // Restores every persisted connector credential once per session (never on repeated visits) —
+  // see useConnectivityBootstrap's own doc comment. Deliberately not inside ConnectionsPage.tsx,
+  // which is pure status discovery and must never itself trigger authentication.
+  useConnectivityBootstrap({ userId: user.id });
+
   const goToAccount = () => setTab('Account');
   const goToDevices = () => setTab('Devices');
 
   return (
-    <div className={styles.settingsLayout}>
-      <nav className={styles.settingsNav}>
-        {SETTINGS_TABS.map((c) => {
-          const Icon = CATEGORY_ICONS[c];
-          return (
-            <button
-              key={c}
-              type="button"
-              className={`${styles.settingsNavItem} ${tab === c ? styles.settingsNavItemActive : ''}`}
-              onClick={() => setTab(c)}
-            >
-              <span className={styles.settingsNavIcon}>
-                <Icon />
-              </span>
-              {c}
-            </button>
-          );
-        })}
-      </nav>
+    <div>
+      {tab !== 'Home' && (
+        <button type="button" className={styles.sectionBackButton} onClick={() => setTab('Home')}>
+          <span style={{ display: 'inline-flex', transform: 'rotate(180deg)' }}>
+            <ChevronRightIcon />
+          </span>
+          Settings
+        </button>
+      )}
 
-      <div className={styles.settingsContent}>
-        {tab === 'Account' && (
-          <AccountSettingsPage
-            user={user}
-            onSignOut={onSignOut}
-            onUpgradeGuestWithGoogle={onUpgradeGuestWithGoogle}
-            onUpgradeGuestWithEmail={onUpgradeGuestWithEmail}
-            isGoogleSignInAvailable={isGoogleSignInAvailable}
-            onRequestPasswordReset={onRequestPasswordReset}
-            onVerifyPasswordResetCode={onVerifyPasswordResetCode}
-            onCompletePasswordReset={onCompletePasswordReset}
-          />
+      <div className={`${styles.settingsContent} ${styles.pageFadeIn}`} key={tab}>
+        {tab === 'Home' && (
+          <SettingsHome user={user} onSelectTab={setTab} onOpenCompanionStudio={onOpenCompanionStudio} />
         )}
-        {tab === 'Devices' && <DevicesSettingsPage user={user} onSignOut={onSignOut} />}
-        {tab === 'Preferences' && <PreferencesSettingsPage onOpenCompanionStudio={onOpenCompanionStudio} />}
-        {tab === 'AI' && <AISettingsPage />}
-        {tab === 'Privacy' && <PrivacySection />}
-        {tab === 'Security' && <SecuritySettingsPage onGoToAccount={goToAccount} onGoToDevices={goToDevices} />}
-        {tab === 'Browser Tools' && <BrowserToolsSettingsPage />}
-        {tab === 'Integrations' && <IntegrationsSettingsPage scope={{ userId: user.id }} />}
-        {tab === 'Billing' && <BillingSettingsPage user={user} onGoToAccount={goToAccount} onUpgrade={onUpgrade} />}
-        {tab === 'Developers' && <DevelopersSettingsPage />}
+        {tab === 'Account' && (
+          <>
+            <SettingsPageHeader title="Account" description="Profile, email, password, and your organization." />
+            <AccountSettingsPage
+              user={user}
+              onSignOut={onSignOut}
+              onUpgradeGuestWithGoogle={onUpgradeGuestWithGoogle}
+              onUpgradeGuestWithEmail={onUpgradeGuestWithEmail}
+              isGoogleSignInAvailable={isGoogleSignInAvailable}
+              onRequestPasswordReset={onRequestPasswordReset}
+              onVerifyPasswordResetCode={onVerifyPasswordResetCode}
+              onCompletePasswordReset={onCompletePasswordReset}
+              onOpenSupportMessages={onOpenSupportMessages}
+            />
+          </>
+        )}
+        {tab === 'Devices' && (
+          <>
+            <SettingsPageHeader title="Devices" description="This device, active sessions, and paired phones." />
+            <DevicesSettingsPage user={user} onSignOut={onSignOut} />
+          </>
+        )}
+        {tab === 'Preferences' && (
+          <>
+            <SettingsPageHeader title="Preferences" description="General (including theme and language), appearance, voice, and notifications." />
+            <PreferencesSettingsPage onOpenCompanionStudio={onOpenCompanionStudio} />
+          </>
+        )}
+        {tab === 'AI' && (
+          <>
+            <SettingsPageHeader title="AI" description="Which Paw model you're using, and what your plan unlocks." />
+            <AISettingsPage onUpgrade={onUpgrade} />
+          </>
+        )}
+        {tab === 'Privacy' && (
+          <>
+            <SettingsPageHeader title="Privacy" description="What PawOS stores, and your recording consent." />
+            <PrivacySection />
+          </>
+        )}
+        {tab === 'Security' && (
+          <>
+            <SettingsPageHeader title="Security" description="Password, sessions, and account protection." />
+            <SecuritySettingsPage onGoToAccount={goToAccount} onGoToDevices={goToDevices} />
+          </>
+        )}
+        {tab === 'Browser Tools' && (
+          <>
+            <SettingsPageHeader title="Browser Tools" description="Browser automation preferences." />
+            <BrowserToolsSettingsPage />
+          </>
+        )}
+        {tab === 'Connections' && <ConnectionsPage scope={{ userId: user.id }} />}
+        {tab === 'Billing' && (
+          <>
+            <SettingsPageHeader title="Billing" description="Plan, credits, referrals, and usage." />
+            <BillingSettingsPage user={user} onGoToAccount={goToAccount} onUpgrade={onUpgrade} />
+          </>
+        )}
+        {tab === 'Developers' && (
+          <>
+            <SettingsPageHeader title="Developers" description="Coding mode, infrastructure connectors, and updates." />
+            <DevelopersSettingsPage />
+          </>
+        )}
       </div>
     </div>
   );

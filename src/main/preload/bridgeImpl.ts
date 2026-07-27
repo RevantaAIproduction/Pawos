@@ -29,6 +29,7 @@ import type {
   ConnectivityScope,
   ConnectorDefinition,
   ConnectorConnection,
+  ConnectorStatus,
   DeploymentProfile,
   DeploymentProfileConfig,
   ConnectivityIpcResult,
@@ -37,6 +38,7 @@ import type {
 } from "../../shared/connectivity/ConnectivityTypes";
 import type {
   PricingConfig,
+  TicketPricingConfig,
   SubscriptionState,
   SubscriptionTierId,
   CreditBalance,
@@ -157,6 +159,7 @@ export function contextBridge() {
     deviceGetLocalIdentity: () => ipcRenderer.invoke("device:getLocalIdentity") as Promise<LocalDeviceIdentity>,
 
     billingGetPricing: () => ipcRenderer.invoke("billing:getPricing") as Promise<PricingConfig>,
+    billingGetTicketPricingConfig: () => ipcRenderer.invoke("billing:getTicketPricingConfig") as Promise<TicketPricingConfig>,
     billingGetSubscription: () => ipcRenderer.invoke("billing:getSubscription") as Promise<SubscriptionState>,
     billingSetSubscriptionTier: (tier: SubscriptionTierId) =>
       ipcRenderer.invoke("billing:setSubscriptionTier", tier) as Promise<SubscriptionState>,
@@ -175,12 +178,12 @@ export function contextBridge() {
     billingCreateCheckoutSession: (tier: SubscriptionTierId, callbackUrl?: string, options?: CheckoutOptions) =>
       ipcRenderer.invoke("billing:createCheckoutSession", tier, callbackUrl, options) as Promise<BillingCheckoutResult>,
     billingStartCheckoutSync: () => ipcRenderer.invoke("billing:startCheckoutSync") as Promise<string>,
-    billingCreateCreditsCheckoutSession: (credits: number, organizationId?: string, callbackUrl?: string) =>
-      ipcRenderer.invoke("billing:createCreditsCheckoutSession", credits, organizationId, callbackUrl) as Promise<BillingCheckoutResult>,
+    billingCreateCreditsCheckoutSession: (amountUsd: number, organizationId?: string, callbackUrl?: string) =>
+      ipcRenderer.invoke("billing:createCreditsCheckoutSession", amountUsd, organizationId, callbackUrl) as Promise<BillingCheckoutResult>,
     onSubscriptionUpdated: (cb: () => void) => {
       ipcRenderer.on("billing:subscriptionUpdated", () => cb());
     },
-    onTaskCreditsPurchased: (cb: (payload: { credits: number; organizationId?: string }) => void) => {
+    onTaskCreditsPurchased: (cb: (payload: { amountUsd: number; organizationId?: string }) => void) => {
       ipcRenderer.on("billing:taskCreditsPurchased", (_evt, payload) => cb(payload));
     },
 
@@ -263,6 +266,10 @@ export function contextBridge() {
       ipcRenderer.invoke("connectivity:listConnections", scope) as Promise<ConnectivityIpcResult<ConnectorConnection[]>>,
     connectivityConnect: (connectorId: string, scope: ConnectivityScope) =>
       ipcRenderer.invoke("connectivity:connect", connectorId, scope) as Promise<ConnectivityIpcResult<ConnectorConnection>>,
+    connectivityGetStatus: (connectorId: string, scope: ConnectivityScope) =>
+      ipcRenderer.invoke("connectivity:getStatus", connectorId, scope) as Promise<ConnectivityIpcResult<ConnectorStatus>>,
+    connectivityRestore: (connectorId: string, scope: ConnectivityScope, credential: unknown) =>
+      ipcRenderer.invoke("connectivity:restore", connectorId, scope, credential) as Promise<ConnectivityIpcResult<ConnectorStatus>>,
     connectivityDisconnect: (connectionId: string) =>
       ipcRenderer.invoke("connectivity:disconnect", connectionId) as Promise<ConnectivityIpcResult<void>>,
     connectivityCheckHealth: (connectionId: string) =>

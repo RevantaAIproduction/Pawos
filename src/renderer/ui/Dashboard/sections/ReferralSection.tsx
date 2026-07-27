@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
 import { referralService } from '../../../organization/ReferralService';
+import { referralCreditService } from '../../../organization/ReferralCreditService';
 import { REFERRALS_PER_MILESTONE, REWARD_USD_PER_MILESTONE } from '../../../../shared/referral/ReferralTypes';
 import type { Referral, ReferralReward } from '../../../../shared/referral/ReferralTypes';
+import type { ReferralCreditBalance } from '../../../../shared/billing/ReferralCreditTypes';
 import type { AuthUser } from '../../../auth/AuthTypes';
 
 function getErrorMessage(e: unknown): string {
@@ -26,13 +28,20 @@ const inputStyle: React.CSSProperties = {
  * the referred account genuinely subscribes to Pro or Pro Max — "signed up"
  * and "subscribed" are shown as distinct states rather than collapsed into
  * one, since only the latter counts toward a reward. Every 5 subscribed
- * referrals grants $70 (14 task credits) automatically — no claim button,
- * since the server-side RPC grants it the moment the 5th conversion lands.
+ * referrals grants $100 in Referral Credits automatically — no claim
+ * button, since the server-side RPC grants it the moment the 5th
+ * conversion lands. Referral Credits are a third balance, fully separate
+ * from both Subscription billing and the Autonomous Ticket System's
+ * Ticket Balance — usable only for Coding Runtime, AI Runtime, Companion
+ * Runtime, and future runtime-based usage; never for tickets, ticket
+ * investigations, subscriptions, plan upgrades, cash withdrawal,
+ * transfers, or any external payout.
  */
 export function ReferralSection({ user }: { user: AuthUser }) {
   const [code, setCode] = useState<string | null>(null);
   const [referrals, setReferrals] = useState<Referral[]>([]);
   const [rewards, setRewards] = useState<ReferralReward[]>([]);
+  const [referralCredits, setReferralCredits] = useState<ReferralCreditBalance | null>(null);
   const [hasApplied, setHasApplied] = useState(false);
   const [codeInput, setCodeInput] = useState('');
   const [loading, setLoading] = useState(true);
@@ -46,12 +55,14 @@ export function ReferralSection({ user }: { user: AuthUser }) {
       referralService.listMyReferrals(),
       referralService.listMyRewards(),
       referralService.hasAppliedCode(),
+      referralCreditService.getBalance(),
     ])
-      .then(([myCode, myReferrals, myRewards, applied]) => {
+      .then(([myCode, myReferrals, myRewards, applied, credits]) => {
         setCode(myCode);
         setReferrals(myReferrals);
         setRewards(myRewards);
         setHasApplied(applied);
+        setReferralCredits(credits);
       })
       .catch((e) => setError(getErrorMessage(e)))
       .finally(() => setLoading(false));
@@ -101,9 +112,10 @@ export function ReferralSection({ user }: { user: AuthUser }) {
       <h3 className={styles.cardTitle}>Refer PawOS</h3>
       <p className={styles.cardBody} style={{ marginTop: 6, marginBottom: 12 }}>
         Share your code. When {REFERRALS_PER_MILESTONE} people you refer take a Pro or Pro Max subscription, you get
-        ${REWARD_USD_PER_MILESTONE} in bonus Autonomous Engineering Task credits added straight to your balance —
-        usable once your own purchased credits run out. A referral only counts once they genuinely subscribe;
-        signing up alone doesn't count.
+        ${REWARD_USD_PER_MILESTONE} in Referral Credits — usable for Coding Runtime, AI Runtime, Companion Runtime, and
+        future runtime-based usage. Referral Credits are a separate balance from both your subscription and the
+        Autonomous Ticket System's Ticket Balance, and can never be spent on tickets, subscriptions, plan upgrades,
+        or withdrawn as cash. A referral only counts once they genuinely subscribe; signing up alone doesn't count.
       </p>
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
@@ -119,6 +131,10 @@ export function ReferralSection({ user }: { user: AuthUser }) {
         <div>
           <p className={styles.cardBody} style={{ fontSize: 12, color: '#96969e' }}>Progress to next reward</p>
           <p style={{ fontSize: 18, fontWeight: 600 }}>{progressInMilestone} / {REFERRALS_PER_MILESTONE}</p>
+        </div>
+        <div>
+          <p className={styles.cardBody} style={{ fontSize: 12, color: '#96969e' }}>Referral Credits balance</p>
+          <p style={{ fontSize: 18, fontWeight: 600 }}>${(referralCredits?.balanceUsd ?? 0).toFixed(2)}</p>
         </div>
         <div>
           <p className={styles.cardBody} style={{ fontSize: 12, color: '#96969e' }}>Total earned</p>

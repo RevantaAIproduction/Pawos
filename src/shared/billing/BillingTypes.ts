@@ -75,6 +75,18 @@ export type PricingConfig = {
   billingProvider: BillingProviderId;
 };
 
+/**
+ * Editable Ticket Balance top-up configuration — completely separate from PricingConfig/plans
+ * above (subscription pricing). Persisted so new preset amounts (e.g. a future $500 option) can be
+ * added later purely as data, without a code change/redeploy. Volume-tiered per-ticket pricing
+ * itself (TICKET_PRICING_TIERS in AutonomousTaskBillingTypes.ts) is not part of this config — only
+ * the top-up amounts offered and the enforced minimum.
+ */
+export type TicketPricingConfig = {
+  topupPresetsUsd: number[];
+  minTopupUsd: number;
+};
+
 export type CreditBalance = {
   /** null = no cap configured yet — usage is tracked but never blocks anything. "Business Configuration Required". */
   limit: number | null;

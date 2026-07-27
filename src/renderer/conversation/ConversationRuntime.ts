@@ -1464,6 +1464,50 @@ export class ConversationRuntime {
   }
 
   /**
+   * Inline "Connect {capability}" submit from a paused Task Card. Saves/activates the credential
+   * via the matching connect action, then resumes the paused action through the existing,
+   * unmodified retryTaskAction — no new resume mechanism, mirroring the "↻ Retry" button's own
+   * two-step shape (act, then re-run the original request).
+   */
+  async connectCapabilityAndRetry(
+    taskId: string,
+    actionId: string,
+    connectorId: string,
+    fields: Record<string, string>,
+    opts?: { incrementalCapability?: string }
+  ): Promise<{ ok: boolean; message?: string }> {
+    const executeAction = this.args.executeAction;
+    if (!executeAction) return { ok: false, message: 'Not available right now.' };
+
+    let connectRequest: ActionRequest;
+    if (connectorId === 'jira') {
+      connectRequest = { type: 'connectJiraCredential', baseUrl: fields.baseUrl ?? '', email: fields.email ?? '', apiToken: fields.apiToken ?? '' };
+    } else {
+      // Generic OAuth2/PKCE path — reused unmodified by any future OAuth connector (Microsoft,
+      // Dropbox, Slack, Notion, GitHub). ConnectionManager.connect() drives the interactive
+      // browser consent flow itself; incrementalCapability (set when the paused card's
+      // grantMode is 'incrementalScope') requests only that one missing scope instead of a
+      // full reconnect.
+      connectRequest = {
+        type: 'connectivityConnect',
+        connectorId,
+        incrementalCapabilities: opts?.incrementalCapability ? [opts.incrementalCapability] : undefined,
+      };
+    }
+
+    let result: ActionResult;
+    try {
+      result = await executeAction(connectRequest);
+    } catch (error) {
+      result = { ok: false, reason: 'failed', message: error instanceof Error ? error.message : 'Connect failed unexpectedly.' };
+    }
+    if (!result.ok) return { ok: false, message: (result as { message?: string }).message ?? 'Could not connect.' };
+
+    await this.retryTaskAction(taskId, actionId);
+    return { ok: true };
+  }
+
+  /**
    * Real mic/system-audio capture lives in THIS renderer process
    * (getUserMedia/MediaRecorder can't run in the main process) — the
    * plugin itself only manages the CommunicationRecord's metadata/status.

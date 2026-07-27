@@ -4,6 +4,7 @@ import { permissionService } from '../../../organization/PermissionService';
 import { KNOWN_CAPABILITIES } from '../../../../shared/organization/PermissionTypes';
 import type { RoleCapability } from '../../../../shared/organization/PermissionTypes';
 import type { OrgRole } from '../../../../shared/organization/OrganizationTypes';
+import { Toggle } from '../Toggle';
 
 function getErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -83,11 +84,12 @@ export function RolesCapabilityCard({ organizationId, roleOptions }: { organizat
                   <td style={{ padding: '6px 10px' }}>{capability}</td>
                   {roleOptions.map((role) => (
                     <td key={role} style={{ textAlign: 'center', padding: '6px 10px' }}>
-                      <input
-                        type="checkbox"
+                      <Toggle
+                        size="sm"
                         checked={isAllowed(role, capability)}
                         disabled={!canManage}
                         onChange={() => toggle(role, capability)}
+                        label={`${capability} for ${role}`}
                       />
                     </td>
                   ))}

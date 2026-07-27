@@ -20,6 +20,7 @@ export function AccountSettingsPage({
   onRequestPasswordReset,
   onVerifyPasswordResetCode,
   onCompletePasswordReset,
+  onOpenSupportMessages,
 }: {
   user: AuthUser;
   onSignOut: () => void;
@@ -29,6 +30,7 @@ export function AccountSettingsPage({
   onRequestPasswordReset: (email: string) => Promise<{ expiresInMinutes: number }>;
   onVerifyPasswordResetCode: (email: string, code: string) => Promise<{ valid: boolean; reason?: string; resetToken?: string }>;
   onCompletePasswordReset: (resetToken: string, newPassword: string) => Promise<{ ok: boolean; reason?: string }>;
+  onOpenSupportMessages: () => void;
 }) {
   return (
     <div>
@@ -82,7 +84,7 @@ export function AccountSettingsPage({
       )}
 
       <div style={{ marginTop: 14 }}>
-        <OrganizationSection user={user} />
+        <OrganizationSection user={user} onOpenSupportMessages={onOpenSupportMessages} />
       </div>
     </div>
   );

@@ -25,11 +25,18 @@ export type HelpActivityState = {
 
 export type SupportConversationStatus = 'new' | 'investigating' | 'aiFixing' | 'waitingPermission' | 'resolved' | 'closed';
 
+export type SupportConversationAttachment = {
+  name: string;
+  dataUrl: string;
+  kind: 'image' | 'file';
+};
+
 export type SupportConversationTurn = {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
   matchedArticleIds?: string[];
+  attachments?: SupportConversationAttachment[];
 };
 
 export type SupportConversation = {

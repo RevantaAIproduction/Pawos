@@ -22,7 +22,6 @@ const pending = new Map<OAuthProvider, PendingResolver>();
 
 /** Called by GoogleOAuthFlow.ts/GitHubOAuthFlow.ts before opening the system browser. */
 export function registerPendingOAuth(provider: OAuthProvider, resolver: PendingResolver): void {
-  console.log('[protocol] registerPendingOAuth:', provider); // [DEBUG-TEMP]
   pending.set(provider, resolver);
 }
 
@@ -51,34 +50,30 @@ export function registerConnectivityOAuthHandler(handler: (url: URL) => void): v
   connectivityOAuthHandler = handler;
 }
 
-/** Called from main.ts with the raw pawos:// URL, from whichever OS mechanism delivered it. */
+/**
+ * Called from main.ts with the raw pawos:// URL, from whichever OS mechanism
+ * delivered it. Never logs `rawUrl` itself — for Google it carries a live
+ * id_token/access_token in the query string, so even a debug log line here
+ * would leak a real credential into disk/console output.
+ */
 export function handleOAuthProtocolUrl(rawUrl: string): void {
-  // [DEBUG-TEMP] verbose logging while verifying the pawos:// handoff end-to-end — remove once confirmed working live.
-  console.log('[protocol] handleOAuthProtocolUrl called with:', rawUrl);
   let parsed: URL;
   try {
     parsed = new URL(rawUrl);
-  } catch (e) {
-    console.log('[protocol] failed to parse URL:', e);
+  } catch {
     return;
   }
-  if (parsed.protocol !== 'pawos:') {
-    console.log('[protocol] ignoring non-pawos protocol:', parsed.protocol);
-    return;
-  }
+  if (parsed.protocol !== 'pawos:') return;
 
   if (parsed.hostname === 'connectivity-oauth-callback') {
     if (connectivityOAuthHandler) connectivityOAuthHandler(parsed);
-    else console.log('[protocol] connectivity-oauth-callback received but no handler registered');
     return;
   }
 
   const provider = PROTOCOL_HOST_TO_PROVIDER[parsed.hostname];
-  console.log('[protocol] hostname:', parsed.hostname, '-> provider:', provider);
   if (!provider) return;
 
   const resolver = pending.get(provider);
-  console.log('[protocol] pending resolver for', provider, ':', Boolean(resolver), '(pending keys:', Array.from(pending.keys()), ')');
   if (!resolver) return;
   pending.delete(provider);
 
@@ -113,7 +108,6 @@ export function handleOAuthProtocolUrl(rawUrl: string): void {
   }
 
   const code = parsed.searchParams.get('code');
-  console.log('[protocol] resolving with code present:', Boolean(code));
   if (code) resolver.resolve(code);
   else resolver.reject(new Error('Sign-in callback was missing an authorization code.'));
 }

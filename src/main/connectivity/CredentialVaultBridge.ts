@@ -7,6 +7,10 @@ export interface StoredCredential {
   authMethod: AuthMethod;
   refreshToken?: string;
   expiresAt?: number;
+  /** The full set of scopes/permissions this connection currently holds — the union across
+   *  every full connect and incremental grant so far (see OAuthManager's incremental-auth
+   *  support). Absent for non-OAuth connectors (apiToken, sshKey). */
+  grantedScopes?: string[];
   updatedAt: number;
 }
 
@@ -57,7 +61,7 @@ class CredentialVaultBridge {
     scope: ConnectivityScope,
     secret: string,
     authMethod: AuthMethod,
-    opts?: { refreshToken?: string; expiresAt?: number }
+    opts?: { refreshToken?: string; expiresAt?: number; grantedScopes?: string[] }
   ): Promise<void> {
     this.credentials.set(credentialKey(connectorId, scope), {
       connectorId,
@@ -66,6 +70,7 @@ class CredentialVaultBridge {
       authMethod,
       refreshToken: opts?.refreshToken,
       expiresAt: opts?.expiresAt,
+      grantedScopes: opts?.grantedScopes,
       updatedAt: Date.now(),
     });
   }
@@ -74,12 +79,36 @@ class CredentialVaultBridge {
     return this.credentials.get(credentialKey(connectorId, scope));
   }
 
-  async rotate(connectorId: string, scope: ConnectivityScope, newSecret: string): Promise<void> {
+  /**
+   * `opts.refreshToken` is rotation-safe by construction, not just by caller discipline: an
+   * absent/empty value here NEVER blanks out an existing stored refresh token. This matters
+   * because Google's normal refresh response omits `refresh_token` entirely (it only reissues
+   * one on rare rotation) — a naive `rotate(id, scope, newAccessToken, { refreshToken:
+   * response.refreshToken })` call would otherwise silently destroy the only refresh token the
+   * connection has, permanently breaking it the next time it expires. Every OAuth connector's
+   * refresh path goes through this same guard automatically; no connector has to remember to
+   * write the "keep the old one" fallback itself. `grantedScopes`, when passed, fully replaces
+   * the stored set (the caller — OAuthManager's incremental-merge step — has already computed
+   * the correct union before calling this).
+   */
+  async rotate(
+    connectorId: string,
+    scope: ConnectivityScope,
+    newSecret: string,
+    opts?: { refreshToken?: string; expiresAt?: number; grantedScopes?: string[] }
+  ): Promise<void> {
     const existing = this.credentials.get(credentialKey(connectorId, scope));
     if (!existing) {
       throw new Error(`Cannot rotate — no credential stored for connector '${connectorId}' in this scope.`);
     }
-    this.credentials.set(credentialKey(connectorId, scope), { ...existing, secret: newSecret, updatedAt: Date.now() });
+    this.credentials.set(credentialKey(connectorId, scope), {
+      ...existing,
+      secret: newSecret,
+      refreshToken: opts?.refreshToken || existing.refreshToken,
+      expiresAt: opts?.expiresAt ?? existing.expiresAt,
+      grantedScopes: opts?.grantedScopes ?? existing.grantedScopes,
+      updatedAt: Date.now(),
+    });
   }
 
   async revoke(connectorId: string, scope: ConnectivityScope): Promise<void> {

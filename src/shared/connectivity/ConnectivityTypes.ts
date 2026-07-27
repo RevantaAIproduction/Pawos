@@ -18,9 +18,102 @@ export type ConnectorCategory =
   | 'restApi'
   | 'mcpServer'
   | 'localApplication'
+  | 'productivity'
   | 'other';
 
+/** User-facing labels for the categories the capability-requirement UI surfaces (RequirementGate /
+ *  CapabilityRequirementResolver). Not every ConnectorCategory needs a label here — only the ones
+ *  a requirement is ever declared against. */
+export const CONNECTOR_CATEGORY_LABELS: Partial<Record<ConnectorCategory, string>> = {
+  projectManagement: 'Ticket Access',
+  sourceControl: 'Repository Access',
+  hosting: 'Deployment Access',
+  cloud: 'Cloud Access',
+  database: 'Database Access',
+  communication: 'Communication Access',
+  productivity: 'Productivity & Documents',
+};
+
 export type AuthMethod = 'oauth2' | 'apiToken' | 'sshKey' | 'none';
+
+/**
+ * The platform-wide connector lifecycle. Every ConnectorSDK implementation — current and future —
+ * moves through these states and no others:
+ *
+ *   Disconnected -> Connecting -> Connected -> Syncing -> Connected -> Expired -> Requires Re-auth -> Error
+ *
+ * Transitions:
+ *   disconnected      --(user clicks Connect)-->            connecting
+ *   connecting        --(OAuth/token exchange succeeds)-->  connected
+ *   connecting        --(fails)-->                          error
+ *   connected         --(sync() starts)-->                  syncing
+ *   syncing           --(sync completes)-->                 connected
+ *   connected         --(token TTL elapses)-->               expired
+ *   expired           --(refresh() succeeds)-->              connected
+ *   expired           --(refresh fails / provider revoked)--> requiresReauth
+ *   requiresReauth    --(user clicks Connect/Grant)-->       connecting
+ *   any state         --(unexpected failure)-->              error
+ *   error             --(user retries)-->                    connecting
+ *   any state         --(user clicks Disconnect)-->          disconnected
+ */
+export type ConnectorLifecycleState =
+  | 'disconnected'
+  | 'connecting'
+  | 'connected'
+  | 'syncing'
+  | 'expired'
+  | 'requiresReauth'
+  | 'error';
+
+/**
+ * The first-class, live status model every `ConnectorSDK.getStatus()` returns. Read-only by
+ * contract — see `ConnectorSDK.getStatus`'s own doc comment for the rules a connector must follow
+ * when reporting this.
+ */
+export interface ConnectorStatus {
+  state: ConnectorLifecycleState;
+  /** The live, possibly-narrower-than-declared capability set — mirrors `ConnectorSDK.capabilities()`. */
+  capabilities: string[];
+  connectedAt?: string;
+  lastSyncAt?: string;
+  lastError?: string;
+  detail?: string;
+}
+
+/**
+ * Describes one declared capability for AI Runtime / tool-calling discovery — the connector
+ * platform is the AI Runtime's execution layer, not only an auth surface. `id` matches an entry in
+ * `ConnectorDefinition.capabilities`; `params` is intentionally loose (no full JSON-Schema this
+ * pass) since only two connectors populate it today (see `capabilityDescriptors` below).
+ */
+export interface CapabilityDescriptor {
+  id: string;
+  label: string;
+  description: string;
+  params?: Record<string, { type: string; description: string; required?: boolean }>;
+}
+
+/** Maps the richer live `ConnectorLifecycleState` down to `ConnectorConnection.status`'s narrower,
+ *  Supabase-backed set — `connecting`/`syncing` collapse to `connected` (both are "in the middle of
+ *  an already-connected flow" from a persisted-record point of view), `expired`/`requiresReauth`
+ *  collapse to `needsReauth`. */
+export function connectorLifecycleToConnectionStatus(
+  state: ConnectorLifecycleState
+): ConnectorConnection['status'] {
+  switch (state) {
+    case 'disconnected':
+      return 'disconnected';
+    case 'connecting':
+    case 'syncing':
+    case 'connected':
+      return 'connected';
+    case 'expired':
+    case 'requiresReauth':
+      return 'needsReauth';
+    case 'error':
+      return 'error';
+  }
+}
 
 export interface OAuthConnectorConfig {
   authorizationUrl: string;
@@ -28,7 +121,30 @@ export interface OAuthConnectorConfig {
   scopes: string[];
   /** Env var name to read at exchange time — never the literal secret itself. */
   clientIdEnvVar: string;
-  clientSecretEnvVar: string;
+  /** Absent for a PKCE-only public client (`usePkce: true`) — OAuthManager's exchange/refresh
+   *  methods never read this field at all in that case, since there is no secret to send. */
+  clientSecretEnvVar?: string;
+  /** PKCE-only public client (no client secret ever sent) — OAuthManager generates a
+   *  code_verifier/code_challenge pair and does the token exchange with just client_id.
+   *  `clientSecretEnvVar` is ignored entirely for a connector that sets this true. */
+  usePkce?: boolean;
+  /** Endpoint OAuthManager.revokeToken() posts to. Absent means the provider has no
+   *  revocation endpoint declared — revokeToken() then no-ops (logs, doesn't throw)
+   *  rather than inventing a call the provider never documented. */
+  revocationUrl?: string;
+  /** When true, every authorize URL OAuthManager builds for this connector includes
+   *  `include_granted_scopes=true` — the standard signal (Google and compatible
+   *  providers) that a new token should union with whatever was already granted,
+   *  rather than replace it. Harmless to set even for a full connect. */
+  supportsIncrementalAuth?: boolean;
+  /** When true, OAuthManager redirects through a temporary http://127.0.0.1:<ephemeral-port>
+   *  listener instead of the pawos:// custom-protocol redirect — the Google-documented
+   *  loopback flow for Desktop-app OAuth clients, which do not accept arbitrary custom URI
+   *  schemes as a redirect target (confirmed live: Google rejects pawos:// with "Error 400:
+   *  invalid_request" for this client type). Generic — any future OAuth connector whose
+   *  provider has the same Desktop-client restriction sets this the same way. Absent/false
+   *  keeps the existing pawos:// protocol-callback path unchanged. */
+  useLoopbackRedirect?: boolean;
 }
 
 /**
@@ -42,14 +158,28 @@ export interface ConnectorDefinition {
   /** 'github', 'jira', 'slack', 'ssh-generic' — unique across the registry. */
   id: string;
   displayName: string;
+  /** One plain-language sentence for the Integrations UI — what connecting this actually gets you.
+   *  Absent falls back to the category label; never render raw category/authMethod enum text to users. */
+  description?: string;
   category: ConnectorCategory;
   authMethod: AuthMethod;
   /** Present only when authMethod === 'oauth2'. */
   oauth?: OAuthConnectorConfig;
   /** Present only when authMethod === 'apiToken'. */
-  apiTokenHelp?: { instructionsUrl: string; fieldLabel: string };
+  apiTokenHelp?: {
+    instructionsUrl: string;
+    fieldLabel: string;
+    /** Extra fields collected before the token itself (e.g. Jira's site URL + email), each
+     *  becoming a key in the JSON credential object passed to the connector's own authenticate() —
+     *  ApiTokenManager never interprets these values, only collects and forwards them. Absent means
+     *  today's single-token flow (the credential is `{ apiToken: <token> }`), unchanged. */
+    additionalFields?: { name: string; label: string; type?: 'text' | 'password' }[];
+  };
   /** Declarative, e.g. ['readTickets', 'createPullRequest']. */
   capabilities: string[];
+  /** Optional, richer AI-Runtime-facing description of each entry in `capabilities` — absent
+   *  entries simply aren't discoverable by name/description yet, not an error. */
+  capabilityDescriptors?: CapabilityDescriptor[];
   /** Event names this connector can emit, e.g. ['issue.created']. */
   events?: string[];
   healthCheck?: { path: string; method: 'GET' };
@@ -72,6 +202,11 @@ export interface ConnectorConnection {
   id: string;
   connectorId: string;
   scope: ConnectivityScope;
+  /** This persisted-record status stays its original, narrower shape — it's backed by a Supabase
+   *  column with a matching check constraint (`connectivity_runtime_persistence` migration).
+   *  Widening it to the full ConnectorLifecycleState is a schema migration, out of scope for this
+   *  pass; `connectorLifecycleToConnectionStatus()` below maps the richer live state down to this
+   *  set whenever a connection record needs updating from a `ConnectorStatus`. */
   status: 'connected' | 'disconnected' | 'error' | 'needsReauth';
   grantedPermissions: string[];
   lastSyncAt?: number;

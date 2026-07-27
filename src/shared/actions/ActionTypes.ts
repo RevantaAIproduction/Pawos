@@ -1,4 +1,6 @@
 import type { ExecutionTrail } from './ExecutionLifecycle';
+import type { ConnectivityScope } from '../connectivity/ConnectivityTypes';
+import type { CapabilityConfirmation, Requirement } from '../runtime/RequirementTypes';
 
 /** Kept as a plain string union here (not imported from src/main/execution/browser/) so this shared file never depends on main-process-only code — the real BrowserAdapter/BrowserId types there are the source of truth for values, this is just the wire shape. */
 export type BrowserId = 'chrome' | 'edge' | 'brave' | 'firefox' | 'electron';
@@ -17,7 +19,10 @@ export type CommandShell = 'cmd' | 'powershell' | 'gitbash';
  *    WiFi/window-arrangement/meetings — these need native modules or
  *    OS-specific APIs this project doesn't have yet).
  */
-export type ActionRequest =
+/** `scope` is optional and additive — populated by the renderer from the signed-in session (same
+ *  convention already used by every `connectivity:*` IPC call) only when a plugin actually needs
+ *  it (via RequirementGate); every existing call site that never sets it is unaffected. */
+export type ActionRequest = { scope?: ConnectivityScope } & (
   | { type: 'openUrl'; url: string }
   | { type: 'openApp'; appId: KnownAppId; path?: string }
   | { type: 'openFolder'; path: string }
@@ -466,7 +471,8 @@ export type ActionRequest =
   // work — writeFile/gitCommit/deployProject each already required their
   // own confirmation before this is ever called.
   // organizationId is optional — omit it for an individual (Pro/Pro Max,
-  // no organization) prepaid task credit run; see AutonomousTaskBillingGate.ts.
+  // no organization) run against that account's own Ticket Balance; see
+  // AutonomousTaskBillingGate.ts.
   | { type: 'startAutonomousEngineeringTask'; organizationId?: string; workspaceId?: string; ticketSource?: 'jira' | 'github' | 'linear' | 'azureDevOps'; ticketId?: string; repository?: string }
   | { type: 'completeAutonomousEngineeringTask'; runId: string; prUrl?: string; clientReplySent?: boolean; deployCompleted?: boolean }
   | { type: 'endAutonomousEngineeringTask'; runId: string; status: 'failed' | 'cancelled' | 'retry_limit_reached' }
@@ -539,7 +545,21 @@ export type ActionRequest =
   | { type: 'recordCompanionRoutine'; companionId: string; description: string; cadence?: string }
   | { type: 'listCompanionRoutines'; companionId: string }
   | { type: 'getCompanionMemorySummary'; companionId: string }
-  | { type: 'resetCompanionMemory'; companionId: string; confirmed?: boolean };
+  | { type: 'resetCompanionMemory'; companionId: string; confirmed?: boolean }
+  // Capability-connect actions — activates a connector in-memory for the current process
+  // (connectJiraCredential) and, for Guest-mode sessions with no Supabase Vault to persist
+  // through, saves the credential locally (saveGuestConnectorCredential). An authenticated
+  // session's persistence goes straight to the Vault from the renderer instead of an action.
+  | { type: 'connectJiraCredential'; baseUrl: string; email: string; apiToken: string }
+  | { type: 'saveGuestConnectorCredential'; connectorId: string; fields: Record<string, string> }
+  // Generic counterpart to connectJiraCredential for any non-apiToken (OAuth2/PKCE) ConnectorSDK
+  // — dispatches straight to ConnectionManager.connect(), which itself drives the interactive
+  // browser consent flow. `incrementalCapabilities`, when set, requests only those capabilities'
+  // backing scopes instead of a full reconnect (see CapabilityRequirementResolver's
+  // 'incrementalScope' grantMode). Persistence (Vault or Guest-mode store) happens inside the
+  // connector's own connect() implementation, exactly like Jira's does today.
+  | { type: 'connectivityConnect'; connectorId: string; incrementalCapabilities?: string[] }
+);
 
 export type KnownAppId =
   | 'vscode'
@@ -558,7 +578,17 @@ export type ActionResult =
   // data on a failure carries a plugin's own diagnostic state forward (e.g. what was
   // installed/run before verify() failed) so recover() has something real to act on,
   // not just a message string.
-  | { ok: false; reason: 'not-implemented' | 'requires-confirmation' | 'coding-mode-restricted' | 'infra-mode-restricted' | 'failed'; message?: string; data?: unknown; trail?: ExecutionTrail };
+  | {
+      ok: false;
+      reason: 'not-implemented' | 'requires-confirmation' | 'coding-mode-restricted' | 'infra-mode-restricted' | 'failed';
+      message?: string;
+      data?: unknown;
+      trail?: ExecutionTrail;
+      /** Present only when reason === 'requires-confirmation'. Absent = today's plain yes/no
+       *  confirmation prompt, unchanged. Present with kind: 'connectCapability' = render a
+       *  connect action (RequirementGate's capability resolver) instead of a yes/no prompt. */
+      confirmation?: { kind: 'yesNo' | 'connectCapability'; capabilities?: CapabilityConfirmation[] };
+    };
 
 /**
  * Destructive action types require an explicit `confirmed: true` before
@@ -657,4 +687,11 @@ export const INFRA_EXECUTION_ACTION_TYPES: ActionRequest['type'][] = ['deployPro
  * natural-language follow-up question instead of executing blind or failing
  * silently (the "Collect Missing Information" pipeline step).
  */
-export type ActionRequirement = { id: string; message: string };
+export type ActionRequirement = {
+  id: string;
+  message: string;
+  /** Present when this requirement should be resolved by RequirementGate (a capability check
+   *  today; later possibly confirmation/approval/selection) rather than surfaced as a plain
+   *  natural-language question. Absent = today's exact behavior, unchanged. */
+  resolvable?: Requirement;
+};

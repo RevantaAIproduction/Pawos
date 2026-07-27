@@ -31,17 +31,17 @@ export function startCheckoutCallbackServer(): Promise<string> {
       res.writeHead(200, { 'Content-Type': 'text/plain', 'Access-Control-Allow-Origin': '*' });
       res.end('ok');
 
-      // `type=credits` distinguishes a task-credit purchase (see
+      // `type=credits` distinguishes a Ticket Balance top-up (see
       // CreditsCheckoutClient.tsx) from a subscription purchase — the
       // renderer (which holds the Supabase session) is the one that
-      // actually calls add_task_credits(), since this main-process server
+      // actually calls add_ticket_balance(), since this main-process server
       // has no Supabase client of its own.
       if (url.searchParams.get('type') === 'credits') {
-        const credits = Number(url.searchParams.get('credits'));
+        const amountUsd = Number(url.searchParams.get('amountUsd'));
         const organizationId = url.searchParams.get('organizationId') || undefined;
-        if (Number.isFinite(credits) && credits > 0) {
+        if (Number.isFinite(amountUsd) && amountUsd > 0) {
           for (const win of BrowserWindow.getAllWindows()) {
-            win.webContents.send('billing:taskCreditsPurchased', { credits, organizationId });
+            win.webContents.send('billing:taskCreditsPurchased', { amountUsd, organizationId });
           }
         }
       } else {

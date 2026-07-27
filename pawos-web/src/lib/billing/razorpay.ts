@@ -45,10 +45,51 @@ export function getRazorpayPlanId(tier: SubscriptionTierId, seatTier?: SeatTier)
   return process.env[ENTERPRISE_BASE_PLAN_ENV_VAR] ?? null;
 }
 
-/** Real, finalized price: $5 per Autonomous Engineering Task credit. Mirrors src/shared/organization/AutonomousTaskBillingTypes.ts's AUTONOMOUS_TASK_PRICE_USD in the Electron app — kept in sync manually since pawos-web is a separate deployment with no shared build step. */
-export const TASK_CREDIT_PRICE_USD = 5;
-/** Real, finalized minimum: every credit purchase (first and subsequent) must be at least 6 credits ($30). */
-export const MIN_TASK_CREDIT_PURCHASE = 6;
+/**
+ * Ticket Balance — a dollar-denominated wallet, completely independent of subscription pricing.
+ * Mirrors TICKET_PRICING_TIERS / getTicketUnitPriceUsd / MIN_TICKET_BALANCE_TOPUP_USD /
+ * TICKET_BALANCE_TOPUP_PRESETS_USD in src/shared/organization/AutonomousTaskBillingTypes.ts —
+ * kept in sync manually since pawos-web is a separate deployment with no shared build step. This
+ * file only ever validates/labels a top-up amount; the actual per-ticket rate is applied by the
+ * Electron app's own get_ticket_unit_price() SQL function at ticket-completion time, never here.
+ */
+export interface TicketPricingTier {
+  minTicketNumber: number;
+  maxTicketNumber: number | null;
+  pricePerTicketUsd: number;
+}
+
+export const TICKET_PRICING_TIERS: readonly TicketPricingTier[] = [
+  { minTicketNumber: 1, maxTicketNumber: 500, pricePerTicketUsd: 5.0 },
+  { minTicketNumber: 501, maxTicketNumber: 2000, pricePerTicketUsd: 4.5 },
+  { minTicketNumber: 2001, maxTicketNumber: 10000, pricePerTicketUsd: 4.0 },
+  { minTicketNumber: 10001, maxTicketNumber: 25000, pricePerTicketUsd: 3.5 },
+  { minTicketNumber: 25001, maxTicketNumber: null, pricePerTicketUsd: 3.0 },
+];
+
+/** Real, finalized minimum top-up: a balance top-up must be at least $30. Code default — see getTicketPricingConfig() for the real, editable value. */
+export const MIN_TICKET_BALANCE_TOPUP_USD = 30;
+/** Preset top-up amounts shown in the UI — not exhaustive, a custom amount at or above the minimum is always accepted. Code default — see getTicketPricingConfig(). */
+export const TICKET_BALANCE_TOPUP_PRESETS_USD: readonly number[] = [30, 60, 100, 150, 200];
+
+/**
+ * Editable Ticket Balance top-up configuration, mirroring the Electron app's own
+ * TicketPricingConfigStore.ts — new preset amounts (e.g. a future $500 option) or a revised
+ * minimum can be added later purely via env vars, no code change or redeploy of application logic
+ * required. TICKET_BALANCE_TOPUP_PRESETS/TICKET_BALANCE_MIN_TOPUP_USD are optional; both fall back
+ * to the code defaults above when unset.
+ */
+export function getTicketPricingConfig(): { topupPresetsUsd: number[]; minTopupUsd: number } {
+  const presetsEnv = process.env.TICKET_BALANCE_TOPUP_PRESETS;
+  const parsedPresets = presetsEnv
+    ? presetsEnv.split(",").map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0)
+    : [];
+  const minEnv = Number(process.env.TICKET_BALANCE_MIN_TOPUP_USD);
+  return {
+    topupPresetsUsd: parsedPresets.length > 0 ? parsedPresets : [...TICKET_BALANCE_TOPUP_PRESETS_USD],
+    minTopupUsd: Number.isFinite(minEnv) && minEnv > 0 ? minEnv : MIN_TICKET_BALANCE_TOPUP_USD,
+  };
+}
 
 export function getRazorpayWebhookSecret(): string | null {
   return process.env.RAZORPAY_WEBHOOK_SECRET ?? null;

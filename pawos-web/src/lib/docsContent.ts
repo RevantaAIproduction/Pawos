@@ -314,14 +314,14 @@ export const DOCS: DocPage[] = [
       {
         heading: "The reward",
         paragraphs: [
-          "Every 5 referrals that convert to Pro or Pro Max earns you $70 — paid as 14 bonus Autonomous Engineering Task credits, added directly to your own prepaid task-credit balance (see Billing). There's no separate referral wallet or cash payout: the reward is the same task-credit balance every other purchased credit sits in, so it's usable the moment you'd otherwise run out.",
+          "Every 5 referrals that convert to Pro or Pro Max earns you $100 in Referral Credits — a third balance, fully separate from your subscription and from your Autonomous Ticket System Ticket Balance, visible in Settings → Billing.",
           "Rewards are granted automatically the instant your 5th, 10th, 15th (and so on) referral converts — there's nothing to claim.",
         ],
       },
       {
-        heading: "Why task credits, not general usage",
+        heading: "What Referral Credits can and can't be used for",
         paragraphs: [
-          "PawOS's general AI usage (chat, reasoning) has no fixed monthly cap on Pro, Pro Max, Team, or Enterprise today — so there's no real \"ran out, top up with a reward\" moment to plug a referral bonus into there. Autonomous Engineering Task credits are the one usage limit in PawOS that's actually real and enforced, which is why that's where the referral reward lands.",
+          "Referral Credits are usable only for Coding Runtime, AI Runtime, Companion Runtime, and future runtime-based usage. They can never be spent on the Autonomous Ticket System or ticket investigations, applied toward a subscription or plan upgrade, withdrawn as cash, transferred to another account, or gifted or sold. Autonomous Ticket System billing always draws from your own payment method or Ticket Balance, never from Referral Credits.",
         ],
       },
     ],

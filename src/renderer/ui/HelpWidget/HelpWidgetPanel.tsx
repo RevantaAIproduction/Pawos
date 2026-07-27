@@ -3,11 +3,12 @@ import styles from './HelpWidget.module.css';
 import { WidgetHomeTab } from './WidgetHomeTab';
 import { WidgetMessagesTab } from './WidgetMessagesTab';
 import { WidgetHelpTab } from './WidgetHelpTab';
+import { HelpBubbleIcon } from '../Dashboard/NavIcons';
 
 type WidgetTab = 'home' | 'messages' | 'help';
 
-export function HelpWidgetPanel({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<WidgetTab>('home');
+export function HelpWidgetPanel({ onClose, initialTab }: { onClose: () => void; initialTab?: WidgetTab }) {
+  const [tab, setTab] = useState<WidgetTab>(initialTab ?? 'home');
   const [articleToOpen, setArticleToOpen] = useState<string | null>(null);
 
   const openArticle = (articleId: string) => {
@@ -19,7 +20,7 @@ export function HelpWidgetPanel({ onClose }: { onClose: () => void }) {
     <div className={styles.panel}>
       <div className={styles.header}>
         <div className={styles.headerTitle}>
-          <span>✳</span> PawOS Support
+          <span style={{ display: 'inline-flex' }}><HelpBubbleIcon /></span> PawOS Support
         </div>
         <button type="button" className={styles.closeButton} onClick={onClose} aria-label="Close">
           ✕

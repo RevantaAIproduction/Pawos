@@ -3,6 +3,7 @@ import styles from './settingsPanel.module.css';
 import type { SettingsState } from '../../services/settings/SettingsManager';
 import { DEFAULT_SETTINGS } from '../../services/settings/SettingsManager';
 import { useIpcBridge } from '../../services/ipc/useIpcBridge';
+import { Toggle } from '../Dashboard/Toggle';
 
 export function SettingsPanel({
   controller,
@@ -91,29 +92,17 @@ export function SettingsPanel({
 
         <label className={styles.row}>
           Muted
-          <input
-            type="checkbox"
-            checked={draft.muted}
-            onChange={(e) => setDraft((d) => ({ ...d, muted: e.target.checked }))}
-          />
+          <Toggle checked={draft.muted} onChange={(checked) => setDraft((d) => ({ ...d, muted: checked }))} />
         </label>
 
         <label className={styles.row}>
           Keyboard reactions
-          <input
-            type="checkbox"
-            checked={draft.enableKeyboardReactions}
-            onChange={(e) => setDraft((d) => ({ ...d, enableKeyboardReactions: e.target.checked }))}
-          />
+          <Toggle checked={draft.enableKeyboardReactions} onChange={(checked) => setDraft((d) => ({ ...d, enableKeyboardReactions: checked }))} />
         </label>
 
         <label className={styles.row}>
           Mouse reactions
-          <input
-            type="checkbox"
-            checked={draft.enableMouseReactions}
-            onChange={(e) => setDraft((d) => ({ ...d, enableMouseReactions: e.target.checked }))}
-          />
+          <Toggle checked={draft.enableMouseReactions} onChange={(checked) => setDraft((d) => ({ ...d, enableMouseReactions: checked }))} />
         </label>
 
         <div className={styles.row} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>

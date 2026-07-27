@@ -19,13 +19,12 @@ import { AnalyticsSection } from './sections/AnalyticsSection';
 import { SettingsSection, type SettingsTab } from './sections/SettingsSection';
 import { UpgradeSection } from './sections/UpgradeSection';
 import { RatingFeedbackModal } from './RatingFeedbackModal';
-import { HelpWidgetLauncher } from '../HelpWidget/HelpWidgetLauncher';
+import { HelpWidgetPanel } from '../HelpWidget/HelpWidgetPanel';
 import { SECTION_TITLES, type SectionId } from './sections';
 import { useIpcBridge } from '../../services/ipc/useIpcBridge';
 import type { AuthUser, EmailCreateAccountOptions } from '../../auth/AuthTypes';
 import type { SubscriptionTierId } from '../../../shared/billing/BillingTypes';
 import { autonomousTaskBillingService } from '../../organization/AutonomousTaskBillingService';
-import { AUTONOMOUS_TASK_PRICE_USD } from '../../../shared/organization/AutonomousTaskBillingTypes';
 import { referralService } from '../../organization/ReferralService';
 import { ipc as ipcBridge } from '../../services/ipc/ipcBridgeImplementation';
 
@@ -77,6 +76,13 @@ export function Dashboard({
   }, []);
   const [tierLabel, setTierLabel] = useState(user.isGuest ? 'Guest Preview' : 'Paw Go');
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('Account');
+  const [helpWidgetOpen, setHelpWidgetOpen] = useState(false);
+  const [helpWidgetInitialTab, setHelpWidgetInitialTab] = useState<'home' | 'messages' | 'help'>('home');
+
+  const openSupportMessages = useCallback(() => {
+    setHelpWidgetInitialTab('messages');
+    setHelpWidgetOpen(true);
+  }, []);
 
   useEffect(() => {
     ipc.isCompanionEnabled().then(setCompanionEnabled).catch(() => {});
@@ -96,15 +102,13 @@ export function Dashboard({
 
   // Guaranteed to fire regardless of which Settings/Organization tab is
   // open — this is the one place that actually calls the security-definer
-  // add_task_credits() RPC after a real Razorpay purchase completes (see
+  // add_ticket_balance() RPC after a real Razorpay purchase completes (see
   // CheckoutSyncServer.ts). Billing UI components separately listen to the
   // same event purely to refresh their own displayed balance.
   useEffect(() => {
     if (user.isGuest) return;
-    ipc.onTaskCreditsPurchased(({ credits, organizationId }) => {
-      autonomousTaskBillingService
-        .confirmCreditPurchase(organizationId ?? null, credits, credits * AUTONOMOUS_TASK_PRICE_USD)
-        .catch(() => {});
+    ipc.onTaskCreditsPurchased(({ amountUsd, organizationId }) => {
+      autonomousTaskBillingService.topUpBalance(organizationId ?? null, amountUsd).catch(() => {});
     });
   }, [ipc, user.isGuest]);
 
@@ -122,6 +126,17 @@ export function Dashboard({
         .then((s) => referralService.reportConversion(s.tier).catch(() => {}))
         .catch(() => {});
     });
+  }, [user.isGuest]);
+
+  // Deterministic, server-side safety net for Autonomous Ticket runs the
+  // model itself never resolved (never called complete/end) — runs
+  // unconditionally once per app session, never gated behind any model
+  // tool call. Never bills anything; it only guarantees a stale run's
+  // fate is recorded in usage history rather than left invisible in
+  // 'running' state forever. See reconcileStaleRuns()'s own comment.
+  useEffect(() => {
+    if (user.isGuest) return;
+    autonomousTaskBillingService.reconcileStaleRuns().catch(() => {});
   }, [user.isGuest]);
 
   const handleEnable = useCallback(async () => {
@@ -168,6 +183,10 @@ export function Dashboard({
         break;
       case 'logout':
         onSignOut();
+        break;
+      case 'help':
+        setHelpWidgetInitialTab('home');
+        setHelpWidgetOpen(true);
         break;
     }
   };
@@ -238,12 +257,13 @@ export function Dashboard({
               onRequestPasswordReset={onRequestPasswordReset}
               onVerifyPasswordResetCode={onVerifyPasswordResetCode}
               onCompletePasswordReset={onCompletePasswordReset}
+              onOpenSupportMessages={openSupportMessages}
             />
           )}
           {active === 'upgrade' && <UpgradeSection onBack={() => openSettingsTab('Billing')} />}
         </div>
       </main>
-      <HelpWidgetLauncher />
+      {helpWidgetOpen && <HelpWidgetPanel initialTab={helpWidgetInitialTab} onClose={() => setHelpWidgetOpen(false)} />}
     </div>
   );
 }

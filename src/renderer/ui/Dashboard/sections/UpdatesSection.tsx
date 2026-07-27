@@ -14,13 +14,13 @@ export function UpdatesSection() {
     <div className={styles.card}>
       <h3 className={styles.cardTitle}>PawOS version {version}</h3>
       <p className={styles.cardBody} style={{ marginTop: 6 }}>
-        Automatic update checks aren't available yet — check revantaai.com for the latest release.
+        Automatic update checks aren't available yet — check pawos.revantaai.com for the latest release.
       </p>
       <button
         type="button"
         className={styles.chip}
         style={{ marginTop: 10 }}
-        onClick={() => ipc.actionExecute({ type: 'openUrl', url: 'https://revantaai.com' })}
+        onClick={() => ipc.actionExecute({ type: 'openUrl', url: 'https://pawos.revantaai.com/download' })}
       >
         Check for the latest release
       </button>

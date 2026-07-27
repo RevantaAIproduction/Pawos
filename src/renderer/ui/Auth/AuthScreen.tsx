@@ -5,6 +5,7 @@ import type { EmailCreateAccountOptions, EmailSignInOptions } from '../../auth/A
 import signInCat from './assets/sign-in-cat.png';
 import createAccountCat from './assets/create-account-cat.png';
 import { OtpInput } from './OtpInput';
+import { Toggle } from '../Dashboard/Toggle';
 import {
   MailIcon,
   LockIcon,
@@ -570,7 +571,7 @@ export function AuthScreen({
                 {mode === 'signin' ? (
                   <div className={styles.rowBetween}>
                     <label className={styles.checkboxLabel}>
-                      <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />
+                      <Toggle size="sm" checked={rememberMe} onChange={setRememberMe} />
                       Remember me
                     </label>
                     <button type="button" className={styles.linkButton} onClick={handleForgotPassword}>
@@ -579,7 +580,7 @@ export function AuthScreen({
                   </div>
                 ) : (
                   <label className={styles.checkboxLabel}>
-                    <input type="checkbox" checked={agreedToTerms} onChange={(e) => setAgreedToTerms(e.target.checked)} />
+                    <Toggle size="sm" checked={agreedToTerms} onChange={setAgreedToTerms} />
                     <span>
                       I agree to the <span className={styles.termsAccent}>Terms of Service</span> and{' '}
                       <span className={styles.termsAccent}>Privacy Policy</span>

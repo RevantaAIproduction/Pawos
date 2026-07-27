@@ -2,6 +2,7 @@ import { getSupabaseClient } from '../auth/supabaseClient';
 import { isPersonalEmailDomain } from '../../shared/organization/PersonalEmailDomains';
 import type { OrganizationRecord, OrganizationMember, OrgTier, OrgRole } from '../../shared/organization/OrganizationTypes';
 import type { SeatTier } from '../../shared/billing/BillingTypes';
+import type { OrgJobRole, OrgJobRoleDepartment } from '../../shared/organization/OrgJobRoles';
 
 type OrgRow = {
   id: string;
@@ -24,7 +25,32 @@ type MemberRow = {
   invited_at: string;
   joined_at: string | null;
   seat_tier: SeatTier | null;
+  job_role_ref: string | null;
 };
+
+type OrgJobRoleRow = {
+  id: string;
+  organization_id: string;
+  name: string;
+  department: OrgJobRoleDepartment | null;
+  archived: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+function toJobRole(row: OrgJobRoleRow): OrgJobRole {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    name: row.name,
+    department: row.department,
+    archived: row.archived,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
 
 function toOrg(row: OrgRow): OrganizationRecord {
   return { id: row.id, slug: row.slug, name: row.name, tier: row.tier, ownerUserId: row.owner_user_id, createdAt: row.created_at, domain: row.domain };
@@ -46,6 +72,7 @@ function toMember(row: MemberRow): OrganizationMember {
     invitedAt: row.invited_at,
     joinedAt: row.joined_at,
     seatTier: row.seat_tier,
+    jobRoleRef: row.job_role_ref,
   };
 }
 
@@ -155,16 +182,85 @@ export const organizationService = {
     if (error) throw error;
   },
 
-  /** Team org only — reassigns a member between the Standard/Premium seat rate. */
+  /** Support-only path — no UI calls this. Seat type is locked once a member is invited; changing
+   *  it happens at renewal or through support, never as a self-serve toggle in Organization
+   *  settings (see OrganizationSection.tsx's static seat badge). Kept here so that path has
+   *  somewhere real to call, not a dead capability. */
   async updateMemberSeatTier(memberId: string, seatTier: SeatTier): Promise<void> {
     const supabase = await getSupabaseClient();
     const { error } = await supabase.from('organization_members').update({ seat_tier: seatTier }).eq('id', memberId);
     if (error) throw error;
   },
 
+  /** Reassigns an unclaimed pending seat (status still 'invited', user_id still null) to a
+   *  different email — e.g. the assigned person left before ever signing in. Only meaningful while
+   *  unclaimed; RLS (org_members_* policies) still governs who may call this. */
+  async reassignPendingMemberEmail(memberId: string, newEmail: string): Promise<void> {
+    const supabase = await getSupabaseClient();
+    const { error } = await supabase
+      .from('organization_members')
+      .update({ email: newEmail })
+      .eq('id', memberId)
+      .eq('status', 'invited');
+    if (error) throw error;
+  },
+
   async removeMember(memberId: string): Promise<void> {
     const supabase = await getSupabaseClient();
     const { error } = await supabase.from('organization_members').update({ status: 'removed' }).eq('id', memberId);
+    if (error) throw error;
+  },
+
+  /** Assigns/clears a member's Organization Role. `jobRoleRef` is the opaque
+   *  `builtin:<key>` / `custom:<uuid>` ref from OrgJobRoles.ts, or null to
+   *  clear it. Completely independent of role/seatTier — no other column
+   *  is touched. */
+  async assignMemberJobRole(memberId: string, jobRoleRef: string | null): Promise<void> {
+    const supabase = await getSupabaseClient();
+    const { error } = await supabase.from('organization_members').update({ job_role_ref: jobRoleRef }).eq('id', memberId);
+    if (error) throw error;
+  },
+
+  async listCustomJobRoles(organizationId: string): Promise<OrgJobRole[]> {
+    const supabase = await getSupabaseClient();
+    const { data, error } = await supabase
+      .from('org_job_roles')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .order('name', { ascending: true })
+      .returns<OrgJobRoleRow[]>();
+    if (error) throw error;
+    return (data ?? []).map(toJobRole);
+  },
+
+  /** RLS rejects this unless the caller holds `org_roles.manage` (or is the org owner). */
+  async createCustomJobRole(organizationId: string, name: string, department: OrgJobRoleDepartment | null): Promise<OrgJobRole> {
+    const supabase = await getSupabaseClient();
+    const { data: userData } = await supabase.auth.getUser();
+    const { data, error } = await supabase
+      .from('org_job_roles')
+      .insert({ organization_id: organizationId, name, department, created_by: userData.user?.id ?? null })
+      .select('*')
+      .single<OrgJobRoleRow>();
+    if (error) throw error;
+    return toJobRole(data);
+  },
+
+  async renameCustomJobRole(id: string, name: string): Promise<void> {
+    const supabase = await getSupabaseClient();
+    const { error } = await supabase
+      .from('org_job_roles')
+      .update({ name, updated_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) throw error;
+  },
+
+  async setCustomJobRoleArchived(id: string, archived: boolean): Promise<void> {
+    const supabase = await getSupabaseClient();
+    const { error } = await supabase
+      .from('org_job_roles')
+      .update({ archived, updated_at: new Date().toISOString() })
+      .eq('id', id);
     if (error) throw error;
   },
 };

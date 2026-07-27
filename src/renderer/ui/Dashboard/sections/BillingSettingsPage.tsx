@@ -1,9 +1,18 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { SubscriptionSection } from './SubscriptionSection';
 import { UsageSection } from './UsageSection';
 import { TaskCreditsSection } from './TaskCreditsSection';
 import { ReferralSection } from './ReferralSection';
+import { SectionHub, SectionDetail, type SectionTileDef } from '../SectionHub';
+import { CardIcon, GaugeIcon, OrganizationIcon, BarsIcon } from '../NavIcons';
 import type { AuthUser } from '../../../auth/AuthTypes';
+
+const BILLING_TILES: SectionTileDef[] = [
+  { id: 'subscription', title: 'Plan & Models', description: 'Your current plan, AI models, and upgrade options.', icon: CardIcon },
+  { id: 'taskCredits', title: 'Autonomous Ticket Balance', description: 'Prepaid balance for autonomous engineering tickets.', icon: GaugeIcon },
+  { id: 'referral', title: 'Refer PawOS', description: 'Share your code and earn Referral Credits.', icon: OrganizationIcon },
+  { id: 'usage', title: 'Usage Statistics', description: 'Runtime, companion, and storage usage this period.', icon: BarsIcon },
+];
 
 /**
  * Billing tab: plan/credits/models (SubscriptionSection), prepaid Autonomous
@@ -11,7 +20,8 @@ import type { AuthUser } from '../../../auth/AuthTypes';
  * (TaskCreditsSection — Team/Enterprise members manage this from their
  * Organization's own card instead), the referral engine (ReferralSection —
  * rewards land in this same task-credit balance), plus real usage numbers
- * (UsageSection).
+ * (UsageSection) — presented as click-to-open tiles rather than every
+ * section forced open in one scroll.
  */
 export function BillingSettingsPage({
   user,
@@ -22,18 +32,18 @@ export function BillingSettingsPage({
   onGoToAccount: () => void;
   onUpgrade: () => void;
 }) {
-  return (
-    <div>
-      <SubscriptionSection user={user} onGoToAccount={onGoToAccount} onUpgrade={onUpgrade} />
-      <div style={{ marginTop: 14 }}>
-        <TaskCreditsSection user={user} />
-      </div>
-      <div style={{ marginTop: 14 }}>
-        <ReferralSection user={user} />
-      </div>
-      <div style={{ marginTop: 14 }}>
-        <UsageSection user={user} onGoToAccount={onGoToAccount} />
-      </div>
-    </div>
-  );
+  const [selected, setSelected] = useState<string | null>(null);
+
+  if (selected) {
+    return (
+      <SectionDetail title={BILLING_TILES.find((t) => t.id === selected)?.title ?? ''} onBack={() => setSelected(null)}>
+        {selected === 'subscription' && <SubscriptionSection user={user} onGoToAccount={onGoToAccount} onUpgrade={onUpgrade} />}
+        {selected === 'taskCredits' && <TaskCreditsSection user={user} />}
+        {selected === 'referral' && <ReferralSection user={user} />}
+        {selected === 'usage' && <UsageSection user={user} onGoToAccount={onGoToAccount} />}
+      </SectionDetail>
+    );
+  }
+
+  return <SectionHub tiles={BILLING_TILES} onSelect={setSelected} />;
 }

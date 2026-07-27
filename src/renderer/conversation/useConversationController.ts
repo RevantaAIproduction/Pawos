@@ -195,6 +195,15 @@ export function useConversationController(args?: {
     [ipc]
   );
 
+  /** Inline "Connect {capability}" submit from a paused Task Card — saves the credential, then
+   *  resumes the paused action via the same retryTaskAction the manual "↻ Retry" button uses. */
+  const connectCapability = useCallback(
+    (taskId: string, actionId: string, connectorId: string, fields: Record<string, string>, opts?: { incrementalCapability?: string }) =>
+      runtimeRef.current?.connectCapabilityAndRetry(taskId, actionId, connectorId, fields, opts) ??
+      Promise.resolve({ ok: false, message: 'Not available.' }),
+    []
+  );
+
   return {
     snapshot,
     open,
@@ -207,6 +216,7 @@ export function useConversationController(args?: {
     setReasoningSystemPrompt,
     setSpeechSynthesisProvider,
     retryAction,
+    connectCapability,
     openPath,
     creditsNoticeTier,
     dismissCreditsNotice,

@@ -43,13 +43,16 @@ export function validateHostDeployIdentifiers(imageName?: string, containerName?
  * repeatedly: no-ops if Docker is already present.
  */
 export async function ensureDockerInstalled(sshHost: string): Promise<ConnectorResult<Record<string, never>>> {
+  // Object literal returned as ConnectorResult<Record<string, never>> fails TS's excess property
+  // check against the intersection's never-valued index signature — an assertion (not a widened
+  // type) is the correct escape hatch since the literal genuinely satisfies the shape.
   const check = await run('ssh', [...SSH_OPTS, sshHost, 'docker --version'], 15000);
-  if (check.ok) return { ok: true };
+  if (check.ok) return { ok: true } as ConnectorResult<Record<string, never>>;
   const install = await run('ssh', [...SSH_OPTS, sshHost, 'curl -fsSL https://get.docker.com | sh && systemctl enable --now docker 2>/dev/null || service docker start 2>/dev/null || true'], REMOTE_TIMEOUT_MS);
   if (!install.ok) return { ok: false, reason: `Docker is not installed on ${sshHost}, and the automatic install via Docker's official get.docker.com script failed: ${install.message}` };
   const recheck = await run('ssh', [...SSH_OPTS, sshHost, 'docker --version'], 15000);
   if (!recheck.ok) return { ok: false, reason: `Docker install script ran on ${sshHost} but \`docker --version\` still fails: ${recheck.message}` };
-  return { ok: true };
+  return { ok: true } as ConnectorResult<Record<string, never>>;
 }
 
 /**

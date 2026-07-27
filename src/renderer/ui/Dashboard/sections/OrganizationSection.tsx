@@ -20,7 +20,46 @@ import { ApprovalQueueCard } from './ApprovalQueueCard';
 import { CredentialVaultCard } from './CredentialVaultCard';
 import { SsoSettingsCard } from './SsoSettingsCard';
 import { AutonomousTaskBillingCard } from './AutonomousTaskBillingCard';
+import { OrganizationRolesCard } from './OrganizationRolesCard';
 import { credentialVaultService } from '../../../organization/CredentialVaultService';
+import { SectionHub, SectionDetail, type SectionTileDef } from '../SectionHub';
+import {
+  builtinJobRoleRef,
+  customJobRoleRef,
+  builtInOrgJobRolesByDepartment,
+  ORG_JOB_ROLE_DEPARTMENTS,
+  ORG_JOB_ROLE_DEPARTMENT_LABELS,
+  type OrgJobRole,
+} from '../../../../shared/organization/OrgJobRoles';
+import {
+  GaugeIcon,
+  DesktopIcon,
+  ShieldIcon,
+  HistoryIcon,
+  OfficeIcon,
+  OrganizationIcon,
+  CardIcon,
+  SecurityIcon,
+  PlugIcon,
+  LanguageIcon,
+  BarsIcon,
+  AccountIcon,
+} from '../NavIcons';
+
+const ORG_SECTION_TILES: SectionTileDef[] = [
+  { id: 'activity', title: 'Activity Dashboard', description: 'Live task and project activity across the organization.', icon: GaugeIcon },
+  { id: 'remoteAssistance', title: 'Remote Assistance', description: 'Screen share and remote control sessions between teammates.', icon: DesktopIcon },
+  { id: 'roles', title: 'Roles & Capabilities', description: 'What each role can do in this organization.', icon: ShieldIcon },
+  { id: 'jobRoles', title: 'Organization Roles', description: 'Job titles and departments for each teammate — independent of billing and permissions.', icon: AccountIcon },
+  { id: 'temporaryPermissions', title: 'Temporary Permissions', description: 'Grant a capability to a member for a limited time.', icon: HistoryIcon },
+  { id: 'workspace', title: 'Workspace', description: 'Shared containers for projects, documents, and research.', icon: OfficeIcon },
+  { id: 'crm', title: 'Organization CRM', description: 'Contacts, companies, and meeting notes shared to the org.', icon: OrganizationIcon },
+  { id: 'credits', title: 'Credits & Billing', description: 'Credit pool and the Autonomous Ticket System balance.', icon: CardIcon },
+  { id: 'governance', title: 'Governance & Approvals', description: 'Require approval before a member can take an action.', icon: SecurityIcon },
+  { id: 'credentialVault', title: 'Credential Vault', description: 'Shared connector credentials for the organization.', icon: PlugIcon },
+  { id: 'sso', title: 'Single Sign-On', description: 'Federated identity for Team and Enterprise plans.', icon: LanguageIcon },
+  { id: 'auditLog', title: 'Audit Log', description: 'A record of security-relevant actions taken in this organization.', icon: BarsIcon },
+];
 
 const TEAM_ROLES: OrgRole[] = ['owner', 'billingAdministrator', 'workspaceAdministrator', 'member'];
 const ENTERPRISE_ROLES: OrgRole[] = [
@@ -48,7 +87,7 @@ const inputStyle: React.CSSProperties = {
   fontSize: 13,
 };
 
-export function OrganizationSection({ user }: { user: AuthUser }) {
+export function OrganizationSection({ user, onOpenSupportMessages }: { user: AuthUser; onOpenSupportMessages: () => void }) {
   const [tier, setTier] = useState<'go' | 'pro' | 'proMax' | 'team' | 'enterprise' | null>(null);
   const [org, setOrg] = useState<OrganizationRecord | null>(null);
   const [members, setMembers] = useState<OrganizationMember[]>([]);
@@ -57,8 +96,14 @@ export function OrganizationSection({ user }: { user: AuthUser }) {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<OrgRole>('member');
   const [inviteSeatTier, setInviteSeatTier] = useState<SeatTier>('standard');
+  const [reassigningMemberId, setReassigningMemberId] = useState<string | null>(null);
+  const [reassignEmailInput, setReassignEmailInput] = useState('');
+  const [seatRequestMessage, setSeatRequestMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedSection, setSelectedSection] = useState<string | null>(null);
+  const [customJobRoles, setCustomJobRoles] = useState<OrgJobRole[]>([]);
+  const [roleFilter, setRoleFilter] = useState<string>('all');
 
   useEffect(() => {
     if (user.isGuest) return;
@@ -153,10 +198,19 @@ export function OrganizationSection({ user }: { user: AuthUser }) {
     credentialVaultService.applyAllToLocalConnectors(org.id).catch(() => {});
   }, [org]);
 
-  // Pending invites are keyed by email, not by the invitee's current tier —
-  // a brand-new invitee starts on Paw Go and must see (and be able to
-  // accept) their invite before their tier is upgraded, so this can't be
-  // gated behind the team/enterprise tier check above.
+  // Refetch custom Organization Roles whenever the org loads and whenever the
+  // detail panel closes (so edits made in OrganizationRolesCard — rename,
+  // archive, create — show up immediately in the Members list's role select
+  // and the role filter without needing a full reload).
+  useEffect(() => {
+    if (!org) return;
+    organizationService.listCustomJobRoles(org.id).then(setCustomJobRoles).catch(() => {});
+  }, [org, selectedSection]);
+
+  // Zero-friction onboarding: a pending seat assigned to this account's email is claimed
+  // automatically the moment we discover it — no Accept/Decline step. Pending invites are keyed by
+  // email, not by the invitee's current tier — a brand-new invitee starts on Paw Go, so this can't
+  // be gated behind the team/enterprise tier check below.
   useEffect(() => {
     if (user.isGuest) return;
     organizationService
@@ -165,29 +219,44 @@ export function OrganizationSection({ user }: { user: AuthUser }) {
       .catch(() => {});
   }, [user.isGuest]);
 
-  async function acceptInvite(organizationId: string) {
-    setBusy(true);
-    setError(null);
-    try {
-      await organizationService.acceptInvite(organizationId);
-      const [orgs, invites] = await Promise.all([
-        organizationService.getMyOrganizations(),
-        organizationService.listMyPendingInvites(),
-      ]);
-      const mine = orgs[0] ?? null;
-      setOrg(mine);
-      setPendingInvites(invites);
-      if (mine) {
-        setMembers(await organizationService.getMembers(mine.id));
-        const synced = await ipc.billingSyncTierFromOrganization(mine.tier);
-        setTier(synced.tier);
+  const [claiming, setClaiming] = useState(false);
+
+  useEffect(() => {
+    if (user.isGuest || pendingInvites.length === 0 || org || claiming) return;
+    let cancelled = false;
+
+    async function claimAllPendingSeats() {
+      setClaiming(true);
+      setError(null);
+      try {
+        for (const invite of pendingInvites) {
+          await organizationService.acceptInvite(invite.organizationId);
+        }
+        const [orgs, invites] = await Promise.all([
+          organizationService.getMyOrganizations(),
+          organizationService.listMyPendingInvites(),
+        ]);
+        if (cancelled) return;
+        const mine = orgs[0] ?? null;
+        setOrg(mine);
+        setPendingInvites(invites);
+        if (mine) {
+          setMembers(await organizationService.getMembers(mine.id));
+          const synced = await ipc.billingSyncTierFromOrganization(mine.tier);
+          if (!cancelled) setTier(synced.tier);
+        }
+      } catch (e) {
+        if (!cancelled) setError(getErrorMessage(e));
+      } finally {
+        if (!cancelled) setClaiming(false);
       }
-    } catch (e) {
-      setError(getErrorMessage(e));
-    } finally {
-      setBusy(false);
     }
-  }
+
+    claimAllPendingSeats();
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingInvites, org, user.isGuest, claiming]);
 
   if (user.isGuest) {
     return (
@@ -202,28 +271,12 @@ export function OrganizationSection({ user }: { user: AuthUser }) {
 
   if (pendingInvites.length > 0 && !org) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {pendingInvites.map((invite) => (
-          <div key={invite.organizationId} className={styles.card}>
-            <h3 className={styles.cardTitle}>You've been invited to {invite.organizationName}</h3>
-            <p className={styles.cardBody} style={{ marginTop: 6 }}>
-              {invite.organizationSlug} · Role: {invite.role}
-            </p>
-            <p className={styles.cardBody} style={{ marginTop: 6, fontSize: 12 }}>
-              Accepting adds you to this organization's Team plan — no purchase needed, your teammate's seats cover you.
-            </p>
-            <button
-              type="button"
-              className={styles.primaryButton}
-              style={{ marginTop: 12 }}
-              disabled={busy}
-              onClick={() => acceptInvite(invite.organizationId)}
-            >
-              Accept invite
-            </button>
-            {error && <p style={{ color: '#e08c8c', fontSize: 12.5, marginTop: 10 }}>{error}</p>}
-          </div>
-        ))}
+      <div className={styles.card}>
+        <h3 className={styles.cardTitle}>Joining {pendingInvites[0]?.organizationName}…</h3>
+        <p className={styles.cardBody} style={{ marginTop: 6 }}>
+          A seat was assigned to your email — it's being activated automatically, no action needed.
+        </p>
+        {error && <p style={{ color: '#e08c8c', fontSize: 12.5, marginTop: 10 }}>{error}</p>}
       </div>
     );
   }
@@ -303,14 +356,79 @@ export function OrganizationSection({ user }: { user: AuthUser }) {
     setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, role } : m)));
   }
 
-  async function changeSeatTier(memberId: string, seatTier: SeatTier) {
-    await organizationService.updateMemberSeatTier(memberId, seatTier);
-    setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, seatTier } : m)));
-  }
-
   async function removeMember(memberId: string) {
     await organizationService.removeMember(memberId);
     setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, status: 'removed' } : m)));
+  }
+
+  async function assignJobRole(memberId: string, jobRoleRef: string | null) {
+    await organizationService.assignMemberJobRole(memberId, jobRoleRef);
+    setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, jobRoleRef } : m)));
+  }
+
+  async function requestSeatChange(member: OrganizationMember) {
+    if (!org) return;
+    const currentSeat = member.seatTier === 'premium' ? 'Premium' : 'Standard';
+    const requestedSeat = currentSeat === 'Premium' ? 'Standard' : 'Premium';
+    const reason = window.prompt(
+      `Requesting a change from ${currentSeat} to ${requestedSeat} for ${member.email}. Add a short reason (optional):`,
+      ''
+    );
+    if (reason === null) return; // user cancelled
+    setBusy(true);
+    setError(null);
+    try {
+      const summary = `Seat change request\nOrganization: ${org.name} (${org.slug})\nMember: ${member.email}\nCurrent seat: ${currentSeat}\nRequested seat: ${requestedSeat}\nReason: ${reason || '(none given)'}`;
+      const created = await ipc.helpCreateConversation(summary);
+      await ipc.helpAddTurn(created.id, { role: 'user', content: summary, timestamp: Date.now() });
+      await ipc.helpUpdateConversation(created.id, {
+        status: 'waitingPermission',
+        needsPermission: true,
+        currentState: 'Waiting for a PawOS admin to review this seat change request.',
+      });
+      setSeatRequestMessage('Request submitted — opening Messages…');
+      onOpenSupportMessages();
+    } catch (e) {
+      setError(getErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function reassignPendingSeat(memberId: string) {
+    const newEmail = reassignEmailInput.trim();
+    const invitedDomain = newEmail.split('@')[1]?.toLowerCase();
+    if (!org || !invitedDomain || invitedDomain !== org.domain) {
+      setError(`This organization only accepts teammates with an @${org?.domain} email.`);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await organizationService.reassignPendingMemberEmail(memberId, newEmail);
+      setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, email: newEmail } : m)));
+      setReassigningMemberId(null);
+      setReassignEmailInput('');
+    } catch (e) {
+      setError(getErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function jobRoleSelectGroups(currentRef: string | null) {
+    const groups: { label: string; options: { value: string; label: string }[] }[] = ORG_JOB_ROLE_DEPARTMENTS.map((dept) => ({
+      label: ORG_JOB_ROLE_DEPARTMENT_LABELS[dept],
+      options: builtInOrgJobRolesByDepartment(dept).map((r) => ({ value: builtinJobRoleRef(r.key), label: r.label })),
+    }));
+    const activeCustom = customJobRoles.filter((r) => !r.archived || customJobRoleRef(r.id) === currentRef);
+    if (activeCustom.length > 0) {
+      groups.push({
+        label: 'Custom',
+        options: activeCustom.map((r) => ({ value: customJobRoleRef(r.id), label: r.archived ? `${r.name} (archived)` : r.name })),
+      });
+    }
+    return groups;
   }
 
   const myDomain = user.email?.split('@')[1]?.toLowerCase() ?? '';
@@ -382,25 +500,101 @@ export function OrganizationSection({ user }: { user: AuthUser }) {
       </div>
 
       <div className={styles.card}>
-        <h3 className={styles.cardTitle}>Members</h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+          <h3 className={styles.cardTitle}>Members</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 12, color: '#96969e' }}>Filter by role</span>
+            <select style={{ ...inputStyle, fontSize: 12, padding: '5px 8px' }} value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
+              <option value="all">All roles</option>
+              {jobRoleSelectGroups(null).map((group) => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.options.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+        </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
-          {members.filter((m) => m.status !== 'removed').map((m) => (
+          {members.filter((m) => m.status !== 'removed' && (roleFilter === 'all' || m.jobRoleRef === roleFilter)).map((m) => (
             <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13.5 }}>{m.displayName ?? m.email}</div>
-                <div style={{ fontSize: 12, color: '#96969e' }}>{m.email} · {m.status === 'invited' ? 'Invited' : 'Active'}</div>
+                {reassigningMemberId === m.id ? (
+                  <div style={{ display: 'flex', gap: 6, marginTop: 4, alignItems: 'center' }}>
+                    <input
+                      style={{ ...inputStyle, fontSize: 12, padding: '4px 8px' }}
+                      placeholder={`teammate@${org?.domain}`}
+                      value={reassignEmailInput}
+                      onChange={(e) => setReassignEmailInput(e.target.value)}
+                    />
+                    <button type="button" className={styles.primaryButton} disabled={busy || !reassignEmailInput.trim()} onClick={() => reassignPendingSeat(m.id)}>
+                      Save
+                    </button>
+                    <button type="button" onClick={() => { setReassigningMemberId(null); setReassignEmailInput(''); }}>
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: '#96969e' }}>
+                    {m.email} · {m.status === 'invited' ? 'Pending — awaiting sign-in' : 'Active'}
+                    {m.status === 'invited' && canManageMembers(myRole) && (
+                      <button
+                        type="button"
+                        onClick={() => { setReassigningMemberId(m.id); setReassignEmailInput(m.email); }}
+                        style={{ marginLeft: 8, fontSize: 11, background: 'none', border: 'none', color: 'var(--pawos-accent, #7c9cff)', cursor: 'pointer', padding: 0 }}
+                      >
+                        Reassign seat
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
               {tier === 'team' && (
-                <select
-                  style={inputStyle}
-                  value={m.seatTier ?? 'standard'}
-                  disabled={!canManageMembers(myRole)}
-                  onChange={(e) => changeSeatTier(m.id, e.target.value as SeatTier)}
-                >
-                  <option value="standard">Standard seat</option>
-                  <option value="premium">Premium seat</option>
-                </select>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      padding: '4px 10px',
+                      borderRadius: 999,
+                      background: 'rgba(255,255,255,0.06)',
+                      color: '#c8c8d2',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title="Seat type is fixed at invite time. Changing it goes through a support-approved request, never edited directly here."
+                  >
+                    {m.seatTier === 'premium' ? 'Premium seat' : 'Standard seat'}
+                  </span>
+                  {m.status !== 'invited' && canManageBilling(myRole) && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => requestSeatChange(m)}
+                      style={{ fontSize: 10.5, background: 'none', border: 'none', color: 'var(--pawos-accent, #7c9cff)', cursor: 'pointer', padding: 0 }}
+                    >
+                      {m.seatTier === 'premium' ? 'Request downgrade' : 'Request upgrade'}
+                    </button>
+                  )}
+                </div>
               )}
+              <select
+                style={{ ...inputStyle, fontSize: 12, padding: '5px 8px' }}
+                value={m.jobRoleRef ?? ''}
+                disabled={!canManageMembers(myRole)}
+                onChange={(e) => assignJobRole(m.id, e.target.value || null)}
+                title="Organization Role (job title) — independent of seat type and permission role"
+              >
+                <option value="">— No role —</option>
+                {jobRoleSelectGroups(m.jobRoleRef).map((group) => (
+                  <optgroup key={group.label} label={group.label}>
+                    {group.options.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
               <select
                 style={inputStyle}
                 value={m.role}
@@ -421,6 +615,10 @@ export function OrganizationSection({ user }: { user: AuthUser }) {
           {members.filter((m) => m.status !== 'removed').length === 0 && (
             <p className={styles.cardBody}>No members yet — invite your first teammate below.</p>
           )}
+          {members.filter((m) => m.status !== 'removed').length > 0 &&
+            members.filter((m) => m.status !== 'removed' && (roleFilter === 'all' || m.jobRoleRef === roleFilter)).length === 0 && (
+              <p className={styles.cardBody}>No members have that role yet.</p>
+            )}
         </div>
 
         {canManageMembers(myRole) && (
@@ -449,6 +647,7 @@ export function OrganizationSection({ user }: { user: AuthUser }) {
           </div>
         )}
         {error && <p style={{ color: '#e08c8c', fontSize: 12.5, marginTop: 10 }}>{error}</p>}
+        {seatRequestMessage && <p style={{ color: '#8ce0a8', fontSize: 12.5, marginTop: 10 }}>{seatRequestMessage}</p>}
         {!canManageBilling(myRole) && (
           <p className={styles.cardBody} style={{ marginTop: 10 }}>
             Billing is managed by your organization's owner or billing administrator.
@@ -456,22 +655,45 @@ export function OrganizationSection({ user }: { user: AuthUser }) {
         )}
       </div>
 
-      <ActivityDashboardCard organizationId={org.id} orgMembers={members} />
-
-      <RemoteAssistancePanel organizationId={org.id} workspaceId={null} currentUser={user} orgMembers={members} />
-      <RolesCapabilityCard organizationId={org.id} roleOptions={roleOptions} />
-      <TemporaryPermissionCard organizationId={org.id} orgMembers={members} />
-      <OrganizationWorkspaceCard organizationId={org.id} orgMembers={members} currentUser={user} />
-      <CrmCard organizationId={org.id} />
-      <CreditPoolCard organizationId={org.id} orgMembers={members} />
-      <AutonomousTaskBillingCard organizationId={org.id} />
-
-      <GovernancePolicyCard organizationId={org.id} />
-      <ApprovalQueueCard organizationId={org.id} />
-      <CredentialVaultCard organizationId={org.id} />
-      <SsoSettingsCard organizationId={org.id} tier={tier === 'enterprise' ? 'enterprise' : 'team'} />
-
-      <AuditLogCard organizationId={org.id} />
+      {selectedSection ? (
+        <SectionDetail
+          title={ORG_SECTION_TILES.find((t) => t.id === selectedSection)?.title ?? ''}
+          onBack={() => setSelectedSection(null)}
+        >
+          {selectedSection === 'activity' && <ActivityDashboardCard organizationId={org.id} orgMembers={members} />}
+          {selectedSection === 'remoteAssistance' && (
+            <RemoteAssistancePanel organizationId={org.id} workspaceId={null} currentUser={user} orgMembers={members} />
+          )}
+          {selectedSection === 'roles' && <RolesCapabilityCard organizationId={org.id} roleOptions={roleOptions} />}
+          {selectedSection === 'jobRoles' && <OrganizationRolesCard organizationId={org.id} orgMembers={members} />}
+          {selectedSection === 'temporaryPermissions' && (
+            <TemporaryPermissionCard organizationId={org.id} orgMembers={members} />
+          )}
+          {selectedSection === 'workspace' && (
+            <OrganizationWorkspaceCard organizationId={org.id} orgMembers={members} currentUser={user} />
+          )}
+          {selectedSection === 'crm' && <CrmCard organizationId={org.id} />}
+          {selectedSection === 'credits' && (
+            <>
+              <CreditPoolCard organizationId={org.id} orgMembers={members} />
+              <AutonomousTaskBillingCard organizationId={org.id} />
+            </>
+          )}
+          {selectedSection === 'governance' && (
+            <>
+              <GovernancePolicyCard organizationId={org.id} />
+              <ApprovalQueueCard organizationId={org.id} />
+            </>
+          )}
+          {selectedSection === 'credentialVault' && <CredentialVaultCard organizationId={org.id} />}
+          {selectedSection === 'sso' && (
+            <SsoSettingsCard organizationId={org.id} tier={tier === 'enterprise' ? 'enterprise' : 'team'} />
+          )}
+          {selectedSection === 'auditLog' && <AuditLogCard organizationId={org.id} />}
+        </SectionDetail>
+      ) : (
+        <SectionHub tiles={ORG_SECTION_TILES} onSelect={setSelectedSection} />
+      )}
     </div>
   );
 }

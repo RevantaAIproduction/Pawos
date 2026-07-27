@@ -6,37 +6,37 @@ import { Button } from "../../components/ui/Button";
 
 export const metadata: Metadata = {
   title: "Pricing",
-  description: "PawOS pricing: Go, Pro, Pro Max, Team, and Enterprise plans, plus prepaid Autonomous Engineering Task credit pricing.",
+  description: "PawOS pricing: Go, Pro, Pro Max, Team, and Enterprise plans, plus volume-tiered Autonomous Ticket System pricing.",
 };
 
 const COMPARISON_ROWS: { feature: string; go: string; pro: string; proMax: string; team: string; enterprise: string }[] = [
   { feature: "Companion Studio & Desktop Companion", go: "✓", pro: "✓", proMax: "✓", team: "✓", enterprise: "✓" },
   { feature: "AI models & reasoning runtimes", go: "—", pro: "✓", proMax: "✓", team: "✓", enterprise: "✓" },
-  { feature: "Autonomous Engineering Task billing", go: "—", pro: "Prepaid credits", proMax: "Prepaid credits", team: "Prepaid credits (per member)", enterprise: "Seat fee + prepaid credits" },
+  { feature: "Autonomous Ticket System billing", go: "—", pro: "Ticket Balance", proMax: "Ticket Balance", team: "Ticket Balance (shared)", enterprise: "Seat fee + usage at API rates" },
   { feature: "Shared Workspaces, Companions & Credit Pool", go: "—", pro: "—", proMax: "—", team: "✓", enterprise: "✓" },
   { feature: "Task Management & Git Collaboration (PR Review)", go: "—", pro: "—", proMax: "—", team: "✓", enterprise: "✓" },
   { feature: "Remote Assistance & CRM Projection", go: "—", pro: "—", proMax: "—", team: "✓", enterprise: "✓" },
   { feature: "Credential Vault, Approval Queue & Audit Log", go: "—", pro: "—", proMax: "—", team: "✓", enterprise: "✓" },
-  { feature: "Seat rates", go: "—", pro: "—", proMax: "—", team: "Standard $20 / Premium $100", enterprise: "$20 base + credits" },
+  { feature: "Seat rates", go: "—", pro: "—", proMax: "—", team: "Standard $20 / Premium $100", enterprise: "$20/seat + tax + usage" },
   { feature: "RBAC roles", go: "—", pro: "—", proMax: "—", team: "Owner, Billing/Workspace Admin, Member", enterprise: "+ IT Admin, Security Admin, Dept. Manager" },
 ];
 
 const FAQS = [
   {
-    q: "How does Autonomous Engineering Task billing work?",
-    a: "Autonomous Engineering Tasks are prepaid. Buy task credits upfront ($5 per credit, $30 minimum — 6 credits) from inside the app, and each completed task consumes exactly one credit. You're only ever charged a credit once a task genuinely completes — a real pull request is opened and the ticket is updated. A task that fails, is cancelled, hits a retry limit, or is denied approval never consumes a credit. Run out of credits and PawOS simply prompts you to buy more before starting a new task.",
+    q: "How does Autonomous Ticket System billing work?",
+    a: "The Autonomous Ticket System is billed through a Ticket Balance — a prepaid dollar wallet, completely separate from your subscription. Add funds anytime from inside the app (any amount, $30 minimum). Each genuinely completed ticket deducts a real dollar amount from that balance — never for chat, tokens, or time, and never until a real pull request is opened and the ticket is updated. The rate per ticket is volume-tiered by your account's (or organization's) cumulative completed-ticket count: $5.00/ticket for your first 500, $4.50 for tickets 501–2,000, $4.00 for 2,001–10,000, $3.50 for 10,001–25,000, and $3.00/ticket beyond that — so the more you use it, the less each ticket costs. A ticket that fails, is cancelled, hits a retry limit, or is denied approval never deducts anything. Run low and PawOS simply prompts you to add funds before starting a new ticket.",
   },
   {
     q: "Can I change plans anytime?",
-    a: "Yes. Upgrades, downgrades, and renewals are self-serve from inside the app — no sales call required for Go, Pro, or Pro Max.",
+    a: "Yes. Upgrades, downgrades, and renewals are self-serve from inside the app for every plan, including Team and Enterprise — no sales call required.",
   },
   {
     q: "What counts as a 'seat' on Team or Enterprise?",
-    a: "One seat is one member of your organization workspace. Team seats come in two rates — Standard ($20/seat/mo) and Premium ($100/seat/mo) — mixed freely across your 2–150 members. Enterprise seats are uniform at a $20/seat/mo base fee (20+ seats), with Autonomous Engineering Task usage billed separately via the same prepaid credit model.",
+    a: "One seat is one member of your organization workspace. Team seats come in two rates — Standard ($20/seat/mo) and Premium ($100/seat/mo) — mixed freely across your 2–150 members. Enterprise seats are uniform at a $20/seat/mo base fee (20+ seats), with Autonomous Ticket System usage billed separately through the same volume-tiered Ticket Balance.",
   },
   {
-    q: "Do unused Autonomous Engineering Task credits roll over?",
-    a: "Yes — prepaid credits don't expire and roll over indefinitely. You're buying a balance, not a monthly allowance, so unused credits simply stay in your account until you use them.",
+    q: "Does an unused Ticket Balance roll over?",
+    a: "Yes — a Ticket Balance never expires and rolls over indefinitely. You're topping up a balance, not a monthly allowance, so unused funds simply stay on the account until they're used.",
   },
   {
     q: "What's your refund policy?",
@@ -80,19 +80,40 @@ export default function PricingPage() {
         </div>
       </Section>
 
-      <Section id="autonomous-engineering" eyebrow="Autonomous Engineering" title="Pay only for completed work" className="border-t border-neutral-900 bg-neutral-900/30">
+      <Section id="autonomous-engineering" eyebrow="Autonomous Ticket System" title="Pay only for completed work" className="border-t border-neutral-900 bg-neutral-900/30">
         <div className="mx-auto mt-8 max-w-2xl space-y-4 text-neutral-400">
           <p>
-            Autonomous Ticket Resolution is billed as a completed <strong className="text-neutral-200">Autonomous Engineering Task</strong> —
-            never as chat, tokens, or time. Task credits are prepaid: buy them upfront, and one credit is consumed
-            only once Paw has genuinely opened a real pull request and updated the originating ticket.
+            Autonomous Ticket Resolution is billed through a <strong className="text-neutral-200">Ticket Balance</strong> — a
+            prepaid dollar wallet completely separate from your subscription — never as chat, tokens, or time. A
+            real dollar amount is deducted only once Paw has genuinely opened a pull request and updated the
+            originating ticket.
           </p>
           <ul className="space-y-2">
-            <li>• $5 per task credit, $30 minimum purchase (6 credits) — buy more anytime from inside the app.</li>
-            <li>• Credits don't expire and roll over indefinitely — you're buying a balance, not a monthly allowance.</li>
-            <li>• A task that fails, is cancelled, hits its retry limit, or is denied approval <strong className="text-neutral-200">never</strong> consumes a credit.</li>
-            <li>• Out of credits? PawOS prompts you to buy more before starting a new task — nothing runs on an empty balance.</li>
-            <li>• Enterprise plans can negotiate custom per-credit rates at volume.</li>
+            <li>• Add funds anytime from inside the app — any amount, $30 minimum.</li>
+            <li>• Per-ticket pricing is volume-tiered by your account&apos;s (or organization&apos;s) cumulative completed-ticket count:</li>
+          </ul>
+          <div className="mt-2 overflow-x-auto rounded-lg border border-neutral-800">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-neutral-800 text-left text-neutral-500">
+                  <th className="py-2 px-4 font-medium">Cumulative tickets</th>
+                  <th className="py-2 px-4 font-medium">Rate per ticket</th>
+                </tr>
+              </thead>
+              <tbody className="text-neutral-300">
+                <tr className="border-b border-neutral-900"><td className="py-2 px-4">1 – 500</td><td className="py-2 px-4">$5.00</td></tr>
+                <tr className="border-b border-neutral-900"><td className="py-2 px-4">501 – 2,000</td><td className="py-2 px-4">$4.50</td></tr>
+                <tr className="border-b border-neutral-900"><td className="py-2 px-4">2,001 – 10,000</td><td className="py-2 px-4">$4.00</td></tr>
+                <tr className="border-b border-neutral-900"><td className="py-2 px-4">10,001 – 25,000</td><td className="py-2 px-4">$3.50</td></tr>
+                <tr><td className="py-2 px-4">25,000+</td><td className="py-2 px-4">$3.00</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <ul className="space-y-2">
+            <li>• Balance never expires and rolls over indefinitely — you&apos;re topping up a wallet, not a monthly allowance.</li>
+            <li>• A ticket that fails, is cancelled, hits its retry limit, or is denied approval <strong className="text-neutral-200">never</strong> deducts anything.</li>
+            <li>• Low balance? PawOS prompts you to add funds before starting a new ticket — nothing runs on an empty balance.</li>
+            <li>• Purchase and usage history are fully visible in-app, with CSV export.</li>
           </ul>
         </div>
       </Section>
@@ -116,10 +137,13 @@ export default function PricingPage() {
       </Section>
 
       <Section className="text-center border-t border-neutral-900">
-        <h2 className="text-2xl font-bold">Need a custom Enterprise quote?</h2>
-        <p className="mx-auto mt-3 max-w-md text-neutral-400">Talk to our team about volume pricing, custom deployment, and dedicated support.</p>
+        <h2 className="text-2xl font-bold">Ready for Team or Enterprise?</h2>
+        <p className="mx-auto mt-3 max-w-md text-neutral-400">
+          Set up your organization directly from the app — 2–150 seats on Team, 20+ seats on Enterprise. No sales
+          call required.
+        </p>
         <div className="mt-6">
-          <Button href="/support/sales" variant="secondary">Contact sales</Button>
+          <Button href="/download" variant="secondary">Get started</Button>
         </div>
       </Section>
     </>

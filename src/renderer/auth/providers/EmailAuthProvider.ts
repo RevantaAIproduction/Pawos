@@ -4,7 +4,7 @@ import type { AuthUser, EmailCreateAccountOptions, EmailSignInOptions } from '..
 import { isValidEmail, isValidPassword, MIN_PASSWORD_LENGTH } from '../validation';
 import { ipc } from '../../services/ipc/ipcBridgeImplementation';
 
-const PAWOS_HOME_URL = 'https://revantaai.com';
+const PAWOS_HOME_URL = 'https://pawos.revantaai.com';
 
 /** Best-effort notification email — a delivery failure must never block the auth flow itself. */
 function notify(method: string, to: string, params: unknown): void {

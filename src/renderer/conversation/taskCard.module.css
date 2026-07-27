@@ -185,6 +185,57 @@
   align-items:flex-start;
 }
 
+/* Waiting-to-connect state — deliberately amber/neutral, not the red errorRow treatment, since a
+   paused capability requirement isn't a failure, just a pause. */
+.connectRow{
+  padding:8px 10px;
+  border-radius:8px;
+  background:rgba(255,196,74,0.10);
+  border:1px solid rgba(255,196,74,0.25);
+  color:#ffe3ad;
+  font-size:12px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  align-items:flex-start;
+}
+.connectProvider{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  width:100%;
+}
+.connectFields{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  margin:2px 0;
+  width:100%;
+  max-width:280px;
+}
+.connectInput{
+  background:rgba(255,255,255,0.08);
+  border:1px solid rgba(255,255,255,0.16);
+  border-radius:6px;
+  color:rgba(255,255,255,0.92);
+  font-size:12px;
+  padding:5px 8px;
+}
+.connectBtn{
+  flex-shrink:0;
+  border:0;
+  background:rgba(255,196,74,0.2);
+  color:#ffe3ad;
+  font-size:10px;
+  font-weight:600;
+  border-radius:999px;
+  padding:3px 9px;
+  cursor:pointer;
+  align-self:flex-start;
+}
+.connectBtn:hover{background:rgba(255,196,74,0.32);}
+.connectError{color:#ff9c9c;font-size:11px;}
+
 .finalReport{
   font-size:12.5px;
   line-height:1.5;

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import type { SettingsState } from '../../../services/settings/SettingsManager';
+import { Toggle } from '../Toggle';
 
 /**
  * Global audio output only (volume/mute). Per-companion voice identity,
@@ -39,12 +40,11 @@ export function VoicePreferencesSection({ onOpenCompanionStudio }: { onOpenCompa
         </label>
         <label className={styles.settingsToggleRow}>
           <span>Mute all sound</span>
-          <input
-            type="checkbox"
+          <Toggle
             checked={draft?.muted ?? false}
-            onChange={async (e) => {
-              setDraft((d) => (d ? { ...d, muted: e.target.checked } : d));
-              await ipc.settingsSet({ muted: e.target.checked });
+            onChange={async (checked) => {
+              setDraft((d) => (d ? { ...d, muted: checked } : d));
+              await ipc.settingsSet({ muted: checked });
             }}
           />
         </label>
@@ -53,7 +53,9 @@ export function VoicePreferencesSection({ onOpenCompanionStudio }: { onOpenCompa
       <div className={styles.card} style={{ marginTop: 14 }}>
         <h3 className={styles.cardTitle}>Companion voice</h3>
         <p className={styles.cardBody}>
-          Choose each companion's voice, speed, and emotion in Companion Studio → Edit → Voice.
+          Choose each companion's voice identity (including male/female-presenting voices), speed,
+          and emotion in Companion Studio → Edit → Voice — that's the one place voice identity is
+          set, since each companion can have its own voice rather than a single app-wide choice.
         </p>
         <button type="button" className={styles.primaryButton} style={{ marginTop: 10 }} onClick={onOpenCompanionStudio}>
           Open Companion Studio

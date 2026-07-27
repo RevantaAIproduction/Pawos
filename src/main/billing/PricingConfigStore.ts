@@ -43,10 +43,10 @@ function defaultConfig(): PricingConfig {
         billingPeriod: 'month',
         features: [
           'Everything in Paw Go',
-          'Paw Flash, Swift & Core reasoning models',
-          'Paw Creative, Vision & Voice',
-          'Higher runtime limits',
-          'Advanced runtimes',
+          'Full AI models: Paw Flash, Swift, Core, Creative, Vision & Voice',
+          'Talk to Paw to run terminal commands, browse the web, and automate your desktop',
+          'Install software, manage files, and run dev workflows through conversation',
+          'Paw remembers context across your workspace and conversation history',
         ],
       },
       {
@@ -57,7 +57,7 @@ function defaultConfig(): PricingConfig {
         billingPeriod: 'month',
         features: [
           'Everything in Paw Pro',
-          'Higher usage limits than Pro',
+          '20x the usage headroom of Paw Pro',
           'Priority access to new Paw models',
         ],
       },
@@ -111,13 +111,21 @@ function defaultConfig(): PricingConfig {
         seatBased: true,
         minSeats: 20,
         usageBilling: {
-          label: 'Autonomous Engineering Task usage',
+          label: 'Flexible pooled usage — seat price + usage at API rates',
           description:
-            'Billed per genuinely completed Autonomous Engineering Task, on top of the seat base fee — never for a failed, cancelled, retry-limit-reached, or approval-denied run.',
+            '$20/seat + tax. Usage cost scales with model and task, billed per genuinely completed Autonomous Engineering Task — never for a failed, cancelled, retry-limit-reached, or approval-denied run.',
         },
         features: [
           'Everything in Paw Team',
-          'Metered Autonomous Engineering Task Billing',
+          'Admins set user and org spend limits',
+          'Role-based access with fine-grained permissioning',
+          'System for Cross-domain Identity Management (SCIM)',
+          'Compliance API for observability and monitoring',
+          'Custom data retention controls',
+          'Network-level access control',
+          'IP allowlisting',
+          'HIPAA-ready offering available',
+          'Paw Security (beta)',
           'Richer Enterprise RBAC roles (IT Admin, Security Admin, Department Manager)',
         ],
       },

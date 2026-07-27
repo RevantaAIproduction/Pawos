@@ -4,7 +4,33 @@ import { ipc } from '../../services/ipc/ipcBridgeImplementation';
 import { aiRouter } from '../../ai/AIRouter';
 import { searchHelpArticles } from '../../help/HelpSearch';
 import { diagnosticsReportingService } from '../../diagnostics/DiagnosticsReportingService';
-import type { SupportConversation, SupportConversationStatus } from '../../services/ipc/ipcTypes';
+import type { SupportConversation, SupportConversationStatus, SupportConversationAttachment } from '../../services/ipc/ipcTypes';
+
+const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
+
+function readFileAsAttachment(file: File): Promise<SupportConversationAttachment> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve({ name: file.name, dataUrl: String(reader.result), kind: file.type.startsWith('image/') ? 'image' : 'file' });
+    reader.onerror = () => reject(reader.error ?? new Error('Could not read file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+const attachButtonStyle: React.CSSProperties = {
+  background: 'none',
+  border: '1px solid rgba(255,255,255,0.12)',
+  borderRadius: 8,
+  width: 34,
+  height: 34,
+  flexShrink: 0,
+  cursor: 'pointer',
+  fontSize: 15,
+  color: '#e8e8ec',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
 
 const inputStyle: React.CSSProperties = {
   flex: 1,
@@ -73,7 +99,72 @@ export function WidgetMessagesTab() {
   const [sending, setSending] = useState(false);
   const [negativeFeedbackOpen, setNegativeFeedbackOpen] = useState(false);
   const [negativeFeedbackText, setNegativeFeedbackText] = useState('');
+  const [pendingAttachments, setPendingAttachments] = useState<SupportConversationAttachment[]>([]);
+  const [attachError, setAttachError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    setAttachError(null);
+    const oversized = files.find((f) => f.size > MAX_ATTACHMENT_BYTES);
+    if (oversized) {
+      setAttachError(`${oversized.name} is too large (max 8MB).`);
+      return;
+    }
+    try {
+      const attachments = await Promise.all(files.map(readFileAsAttachment));
+      setPendingAttachments((prev) => [...prev, ...attachments]);
+    } catch {
+      setAttachError('Could not read that file.');
+    }
+  }
+
+  function removePendingAttachment(index: number) {
+    setPendingAttachments((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function renderPendingAttachments() {
+    if (pendingAttachments.length === 0) return null;
+    return (
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+        {pendingAttachments.map((a, i) => (
+          <span
+            key={`${a.name}-${i}`}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 999, padding: '4px 8px', fontSize: 11.5, color: '#e8e8ec' }}
+          >
+            {a.kind === 'image' ? '🖼' : '📄'} {a.name}
+            <button type="button" onClick={() => removePendingAttachment(i)} style={{ background: 'none', border: 'none', color: '#96969e', cursor: 'pointer', padding: 0, fontSize: 12 }}>
+              ✕
+            </button>
+          </span>
+        ))}
+      </div>
+    );
+  }
+
+  function renderTurnAttachments(attachments?: SupportConversationAttachment[]) {
+    if (!attachments || attachments.length === 0) return null;
+    return (
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+        {attachments.map((a, i) =>
+          a.kind === 'image' ? (
+            <img key={`${a.name}-${i}`} src={a.dataUrl} alt={a.name} style={{ maxWidth: 120, maxHeight: 120, borderRadius: 8, display: 'block' }} />
+          ) : (
+            <a
+              key={`${a.name}-${i}`}
+              href={a.dataUrl}
+              download={a.name}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: '#b8adff', background: 'rgba(255,255,255,0.06)', borderRadius: 8, padding: '4px 8px' }}
+            >
+              📄 {a.name}
+            </a>
+          )
+        )}
+      </div>
+    );
+  }
 
   useEffect(() => {
     ipc.helpListConversations().then((list) => {
@@ -94,19 +185,26 @@ export function WidgetMessagesTab() {
   async function startConversation() {
     if (!problemInput.trim()) return;
     const text = problemInput.trim();
+    const attachments = pendingAttachments;
+    setPendingAttachments([]);
     const created = await ipc.helpCreateConversation(text);
     setConversation(created);
     setProblemInput('');
-    await sendToAI(created, text);
+    await sendToAI(created, text, attachments);
   }
 
-  async function sendToAI(conv: SupportConversation, userText: string) {
+  async function sendToAI(conv: SupportConversation, userText: string, attachments: SupportConversationAttachment[] = []) {
     setSending(true);
     try {
       const matches = searchHelpArticles(userText, 3);
       const context = matches.map((a) => `# ${a.title}\n${a.overview}\n${a.howItWorks}`).join('\n\n');
 
-      const afterUserTurn = await ipc.helpAddTurn(conv.id, { role: 'user', content: userText, timestamp: Date.now() });
+      const afterUserTurn = await ipc.helpAddTurn(conv.id, {
+        role: 'user',
+        content: userText,
+        timestamp: Date.now(),
+        ...(attachments.length > 0 ? { attachments } : {}),
+      });
       if (afterUserTurn) setConversation(afterUserTurn);
       await ipc.helpUpdateConversation(conv.id, { status: 'investigating', currentState: 'Reviewing documentation for a match.' });
 
@@ -119,10 +217,17 @@ export function WidgetMessagesTab() {
         return;
       }
 
+      // This support pipeline has no vision input yet, so attachments are stored with the
+      // conversation for a human/self-healing reviewer, not "seen" by the model — naming
+      // them here just keeps Paw's reply honest about what it can and can't check.
+      const attachmentNote = attachments.length > 0
+        ? `\n\n[User attached ${attachments.length} file(s): ${attachments.map((a) => a.name).join(', ')} — noted for the record, not visible to you.]`
+        : '';
+
       let full = '';
       await new Promise<void>((resolve) => {
         provider.streamResponse(
-          { systemPrompt: buildSystemPrompt(context || 'No matching documentation was found for this question.'), history: [], input: userText, tools: [] },
+          { systemPrompt: buildSystemPrompt(context || 'No matching documentation was found for this question.'), history: [], input: userText + attachmentNote, tools: [] },
           {
             onDelta: (delta) => {
               full += delta;
@@ -173,8 +278,10 @@ export function WidgetMessagesTab() {
   async function sendFollowUp() {
     if (!conversation || !messageInput.trim()) return;
     const text = messageInput.trim();
+    const attachments = pendingAttachments;
+    setPendingAttachments([]);
     setMessageInput('');
-    await sendToAI(conversation, text);
+    await sendToAI(conversation, text, attachments);
   }
 
   async function rate(value: 'up' | 'down') {
@@ -254,21 +361,31 @@ export function WidgetMessagesTab() {
     }
     if (stage === 'composing') {
       return (
-        <div>
-          <div className={styles.agentBubble}>Hi! I&apos;m Paw. What&apos;s your inquiry about?</div>
-          <h2 style={{ fontSize: 16, fontWeight: 700, margin: '2px 0 10px', color: '#f5f5f7' }}>What's going on?</h2>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input
-              style={inputStyle}
-              placeholder={composerPlaceholder}
-              value={problemInput}
-              onChange={(e) => setProblemInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && startConversation()}
-              autoFocus
-            />
-            <button type="button" style={smallButton} disabled={!problemInput.trim()} onClick={startConversation}>
-              Start
-            </button>
+        <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+          <div>
+            <div className={styles.agentBubble}>Hi! I&apos;m Paw. What&apos;s your inquiry about?</div>
+            <h2 style={{ fontSize: 16, fontWeight: 700, margin: '2px 0 10px', color: '#f5f5f7' }}>What's going on?</h2>
+          </div>
+          <div style={{ marginTop: 'auto' }}>
+            {renderPendingAttachments()}
+            <input ref={fileInputRef} type="file" multiple accept="image/*,.txt,.log,.json,.pdf,.zip" style={{ display: 'none' }} onChange={handleFilesSelected} />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                style={inputStyle}
+                placeholder={composerPlaceholder}
+                value={problemInput}
+                onChange={(e) => setProblemInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && startConversation()}
+                autoFocus
+              />
+              <button type="button" style={attachButtonStyle} title="Attach a photo or file" onClick={() => fileInputRef.current?.click()}>
+                📎
+              </button>
+              <button type="button" style={smallButton} disabled={!problemInput.trim()} onClick={startConversation}>
+                Start
+              </button>
+            </div>
+            {attachError && <p style={{ color: '#f87171', fontSize: 11.5, marginTop: 6 }}>{attachError}</p>}
           </div>
         </div>
       );
@@ -319,6 +436,7 @@ export function WidgetMessagesTab() {
             <div style={{ background: t.role === 'user' ? 'rgba(139,123,255,0.16)' : 'rgba(255,255,255,0.05)', borderRadius: 10, padding: '7px 11px', fontSize: 12.5, color: '#e8e8ec' }}>
               {t.content}
             </div>
+            {renderTurnAttachments(t.attachments)}
           </div>
         ))}
         {sending && <div style={{ fontSize: 12, color: '#6f6f78' }}>Paw is thinking…</div>}
@@ -341,10 +459,16 @@ export function WidgetMessagesTab() {
         </div>
       )}
 
+      {renderPendingAttachments()}
+      <input ref={fileInputRef} type="file" multiple accept="image/*,.txt,.log,.json,.pdf,.zip" style={{ display: 'none' }} onChange={handleFilesSelected} />
       <div style={{ display: 'flex', gap: 6 }}>
         <input style={inputStyle} placeholder="Ask a follow-up…" value={messageInput} onChange={(e) => setMessageInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendFollowUp()} disabled={sending} />
+        <button type="button" style={attachButtonStyle} title="Attach a photo or file" onClick={() => fileInputRef.current?.click()} disabled={sending}>
+          📎
+        </button>
         <button type="button" style={smallButton} disabled={sending || !messageInput.trim()} onClick={sendFollowUp}>Send</button>
       </div>
+      {attachError && <p style={{ color: '#f87171', fontSize: 11.5, marginTop: 6 }}>{attachError}</p>}
     </div>
   );
 }

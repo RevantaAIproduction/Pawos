@@ -37,7 +37,7 @@ export function PrivacySection() {
         <button
           type="button"
           className={styles.chip}
-          onClick={() => ipc.actionExecute({ type: 'openUrl', url: 'https://revantaai.com/privacy' })}
+          onClick={() => ipc.actionExecute({ type: 'openUrl', url: 'https://pawos.revantaai.com/legal/privacy-policy' })}
         >
           View Privacy Policy
         </button>

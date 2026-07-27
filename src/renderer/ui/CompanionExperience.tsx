@@ -276,6 +276,7 @@ export default function CompanionExperience() {
             onSendTranscript={(text, context) => conversation.submitTranscript(text, context)}
             onRetryAction={(taskId, actionId) => conversation.retryAction(taskId, actionId)}
             onOpenPath={(path, kind) => conversation.openPath(path, kind)}
+            onConnectCapability={(taskId, actionId, connectorId, fields, opts) => conversation.connectCapability(taskId, actionId, connectorId, fields, opts)}
             creditsNoticeTier={conversation.creditsNoticeTier}
             onDismissCreditsNotice={() => conversation.dismissCreditsNotice()}
           />
@@ -287,6 +288,7 @@ export default function CompanionExperience() {
             task={activeTask}
             onRetryAction={(taskId, actionId) => conversation.retryAction(taskId, actionId)}
             onOpenPath={(path, kind) => conversation.openPath(path, kind)}
+            onConnectCapability={(taskId, actionId, connectorId, fields, opts) => conversation.connectCapability(taskId, actionId, connectorId, fields, opts)}
           />
         </div>
       )}

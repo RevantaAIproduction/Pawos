@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
 import { permissionService } from '../../../organization/PermissionService';
+import { Toggle } from '../Toggle';
 
 function getErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -70,7 +71,7 @@ export function GovernancePolicyCard({ organizationId }: { organizationId: strin
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {GOVERNABLE_CAPABILITIES.map(({ id, label }) => (
             <label key={id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-              <input type="checkbox" checked={required.includes(id)} disabled={!canManage} onChange={() => toggle(id)} />
+              <Toggle checked={required.includes(id)} disabled={!canManage} onChange={() => toggle(id)} />
               <span>Require approval to {label.toLowerCase()}</span>
             </label>
           ))}

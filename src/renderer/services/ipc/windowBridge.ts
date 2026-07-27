@@ -15,6 +15,7 @@ import type { PairedDevice } from '../../../shared/pairing/PairingTypes';
 import type { LocalDeviceIdentity } from '../../../shared/device/DeviceTypes';
 import type {
   PricingConfig,
+  TicketPricingConfig,
   SubscriptionState,
   SubscriptionTierId,
   CreditBalance,
@@ -41,6 +42,7 @@ import type {
   ConnectivityScope,
   ConnectorDefinition,
   ConnectorConnection,
+  ConnectorStatus,
   DeploymentProfile,
   DeploymentProfileConfig,
   ConnectivityIpcResult,
@@ -154,6 +156,7 @@ export function contextBridge() {
     deviceGetLocalIdentity: async (): Promise<LocalDeviceIdentity> => ipcApi.invoke('device:getLocalIdentity'),
 
     billingGetPricing: async (): Promise<PricingConfig> => ipcApi.invoke('billing:getPricing'),
+    billingGetTicketPricingConfig: async (): Promise<TicketPricingConfig> => ipcApi.invoke('billing:getTicketPricingConfig'),
     billingGetSubscription: async (): Promise<SubscriptionState> => ipcApi.invoke('billing:getSubscription'),
     billingSetSubscriptionTier: async (tier: SubscriptionTierId): Promise<SubscriptionState> =>
       ipcApi.invoke('billing:setSubscriptionTier', tier),
@@ -171,10 +174,10 @@ export function contextBridge() {
     billingCreateCheckoutSession: async (tier: SubscriptionTierId, callbackUrl?: string, options?: CheckoutOptions): Promise<BillingCheckoutResult> =>
       ipcApi.invoke('billing:createCheckoutSession', tier, callbackUrl, options),
     billingStartCheckoutSync: async (): Promise<string> => ipcApi.invoke('billing:startCheckoutSync'),
-    billingCreateCreditsCheckoutSession: async (credits: number, organizationId?: string, callbackUrl?: string): Promise<BillingCheckoutResult> =>
-      ipcApi.invoke('billing:createCreditsCheckoutSession', credits, organizationId, callbackUrl),
+    billingCreateCreditsCheckoutSession: async (amountUsd: number, organizationId?: string, callbackUrl?: string): Promise<BillingCheckoutResult> =>
+      ipcApi.invoke('billing:createCreditsCheckoutSession', amountUsd, organizationId, callbackUrl),
     onSubscriptionUpdated: (cb: () => void) => on('billing:subscriptionUpdated', cb),
-    onTaskCreditsPurchased: (cb: (payload: { credits: number; organizationId?: string }) => void) =>
+    onTaskCreditsPurchased: (cb: (payload: { amountUsd: number; organizationId?: string }) => void) =>
       on('billing:taskCreditsPurchased', cb),
 
     onboardingGet: async (): Promise<OnboardingState> => ipcApi.invoke('onboarding:get'),
@@ -232,6 +235,10 @@ export function contextBridge() {
       ipcApi.invoke('connectivity:listConnections', scope),
     connectivityConnect: async (connectorId: string, scope: ConnectivityScope): Promise<ConnectivityIpcResult<ConnectorConnection>> =>
       ipcApi.invoke('connectivity:connect', connectorId, scope),
+    connectivityGetStatus: async (connectorId: string, scope: ConnectivityScope): Promise<ConnectivityIpcResult<ConnectorStatus>> =>
+      ipcApi.invoke('connectivity:getStatus', connectorId, scope),
+    connectivityRestore: async (connectorId: string, scope: ConnectivityScope, credential: unknown): Promise<ConnectivityIpcResult<ConnectorStatus>> =>
+      ipcApi.invoke('connectivity:restore', connectorId, scope, credential),
     connectivityDisconnect: async (connectionId: string): Promise<ConnectivityIpcResult<void>> =>
       ipcApi.invoke('connectivity:disconnect', connectionId),
     connectivityCheckHealth: async (connectionId: string): Promise<ConnectivityIpcResult<ConnectorConnection>> =>

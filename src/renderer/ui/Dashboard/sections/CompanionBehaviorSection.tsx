@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import type { SettingsState } from '../../../services/settings/SettingsManager';
+import { Toggle } from '../Toggle';
 
 /**
  * Global desktop-companion behavior toggles only — personality, memory, and
@@ -25,18 +26,16 @@ export function CompanionBehaviorSection({ onOpenCompanionStudio }: { onOpenComp
         <h3 className={styles.cardTitle}>Desktop reactions</h3>
         <label className={styles.settingsToggleRow}>
           <span>React to keyboard activity</span>
-          <input
-            type="checkbox"
+          <Toggle
             checked={settings?.enableKeyboardReactions ?? true}
-            onChange={(e) => update({ enableKeyboardReactions: e.target.checked })}
+            onChange={(checked) => update({ enableKeyboardReactions: checked })}
           />
         </label>
         <label className={styles.settingsToggleRow}>
           <span>React to mouse activity</span>
-          <input
-            type="checkbox"
+          <Toggle
             checked={settings?.enableMouseReactions ?? true}
-            onChange={(e) => update({ enableMouseReactions: e.target.checked })}
+            onChange={(checked) => update({ enableMouseReactions: checked })}
           />
         </label>
       </div>

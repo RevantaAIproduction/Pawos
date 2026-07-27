@@ -8,9 +8,10 @@ import { useState } from "react";
  * two finalized seat rates (Standard $20/seat, Premium $100/seat) — a
  * member's seat tier is chosen when they're invited (see Organization
  * settings in the desktop app). Enterprise is seat-based at a finalized
- * $20/seat base fee plus prepaid Autonomous Engineering Task credits, billed
- * through the same success-gated prepaid credit system already used for
- * individual Pro/Pro Max accounts — never a flat per-seat rate.
+ * $20/seat base fee plus the Autonomous Ticket System's own Ticket Balance
+ * (a separate prepaid dollar wallet, volume-tiered per ticket — see
+ * src/shared/organization/AutonomousTaskBillingTypes.ts) — never a flat
+ * per-seat rate.
  */
 type SeatOption = { seatTier: "standard" | "premium"; label: string; priceCents: number; description: string };
 
@@ -48,10 +49,10 @@ const INDIVIDUAL_PLANS: Plan[] = [
     period: "month",
     features: [
       "Everything in Paw Go",
-      "Paw Flash, Swift & Core reasoning models",
-      "Paw Creative, Vision & Voice",
-      "Higher runtime limits",
-      "Advanced runtimes",
+      "Full AI models: Paw Flash, Swift, Core, Creative, Vision & Voice",
+      "Talk to Paw to run terminal commands, browse the web, and automate your desktop",
+      "Install software, manage files, and run dev workflows through conversation",
+      "Paw remembers context across your workspace and conversation history",
     ],
   },
   {
@@ -61,7 +62,7 @@ const INDIVIDUAL_PLANS: Plan[] = [
     period: "month",
     features: [
       "Everything in Paw Pro",
-      "Higher usage limits than Pro",
+      "20x the usage headroom of Paw Pro",
       "Priority access to new Paw models",
     ],
   },
@@ -101,12 +102,20 @@ const TEAM_ENTERPRISE_PLANS: Plan[] = [
     seatBased: true,
     minSeats: 20,
     usageBilling: {
-      label: "+ prepaid Autonomous Engineering Task credits",
-      description: "One prepaid credit ($5) consumed per genuinely completed task, on top of the seat base fee — never for a failed, cancelled, retry-limit-reached, or approval-denied run.",
+      label: "Flexible pooled usage — seat price + usage at API rates",
+      description: "$20/seat + tax. Usage cost scales with model and task. Self-serve — no sales call required, same as Team.",
     },
     features: [
       "Everything in Paw Team",
-      "Prepaid Autonomous Engineering Task Credits",
+      "Admins set user and org spend limits",
+      "Role-based access with fine-grained permissioning",
+      "System for Cross-domain Identity Management (SCIM)",
+      "Compliance API for observability and monitoring",
+      "Custom data retention controls",
+      "Network-level access control",
+      "IP allowlisting",
+      "HIPAA-ready offering available",
+      "Paw Security (beta)",
       "Richer Enterprise RBAC roles (IT Admin, Security Admin, Department Manager)",
     ],
   },

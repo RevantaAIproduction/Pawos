@@ -173,6 +173,19 @@ export function HelpIcon() {
   );
 }
 
+/** A speech-bubble glyph for the Help widget — distinct from HelpIcon's plain "?" circle, used
+ *  wherever the widget itself (not just the generic concept of help) is being represented. */
+export function HelpBubbleIcon() {
+  return (
+    <svg {...base}>
+      <path d="M4.5 6.5h15v9h-8l-4 3.5v-3.5h-3z" />
+      <circle cx="9.2" cy="11" r="0.9" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="11" r="0.9" fill="currentColor" stroke="none" />
+      <circle cx="14.8" cy="11" r="0.9" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export function InfoIcon() {
   return (
     <svg {...base}>

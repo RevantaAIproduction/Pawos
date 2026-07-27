@@ -4,6 +4,7 @@ import { DESTRUCTIVE_ACTION_TYPES, CODING_EXECUTION_ACTION_TYPES, INFRA_EXECUTIO
 import { codingModeStore } from './CodingModeStore';
 import { infraModeStore } from '../infrastructure/InfraModeStore';
 import { pendingApprovalStore, deriveApprovalKey } from '../infrastructure/PendingApprovalStore';
+import { requirementGate } from '../runtime/RequirementGate';
 import type { ExecutionTrail, ObservationEvent } from '../../shared/actions/ExecutionLifecycle';
 import { NOT_AUTO_RECOVERABLE, classifyFailure, recoveryNarrationFor, RECOVERY_SUCCESS_NARRATION } from '../../shared/execution/RecoveryNarration';
 import type { DesktopPlugin } from './DesktopPlugin';
@@ -155,6 +156,9 @@ import { getInfrastructureGraphSummaryPlugin } from './plugins/infrastructure/Ge
 import { getDeploymentStatusPlugin } from './plugins/infrastructure/GetDeploymentStatusPlugin';
 import { listConfiguredInfraConnectorsPlugin } from './plugins/infrastructure/ListConfiguredInfraConnectorsPlugin';
 import { applyOrganizationCredentialPlugin } from './plugins/infrastructure/ApplyOrganizationCredentialPlugin';
+import { connectJiraCredentialPlugin } from './plugins/infrastructure/ConnectJiraCredentialPlugin';
+import { saveGuestConnectorCredentialPlugin } from './plugins/infrastructure/SaveGuestConnectorCredentialPlugin';
+import { connectivityConnectPlugin } from './plugins/infrastructure/ConnectivityConnectPlugin';
 import { investigateTicketPlugin } from './plugins/infrastructure/InvestigateTicketPlugin';
 import { investigateProductionIssuePlugin } from './plugins/infrastructure/InvestigateProductionIssuePlugin';
 import { compareDeploymentsPlugin } from './plugins/infrastructure/CompareDeploymentsPlugin';
@@ -335,6 +339,9 @@ export class DesktopExecutionEngine extends EventEmitter {
     getDeploymentStatusPlugin,
     listConfiguredInfraConnectorsPlugin,
     applyOrganizationCredentialPlugin,
+    connectJiraCredentialPlugin,
+    saveGuestConnectorCredentialPlugin,
+    connectivityConnectPlugin,
     getApprovalQueuePlugin,
     listEngineeringMemoryPlugin,
     getInfrastructureGraphSummaryPlugin,
@@ -423,7 +430,12 @@ export class DesktopExecutionEngine extends EventEmitter {
     const prepared = await plugin.prepare(request);
     const [firstMissing] = prepared.requirements;
     if (firstMissing) {
-      return { ok: false, reason: 'failed', message: firstMissing.message };
+      if (firstMissing.resolvable) {
+        const gateResult = await requirementGate.check([firstMissing.resolvable], { scope: request.scope });
+        if (gateResult) return gateResult;
+      } else {
+        return { ok: false, reason: 'failed', message: firstMissing.message };
+      }
     }
 
     const observations: ObservationEvent[] = [];

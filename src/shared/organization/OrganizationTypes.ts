@@ -50,4 +50,9 @@ export type OrganizationMember = {
   joinedAt: string | null;
   /** Only meaningful in a 'team' organization (Standard/Premium). Always null for 'enterprise' members — Enterprise seats are uniform. */
   seatTier: SeatTier | null;
+  /** Organization Role (job title, e.g. "Frontend Engineer") — a third
+   * attribute completely independent of seatTier (billing) and role
+   * (permissions). Resolves via resolveOrgJobRole() in OrgJobRoles.ts.
+   * Null means no job title has been assigned yet. */
+  jobRoleRef: string | null;
 };

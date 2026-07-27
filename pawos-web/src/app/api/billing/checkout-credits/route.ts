@@ -1,23 +1,24 @@
 import { NextResponse } from "next/server";
-import { getRazorpayCredentials, razorpayAuthHeader, TASK_CREDIT_PRICE_USD, MIN_TASK_CREDIT_PURCHASE } from "@/lib/billing/razorpay";
+import { getRazorpayCredentials, razorpayAuthHeader, getTicketPricingConfig } from "@/lib/billing/razorpay";
 
 /**
- * Creates a real Razorpay Order for a one-time prepaid Autonomous
- * Engineering Task credit purchase — $5/credit, minimum 6 credits ($30),
- * enforced on every purchase (not just the first, since pawos-web has no
- * persistent account database to check purchase history against — see
- * the webhook route's own comment on why). The order amount is always
- * computed server-side from `credits`, never trusted from the client
- * beyond the credit count itself.
+ * Creates a real Razorpay Order for a one-time Ticket Balance top-up — any dollar amount at or
+ * above the real, editable minimum (see getTicketPricingConfig()), enforced on every purchase (not
+ * just the first, since pawos-web has no persistent account database to check purchase history
+ * against — see the webhook route's own comment on why). The per-ticket rate this balance
+ * eventually buys is computed later, server-side, at ticket-completion time in the Electron app's
+ * own get_ticket_unit_price() SQL function — this route only ever validates and charges the raw
+ * top-up amount, never a credit count or a price-per-ticket.
  */
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
-  const credits = typeof body?.credits === "number" && Number.isInteger(body.credits) ? body.credits : undefined;
+  const amountUsd = typeof body?.amountUsd === "number" && Number.isFinite(body.amountUsd) ? body.amountUsd : undefined;
   const organizationId = typeof body?.organizationId === "string" ? body.organizationId : undefined;
+  const { minTopupUsd } = getTicketPricingConfig();
 
-  if (!credits || credits < MIN_TASK_CREDIT_PURCHASE) {
+  if (!amountUsd || amountUsd < minTopupUsd) {
     return NextResponse.json(
-      { ok: false, reason: `Minimum purchase is ${MIN_TASK_CREDIT_PURCHASE} task credits ($${MIN_TASK_CREDIT_PURCHASE * TASK_CREDIT_PRICE_USD}).` },
+      { ok: false, reason: `Minimum top-up is $${minTopupUsd}.` },
       { status: 400 }
     );
   }
@@ -30,7 +31,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const amountUsd = credits * TASK_CREDIT_PRICE_USD;
   const response = await fetch("https://api.razorpay.com/v1/orders", {
     method: "POST",
     headers: {
@@ -38,9 +38,9 @@ export async function POST(request: Request) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      amount: amountUsd * 100, // Razorpay amounts are in the smallest currency unit (cents for USD).
+      amount: Math.round(amountUsd * 100), // Razorpay amounts are in the smallest currency unit (cents for USD).
       currency: "USD",
-      notes: { credits: String(credits), organizationId: organizationId ?? "" },
+      notes: { amountUsd: String(amountUsd), organizationId: organizationId ?? "" },
     }),
   });
 

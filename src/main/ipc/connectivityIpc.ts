@@ -4,6 +4,7 @@ import type {
   ConnectivityScope,
   ConnectorDefinition,
   ConnectorConnection,
+  ConnectorStatus,
   DeploymentProfile,
   DeploymentProfileConfig,
   ConnectivityIpcResult,
@@ -74,6 +75,32 @@ export function registerConnectivityIpc(): void {
       throw new Error("connectivity:connect requires a valid scope ({ userId, organizationId? }).");
     }
     return connectivityRuntime.connections.connect(connectorId, scope);
+  });
+
+  // Strictly read-only — see ConnectorSDK.getStatus's contract. The Connections page uses this
+  // one, and only this one, on mount/repeated visits; it must never trigger connect()/authenticate().
+  safeHandle<ConnectorStatus>('connectivity:getStatus', (connectorId: unknown, scope: unknown) => {
+    if (!isNonEmptyString(connectorId)) {
+      throw new Error('connectivity:getStatus requires a non-empty connectorId string.');
+    }
+    if (!isConnectivityScope(scope)) {
+      throw new Error("connectivity:getStatus requires a valid scope ({ userId, organizationId? }).");
+    }
+    return connectivityRuntime.connections.getConnectorStatus(connectorId, scope);
+  });
+
+  // The one explicit restoration entry point — activates an already-obtained credential (read by
+  // the renderer from Supabase, or by main.ts's guest-mode startup code) into a connector's
+  // in-memory state via authenticate(). Called once per session by useConnectivityBootstrap, never
+  // from a page mount — see ConnectionManager.restore's own doc comment.
+  safeHandle<ConnectorStatus>('connectivity:restore', (connectorId: unknown, scope: unknown, credential: unknown) => {
+    if (!isNonEmptyString(connectorId)) {
+      throw new Error('connectivity:restore requires a non-empty connectorId string.');
+    }
+    if (!isConnectivityScope(scope)) {
+      throw new Error("connectivity:restore requires a valid scope ({ userId, organizationId? }).");
+    }
+    return connectivityRuntime.connections.restore(connectorId, scope, credential);
   });
 
   safeHandle<void>('connectivity:disconnect', (connectionId: unknown) => {
@@ -166,19 +193,20 @@ export function registerConnectivityIpc(): void {
     return connectivityRuntime.apiTokens.save(connectorId, scope, token);
   });
 
-  safeHandle<OAuthBeginResult>('connectivity:oauth:begin', (connectorId: unknown, scope: unknown) => {
+  safeHandle<OAuthBeginResult>('connectivity:oauth:begin', async (connectorId: unknown, scope: unknown) => {
     if (!isNonEmptyString(connectorId)) {
       throw new Error('connectivity:oauth:begin requires a non-empty connectorId string.');
     }
     if (!isConnectivityScope(scope)) {
       throw new Error("connectivity:oauth:begin requires a valid scope ({ userId, organizationId? }).");
     }
-    const handle = connectivityRuntime.oauth.beginAuthorization(connectorId, scope);
+    const handle = await connectivityRuntime.oauth.beginAuthorization(connectorId, scope);
     // Deliberately NOT returned: `handle.result` — a Promise can't cross
-    // IPC, and completing the flow requires a real connector's callback
-    // wiring that doesn't exist yet this phase (see Section 9's report).
-    // The renderer gets the requestId (to cancel) and the URL (already
-    // opened in the system browser by beginAuthorization itself).
+    // IPC. This low-level primitive only starts the flow and hands back a
+    // cancellable requestId + the URL (already opened in the system browser
+    // by beginAuthorization itself); a caller that wants the connection
+    // actually completed should use `connectivity:connect` instead, which
+    // awaits the full round trip through the connector's own connect().
     return { requestId: handle.requestId, authorizationUrl: handle.authorizationUrl };
   });
 

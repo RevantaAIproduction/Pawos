@@ -1,11 +1,12 @@
-import type { CalendarProviderConnector, DocumentProviderConnector, MailboxProviderConnector } from '../../shared/office/OfficeTypes';
+import type { CalendarProviderConnector, ContactsProviderConnector, DocumentProviderConnector, MailboxProviderConnector } from '../../shared/office/OfficeTypes';
 
-export type OfficeConnectorKind = 'documentProvider' | 'calendarProvider' | 'mailboxProvider';
+export type OfficeConnectorKind = 'documentProvider' | 'calendarProvider' | 'mailboxProvider' | 'contactsProvider';
 
 type OfficeAdapterByKind = {
   documentProvider: DocumentProviderConnector;
   calendarProvider: CalendarProviderConnector;
   mailboxProvider: MailboxProviderConnector;
+  contactsProvider: ContactsProviderConnector;
 };
 
 /**
@@ -21,6 +22,7 @@ class OfficeConnectorRegistry {
     documentProvider: new Map(),
     calendarProvider: new Map(),
     mailboxProvider: new Map(),
+    contactsProvider: new Map(),
   };
 
   register<K extends OfficeConnectorKind>(kind: K, connector: OfficeAdapterByKind[K]): void {

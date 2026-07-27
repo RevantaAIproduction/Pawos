@@ -36,6 +36,8 @@ export function ConversationPanel({
   onSendTranscript,
   onRetryAction,
   onOpenPath,
+  onConnectCapability,
+  onNavigateToSettingsConnector,
   creditsNoticeTier,
   onDismissCreditsNotice,
 }: {
@@ -47,6 +49,16 @@ export function ConversationPanel({
   onRetryAction?: (taskId: string, actionId: string) => void;
   /** "Open" next to a file/folder a Task Card touched. */
   onOpenPath?: (path: string, kind: 'file' | 'folder') => void;
+  /** Inline "Connect {capability}" submit from a paused Task Card. */
+  onConnectCapability?: (
+    taskId: string,
+    actionId: string,
+    connectorId: string,
+    fields: Record<string, string>,
+    opts?: { incrementalCapability?: string }
+  ) => Promise<{ ok: boolean; message?: string }> | void;
+  /** "Connect in Settings" for a capability with no inline form yet. */
+  onNavigateToSettingsConnector?: (connectorId: string) => void;
   /** Set when the last submit was blocked by the entitlement/credit gate (see useConversationController). */
   creditsNoticeTier?: SubscriptionTierId | null;
   onDismissCreditsNotice?: () => void;
@@ -189,7 +201,14 @@ export function ConversationPanel({
         {snapshot.messages.map((message) =>
           message.role === 'system' ? (
             message.task ? (
-              <TaskCard key={message.id} task={message.task} onRetryAction={onRetryAction} onOpenPath={onOpenPath} />
+              <TaskCard
+                key={message.id}
+                task={message.task}
+                onRetryAction={onRetryAction}
+                onOpenPath={onOpenPath}
+                onConnectCapability={onConnectCapability}
+                onNavigateToSettingsConnector={onNavigateToSettingsConnector}
+              />
             ) : (
               <div key={message.id} className={styles.systemLineWrap}>
                 <div

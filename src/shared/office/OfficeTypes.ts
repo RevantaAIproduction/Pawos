@@ -48,3 +48,14 @@ export interface MailboxProviderConnector {
   listRecentThreads(maxResults: number): Promise<ConnectorResult<{ threads: { id: string; subject: string; snippet: string; from: string; at: string }[] }>>;
   readThread(threadId: string): Promise<ConnectorResult<{ subject: string; messages: { from: string; at: string; body: string }[] }>>;
 }
+
+export type ContactsProviderId = 'googleContacts' | 'outlookContacts' | 'appleContacts';
+
+export type ContactRef = { id: string; name: string; emails: string[]; phones: string[] };
+
+export interface ContactsProviderConnector {
+  readonly id: ContactsProviderId;
+  readonly displayName: string;
+  isConfigured(): boolean;
+  listContacts(query?: string): Promise<ConnectorResult<{ contacts: ContactRef[] }>>;
+}

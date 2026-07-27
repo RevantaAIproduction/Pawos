@@ -94,11 +94,23 @@ export function AdvancedSection() {
           </button>
         </div>
         {connectors.length > 0 && (
-          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
             {connectors.map((c) => (
-              <span key={`${c.kind}-${c.id}`} className={styles.cardBody}>
-                {c.configured ? '●' : '○'} {c.displayName}
-              </span>
+              <div key={`${c.kind}-${c.id}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: '50%',
+                    background: c.configured ? '#7fd88f' : 'rgba(var(--pawos-overlay-rgb), 0.25)',
+                    flexShrink: 0,
+                  }}
+                />
+                <span className={styles.cardBody} style={{ flex: 1 }}>{c.displayName}</span>
+                <span style={{ fontSize: 11.5, color: 'var(--pawos-text-secondary)' }}>
+                  {c.configured ? 'Configured' : 'Not configured'}
+                </span>
+              </div>
             ))}
           </div>
         )}

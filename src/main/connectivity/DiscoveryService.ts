@@ -99,6 +99,12 @@ function buildLocalToolSdk(capability: DiscoveredCapability, category: Connector
       const result = await probe();
       return { status: result.available ? 'healthy' : 'down' };
     },
+    // Pure reflection of the presence check already captured in `capability.available` — no I/O,
+    // no re-probing; matches ConnectorSDK.getStatus's strictly-read-only contract.
+    getStatus: async () => ({
+      state: capability.available ? 'connected' : 'disconnected',
+      capabilities: capability.available ? [capabilityName] : [],
+    }),
     capabilities: () => [capabilityName],
     subscribe: () => () => {},
     unsubscribe: () => {},
