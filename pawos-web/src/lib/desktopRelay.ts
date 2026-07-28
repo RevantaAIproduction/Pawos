@@ -107,16 +107,41 @@ export async function relayGoogleToDesktop(code: string | null, error: string | 
   }
 }
 
+/**
+ * Chrome/Edge/Firefox routinely block a script-driven `window.location.href` navigation to a
+ * custom protocol (`pawos://…`) when the page wasn't given a fresh, direct user gesture at the
+ * moment of navigation — a full OAuth round trip (redirect to Google, redirect back here) doesn't
+ * count, even though the whole flow started from a real click on "Continue with Google". When
+ * blocked, browsers give no error and no prompt — the page just sits here forever, which looks
+ * identical to "PawOS never received the callback" from the user's side. The auto-redirect below
+ * is still attempted (it does work in some browsers/versions), but the real, reliable path is the
+ * big button, which IS a direct user gesture and reliably clears every browser's custom-protocol
+ * gate. Making it the visually primary element (not a buried "click here" text link) is the actual
+ * fix — most users never notice a small fallback link and just wait, which is exactly how this bug
+ * was reported.
+ */
 function buildRelayResponse(deepLink: string, error: string | null): Response {
+  const styles = `
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 48px 24px; max-width: 420px; margin: 0 auto; text-align: center; color: #1a1a1a; }
+    .button { display: inline-block; margin-top: 20px; padding: 14px 32px; background: #2563eb; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; }
+    .button:hover { background: #1d4ed8; }
+    .hint { margin-top: 16px; color: #666; font-size: 14px; }
+  `;
   const body = error
-    ? `<html><body style="font-family:sans-serif;padding:40px;">
+    ? `<html><head><style>${styles}</style></head><body>
         <p>Sign-in failed: ${escapeHtml(error)}.</p>
-        <p><a href="${escapeHtml(deepLink)}">Click here to return to PawOS</a>, or close this window and try again.</p>
+        <a class="button" href="${escapeHtml(deepLink)}">Return to PawOS</a>
+        <p class="hint">Or close this window and try again.</p>
       </body></html>`
-    : `<html><body style="font-family:sans-serif;padding:40px;">
-        <p>Signed in — returning you to PawOS&hellip;</p>
-        <p>If nothing happens, <a href="${escapeHtml(deepLink)}">click here</a>.</p>
-        <script>window.location.href = ${JSON.stringify(deepLink)};</script>
+    : `<html><head><style>${styles}</style></head><body>
+        <p>Signed in successfully.</p>
+        <a class="button" id="return-link" href="${escapeHtml(deepLink)}">Return to PawOS</a>
+        <p class="hint">Click the button above if you're not redirected automatically.</p>
+        <script>
+          // Best-effort automatic redirect — silently no-ops in browsers that block it, in which
+          // case the button above (a genuine user click) is what actually gets the user through.
+          window.location.href = ${JSON.stringify(deepLink)};
+        </script>
       </body></html>`;
 
   return new Response(body, { headers: { "Content-Type": "text/html; charset=utf-8" } });
