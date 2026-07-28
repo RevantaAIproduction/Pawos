@@ -143,7 +143,7 @@ export function SettingsSection({
             <BrowserToolsSettingsPage />
           </>
         )}
-        {tab === 'Connections' && <ConnectionsPage scope={{ userId: user.id }} />}
+        {tab === 'Connections' && <ConnectionsPage scope={{ userId: user.id }} onUpgrade={onUpgrade} />}
         {tab === 'Billing' && (
           <>
             <SettingsPageHeader title="Billing" description="Plan, credits, referrals, and usage." />

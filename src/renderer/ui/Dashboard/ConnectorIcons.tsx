@@ -127,23 +127,15 @@ function RailwayGlyph({ size = 32 }: { size?: number }) {
   );
 }
 
-function CloudflareGlyph({ size = 32 }: { size?: number }) {
-  const g = size * 0.62;
+function SlackGlyph({ size = 32 }: { size?: number }) {
+  const g = size * 0.6;
   return (
-    <Badge size={size} background="#F6821F">
+    <Badge size={size} background="#4A154B">
       <svg width={g} height={g} viewBox="0 0 24 24" fill="none">
-        <path d="M6.5 17a3.8 3.8 0 0 1-.4-7.6 5 5 0 0 1 9.6-1.9A4.2 4.2 0 0 1 17.5 17Z" fill="#fff" />
-      </svg>
-    </Badge>
-  );
-}
-
-function SupabaseGlyph({ size = 32 }: { size?: number }) {
-  const g = size * 0.55;
-  return (
-    <Badge size={size} background="#181818">
-      <svg width={g} height={g} viewBox="0 0 24 24" fill="none">
-        <path d="M13 2 4.5 13.5H11L10 22 19.5 10H13Z" fill="#3ECF8E" />
+        <rect x="9" y="2" width="3" height="8" rx="1.5" fill="#36C5F0" />
+        <rect x="2" y="9" width="8" height="3" rx="1.5" fill="#ECB22E" />
+        <rect x="12" y="14" width="3" height="8" rx="1.5" fill="#2EB67D" />
+        <rect x="14" y="12" width="8" height="3" rx="1.5" fill="#E01E5A" />
       </svg>
     </Badge>
   );
@@ -168,8 +160,7 @@ const CONNECTOR_GLYPHS: Record<string, (props: { size?: number }) => React.React
   vercel: VercelGlyph,
   netlify: NetlifyGlyph,
   railway: RailwayGlyph,
-  cloudflare: CloudflareGlyph,
-  supabase: SupabaseGlyph,
+  slack: SlackGlyph,
 };
 
 /** Dispatches on connector id — falls back to a neutral initial badge for anything not hand-drawn

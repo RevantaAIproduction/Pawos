@@ -5,6 +5,22 @@
  * is written against, so a new connector never requires a runtime change.
  */
 
+import type { FeatureId } from '../billing/BillingTypes';
+
+/**
+ * Which connectors require a paid-tier feature flag before the Connections UI enables their
+ * Connect button — read via `ipc.entitlementIsFeatureAvailable`/`entitlementGetSnapshot`, never a
+ * hardcoded tier name in the UI itself (see EntitlementService.ts's TIER_ENTITLEMENTS for which
+ * tier actually grants each FeatureId). GitHub/GitLab/Vercel/Netlify/Railway are intentionally
+ * absent — free on every tier, no gate.
+ */
+export const CONNECTOR_REQUIRED_FEATURE: Partial<Record<string, FeatureId>> = {
+  linear: 'connectLinear',
+  googleWorkspace: 'connectGoogleWorkspace',
+  jira: 'connectJira',
+  slack: 'connectSlack',
+};
+
 export type ConnectorCategory =
   | 'sourceControl'
   | 'projectManagement'
@@ -145,6 +161,19 @@ export interface OAuthConnectorConfig {
    *  provider has the same Desktop-client restriction sets this the same way. Absent/false
    *  keeps the existing pawos:// protocol-callback path unchanged. */
   useLoopbackRedirect?: boolean;
+  /** Extra static query params OAuthManager.buildAuthorizationUrl adds to the authorize request —
+   *  e.g. Atlassian/Jira requires `audience=api.atlassian.com` and `prompt=consent`. Absent for
+   *  every provider that needs nothing beyond the standard client_id/redirect_uri/scope/
+   *  response_type set. */
+  extraAuthParams?: Record<string, string>;
+  /** Env var naming this connector's own already-registered, pawos-web-hosted callback URL (e.g.
+   *  CONNECTOR_VERCEL_CALLBACK_URL) — used instead of the generic CONNECTIVITY_OAUTH_REDIRECT_URI
+   *  when the provider's OAuth app was registered with one specific callback URL rather than
+   *  PawOS's pawos:// custom scheme. pawos-web's route at that path is a thin relay (forwards the
+   *  raw code/state/error on to pawos://connectivity-oauth-callback, exactly like the existing
+   *  GitHub/Google sign-in relays) — it never itself performs the token exchange; that still
+   *  happens via OAuthManager.exchangeCodeForToken -> /api/connectivity/oauth/exchange. */
+  redirectUriEnvVar?: string;
 }
 
 /**

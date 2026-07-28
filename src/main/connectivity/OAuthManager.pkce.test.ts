@@ -101,9 +101,10 @@ describe('OAuthManager — generic PKCE infrastructure', () => {
 
     const firstCall = fetchMock.mock.calls[0];
     if (!firstCall) throw new Error('Expected fetch to have been called.');
-    const body = String((firstCall[1] as { body?: unknown } | undefined)?.body);
-    expect(body).toContain('code_verifier=verifier123');
-    expect(body).not.toContain('client_secret');
+    expect(String(firstCall[0])).toContain('/api/connectivity/oauth/exchange');
+    const body = JSON.parse(String((firstCall[1] as { body?: unknown } | undefined)?.body));
+    expect(body.code_verifier).toBe('verifier123');
+    expect(body).not.toHaveProperty('client_secret');
   });
 
   it('refreshAccessToken never sends a client secret', async () => {
@@ -114,10 +115,10 @@ describe('OAuthManager — generic PKCE infrastructure', () => {
 
     const firstCall = fetchMock.mock.calls[0];
     if (!firstCall) throw new Error('Expected fetch to have been called.');
-    const body = String((firstCall[1] as { body?: unknown } | undefined)?.body);
-    expect(body).toContain('grant_type=refresh_token');
-    expect(body).toContain('refresh_token=RT1');
-    expect(body).not.toContain('client_secret');
+    const body = JSON.parse(String((firstCall[1] as { body?: unknown } | undefined)?.body));
+    expect(body.grant_type).toBe('refresh_token');
+    expect(body.refresh_token).toBe('RT1');
+    expect(body).not.toHaveProperty('client_secret');
   });
 
   it('revokeToken posts to the declared revocationUrl', async () => {
@@ -161,24 +162,13 @@ describe('OAuthManager — generic PKCE infrastructure', () => {
     const merged = await oauthManager.refreshAndPersist('fake-oauth', scope);
     expect(merged.refreshToken).toBe('RT-rotated');
   });
-});
 
-describe('OAuthManager — optional client_secret (Desktop-app clients that still require one)', () => {
-  const scope = { userId: 'u1' };
-
-  beforeEach(() => {
-    process.env.FAKE_CLIENT_ID = 'test-client-id';
-    vi.stubGlobal('fetch', vi.fn());
-  });
-
-  afterEach(() => {
-    connectorRegistry.unregister('fake-secret-oauth');
-    delete process.env.FAKE_CLIENT_ID;
-    delete process.env.FAKE_CLIENT_SECRET;
-    vi.unstubAllGlobals();
-  });
-
-  it('includes client_secret in the token exchange when the connector declares clientSecretEnvVar', async () => {
+  /** Regression guard for the CONN-1 backend migration: every provider's client_secret now lives
+   *  only in pawos-web's own environment (see connectivityOAuthProviders.ts) — Electron posts just
+   *  {connectorId, grant_type, code/refresh_token, redirect_uri, code_verifier} to
+   *  /api/connectivity/oauth/exchange and must never embed a secret itself, even for a connector
+   *  whose definition still declares `oauth.clientSecretEnvVar` for documentation/parity purposes. */
+  it('never embeds a client_secret in the request body, even when the connector declares clientSecretEnvVar', async () => {
     process.env.FAKE_CLIENT_SECRET = 'shh-its-not-really-secret';
     connectorRegistry.register(fakeConnector('fake-secret-oauth', { clientSecretEnvVar: 'FAKE_CLIENT_SECRET' }));
 
@@ -189,31 +179,13 @@ describe('OAuthManager — optional client_secret (Desktop-app clients that stil
 
     const firstCall = fetchMock.mock.calls[0];
     if (!firstCall) throw new Error('Expected fetch to have been called.');
+    expect(String(firstCall[0])).toContain('/api/connectivity/oauth/exchange');
     const body = String((firstCall[1] as { body?: unknown } | undefined)?.body);
-    expect(body).toContain('client_secret=shh-its-not-really-secret');
-  });
+    expect(body).not.toContain('client_secret');
+    expect(body).not.toContain('shh-its-not-really-secret');
 
-  it('includes client_secret in refreshAccessToken too, under the same declared env var', async () => {
-    process.env.FAKE_CLIENT_SECRET = 'shh-its-not-really-secret';
-    connectorRegistry.register(fakeConnector('fake-secret-oauth', { clientSecretEnvVar: 'FAKE_CLIENT_SECRET' }));
-
-    const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
-    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: 'AT1', expires_in: 3600 }) });
-
-    await oauthManager.refreshAccessToken('fake-secret-oauth', 'RT1');
-
-    const firstCall = fetchMock.mock.calls[0];
-    if (!firstCall) throw new Error('Expected fetch to have been called.');
-    const body = String((firstCall[1] as { body?: unknown } | undefined)?.body);
-    expect(body).toContain('client_secret=shh-its-not-really-secret');
-  });
-
-  it('throws clearly when clientSecretEnvVar is declared but the env var is unset', async () => {
-    connectorRegistry.register(fakeConnector('fake-secret-oauth', { clientSecretEnvVar: 'FAKE_CLIENT_SECRET' }));
-
-    await expect(oauthManager.exchangeCodeForToken('fake-secret-oauth', 'code123', 'verifier123')).rejects.toThrow(
-      'FAKE_CLIENT_SECRET'
-    );
+    connectorRegistry.unregister('fake-secret-oauth');
+    delete process.env.FAKE_CLIENT_SECRET;
   });
 });
 

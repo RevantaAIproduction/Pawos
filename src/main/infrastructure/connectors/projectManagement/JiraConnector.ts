@@ -13,23 +13,34 @@ function flattenDescription(node: JiraDescriptionNode | string | null | undefine
   return text;
 }
 
-/** Real Jira Cloud REST API connector (basic auth: account email + API token). */
+/** Either the legacy basic-auth credential (account email + API token, still supported for any
+ *  caller that hasn't migrated) or a real Atlassian OAuth 2.0 (3LO) access token — see
+ *  JiraConnectorSDK.ts, which now exclusively uses the 'bearer' mode. `baseUrl` differs by mode:
+ *  a site's own URL (https://yourteam.atlassian.net) for 'basic', or Atlassian's
+ *  cloudId-addressed proxy (https://api.atlassian.com/ex/jira/{cloudId}) for 'bearer' — see
+ *  https://developer.atlassian.com/cloud/jira/platform/oauth-2-3lo-apps/. */
+export type JiraAuthCredential = { mode: 'basic'; email: string; apiToken: string } | { mode: 'bearer'; accessToken: string };
+
+/** Real Jira Cloud REST API connector — basic auth (account email + API token) or Atlassian OAuth 2.0 bearer token. */
 export class JiraConnector implements ProjectManagementConnector {
   readonly id = 'jira' as const;
   readonly displayName = 'Jira';
 
-  constructor(private baseUrl: string | undefined, private email: string | undefined, private apiToken: string | undefined) {}
+  constructor(private baseUrl: string | undefined, private credential: JiraAuthCredential | undefined) {}
 
   isConfigured(): boolean {
-    return Boolean(this.baseUrl && this.email && this.apiToken);
+    return Boolean(this.baseUrl && this.credential);
   }
 
   private notConfigured(): { ok: false; reason: string } {
-    return { ok: false, reason: 'Jira is not configured. Add JIRA_BASE_URL, JIRA_EMAIL, and JIRA_API_TOKEN to .env to connect it.' };
+    return { ok: false, reason: 'Jira is not connected — connect it from Settings > Connections.' };
   }
 
   private headers(): Record<string, string> {
-    const basic = Buffer.from(`${this.email}:${this.apiToken}`).toString('base64');
+    if (this.credential?.mode === 'bearer') {
+      return { Authorization: `Bearer ${this.credential.accessToken}`, Accept: 'application/json' };
+    }
+    const basic = this.credential?.mode === 'basic' ? Buffer.from(`${this.credential.email}:${this.credential.apiToken}`).toString('base64') : '';
     return { Authorization: `Basic ${basic}`, Accept: 'application/json' };
   }
 

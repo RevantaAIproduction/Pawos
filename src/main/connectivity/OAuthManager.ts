@@ -29,6 +29,10 @@ import type { ConnectivityScope } from '../../shared/connectivity/ConnectivityTy
 
 export const CONNECTIVITY_OAUTH_REDIRECT_URI = 'pawos://connectivity-oauth-callback';
 
+/** pawos-web's hosted origin — the only place a connector OAuth client_secret ever lives. Matches
+ *  the domain already used for checkout (see RazorpayBillingProvider.ts's WEB_CHECKOUT_BASE_URL). */
+const CONNECTIVITY_OAUTH_BACKEND_BASE_URL = 'https://pawos.revantaai.com';
+
 const DEFAULT_TIMEOUT_MS = 120000;
 
 export interface OAuthAuthorizationResult {
@@ -174,6 +178,9 @@ class OAuthManager {
     if (oauth.supportsIncrementalAuth) {
       url.searchParams.set('include_granted_scopes', 'true');
     }
+    if (oauth.extraAuthParams) {
+      for (const [key, value] of Object.entries(oauth.extraAuthParams)) url.searchParams.set(key, value);
+    }
 
     let codeVerifier: string | undefined;
     if (oauth.usePkce) {
@@ -206,14 +213,22 @@ class OAuthManager {
     opts?: { scopesOverride?: string[]; timeoutMs?: number }
   ): Promise<OAuthAuthorizationHandle> {
     const sdk = connectorRegistry.get(connectorId);
-    const useLoopback = Boolean(sdk?.definition.oauth?.useLoopbackRedirect);
+    const oauth = sdk?.definition.oauth;
+    const useLoopback = Boolean(oauth?.useLoopbackRedirect);
+    // A connector whose provider's OAuth app was registered with one specific, already-hosted
+    // callback URL (rather than PawOS's pawos:// custom scheme) declares that URL's env var name
+    // here — see OAuthConnectorConfig.redirectUriEnvVar's own doc comment.
+    const staticRedirectUri = !useLoopback && oauth?.redirectUriEnvVar ? process.env[oauth.redirectUriEnvVar] : undefined;
+    if (!useLoopback && oauth?.redirectUriEnvVar && !staticRedirectUri) {
+      throw new Error(`Missing environment variable '${oauth.redirectUriEnvVar}' required to begin OAuth for connector '${connectorId}'.`);
+    }
 
     const loopback = useLoopback ? await startLoopbackListener() : undefined;
     const { url: baseUrl, codeVerifier } = this.buildAuthorizationUrl(connectorId, {
       scopesOverride: opts?.scopesOverride,
-      redirectUri: loopback?.redirectUri,
+      redirectUri: loopback?.redirectUri ?? staticRedirectUri,
     });
-    const redirectUri = loopback?.redirectUri ?? CONNECTIVITY_OAUTH_REDIRECT_URI;
+    const redirectUri = loopback?.redirectUri ?? staticRedirectUri ?? CONNECTIVITY_OAUTH_REDIRECT_URI;
     const requestId = randomUUID();
     const authorizeUrl = new URL(baseUrl.toString());
     authorizeUrl.searchParams.set('state', requestId);
@@ -302,51 +317,63 @@ class OAuthManager {
   }
 
   /**
-   * Generic authorization-code → token exchange for a PKCE/public client — POSTs
-   * `oauth.tokenUrl` with grant_type=authorization_code, code, redirect_uri, client_id, and
-   * code_verifier (when the connector is PKCE-based). `client_secret` is included only when
-   * the connector's own `oauth.clientSecretEnvVar` is set (see that field's doc comment: some
-   * providers' installed-app credential types, e.g. Google's "Desktop app" client, still
-   * require this value in the token request even though PKCE is used and the value itself
-   * isn't meant to stay confidential) — absent for a genuinely secretless public client.
-   * Reusable by any future OAuth connector (Microsoft, Dropbox, Slack, Notion, GitHub) either
-   * way, with zero new plumbing.
+   * Authorization-code → token exchange. Unlike a sign-in-only flow, connector OAuth needs a
+   * real client_secret for every provider here (none of GitHub/GitLab/Linear/Jira/Vercel/
+   * Netlify/Railway/Slack/Google Workspace issue secretless public clients for this kind of
+   * offline-access grant) — so this never touches the provider's token endpoint directly from
+   * Electron. It POSTs to pawos-web's `/api/connectivity/oauth/exchange` instead, which holds
+   * every provider's client_secret in its own server environment and performs the actual
+   * `oauth.tokenUrl` request — the exact same "secret lives only in the hosted backend" shape
+   * already used for PawOS's own Google/GitHub sign-in (see pawos-web/src/lib/desktopRelay.ts).
+   * Electron only ever sends/receives the non-secret authorization code and the finished
+   * tokens. Reusable unmodified by any future OAuth connector: this file no longer needs to
+   * know a single provider's secret, PKCE-ness, or token-endpoint quirks — pawos-web's own
+   * provider config (connectivityOAuthProviders.ts) is where that detail lives now.
    */
   async exchangeCodeForToken(connectorId: string, code: string, codeVerifier?: string, redirectUri?: string): Promise<OAuthTokenResult> {
-    const oauth = this.requireOAuthConfig(connectorId);
-    const clientId = this.requireClientId(connectorId, oauth.clientIdEnvVar);
-    const body = new URLSearchParams({
+    return this.exchangeViaBackend(connectorId, {
       grant_type: 'authorization_code',
       code,
       // Must exactly match whatever redirect_uri the authorize request used — loopback's
       // ephemeral port included — or the token endpoint rejects the exchange.
       redirect_uri: redirectUri ?? CONNECTIVITY_OAUTH_REDIRECT_URI,
-      client_id: clientId,
+      code_verifier: codeVerifier,
     });
-    if (codeVerifier) body.set('code_verifier', codeVerifier);
-    const clientSecret = this.optionalClientSecret(connectorId, oauth);
-    if (clientSecret) body.set('client_secret', clientSecret);
-    return this.postToken(oauth.tokenUrl, body);
   }
 
   /**
-   * Generic refresh-token exchange — POSTs grant_type=refresh_token, including `client_secret`
-   * under the same `oauth.clientSecretEnvVar` condition as `exchangeCodeForToken`. Purely
-   * reports whatever the provider returned; it does not itself decide what to persist. Most
-   * callers should use `refreshAndPersist` instead, which also applies the
-   * never-blank-a-valid-refresh-token guarantee via `CredentialVaultBridge.rotate`.
+   * Generic refresh-token exchange, routed through the same pawos-web backend endpoint as
+   * `exchangeCodeForToken` — see that method's doc comment for why. Purely reports whatever the
+   * provider returned; it does not itself decide what to persist. Most callers should use
+   * `refreshAndPersist` instead, which also applies the never-blank-a-valid-refresh-token
+   * guarantee via `CredentialVaultBridge.rotate`.
    */
   async refreshAccessToken(connectorId: string, refreshToken: string): Promise<OAuthTokenResult> {
-    const oauth = this.requireOAuthConfig(connectorId);
-    const clientId = this.requireClientId(connectorId, oauth.clientIdEnvVar);
-    const body = new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: clientId,
+    return this.exchangeViaBackend(connectorId, { grant_type: 'refresh_token', refresh_token: refreshToken });
+  }
+
+  private async exchangeViaBackend(
+    connectorId: string,
+    params: { grant_type: string; code?: string; redirect_uri?: string; code_verifier?: string; refresh_token?: string }
+  ): Promise<OAuthTokenResult> {
+    const response = await fetch(`${CONNECTIVITY_OAUTH_BACKEND_BASE_URL}/api/connectivity/oauth/exchange`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ connectorId, ...params }),
     });
-    const clientSecret = this.optionalClientSecret(connectorId, oauth);
-    if (clientSecret) body.set('client_secret', clientSecret);
-    return this.postToken(oauth.tokenUrl, body);
+    const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!response.ok) {
+      const message = typeof payload.error === 'string' ? payload.error : `Token exchange for '${connectorId}' failed with HTTP ${response.status}.`;
+      throw new Error(message);
+    }
+    const accessToken = payload.access_token;
+    if (typeof accessToken !== 'string' || !accessToken) {
+      throw new Error(`Token exchange for '${connectorId}' did not return an access_token.`);
+    }
+    const refreshToken = typeof payload.refresh_token === 'string' ? payload.refresh_token : undefined;
+    const expiresAt = typeof payload.expires_in === 'number' ? Date.now() + payload.expires_in * 1000 : undefined;
+    const grantedScopes = typeof payload.scope === 'string' ? payload.scope.split(' ').filter(Boolean) : undefined;
+    return { accessToken, refreshToken, expiresAt, grantedScopes };
   }
 
   /**
@@ -404,59 +431,10 @@ class OAuthManager {
     }
   }
 
-  private requireOAuthConfig(connectorId: string) {
-    const sdk = connectorRegistry.get(connectorId);
-    if (!sdk) throw new Error(`No connector registered with id '${connectorId}'.`);
-    const oauth = sdk.definition.oauth;
-    if (!oauth) throw new Error(`Connector '${connectorId}' does not declare an OAuth configuration.`);
-    return oauth;
-  }
-
   private requireClientId(connectorId: string, clientIdEnvVar: string): string {
     const clientId = process.env[clientIdEnvVar];
     if (!clientId) throw new Error(`Missing environment variable '${clientIdEnvVar}' required for connector '${connectorId}'.`);
     return clientId;
-  }
-
-  /** Returns the connector's client secret only when its `oauth.clientSecretEnvVar` is
-   *  declared — a genuinely secretless public client (the common PKCE case) leaves that field
-   *  unset and this returns `undefined`, sending no `client_secret` param at all. When the
-   *  field IS declared, the env var is required — a declared-but-missing secret must fail
-   *  loudly here rather than let the token endpoint reject the request with a confusing
-   *  "client_secret is missing" error far from the actual misconfiguration. */
-  private optionalClientSecret(connectorId: string, oauth: { clientSecretEnvVar?: string }): string | undefined {
-    if (!oauth.clientSecretEnvVar) return undefined;
-    const secret = process.env[oauth.clientSecretEnvVar];
-    if (!secret) {
-      throw new Error(`Missing environment variable '${oauth.clientSecretEnvVar}' required for connector '${connectorId}'.`);
-    }
-    return secret;
-  }
-
-  private async postToken(tokenUrl: string, body: URLSearchParams): Promise<OAuthTokenResult> {
-    const response = await fetch(tokenUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
-      body,
-    });
-    const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-    if (!response.ok) {
-      const message =
-        typeof payload.error_description === 'string'
-          ? payload.error_description
-          : typeof payload.error === 'string'
-            ? payload.error
-            : `Token request to ${tokenUrl} failed with HTTP ${response.status}.`;
-      throw new Error(message);
-    }
-    const accessToken = payload.access_token;
-    if (typeof accessToken !== 'string' || !accessToken) {
-      throw new Error(`Token response from ${tokenUrl} was missing access_token.`);
-    }
-    const refreshToken = typeof payload.refresh_token === 'string' ? payload.refresh_token : undefined;
-    const expiresAt = typeof payload.expires_in === 'number' ? Date.now() + payload.expires_in * 1000 : undefined;
-    const grantedScopes = typeof payload.scope === 'string' ? payload.scope.split(' ').filter(Boolean) : undefined;
-    return { accessToken, refreshToken, expiresAt, grantedScopes };
   }
 }
 

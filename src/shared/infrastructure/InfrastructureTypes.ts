@@ -19,7 +19,6 @@ export type HostingProviderId =
   | 'railway'
   | 'render'
   | 'flyio'
-  | 'cloudflare'
   | 'firebaseHosting'
   | 'githubPages'
   | 'googleCloudRun'
@@ -53,7 +52,6 @@ export type DatabaseProviderId =
   | 'mongodb'
   | 'redis'
   | 'sqlite'
-  | 'supabase'
   | 'planetscale'
   | 'neon';
 export type InfrastructureProviderId = 'ssh' | 'vpn' | 'onPrem' | 'privateKubernetes' | 'reverseProxy' | 'dns' | 'ssl' | 'secretManager';

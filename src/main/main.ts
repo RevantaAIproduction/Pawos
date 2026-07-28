@@ -43,6 +43,13 @@ import { discoveryService } from './connectivity/DiscoveryService';
 import { connectorRegistry } from './connectivity/ConnectorRegistry';
 import { jiraConnectorSDK } from './connectivity/connectors/JiraConnectorSDK';
 import { googleWorkspaceConnectorSDK } from './connectivity/connectors/GoogleWorkspaceConnectorSDK';
+import { gitHubConnectorSDK } from './connectivity/connectors/GitHubConnectorSDK';
+import { gitLabConnectorSDK } from './connectivity/connectors/GitLabConnectorSDK';
+import { linearConnectorSDK } from './connectivity/connectors/LinearConnectorSDK';
+import { vercelConnectorSDK } from './connectivity/connectors/VercelConnectorSDK';
+import { netlifyConnectorSDK } from './connectivity/connectors/NetlifyConnectorSDK';
+import { railwayConnectorSDK } from './connectivity/connectors/RailwayConnectorSDK';
+import { slackConnectorSDK } from './connectivity/connectors/SlackConnectorSDK';
 import { guestConnectorCredentialStore } from './infrastructure/GuestConnectorCredentialStore';
 import { startRatingPromptScheduler } from './feedback/RatingPromptScheduler';
 // One constant size, always — the overlay window itself never resizes at
@@ -340,10 +347,16 @@ app.whenReady().then(async () => {
 
   // Restart durability for Guest-mode sessions (no Supabase session to read a Vault-stored
   // credential from) — a signed-in user's Jira credential is instead reconnected by the renderer
-  // once it confirms an authenticated session, via the same connectJiraCredential action below.
+  // once it confirms an authenticated session. Bundle-JSON shape, same as Google Workspace below,
+  // since Jira moved from an apiToken form to real Atlassian OAuth (see JiraConnectorSDK.ts).
   const savedGuestJira = guestConnectorCredentialStore.load('jira');
-  if (savedGuestJira) {
-    jiraConnectorSDK.authenticate({ userId: 'guest' }, savedGuestJira).catch((e) => console.error('[connectivity] Jira reconnect from Guest store failed:', e));
+  if (savedGuestJira?.bundle) {
+    try {
+      const credential = JSON.parse(savedGuestJira.bundle);
+      jiraConnectorSDK.authenticate({ userId: 'guest' }, credential).catch((e) => console.error('[connectivity] Jira reconnect from Guest store failed:', e));
+    } catch (e) {
+      console.error('[connectivity] Jira Guest store credential was corrupt:', e);
+    }
   }
 
   // Connector #2: Google Workspace — first OAuth2/PKCE ConnectorSDK, bridging Drive/Gmail/
@@ -361,6 +374,33 @@ app.whenReady().then(async () => {
         .catch((e) => console.error('[connectivity] Google Workspace reconnect from Guest store failed:', e));
     } catch (e) {
       console.error('[connectivity] Google Workspace Guest store credential was corrupt:', e);
+    }
+  }
+
+  // Connectors #3-#9: GitHub/GitLab/Linear/Vercel/Netlify/Railway/Slack — every remaining PawOS
+  // v1 Connections provider, all real OAuth2 ConnectorSDKs sharing this same registration +
+  // Guest-mode restart-durability shape (bundle-JSON via GuestConnectorCredentialStore, exactly
+  // like Google Workspace above). GitHub/GitLab/Linear/Vercel/Netlify/Railway replace what used
+  // to be read-only, env-var-only entries in the older InfrastructureConnectorRegistry-only path.
+  const oauthConnectorSDKs = [
+    gitHubConnectorSDK,
+    gitLabConnectorSDK,
+    linearConnectorSDK,
+    vercelConnectorSDK,
+    netlifyConnectorSDK,
+    railwayConnectorSDK,
+    slackConnectorSDK,
+  ] as const;
+  for (const sdk of oauthConnectorSDKs) {
+    connectorRegistry.register(sdk);
+    const saved = guestConnectorCredentialStore.load(sdk.definition.id);
+    if (saved?.bundle) {
+      try {
+        const credential = JSON.parse(saved.bundle);
+        sdk.authenticate({ userId: 'guest' }, credential).catch((e) => console.error(`[connectivity] ${sdk.definition.id} reconnect from Guest store failed:`, e));
+      } catch (e) {
+        console.error(`[connectivity] ${sdk.definition.id} Guest store credential was corrupt:`, e);
+      }
     }
   }
 

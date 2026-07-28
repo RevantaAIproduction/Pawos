@@ -3,7 +3,6 @@ import { GitHubSourceControlConnector } from './connectors/sourceControl/GitHubS
 import { GitLabSourceControlConnector } from './connectors/sourceControl/GitLabSourceControlConnector';
 import { GitHubIssuesConnector } from './connectors/projectManagement/GitHubIssuesConnector';
 import { LinearConnector } from './connectors/projectManagement/LinearConnector';
-import { JiraConnector } from './connectors/projectManagement/JiraConnector';
 import { GitHubActionsConnector } from './connectors/cicd/GitHubActionsConnector';
 import { GitLabCiConnector } from './connectors/cicd/GitLabCiConnector';
 import { VercelConnector } from './connectors/hosting/VercelConnector';
@@ -46,7 +45,8 @@ export function initInfrastructureConnectors(envVars: Record<string, string>): v
 
   infrastructureConnectorRegistry.register('projectManagement', new GitHubIssuesConnector(envVars.GITHUB_TOKEN));
   infrastructureConnectorRegistry.register('projectManagement', new LinearConnector(envVars.LINEAR_API_KEY));
-  infrastructureConnectorRegistry.register('projectManagement', new JiraConnector(envVars.JIRA_BASE_URL, envVars.JIRA_EMAIL, envVars.JIRA_API_TOKEN));
+  // Jira is OAuth-only now (see JiraConnectorSDK.ts) — no env-var basic-auth fallback registered
+  // here; connectorRegistry's own Jira SDK registers the live JiraConnector once connected.
 
   infrastructureConnectorRegistry.register('cicd', new GitHubActionsConnector(envVars.GITHUB_TOKEN));
   infrastructureConnectorRegistry.register('cicd', new GitLabCiConnector(envVars.GITLAB_TOKEN, gitlabUrl));

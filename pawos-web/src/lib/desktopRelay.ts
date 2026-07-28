@@ -20,6 +20,24 @@ export function relayToDesktop(scheme: "google-auth-callback" | "github-auth-cal
 }
 
 /**
+ * The Connectivity Runtime's own connector-OAuth relay (Jira, Slack, Linear, Vercel, Netlify,
+ * Railway, and GitLab/GitHub-as-a-connector) — a thin forward of the raw authorization code and
+ * `state` (OAuthManager's request-id correlation, see src/main/connectivity/OAuthManager.ts) to
+ * `pawos://connectivity-oauth-callback`. Deliberately does NOT exchange the code for a token here:
+ * unlike PawOS's own Google/GitHub sign-in (which need the finished profile immediately to bridge
+ * into a Supabase session), a connector's OAuthManager.exchangeCodeForToken already routes through
+ * `/api/connectivity/oauth/exchange` — the one place every connector's client_secret lives — so
+ * there is no reason to duplicate that call here.
+ */
+export function relayConnectivityToDesktop(code: string | null, error: string | null, state: string | null): Response {
+  const params = new URLSearchParams();
+  if (code) params.set("code", code);
+  if (error) params.set("error", error);
+  if (state) params.set("state", state);
+  return buildRelayResponse(`pawos://connectivity-oauth-callback?${params.toString()}`, error);
+}
+
+/**
  * Google-specific: this app's OAuth client is a "Web application" type,
  * meaning the token exchange requires GOOGLE_CLIENT_SECRET. That secret
  * must never be bundled into the publicly-distributed desktop installer

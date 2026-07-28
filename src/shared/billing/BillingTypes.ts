@@ -148,6 +148,10 @@ export type FeatureId =
   | 'governanceCredentialVault'
   | 'governanceApprovalQueue'
   | 'governanceAuditLog'
+  | 'connectLinear'
+  | 'connectGoogleWorkspace'
+  | 'connectJira'
+  | 'connectSlack'
   | 'ssoConfiguration'
   | 'autonomousTaskBilling';
 

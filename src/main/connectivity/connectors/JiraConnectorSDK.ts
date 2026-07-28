@@ -2,56 +2,63 @@ import type { ConnectorSDK } from '../../../shared/connectivity/ConnectorSDK';
 import type { ConnectivityScope, ConnectorConnection, ConnectorStatus, NormalizedConnectivityEvent } from '../../../shared/connectivity/ConnectivityTypes';
 import { JiraConnector } from '../../infrastructure/connectors/projectManagement/JiraConnector';
 import { infrastructureConnectorRegistry } from '../../infrastructure/InfrastructureConnectorRegistry';
+import { oauthManager } from '../OAuthManager';
+import { credentialVaultBridge } from '../CredentialVaultBridge';
+import { guestConnectorCredentialStore } from '../../infrastructure/GuestConnectorCredentialStore';
 
-export interface JiraCredentialFields {
-  baseUrl: string;
-  email: string;
-  apiToken: string;
+interface JiraCredential {
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt?: number;
+  /** The Atlassian Cloud ID this token is scoped to — resolved once via accessible-resources
+   *  right after the OAuth exchange, since Jira Cloud's OAuth API is addressed by cloud id
+   *  (https://api.atlassian.com/ex/jira/{cloudId}/...), never the site's own atlassian.net URL. */
+  cloudId: string;
+  siteUrl: string;
+  siteName: string;
 }
 
-export function isJiraCredentialFields(value: unknown): value is JiraCredentialFields {
-  const v = value as Partial<JiraCredentialFields> | null | undefined;
-  return typeof v?.baseUrl === 'string' && typeof v?.email === 'string' && typeof v?.apiToken === 'string';
-}
-
-async function checkJiraCredential(fields: JiraCredentialFields): Promise<{ valid: boolean; reason?: string }> {
-  try {
-    const basic = Buffer.from(`${fields.email}:${fields.apiToken}`).toString('base64');
-    const res = await fetch(`${fields.baseUrl.replace(/\/+$/, '')}/rest/api/3/myself`, {
-      headers: { Authorization: `Basic ${basic}`, Accept: 'application/json' },
-    });
-    if (res.ok) return { valid: true };
-    return { valid: false, reason: `Jira rejected these credentials (HTTP ${res.status}).` };
-  } catch (error) {
-    return { valid: false, reason: `Couldn't reach Jira: ${error instanceof Error ? error.message : String(error)}` };
-  }
+/** https://developer.atlassian.com/cloud/jira/platform/oauth-2-3lo-apps/#3-2--exchange-authorization-code-for-access-token */
+async function fetchAccessibleResource(accessToken: string): Promise<{ cloudId: string; siteUrl: string; siteName: string }> {
+  const res = await fetch('https://api.atlassian.com/oauth/token/accessible-resources', {
+    headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+  });
+  if (!res.ok) throw new Error(`Could not list accessible Jira sites (HTTP ${res.status}).`);
+  const resources = (await res.json()) as Array<{ id: string; url: string; name: string }>;
+  const first = resources[0];
+  if (!first) throw new Error('This Atlassian account has no Jira site to connect.');
+  return { cloudId: first.id, siteUrl: first.url, siteName: first.name };
 }
 
 /**
- * PawOS's first real ConnectorSDK — bridges the Connectivity Runtime's capability resolution
- * (previously connector-less) into the Infrastructure Runtime, which is what
- * InvestigateTicketPlugin and every other infra plugin actually call. `authenticate()` validates
- * the credential live against Jira, then registers/replaces the live JiraConnector instance in
- * `infrastructureConnectorRegistry` — the same registry InvestigateTicketPlugin already reads from
- * today, so nothing else needs to change for it to start working.
- *
- * Phase 3 scope: in-memory only, for the current process lifetime. Restart durability (persisting
- * the credential to the Vault or a Guest-mode local store) is Phase 4, not this file.
+ * Real Atlassian OAuth 2.0 (3LO) connector — replaces the earlier apiToken (email + API token)
+ * form entirely; there is no manual-credential path left for Jira. `connect()` drives the same
+ * OAuthManager.beginAuthorization -> exchangeCodeForToken round trip every other OAuth connector
+ * uses (see GoogleWorkspaceConnectorSDK.ts), then resolves the real Cloud ID via Atlassian's
+ * accessible-resources endpoint so JiraConnector's REST calls hit the correct
+ * api.atlassian.com/ex/jira/{cloudId} base. The underlying JiraConnector REST class is unchanged
+ * except for accepting a bearer credential alongside its original basic-auth one (see
+ * JiraConnector.ts) — InvestigateTicketPlugin and everything else reading from
+ * infrastructureConnectorRegistry keeps working unmodified.
  */
 export class JiraConnectorSDK implements ConnectorSDK {
   readonly definition = {
     id: 'jira',
     displayName: 'Jira',
-    description: 'Read tickets and project data from your Jira workspace.',
+    description: 'Read tickets, projects, and workflows from your Jira workspace.',
     category: 'projectManagement' as const,
-    authMethod: 'apiToken' as const,
-    apiTokenHelp: {
-      instructionsUrl: 'https://id.atlassian.com/manage-profile/security/api-tokens',
-      fieldLabel: 'API token',
-      additionalFields: [
-        { name: 'baseUrl', label: 'Jira site URL (e.g. https://yourteam.atlassian.net)', type: 'text' as const },
-        { name: 'email', label: 'Email', type: 'text' as const },
-      ],
+    authMethod: 'oauth2' as const,
+    oauth: {
+      authorizationUrl: 'https://auth.atlassian.com/authorize',
+      tokenUrl: 'https://auth.atlassian.com/oauth/token',
+      scopes: ['read:jira-work', 'read:jira-user', 'offline_access'],
+      clientIdEnvVar: 'CONNECTOR_JIRA_CLIENT_ID',
+      clientSecretEnvVar: 'CONNECTOR_JIRA_CLIENT_SECRET',
+      redirectUriEnvVar: 'CONNECTOR_JIRA_CALLBACK_URL',
+      // Atlassian's authorize endpoint requires `audience` to say which API this grant is for,
+      // and `prompt=consent` so re-connecting after a revoke always re-shows the consent screen
+      // instead of silently reusing a stale grant.
+      extraAuthParams: { audience: 'api.atlassian.com', prompt: 'consent' },
     },
     capabilities: ['readTickets'],
     capabilityDescriptors: [
@@ -59,36 +66,51 @@ export class JiraConnectorSDK implements ConnectorSDK {
     ],
   };
 
-  private credential: JiraCredentialFields | undefined;
+  private credential: JiraCredential | undefined;
   /** Populated only by authenticate()/connect()/disconnect()/refresh() — getStatus() only ever
    *  reads this field, never derives or fetches it itself. */
   private currentStatus: ConnectorStatus = { state: 'disconnected', capabilities: [] };
 
   private registerLiveConnector(): void {
     const c = this.credential;
-    infrastructureConnectorRegistry.register('projectManagement', new JiraConnector(c?.baseUrl, c?.email, c?.apiToken));
+    infrastructureConnectorRegistry.register(
+      'projectManagement',
+      new JiraConnector(c ? `https://api.atlassian.com/ex/jira/${c.cloudId}` : undefined, c ? { mode: 'bearer', accessToken: c.accessToken } : undefined)
+    );
   }
 
   async authenticate(_scope: ConnectivityScope, credential: unknown): Promise<void> {
-    if (!isJiraCredentialFields(credential)) {
-      throw new Error('Jira credential must include baseUrl, email, and apiToken.');
+    const c = credential as Partial<JiraCredential> | null | undefined;
+    if (!c || typeof c.accessToken !== 'string' || typeof c.cloudId !== 'string') {
+      throw new Error('Jira credential must include accessToken and cloudId.');
     }
-    const result = await checkJiraCredential(credential);
-    if (!result.valid) {
-      this.currentStatus = { state: 'error', capabilities: [], lastError: result.reason ?? 'Jira credential validation failed.' };
-      throw new Error(result.reason ?? 'Jira credential validation failed.');
-    }
-    this.credential = credential;
+    this.credential = { accessToken: c.accessToken, refreshToken: c.refreshToken, expiresAt: c.expiresAt, cloudId: c.cloudId, siteUrl: c.siteUrl ?? '', siteName: c.siteName ?? 'Jira' };
     this.registerLiveConnector();
-    this.currentStatus = { state: 'connected', capabilities: this.capabilities(), connectedAt: new Date().toISOString() };
+    this.currentStatus = { state: 'connected', capabilities: this.capabilities(), connectedAt: new Date().toISOString(), detail: this.credential.siteName };
   }
 
   async connect(scope: ConnectivityScope): Promise<ConnectorConnection> {
-    if (!this.credential) {
-      throw new Error('JiraConnectorSDK.connect() requires authenticate() to have succeeded first.');
+    this.currentStatus = { state: 'connecting', capabilities: [] };
+    try {
+      const handle = await oauthManager.beginAuthorization(this.definition.id, scope);
+      const { code, codeVerifier, redirectUri } = await handle.result;
+      const token = await oauthManager.exchangeCodeForToken(this.definition.id, code, codeVerifier, redirectUri);
+      const resource = await fetchAccessibleResource(token.accessToken);
+      this.credential = { accessToken: token.accessToken, refreshToken: token.refreshToken, expiresAt: token.expiresAt, ...resource };
+      await credentialVaultBridge.store(this.definition.id, scope, token.accessToken, 'oauth2', {
+        refreshToken: token.refreshToken,
+        expiresAt: token.expiresAt,
+        grantedScopes: token.grantedScopes,
+      });
+      if (scope.userId === 'guest') {
+        guestConnectorCredentialStore.save(this.definition.id, { bundle: JSON.stringify(this.credential) });
+      }
+      this.registerLiveConnector();
+      this.currentStatus = { state: 'connected', capabilities: this.capabilities(), connectedAt: new Date().toISOString(), detail: resource.siteName };
+    } catch (error) {
+      this.currentStatus = { state: 'error', capabilities: [], lastError: error instanceof Error ? error.message : String(error) };
+      throw error;
     }
-    this.registerLiveConnector();
-    this.currentStatus = { state: 'connected', capabilities: this.capabilities(), connectedAt: new Date().toISOString() };
     return {
       id: `jira:${scope.userId}`,
       connectorId: this.definition.id,
@@ -96,44 +118,53 @@ export class JiraConnectorSDK implements ConnectorSDK {
       status: 'connected',
       grantedPermissions: this.capabilities(),
       lastSyncAt: Date.now(),
-      metadata: {},
+      metadata: { accountName: this.credential?.siteName, organization: this.credential?.siteName, siteUrl: this.credential?.siteUrl },
     };
   }
 
-  async disconnect(_scope: ConnectivityScope): Promise<void> {
+  async disconnect(scope: ConnectivityScope): Promise<void> {
+    if (this.credential) {
+      await oauthManager.revokeToken(this.definition.id, this.credential.accessToken).catch(() => {});
+    }
     this.credential = undefined;
+    await credentialVaultBridge.revoke(this.definition.id, scope);
+    guestConnectorCredentialStore.remove(this.definition.id);
     // No unregister() exists on InfrastructureConnectorRegistry (deliberately not added this
     // pass) — replacing the live connector with an unconfigured instance is an honest, equivalent
     // way to report "not connected" without widening that registry's API.
-    infrastructureConnectorRegistry.register('projectManagement', new JiraConnector(undefined, undefined, undefined));
+    infrastructureConnectorRegistry.register('projectManagement', new JiraConnector(undefined, undefined));
     this.currentStatus = { state: 'disconnected', capabilities: [] };
   }
 
-  async refresh(_scope: ConnectivityScope): Promise<void> {
-    // apiToken auth has no refresh-token concept — re-validate the credential already on file.
-    if (!this.credential) return;
-    const result = await checkJiraCredential(this.credential);
-    if (!result.valid) {
-      this.credential = undefined;
-      this.currentStatus = { state: 'requiresReauth', capabilities: [], lastError: result.reason };
+  async refresh(scope: ConnectivityScope): Promise<void> {
+    if (!this.credential?.refreshToken) return;
+    try {
+      const result = await oauthManager.refreshAndPersist(this.definition.id, scope);
+      this.credential = { ...this.credential, accessToken: result.accessToken, refreshToken: result.refreshToken, expiresAt: result.expiresAt };
+      this.registerLiveConnector();
+      this.currentStatus = { state: 'connected', capabilities: this.capabilities(), connectedAt: this.currentStatus.connectedAt, detail: this.credential.siteName };
+    } catch (error) {
+      this.currentStatus = { state: 'requiresReauth', capabilities: [], lastError: error instanceof Error ? error.message : String(error) };
     }
   }
 
-  /** Strictly read-only — see ConnectorSDK.getStatus's contract. Never validates live, never
-   *  touches a store; only reflects whatever the last connect/authenticate/disconnect/refresh call
-   *  already put in currentStatus. */
+  /** Strictly read-only — see ConnectorSDK.getStatus's contract. */
   async getStatus(_scope: ConnectivityScope): Promise<ConnectorStatus> {
     return { ...this.currentStatus, capabilities: this.capabilities() };
   }
 
   async validate(_scope: ConnectivityScope): Promise<{ valid: boolean; reason?: string }> {
     if (!this.credential) return { valid: false, reason: 'Jira is not connected.' };
-    return checkJiraCredential(this.credential);
+    const res = await fetch(`https://api.atlassian.com/ex/jira/${this.credential.cloudId}/rest/api/3/myself`, {
+      headers: { Authorization: `Bearer ${this.credential.accessToken}`, Accept: 'application/json' },
+    }).catch(() => null);
+    if (!res || !res.ok) return { valid: false, reason: `Jira rejected the stored access token${res ? ` (HTTP ${res.status})` : ''}.` };
+    return { valid: true };
   }
 
   async health(scope: ConnectivityScope): Promise<{ status: 'healthy' | 'degraded' | 'down'; detail?: string }> {
     const result = await this.validate(scope);
-    return result.valid ? { status: 'healthy' } : { status: 'down', detail: result.reason };
+    return result.valid ? { status: 'healthy', detail: this.credential?.siteName } : { status: 'down', detail: result.reason };
   }
 
   capabilities(): string[] {
@@ -149,7 +180,7 @@ export class JiraConnectorSDK implements ConnectorSDK {
 
   async execute(action: string, params: Record<string, unknown>): Promise<unknown> {
     if (!this.credential) throw new Error('Jira is not connected.');
-    const connector = new JiraConnector(this.credential.baseUrl, this.credential.email, this.credential.apiToken);
+    const connector = new JiraConnector(`https://api.atlassian.com/ex/jira/${this.credential.cloudId}`, { mode: 'bearer', accessToken: this.credential.accessToken });
     if (action === 'getTicket') return connector.getTicket(String(params.ticketId));
     if (action === 'searchTickets') return connector.searchTickets(String(params.query));
     throw new Error(`JiraConnectorSDK does not support action "${action}".`);

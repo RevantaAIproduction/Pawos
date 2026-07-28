@@ -52,6 +52,8 @@ const TEAM_FEATURES: FeatureId[] = [
   'governanceApprovalQueue',
   'governanceAuditLog',
   'ssoConfiguration',
+  'connectLinear',
+  'connectGoogleWorkspace',
 ];
 
 /**
@@ -63,7 +65,7 @@ const TEAM_FEATURES: FeatureId[] = [
  * ENTERPRISE_ROLES in OrganizationSection.tsx), which is a role list, not a
  * FeatureId gate.
  */
-const ENTERPRISE_FEATURES: FeatureId[] = [...TEAM_FEATURES, 'autonomousTaskBilling'];
+const ENTERPRISE_FEATURES: FeatureId[] = [...TEAM_FEATURES, 'autonomousTaskBilling', 'connectJira', 'connectSlack'];
 
 /**
  * The single source of truth for what a tier unlocks. No runtime should

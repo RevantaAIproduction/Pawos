@@ -13,6 +13,18 @@ import type {
   ConnectorConnection,
   DeploymentProfile,
 } from '../../../../shared/connectivity/ConnectivityTypes';
+import { CONNECTOR_REQUIRED_FEATURE } from '../../../../shared/connectivity/ConnectivityTypes';
+import type { EntitlementSnapshot } from '../../../../shared/billing/BillingTypes';
+
+/** Team/Enterprise-gated connectors that lack the required feature render a locked card with an
+ *  upgrade CTA instead of a disabled Connect button that explains nothing. Which tier unlocks
+ *  which FeatureId lives only in EntitlementService.ts — this is just copy, not a gate. */
+const UPGRADE_TIER_LABEL: Record<string, string> = {
+  connectLinear: 'Team',
+  connectGoogleWorkspace: 'Team',
+  connectJira: 'Enterprise',
+  connectSlack: 'Enterprise',
+};
 
 function getErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -44,18 +56,6 @@ function connectionLiveState(status: ConnectorConnection['status'] | 'notConnect
   return 'off';
 }
 
-/** Read-only infra connectors (GitHub, GitLab, Linear, Vercel, Netlify, Railway) are configured
- *  entirely via env vars today — this is just the honest "where would I set that" hint shown in
- *  their slide-over, not a claim that this page can write it for you. */
-const CLOUD_ENV_HINT: Record<string, string> = {
-  github: 'GITHUB_TOKEN',
-  gitlab: 'GITLAB_TOKEN',
-  linear: 'LINEAR_API_KEY',
-  vercel: 'VERCEL_TOKEN',
-  netlify: 'NETLIFY_TOKEN',
-  railway: 'RAILWAY_TOKEN',
-};
-
 interface InfraStatus {
   kind: string;
   id: string;
@@ -66,6 +66,7 @@ interface InfraStatus {
 
 type SelectedCard =
   | { kind: 'connectivity'; id: string }
+  | { kind: 'locked'; id: string; displayName: string; requiredTier: string }
   | { kind: 'infra'; id: string; displayName: string; configured: boolean; detail?: string }
   | { kind: 'runtime'; id: string; displayName: string; description: string }
   | { kind: 'comingSoon'; id: string; displayName: string };
@@ -78,6 +79,7 @@ function ConnectionCard({
   stateLabel,
   detail,
   disabled,
+  lockBadge,
   onClick,
 }: {
   logo: React.ReactNode;
@@ -87,6 +89,9 @@ function ConnectionCard({
   stateLabel: string;
   detail?: string;
   disabled?: boolean;
+  /** Present only for a Team/Enterprise-gated connector the current plan doesn't unlock — renders
+   *  a "🔒 Available on {tier}" pill instead of the normal live-status pill. */
+  lockBadge?: string;
   onClick: () => void;
 }) {
   return (
@@ -97,7 +102,18 @@ function ConnectionCard({
           <span className={styles.connectionCardTitle}>{title}</span>
         </div>
       </div>
-      <LiveStatusPill state={state} label={stateLabel} />
+      {lockBadge ? (
+        <span
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600,
+            padding: '3px 8px', borderRadius: 999, background: 'rgba(var(--pawos-accent-rgb), 0.14)', color: 'var(--pawos-accent)',
+          }}
+        >
+          🔒 {lockBadge}
+        </span>
+      ) : (
+        <LiveStatusPill state={state} label={stateLabel} />
+      )}
       <div className={styles.connectionCardStats}>
         <div className={styles.connectionCardStatRow}>{description}</div>
         {detail && <div className={styles.connectionCardStatRow}><strong>{detail}</strong></div>}
@@ -107,30 +123,33 @@ function ConnectionCard({
 }
 
 /**
- * Connections — every service, server, and local tool PawOS can act through, grouped by what it
- * is (Cloud Services / Infrastructure / Runtime) instead of one flat list. Real data only:
- * Jira/Google Workspace come from the Connectivity Runtime (registered `ConnectorSDK`s, discovered
- * generically via `connectivityListConnectors()` — a new connector needs zero edits here);
- * GitHub/GitLab/Linear/Vercel/Netlify/Railway/Docker/Kubernetes come from the existing
- * `listConfiguredInfraConnectors` action (env-var configured, read-only from here, not yet unified
- * onto the ConnectorSDK registry); Browser/Filesystem/Terminal are PawOS's own always-on
+ * Connections — PawOS v1's exact provider list, grouped by what it is (Cloud Services /
+ * Infrastructure / Runtime) instead of one flat list. Real data only: every Cloud Services
+ * provider (GitHub, GitLab, Jira, Slack, Linear, Google Workspace, Vercel, Netlify, Railway) is a
+ * real, registered OAuth2 `ConnectorSDK`, discovered generically via `connectivityListConnectors()`
+ * — a new connector needs zero edits here. GitHub/GitLab/Vercel/Netlify/Railway are free on every
+ * plan; Linear/Google Workspace require Team; Jira/Slack require Enterprise — gating comes from
+ * `ipc.entitlementGetSnapshot()`'s real `features` list (see CONNECTOR_REQUIRED_FEATURE), never a
+ * hardcoded plan-name check in this component. Docker/Kubernetes come from the existing
+ * `listConfiguredInfraConnectors` action; Browser/Filesystem/Terminal are PawOS's own always-on
  * capabilities; VS Code/Cursor come from the Discovery Service's real presence detection.
- * Cloudflare/Supabase/SSH Servers/Virtual Machines are honestly marked "Coming soon" — no connector
- * exists for them yet, matching this app's no-fake-data convention.
+ * SSH Servers/Virtual Machines are honestly marked "Coming soon" — no connector exists for them
+ * yet, matching this app's no-fake-data convention. Cloudflare and Supabase are not part of v1.
  *
  * Contract: this page is a read-only view over connector state. It must never itself initiate
  * authentication, OAuth, restoration, synchronization, webhook registration, or token refresh — its
  * only responsibility is `connectivityListConnectors()` -> `connectivityGetStatus()` per connector
  * -> render. Credential restoration happens once per session elsewhere (see
  * `useConnectivityBootstrap`, called from `SettingsSection.tsx`); the only mutating calls left in
- * this file are the explicit, user-click-triggered `connectWithApiToken`/`connectOAuth`/`disconnect`/
- * `checkHealth` handlers below, each wired to a button, never to a mount effect.
+ * this file are the explicit, user-click-triggered `connectOAuth`/`disconnect`/`checkHealth`
+ * handlers below, each wired to a button, never to a mount effect.
  */
-export function ConnectionsPage({ scope }: { scope: ConnectivityScope }) {
+export function ConnectionsPage({ scope, onUpgrade }: { scope: ConnectivityScope; onUpgrade?: () => void }) {
   const [connectors, setConnectors] = useState<ConnectorDefinition[]>([]);
   const [connections, setConnections] = useState<ConnectorConnection[]>([]);
   const [profiles, setProfiles] = useState<DeploymentProfile[]>([]);
   const [infra, setInfra] = useState<{ connectors: InfraStatus[]; cliTools: InfraStatus[] } | null>(null);
+  const [entitlement, setEntitlement] = useState<EntitlementSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
   const [refreshingDiscovery, setRefreshingDiscovery] = useState(false);
@@ -143,11 +162,12 @@ export function ConnectionsPage({ scope }: { scope: ConnectivityScope }) {
 
   async function reload() {
     try {
-      const [connectorsResult, connectionsResult, profilesResult, infraResult] = await Promise.all([
+      const [connectorsResult, connectionsResult, profilesResult, infraResult, entitlementSnapshot] = await Promise.all([
         ipc.connectivityListConnectors(),
         ipc.connectivityListConnections(scope),
         ipc.connectivityDeploymentProfilesList(scope),
         ipc.actionExecute({ type: 'listConfiguredInfraConnectors' }),
+        ipc.entitlementGetSnapshot().catch(() => null),
       ]);
       if (!connectorsResult.ok) throw new Error(connectorsResult.error);
       if (!connectionsResult.ok) throw new Error(connectionsResult.error);
@@ -156,12 +176,26 @@ export function ConnectionsPage({ scope }: { scope: ConnectivityScope }) {
       setConnections(connectionsResult.data);
       setProfiles(profilesResult.data);
       if (infraResult.ok) setInfra(infraResult.data as { connectors: InfraStatus[]; cliTools: InfraStatus[] });
+      setEntitlement(entitlementSnapshot);
       setPageError(null);
     } catch (e) {
       setPageError(getErrorMessage(e));
     } finally {
       setLoading(false);
     }
+  }
+
+  /** A connector is locked when it declares a required FeatureId (see CONNECTOR_REQUIRED_FEATURE)
+   *  that the current entitlement snapshot's real `features` list doesn't include. Guests and a
+   *  not-yet-loaded snapshot are treated as unlocked-unknown (never shown falsely locked) rather
+   *  than assuming the most restrictive tier. */
+  function requiredFeatureFor(connectorId: string) {
+    return CONNECTOR_REQUIRED_FEATURE[connectorId];
+  }
+  function isLocked(connectorId: string): boolean {
+    const feature = requiredFeatureFor(connectorId);
+    if (!feature || !entitlement) return false;
+    return !entitlement.features.includes(feature);
   }
 
   // Pure status discovery on mount — this page must never itself trigger authentication,
@@ -294,16 +328,10 @@ export function ConnectionsPage({ scope }: { scope: ConnectivityScope }) {
   const detectedTools = connectors.filter((c) => c.authMethod === 'none');
   const vscodeLike = detectedTools.filter((c) => ['vscode', 'cursor', 'windsurf'].includes(c.id));
 
-  const infraCloud = useMemo(
-    () => (infra?.connectors ?? []).filter((c) => CLOUD_ENV_HINT[c.id]),
-    [infra]
-  );
   const infraContainers = useMemo(() => infra?.cliTools.filter((c) => c.kind === 'container') ?? [], [infra]);
 
-  const connectedCloudCount =
-    connectable.filter((c) => connectionFor(c.id)?.status === 'connected').length +
-    infraCloud.filter((c) => c.configured).length;
-  const totalCloudCount = connectable.length + infraCloud.length;
+  const connectedCloudCount = connectable.filter((c) => connectionFor(c.id)?.status === 'connected').length;
+  const totalCloudCount = connectable.length;
 
   return (
     <div>
@@ -333,6 +361,8 @@ export function ConnectionsPage({ scope }: { scope: ConnectivityScope }) {
             <div className={styles.connectionCardGrid}>
               {connectable.map((c) => {
                 const connection = connectionFor(c.id);
+                const locked = isLocked(c.id);
+                const requiredFeature = requiredFeatureFor(c.id);
                 const state = connectionLiveState(connection?.status ?? 'notConnected');
                 return (
                   <ConnectionCard
@@ -342,40 +372,15 @@ export function ConnectionsPage({ scope }: { scope: ConnectivityScope }) {
                     description={c.description ?? c.category}
                     state={state}
                     stateLabel={connection ? connection.status : 'Not connected'}
-                    onClick={() => setSelected({ kind: 'connectivity', id: c.id })}
+                    lockBadge={locked ? `Available on ${UPGRADE_TIER_LABEL[requiredFeature ?? ''] ?? 'a higher plan'}` : undefined}
+                    onClick={() =>
+                      locked
+                        ? setSelected({ kind: 'locked', id: c.id, displayName: c.displayName, requiredTier: UPGRADE_TIER_LABEL[requiredFeature ?? ''] ?? 'a higher plan' })
+                        : setSelected({ kind: 'connectivity', id: c.id })
+                    }
                   />
                 );
               })}
-              {infraCloud.map((c) => (
-                <ConnectionCard
-                  key={c.id}
-                  logo={<ConnectorLogo connectorId={c.id} displayName={c.displayName} size={28} />}
-                  title={c.displayName}
-                  description={`Configured via ${CLOUD_ENV_HINT[c.id]}`}
-                  state={c.configured ? 'live' : 'off'}
-                  stateLabel={c.configured ? 'Configured' : 'Not configured'}
-                  detail={c.detail}
-                  onClick={() => setSelected({ kind: 'infra', id: c.id, displayName: c.displayName, configured: c.configured, detail: c.detail })}
-                />
-              ))}
-              <ConnectionCard
-                logo={<ConnectorLogo connectorId="cloudflare" displayName="Cloudflare" size={28} />}
-                title="Cloudflare"
-                description="DNS and edge deployment access."
-                state="off"
-                stateLabel="Coming soon"
-                disabled
-                onClick={() => setSelected({ kind: 'comingSoon', id: 'cloudflare', displayName: 'Cloudflare' })}
-              />
-              <ConnectionCard
-                logo={<ConnectorLogo connectorId="supabase" displayName="Supabase" size={28} />}
-                title="Supabase"
-                description="Database and auth project access."
-                state="off"
-                stateLabel="Coming soon"
-                disabled
-                onClick={() => setSelected({ kind: 'comingSoon', id: 'supabase', displayName: 'Supabase' })}
-              />
             </div>
           </div>
 
@@ -493,14 +498,53 @@ export function ConnectionsPage({ scope }: { scope: ConnectivityScope }) {
             <LiveStatusPill state={connectionLiveState(connection?.status ?? 'notConnected')} label={connection ? connection.status : 'Not connected'} />
             <div style={{ marginTop: 16 }}>
               {connection ? (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button type="button" className={styles.chip} disabled={busy} onClick={() => checkHealth(c.id, connection.id)}>
-                    Check health
-                  </button>
-                  <button type="button" className={styles.dangerButton} disabled={busy} onClick={() => disconnect(c.id, connection.id)}>
-                    Disconnect
-                  </button>
-                </div>
+                <>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+                    {(() => {
+                      const meta = connection.metadata as Record<string, unknown>;
+                      const accountName = typeof meta.accountName === 'string' ? meta.accountName : undefined;
+                      const organization = typeof meta.organization === 'string' ? meta.organization : typeof meta.siteName === 'string' ? meta.siteName : undefined;
+                      return (
+                        <>
+                          {accountName && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5 }}>
+                              <span style={{ color: 'var(--pawos-text-secondary)' }}>Account</span>
+                              <span>{accountName}</span>
+                            </div>
+                          )}
+                          {organization && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5 }}>
+                              <span style={{ color: 'var(--pawos-text-secondary)' }}>Organization / Workspace</span>
+                              <span>{organization}</span>
+                            </div>
+                          )}
+                          <div style={{ fontSize: 12.5 }}>
+                            <span style={{ color: 'var(--pawos-text-secondary)' }}>Granted permissions</span>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                              {connection.grantedPermissions.map((p) => (
+                                <span key={p} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: 'rgba(var(--pawos-overlay-rgb), 0.08)' }}>{p}</span>
+                              ))}
+                            </div>
+                          </div>
+                          {connection.lastSyncAt && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5 }}>
+                              <span style={{ color: 'var(--pawos-text-secondary)' }}>Last synced</span>
+                              <span>{new Date(connection.lastSyncAt).toLocaleString()}</span>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button type="button" className={styles.chip} disabled={busy} onClick={() => checkHealth(c.id, connection.id)}>
+                      Check health
+                    </button>
+                    <button type="button" className={styles.dangerButton} disabled={busy} onClick={() => disconnect(c.id, connection.id)}>
+                      Disconnect
+                    </button>
+                  </div>
+                </>
               ) : c.authMethod === 'apiToken' ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {additionalFields.map((field) => (
@@ -556,11 +600,7 @@ export function ConnectionsPage({ scope }: { scope: ConnectivityScope }) {
         <SlideOver title={selected.displayName} subtitle={selected.configured ? 'Configured' : 'Not configured'} onClose={() => setSelected(null)}>
           <LiveStatusPill state={selected.configured ? 'live' : 'off'} label={selected.configured ? 'Configured' : 'Not configured'} />
           <p className={styles.cardBody} style={{ marginTop: 14 }}>
-            {CLOUD_ENV_HINT[selected.id]
-              ? <>Set <code>{CLOUD_ENV_HINT[selected.id]}</code> in your environment, then restart PawOS — or ask Paw to help you connect it.</>
-              : selected.configured
-              ? 'Detected and authenticated on this machine.'
-              : 'Not detected on this machine yet.'}
+            {selected.configured ? 'Detected and authenticated on this machine.' : 'Not detected on this machine yet.'}
           </p>
           {selected.detail && <p className={styles.cardBody} style={{ marginTop: 8 }}>{selected.detail}</p>}
         </SlideOver>
@@ -579,6 +619,27 @@ export function ConnectionsPage({ scope }: { scope: ConnectivityScope }) {
           <p className={styles.cardBody} style={{ marginTop: 14 }}>
             {selected.displayName} isn't wired up yet — this card is here so you know it's planned.
           </p>
+        </SlideOver>
+      )}
+
+      {selected?.kind === 'locked' && (
+        <SlideOver title={selected.displayName} subtitle={`${selected.requiredTier} feature`} onClose={() => setSelected(null)}>
+          <span
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600,
+              padding: '3px 8px', borderRadius: 999, background: 'rgba(var(--pawos-accent-rgb), 0.14)', color: 'var(--pawos-accent)',
+            }}
+          >
+            🔒 Available on {selected.requiredTier} &amp; above
+          </span>
+          <p className={styles.cardBody} style={{ marginTop: 14 }}>
+            This integration requires a {selected.requiredTier} workspace.
+          </p>
+          {onUpgrade && (
+            <button type="button" className={styles.primaryButton} style={{ marginTop: 10 }} onClick={onUpgrade}>
+              Upgrade to {selected.requiredTier}
+            </button>
+          )}
         </SlideOver>
       )}
     </div>
