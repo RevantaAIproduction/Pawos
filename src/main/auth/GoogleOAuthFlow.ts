@@ -70,7 +70,16 @@ export async function startGoogleSignIn(config: GoogleOAuthConfig): Promise<Goog
 
   // Registering the pending resolver before opening the browser avoids
   // missing a very fast redirect back into the app.
-  await shell.openExternal(authUrl.toString());
+  console.log('[GoogleOAuthFlow] opening system browser for:', authUrl.toString());
+  try {
+    await shell.openExternal(authUrl.toString());
+    console.log('[GoogleOAuthFlow] shell.openExternal resolved without throwing');
+  } catch (e) {
+    console.error('[GoogleOAuthFlow] shell.openExternal threw:', e);
+    unregisterPendingOAuth('google');
+    clearTimeout(timeoutHandle);
+    throw e;
+  }
 
   const payload = await payloadPromise;
   const { idToken, accessToken, profile } = JSON.parse(payload) as {

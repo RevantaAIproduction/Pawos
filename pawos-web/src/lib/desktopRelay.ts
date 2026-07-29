@@ -1,3 +1,5 @@
+import { stashGoogleAuthPayload } from "./googleAuthRelayStore";
+
 /**
  * Shared by auth/google/callback and auth/github/callback: both routes
  * exist only to receive the OAuth provider's redirect when a PawOS desktop
@@ -46,6 +48,11 @@ export function relayConnectivityToDesktop(code: string | null, error: string | 
  * server-side, using this server's own environment — the desktop app never
  * sees the code or the secret, only the finished tokens/profile, relayed
  * onward via the same pawos:// handoff as everything else.
+ *
+ * The finished id_token/access_token are NOT embedded in the pawos:// deep link — see
+ * googleAuthRelayStore.ts's doc comment for why (long real tokens make the URL silently
+ * undeliverable). Instead they're stashed server-side under a short single-use `ref`, and only
+ * that ref goes in the deep link; Electron fetches the real payload via /api/auth/google/consume.
  */
 export async function relayGoogleToDesktop(code: string | null, error: string | null): Promise<Response> {
   if (error) return buildRelayResponse(`pawos://google-auth-callback?${new URLSearchParams({ error }).toString()}`, error);
@@ -93,14 +100,12 @@ export async function relayGoogleToDesktop(code: string | null, error: string | 
     }
     const profile = (await profileResponse.json()) as { sub: string; email: string; name?: string; picture?: string };
 
-    const params = new URLSearchParams();
-    params.set("id_token", tokens.id_token);
-    params.set("access_token", tokens.access_token);
-    params.set("sub", profile.sub);
-    params.set("email", profile.email);
-    if (profile.name) params.set("name", profile.name);
-    if (profile.picture) params.set("picture", profile.picture);
-    return buildRelayResponse(`pawos://google-auth-callback?${params.toString()}`, null);
+    const ref = stashGoogleAuthPayload({
+      idToken: tokens.id_token,
+      accessToken: tokens.access_token,
+      profile,
+    });
+    return buildRelayResponse(`pawos://google-auth-callback?${new URLSearchParams({ ref }).toString()}`, null);
   } catch (e) {
     const message = e instanceof Error ? e.message : "unknown_error";
     return buildRelayResponse(`pawos://google-auth-callback?${new URLSearchParams({ error: message }).toString()}`, message);

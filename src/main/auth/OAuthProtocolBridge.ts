@@ -50,13 +50,20 @@ export function registerConnectivityOAuthHandler(handler: (url: URL) => void): v
   connectivityOAuthHandler = handler;
 }
 
+/** Matches pawos-web's CONNECTIVITY_OAUTH_BACKEND_BASE_URL (see OAuthManager.ts) — the same
+ *  hosted origin, used here to fetch the short-lived Google sign-in payload by ref. */
+const PAWOS_WEB_BASE_URL = 'https://pawos.revantaai.com';
+
 /**
- * Called from main.ts with the raw pawos:// URL, from whichever OS mechanism
- * delivered it. Never logs `rawUrl` itself — for Google it carries a live
- * id_token/access_token in the query string, so even a debug log line here
- * would leak a real credential into disk/console output.
+ * Called from main.ts with the raw pawos:// URL, from whichever OS mechanism delivered it. Never
+ * logs `rawUrl` itself — even the `ref` param is a single-use credential-fetch capability, not
+ * something to leave in disk/console output.
+ *
+ * Async because the 'google' branch makes one follow-up fetch (see below) — every caller (the
+ * 'second-instance'/'open-url' event handlers and the cold-start argv check in main.ts) already
+ * treats this as fire-and-forget, so returning a Promise instead of void is a non-breaking change.
  */
-export function handleOAuthProtocolUrl(rawUrl: string): void {
+export async function handleOAuthProtocolUrl(rawUrl: string): Promise<void> {
   let parsed: URL;
   try {
     parsed = new URL(rawUrl);
@@ -84,26 +91,43 @@ export function handleOAuthProtocolUrl(rawUrl: string): void {
   }
 
   if (provider === 'google') {
-    // pawos-web's callback already exchanged the code for tokens
-    // server-side (see relayGoogleToDesktop) — this app never sees a raw
-    // authorization code or the client secret, only the finished result.
-    const idToken = parsed.searchParams.get('id_token');
-    const accessToken = parsed.searchParams.get('access_token');
-    const sub = parsed.searchParams.get('sub');
-    const email = parsed.searchParams.get('email');
-    if (!idToken || !accessToken || !sub || !email) {
-      resolver.reject(new Error('Google sign-in callback was missing required fields.'));
+    // pawos-web already exchanged the code for tokens server-side (see relayGoogleToDesktop) —
+    // this app never sees a raw authorization code or the client secret. The finished
+    // id_token/access_token/profile aren't in this URL either (real Google tokens are long
+    // enough that embedding them here made the pawos:// deep link silently undeliverable —
+    // confirmed live) — only a short single-use `ref` is, and this fetch trades it in once for
+    // the real payload. See pawos-web/src/lib/googleAuthRelayStore.ts's doc comment.
+    const ref = parsed.searchParams.get('ref');
+    if (!ref) {
+      resolver.reject(new Error('Google sign-in callback was missing its handoff reference.'));
       return;
     }
-    const name = parsed.searchParams.get('name');
-    const picture = parsed.searchParams.get('picture');
-    resolver.resolve(
-      JSON.stringify({
-        idToken,
-        accessToken,
-        profile: { sub, email, name: name ?? email, picture: picture ?? undefined },
-      })
-    );
+    try {
+      const res = await fetch(`${PAWOS_WEB_BASE_URL}/api/auth/google/consume?ref=${encodeURIComponent(ref)}`);
+      if (!res.ok) {
+        resolver.reject(new Error(`Google sign-in handoff could not be completed (HTTP ${res.status}).`));
+        return;
+      }
+      const payload = (await res.json()) as { idToken?: string; accessToken?: string; profile?: { sub?: string; email?: string; name?: string; picture?: string } };
+      if (!payload.idToken || !payload.accessToken || !payload.profile?.sub || !payload.profile?.email) {
+        resolver.reject(new Error('Google sign-in handoff response was missing required fields.'));
+        return;
+      }
+      resolver.resolve(
+        JSON.stringify({
+          idToken: payload.idToken,
+          accessToken: payload.accessToken,
+          profile: {
+            sub: payload.profile.sub,
+            email: payload.profile.email,
+            name: payload.profile.name ?? payload.profile.email,
+            picture: payload.profile.picture,
+          },
+        })
+      );
+    } catch (e) {
+      resolver.reject(e instanceof Error ? e : new Error('Google sign-in handoff request failed.'));
+    }
     return;
   }
 
