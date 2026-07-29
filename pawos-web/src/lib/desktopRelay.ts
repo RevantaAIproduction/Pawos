@@ -40,6 +40,16 @@ export function relayConnectivityToDesktop(code: string | null, error: string | 
 }
 
 /**
+ * Loopback callback this relay hands the browser to — the same port GoogleOAuthFlow.ts listens
+ * on (see its own doc comment for why: this is the RFC 8252 "OAuth for Native Apps" pattern used
+ * by Claude Desktop/Cursor/VS Code/gcloud/etc., not a pawos:// custom protocol). A remote server
+ * can't reach a port on the user's own machine, but the *browser* redirecting there is a normal
+ * same-machine HTTP request — no OS protocol registry, no external-app dialog, no browser
+ * anti-abuse throttling involved at all.
+ */
+const LOCAL_CALLBACK_URL = "http://127.0.0.1:51899/callback";
+
+/**
  * Google-specific: this app's OAuth client is a "Web application" type,
  * meaning the token exchange requires GOOGLE_CLIENT_SECRET. That secret
  * must never be bundled into the publicly-distributed desktop installer
@@ -47,18 +57,18 @@ export function relayConnectivityToDesktop(code: string | null, error: string | 
  * leak it to every download). Instead, the exchange happens right here,
  * server-side, using this server's own environment — the desktop app never
  * sees the code or the secret, only the finished tokens/profile, relayed
- * onward via the same pawos:// handoff as everything else.
+ * onward via the loopback handoff above.
  *
- * The finished id_token/access_token are NOT embedded in the pawos:// deep link — see
- * googleAuthRelayStore.ts's doc comment for why (long real tokens make the URL silently
- * undeliverable). Instead they're stashed server-side under a short single-use `ref`, and only
- * that ref goes in the deep link; Electron fetches the real payload via /api/auth/google/consume.
+ * The finished id_token/access_token are NOT embedded in the loopback URL — they're stashed
+ * server-side under a short single-use `ref` (see googleAuthRelayStore.ts), and only that ref
+ * goes in the URL; GoogleOAuthFlow.ts's local listener fetches the real payload via
+ * /api/auth/google/consume the instant it receives the request.
  */
 export async function relayGoogleToDesktop(code: string | null, error: string | null): Promise<Response> {
-  if (error) return buildRelayResponse(`pawos://google-auth-callback?${new URLSearchParams({ error }).toString()}`, error);
+  if (error) return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error }).toString()}`, error);
   if (!code) {
     const missing = "missing_code";
-    return buildRelayResponse(`pawos://google-auth-callback?${new URLSearchParams({ error: missing }).toString()}`, missing);
+    return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error: missing }).toString()}`, missing);
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -66,7 +76,7 @@ export async function relayGoogleToDesktop(code: string | null, error: string | 
   const redirectUri = process.env.GOOGLE_REDIRECT_URI;
   if (!clientId || !clientSecret || !redirectUri) {
     const notConfigured = "server_not_configured";
-    return buildRelayResponse(`pawos://google-auth-callback?${new URLSearchParams({ error: notConfigured }).toString()}`, notConfigured);
+    return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error: notConfigured }).toString()}`, notConfigured);
   }
 
   try {
@@ -83,12 +93,12 @@ export async function relayGoogleToDesktop(code: string | null, error: string | 
     });
     if (!tokenResponse.ok) {
       const failed = `token_exchange_failed_${tokenResponse.status}`;
-      return buildRelayResponse(`pawos://google-auth-callback?${new URLSearchParams({ error: failed }).toString()}`, failed);
+      return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error: failed }).toString()}`, failed);
     }
     const tokens = (await tokenResponse.json()) as { access_token: string; id_token?: string };
     if (!tokens.id_token) {
       const missing = "no_id_token";
-      return buildRelayResponse(`pawos://google-auth-callback?${new URLSearchParams({ error: missing }).toString()}`, missing);
+      return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error: missing }).toString()}`, missing);
     }
 
     const profileResponse = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
@@ -96,7 +106,7 @@ export async function relayGoogleToDesktop(code: string | null, error: string | 
     });
     if (!profileResponse.ok) {
       const failed = "profile_fetch_failed";
-      return buildRelayResponse(`pawos://google-auth-callback?${new URLSearchParams({ error: failed }).toString()}`, failed);
+      return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error: failed }).toString()}`, failed);
     }
     const profile = (await profileResponse.json()) as { sub: string; email: string; name?: string; picture?: string };
 
@@ -105,10 +115,10 @@ export async function relayGoogleToDesktop(code: string | null, error: string | 
       accessToken: tokens.access_token,
       profile,
     });
-    return buildRelayResponse(`pawos://google-auth-callback?${new URLSearchParams({ ref }).toString()}`, null);
+    return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ ref }).toString()}`, null);
   } catch (e) {
     const message = e instanceof Error ? e.message : "unknown_error";
-    return buildRelayResponse(`pawos://google-auth-callback?${new URLSearchParams({ error: message }).toString()}`, message);
+    return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error: message }).toString()}`, message);
   }
 }
 
