@@ -200,20 +200,28 @@ function CommunicationSurface({ compact = false }: { compact?: boolean }) {
           </div>
         </div>
         <div className="mt-4 grid gap-2 text-[11px] text-neutral-300">
-          {["Avery", "Jordan", "Sam"].map((name) => <Pill key={name}>{name}</Pill>)}
+          {["Speaker 1", "Speaker 2", "Speaker 3"].map((name) => <Pill key={name}>{name}</Pill>)}
         </div>
       </div>
       <div className="rounded-xl border border-white/10 bg-white/[0.045] p-4">
         <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">Transcript</p>
         <div className="mt-3 space-y-2 text-xs text-neutral-300">
-          <p><span className="text-neutral-500">00:12</span> We should ship the Windows build first.</p>
-          <p><span className="text-neutral-500">00:26</span> Keep Linux direct download behind configured release URL.</p>
-          <p><span className="text-neutral-500">00:34</span> macOS remains coming soon until a real build exists.</p>
+          <p><span className="text-neutral-500">00:12</span> [Speaker 1] Let&apos;s review the release checklist.</p>
+          <p><span className="text-neutral-500">00:26</span> [Speaker 2] The transcript is aligned to the recording timeline.</p>
+          <p><span className="text-neutral-500">00:34</span> [Speaker 1] Evidence objects keep the original timestamp.</p>
         </div>
         {!compact && (
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            <div className="rounded-lg bg-emerald-300/10 p-3 text-xs text-emerald-100">Decision detected</div>
-            <div className="rounded-lg bg-blue-300/10 p-3 text-xs text-blue-100">Follow-up drafted</div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-3">
+            {[
+              ["Speech", "0.98"],
+              ["Speaker", "0.91"],
+              ["Timestamp", "0.96"],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-lg bg-emerald-300/10 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-200">{label}</p>
+                <p className="mt-1 text-sm font-semibold text-emerald-100">{value}</p>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -532,7 +540,7 @@ function DownloadSection() {
               <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-emerald-300">Download PawOS</p>
               <h2 className="mt-3 text-4xl font-bold tracking-tight text-neutral-50">Get PawOS Desktop</h2>
               <p className="mt-4 text-sm leading-6 text-neutral-400">
-                Download directly from pawos.revantaai.com. PawOS website downloads use configured release URLs only, with no Microsoft Store requirement.
+                Download directly from pawos.revantaai.com. PawOS website downloads use configured release URLs only, with no store redirect.
               </p>
               <div className="mt-6 grid gap-3 text-[11px] text-neutral-400 sm:grid-cols-2">
                 {["Secure by Design", "Runs Locally", "Direct Website Download", "Enterprise Ready"].map((item) => (
