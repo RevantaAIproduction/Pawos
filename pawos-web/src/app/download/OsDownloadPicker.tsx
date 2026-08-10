@@ -5,6 +5,7 @@ import { trackEvent } from "../../components/analytics/Analytics";
 import { getDownloadPlatforms, type DownloadPlatformId } from "../../lib/config/downloadConfig";
 
 const PLATFORMS = getDownloadPlatforms();
+const NOTIFY_HREF = "/signup?intent=pawos-desktop-waitlist";
 
 function detectOs(): DownloadPlatformId {
   if (typeof navigator === "undefined") return "windows";
@@ -50,21 +51,15 @@ export function OsDownloadPicker() {
             <div key={v.id} className="flex items-center justify-between rounded-lg border border-neutral-800 p-4">
               <div>
                 <p className="text-sm font-medium text-neutral-100">{v.label}</p>
-                <p className="text-xs text-neutral-500">{v.status === "available" ? "Ready to download" : "Coming soon"}</p>
+                <p className="text-xs text-neutral-500">Coming soon</p>
               </div>
-              {v.status === "available" ? (
-                <a
-                  href={v.url!}
-                  onClick={() => trackEvent("download_click", { platform: activePlatform.label, variant: v.label })}
-                  className="rounded-full bg-gradient-to-r from-indigo-500 to-blue-400 px-4 py-1.5 text-xs font-semibold text-black hover:opacity-90"
-                >
-                  Download
-                </a>
-              ) : (
-                <span className="rounded-full border border-neutral-700 px-4 py-1.5 text-xs font-semibold text-neutral-500">
-                  Coming soon
-                </span>
-              )}
+              <a
+                href={NOTIFY_HREF}
+                onClick={() => trackEvent("download_notify_click", { platform: activePlatform.label, variant: v.label })}
+                className="rounded-full border border-blue-400/40 px-4 py-1.5 text-xs font-semibold text-blue-200 transition hover:border-blue-300 hover:text-blue-100"
+              >
+                Notify me
+              </a>
             </div>
           ))}
         </div>

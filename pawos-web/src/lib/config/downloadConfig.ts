@@ -17,14 +17,11 @@ export type DownloadPlatform = {
 };
 
 /**
- * Every installer URL is read from an env var and defaults to null. A
- * variant is only ever "available" when a real URL is actually configured —
- * this file is the one place that changes when production storage (R2, GCS,
- * S3, etc.) is ready. The UI never hardcodes "Ready" independent of this.
+ * Public installers are intentionally held until launch. Environment URLs may
+ * exist for release preparation, but the website must not expose any build yet.
  */
-function variant(id: string, label: string, envUrl: string | undefined): DownloadVariant {
-  const url = envUrl && envUrl.trim().length > 0 ? envUrl.trim() : null;
-  return { id, label, status: url ? "available" : "comingSoon", url };
+function variant(id: string, label: string, _envUrl: string | undefined): DownloadVariant {
+  return { id, label, status: "comingSoon", url: null };
 }
 
 export function getDownloadPlatforms(): DownloadPlatform[] {

@@ -1,17 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "../../lib/supabase/client";
 import { GoogleGlyph, GitHubGlyph } from "../login/GoogleGitHubIcons";
 
 export function SignupForm() {
+  const [intent, setIntent] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "error" | "confirm">("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [oauthPending, setOauthPending] = useState<"google" | "github" | null>(null);
+  const isDesktopWaitlist = intent === "pawos-desktop-waitlist";
+
+  useEffect(() => {
+    setIntent(new URLSearchParams(window.location.search).get("intent"));
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,8 +83,14 @@ export function SignupForm() {
 
   return (
     <div className="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-8">
-      <h1 className="text-2xl font-bold">Create your PawOS account</h1>
-      <p className="mt-2 text-sm text-neutral-400">Same account works on the desktop app.</p>
+      <h1 className="text-2xl font-bold">
+        {isDesktopWaitlist ? "Join the PawOS Desktop launch list" : "Create your PawOS account"}
+      </h1>
+      <p className="mt-2 text-sm text-neutral-400">
+        {isDesktopWaitlist
+          ? "Create an account to explore PawOS now and receive launch updates when public installers are available."
+          : "Same account works on the desktop app."}
+      </p>
 
       <div className="mt-6 flex flex-col gap-3">
         <button

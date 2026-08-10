@@ -21,6 +21,7 @@ export const metadata: Metadata = {
 };
 
 const DOWNLOAD_PLATFORMS = getDownloadPlatforms();
+const NOTIFY_HREF = "/signup?intent=pawos-desktop-waitlist";
 
 const SYSTEM_REQUIREMENTS = [
   { platform: "Windows", spec: "Windows 10 (64-bit) or later, 4 GB RAM minimum.", href: "/download/windows" },
@@ -40,10 +41,6 @@ const RUNTIME_TRUTH = [
 
 function getPlatform(id: DownloadPlatform["id"]) {
   return DOWNLOAD_PLATFORMS.find((platform) => platform.id === id);
-}
-
-function primaryVariant(platform: DownloadPlatform) {
-  return platform.variants.find((variant) => variant.status === "available" && variant.url) ?? platform.variants[0];
 }
 
 function ProductFrame({ title, children, className = "" }: { title: string; children: ReactNode; className?: string }) {
@@ -263,7 +260,7 @@ function BrowserSurface({ compact = false }: { compact?: boolean }) {
       <div className="rounded-xl border border-white/10 bg-white/[0.045]">
         <div className="flex items-center gap-2 border-b border-white/10 p-3">
           <Pill tone="blue">BROWSER</Pill>
-          <div className="min-w-0 flex-1 rounded-full bg-black/25 px-3 py-1.5 font-mono text-[11px] text-neutral-400">https://example.test/release</div>
+          <div className="min-w-0 flex-1 rounded-full bg-black/25 px-3 py-1.5 text-[11px] text-neutral-400">Example browser task</div>
         </div>
         <div className={`grid gap-3 p-3 ${compact ? "" : "sm:grid-cols-[1.1fr_0.9fr]"}`}>
           <div className="rounded-lg border border-white/10 bg-black/25 p-3">
@@ -489,33 +486,23 @@ function RuntimeOverview() {
 }
 
 function DownloadCard({ platform }: { platform: DownloadPlatform }) {
-  const variant = primaryVariant(platform);
-  const available = Boolean(variant?.status === "available" && variant.url);
-  const isLinux = platform.id === "linux";
   const isMac = platform.id === "macos";
 
   return (
-    <div className={`rounded-2xl border border-white/10 bg-white/[0.035] p-5 ${isMac && !available ? "opacity-85" : ""}`}>
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{available ? platform.label : "Coming soon"}</p>
+    <div className={`rounded-2xl border border-white/10 bg-white/[0.035] p-5 ${isMac ? "opacity-85" : ""}`}>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Coming soon</p>
       <h3 className="mt-1 text-xl font-bold text-neutral-50">{platform.label}</h3>
       <p className="mt-1 min-h-10 text-xs leading-5 text-neutral-400">
         {platform.id === "windows" && "For Windows 10 / 11 (64-bit)."}
         {platform.id === "linux" && "For Ubuntu 20.04+ / Debian 11+."}
         {platform.id === "macos" && "Stay tuned for the macOS release."}
       </p>
-      {available && variant?.url ? (
-        <a
-          href={variant.url}
-          className={`mt-4 inline-flex w-full items-center justify-center rounded-full px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 ${isLinux ? "bg-emerald-500" : "bg-blue-600"}`}
-          rel="noopener noreferrer"
-        >
-          Download for {platform.label}
-        </a>
-      ) : (
-        <span className="mt-4 inline-flex w-full items-center justify-center rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-neutral-400">
-          Coming Soon
-        </span>
-      )}
+      <a
+        href={NOTIFY_HREF}
+        className="mt-4 inline-flex w-full items-center justify-center rounded-full border border-blue-400/40 px-4 py-2 text-sm font-semibold text-blue-200 transition hover:border-blue-300 hover:text-blue-100"
+      >
+        Notify me
+      </a>
       <div className="mt-3 flex flex-wrap gap-3 text-[11px] text-neutral-500">
         <span>SHA256</span>
         <Link href={`/download/${platform.id}`} className="text-blue-300 hover:underline">
@@ -540,7 +527,7 @@ function DownloadSection() {
               <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-emerald-300">Download PawOS</p>
               <h2 className="mt-3 text-4xl font-bold tracking-tight text-neutral-50">Get PawOS Desktop</h2>
               <p className="mt-4 text-sm leading-6 text-neutral-400">
-                Download directly from pawos.revantaai.com. PawOS website downloads use configured release URLs only, with no store redirect.
+                PawOS Desktop is coming soon. Join the launch notification list, then explore the real PawOS product surfaces below.
               </p>
               <div className="mt-6 grid gap-3 text-[11px] text-neutral-400 sm:grid-cols-2">
                 {["Secure by Design", "Runs Locally", "Direct Website Download", "Enterprise Ready"].map((item) => (
@@ -560,7 +547,7 @@ function DownloadSection() {
           <div className="mt-5 grid gap-3 border-t border-white/10 pt-5 text-xs text-neutral-400 md:grid-cols-4">
             {[
               ["No Microsoft Store", "PawOS is distributed directly from our website."],
-              ["Verify Downloads", "Check the SHA256 hash for integrity."],
+              ["Verify Downloads", "SHA256 hashes will be published with the installers at launch."],
               ["Need Help?", "Visit documentation or contact support."],
               ["Updates", "You will be notified when updates are available."],
             ].map(([title, body]) => (
@@ -580,12 +567,6 @@ function DownloadSection() {
 }
 
 export default function DownloadPage() {
-  const firstAvailable = DOWNLOAD_PLATFORMS.flatMap((platform) =>
-    platform.variants
-      .filter((variant) => variant.status === "available" && variant.url)
-      .map((variant) => ({ platform, variant }))
-  )[0];
-
   return (
     <div className="overflow-hidden bg-neutral-950 text-neutral-100">
       <section className="relative border-b border-white/10">
@@ -601,13 +582,7 @@ export default function DownloadPage() {
               PawOS is not just an answer box. Tell Paw what you want, then watch the operating layer plan, act through runtimes, and return verified results.
             </p>
             <div className="mt-10 flex flex-wrap justify-center gap-4">
-              {firstAvailable?.variant.url ? (
-                <Button href={firstAvailable.variant.url} external>
-                  Download for {firstAvailable.platform.label}
-                </Button>
-              ) : (
-                <Button href="#desktop">View Downloads</Button>
-              )}
+              <Button href={NOTIFY_HREF}>Notify me</Button>
               <Button href="#runtime-showcase" variant="secondary">See PawOS UI</Button>
             </div>
           </div>
@@ -746,13 +721,13 @@ export default function DownloadPage() {
         <Container>
           <Image src="/logo-icon.png" alt="" width={64} height={64} className="mx-auto rounded-2xl" />
           <h2 className="mx-auto mt-6 max-w-2xl text-3xl font-bold tracking-tight sm:text-5xl">
-            PawOS Desktop downloads stay direct from the website.
+            PawOS Desktop launch notifications stay direct from the website.
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-neutral-400">
-            Windows and Linux download only when configured release URLs exist. macOS remains coming soon unless a real macOS release URL is configured.
+            Public installers are not available yet. Join the notification list for launch updates, then explore the product while PawOS Desktop is prepared for release.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-4">
-            <Button href="#desktop">View Downloads</Button>
+            <Button href={NOTIFY_HREF}>Notify me</Button>
             <Button href="/docs" variant="secondary">Read Docs</Button>
           </div>
         </Container>
