@@ -29,6 +29,292 @@
   overflow: auto;
 }
 
+.codingWorkspaceShell {
+  display: grid;
+  grid-template-columns: minmax(190px, 240px) minmax(260px, 1fr) minmax(240px, 320px);
+  grid-template-rows: minmax(300px, 1fr) minmax(120px, 180px);
+  grid-template-areas:
+    "explorer main context"
+    "terminal terminal context";
+  gap: 10px;
+  min-height: 520px;
+  max-height: min(760px, calc(100vh - 110px));
+  border-radius: 14px;
+  background: rgba(10, 10, 16, 0.82);
+  backdrop-filter: blur(6px);
+  padding: 10px;
+  overflow: hidden;
+}
+
+.workspaceExplorer,
+.workspaceMain,
+.workspaceContext,
+.workspaceTerminal {
+  min-width: 0;
+  min-height: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.workspaceExplorer {
+  grid-area: explorer;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.workspaceMain {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  overflow: auto;
+}
+
+.workspaceContext {
+  grid-area: context;
+  overflow: hidden;
+}
+
+.workspaceTerminal {
+  grid-area: terminal;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.panelTitle,
+.selectedFileEyebrow {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.panelSubtitle {
+  display: block;
+  margin-top: 2px;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.clearContextButton,
+.rootButton,
+.fileSearchButton {
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 5px 9px;
+  cursor: pointer;
+}
+
+.clearContextButton:hover,
+.rootButton:hover,
+.fileSearchButton:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.fileSearchButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.rootSwitcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 10px 0;
+}
+
+.rootButtonActive {
+  background: rgba(116, 167, 255, 0.24);
+  color: #cfe0ff;
+}
+
+.fileSearchForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  padding: 10px;
+}
+
+.fileSearchInput {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.22);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+  padding: 6px 8px;
+}
+
+.searchResults {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 150px;
+  overflow: auto;
+  padding: 0 10px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.searchResultRow {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  padding: 5px 6px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.searchResultRow:hover,
+.explorerRow:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.searchResultName {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.searchResultPath {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.explorerTree {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 6px 10px;
+}
+
+.explorerRow {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 12px 14px minmax(0, 1fr);
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  font: inherit;
+  font-size: 11.5px;
+  padding: 5px 8px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.explorerRowActive {
+  background: rgba(116, 167, 255, 0.18);
+  color: #d7e5ff;
+}
+
+.explorerDisclosure,
+.explorerIcon {
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.explorerName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorerHint,
+.explorerError,
+.emptyExplorer {
+  padding: 8px 10px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.explorerError {
+  color: #ffb8b8;
+}
+
+.selectedFilePanel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.selectedFileName {
+  font-size: 18px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.96);
+  overflow-wrap: anywhere;
+}
+
+.selectedFilePath {
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  overflow-wrap: anywhere;
+}
+
+.contextScroll {
+  height: 100%;
+  overflow: auto;
+  padding: 10px;
+}
+
+.terminalOutputArea {
+  flex: 1;
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 10.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: rgba(255, 255, 255, 0.76);
+  background: rgba(0, 0, 0, 0.26);
+}
+
 .region {
   display: contents;
 }

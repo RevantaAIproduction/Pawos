@@ -49,7 +49,7 @@ export class ScreenShareHostSession {
     channel.on('broadcast', { event: 'request-offer' }, async () => {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      channel.send({ type: 'broadcast', event: 'offer', payload: { sdp: offer.sdp, fromUserId: selfUserId } satisfies SignalingOfferPayload });
+      channel.send({ type: 'broadcast', event: 'offer', payload: { sdp: offer.sdp ?? '', fromUserId: selfUserId } satisfies SignalingOfferPayload });
     });
 
     channel.on('broadcast', { event: 'answer' }, async ({ payload }) => {
@@ -93,7 +93,10 @@ export class ScreenShareViewerSession {
     const channel = supabase.channel(`screen-share-signal:${sessionId}`, { config: { broadcast: { self: false } } });
 
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-    pc.ontrack = (event) => onStream(event.streams[0]);
+    pc.ontrack = (event) => {
+      const stream = event.streams[0];
+      if (stream) onStream(stream);
+    };
     pc.onicecandidate = (event) => {
       if (event.candidate) {
         channel.send({
@@ -109,7 +112,7 @@ export class ScreenShareViewerSession {
       await pc.setRemoteDescription({ type: 'offer', sdp });
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      channel.send({ type: 'broadcast', event: 'answer', payload: { sdp: answer.sdp, fromUserId: selfUserId } satisfies SignalingAnswerPayload });
+      channel.send({ type: 'broadcast', event: 'answer', payload: { sdp: answer.sdp ?? '', fromUserId: selfUserId } satisfies SignalingAnswerPayload });
     });
 
     channel.on('broadcast', { event: 'ice-candidate' }, async ({ payload }) => {

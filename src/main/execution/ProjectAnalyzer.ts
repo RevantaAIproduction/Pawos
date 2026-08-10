@@ -4,7 +4,10 @@ import { execFile } from 'child_process';
 import type { ProjectContext } from '../../shared/actions/ProjectTypes';
 
 const ENV_FILE_NAMES = ['.env', '.env.local', '.env.development', '.env.production', '.env.example'];
-const TEST_FILE_PATTERN = /\.(test|spec)\.[jt]sx?$/;
+// Exported so other modules that need the same "is this a test file" convention (e.g.
+// FeatureMapBuilder's test/config association step) import this instead of redefining it —
+// avoids the exact duplicate-constant smell flagged in the Phase 1 audit's Technical Debt Register.
+export const TEST_FILE_PATTERN = /\.(test|spec)\.[jt]sx?$/;
 const PORT_PATTERN = /^\s*[A-Z_]*PORT[A-Z_]*\s*=\s*(\d{2,5})/im;
 
 function readJson(filePath: string): Record<string, any> | null {
@@ -120,6 +123,47 @@ function detectHasTests(pkg: Record<string, any> | null, root: string): boolean 
   }
 }
 
+const DESIGN_SYSTEM_DEPS: Record<string, string> = {
+  '@mui/material': 'MUI',
+  '@chakra-ui/react': 'Chakra UI',
+  'tailwindcss': 'Tailwind CSS',
+  'antd': 'Ant Design',
+  '@mantine/core': 'Mantine',
+  'bootstrap': 'Bootstrap',
+  'react-bootstrap': 'React Bootstrap',
+  '@radix-ui/react-primitive': 'Radix UI',
+};
+
+function detectMonorepo(root: string): ProjectContext['monorepo'] {
+  if (fs.existsSync(path.join(root, 'pnpm-workspace.yaml'))) return { isMonorepo: true, tool: 'pnpm' };
+  if (fs.existsSync(path.join(root, 'lerna.json'))) return { isMonorepo: true, tool: 'lerna' };
+  if (fs.existsSync(path.join(root, 'nx.json'))) return { isMonorepo: true, tool: 'nx' };
+  const pkg = readJson(path.join(root, 'package.json'));
+  if (Array.isArray(pkg?.workspaces) || Array.isArray(pkg?.workspaces?.packages)) {
+    return { isMonorepo: true, tool: 'npm-workspaces' };
+  }
+  return { isMonorepo: false, tool: null };
+}
+
+// Existence checks only — deliberately never invokes eslint/prettier, which would be a real
+// command execution (a Validation Pipeline concern, a later phase), not filesystem inspection.
+function detectLintFormatConfig(root: string): ProjectContext['lintFormatConfig'] {
+  const eslint = Boolean(
+    firstExisting(root, ['.eslintrc', '.eslintrc.js', '.eslintrc.cjs', '.eslintrc.json', '.eslintrc.yml', '.eslintrc.yaml', 'eslint.config.js', 'eslint.config.mjs', 'eslint.config.ts'])
+  );
+  const prettier = Boolean(firstExisting(root, ['.prettierrc', '.prettierrc.js', '.prettierrc.cjs', '.prettierrc.json', '.prettierrc.yml', '.prettierrc.yaml', 'prettier.config.js', 'prettier.config.mjs']));
+  return { eslint, prettier };
+}
+
+function detectDesignSystem(pkg: Record<string, any> | null, root: string): string | null {
+  const deps = { ...(pkg?.dependencies ?? {}), ...(pkg?.devDependencies ?? {}) };
+  for (const [dep, label] of Object.entries(DESIGN_SYSTEM_DEPS)) {
+    if (deps[dep]) return label;
+  }
+  if (fs.existsSync(path.join(root, 'components.json'))) return 'shadcn/ui';
+  return null;
+}
+
 function detectGitRemote(root: string): Promise<string | undefined> {
   return new Promise((resolve) => {
     execFile('git', ['remote', 'get-url', 'origin'], { cwd: root, timeout: 5000 }, (error, stdout) => {
@@ -152,5 +196,8 @@ export async function analyzeProject(root: string): Promise<ProjectContext> {
     ports: detectPorts(root),
     hasTests: detectHasTests(pkg, root),
     envFiles: ENV_FILE_NAMES.filter((name) => fs.existsSync(path.join(root, name))),
+    monorepo: detectMonorepo(root),
+    lintFormatConfig: detectLintFormatConfig(root),
+    designSystem: detectDesignSystem(pkg, root),
   };
 }

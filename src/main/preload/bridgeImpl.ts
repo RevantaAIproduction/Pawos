@@ -20,11 +20,11 @@ import type { WorkspaceFileChangeEvent } from "../../shared/actions/WorkspaceFil
 import type { WorkspaceObservationEvent } from "../../shared/actions/ExecutionLifecycle";
 import type { ExecutionRecord } from "../../shared/actions/ExecutionRecordTypes";
 import type { BrowserCapabilityReport } from "../../shared/actions/BrowserCapabilityTypes";
-import type { CommunicationRuntimeEvent, ParticipantRecord, CompanyRecord, CommunicationSummary, FollowUp } from "../../shared/communication/CommunicationTypes";
+import type { CommunicationRuntimeEvent, ParticipantRecord, CompanyRecord, CommunicationSummary, FollowUp, RecordingTimelineEntry, EvidenceObject, BusinessInsight } from "../../shared/communication/CommunicationTypes";
 import type { ForegroundWindowInfo } from "../../shared/system/ForegroundWindowInfo";
 import type { GoogleSignInResult } from "../../shared/auth/AccountTypes";
-import type { PairedDevice } from "../../shared/pairing/PairingTypes";
 import type { LocalDeviceIdentity } from "../../shared/device/DeviceTypes";
+import type { PushNotificationPayload, PushSendResult } from "../../shared/mobilePresence/MobilePresenceTypes";
 import type {
   ConnectivityScope,
   ConnectorDefinition,
@@ -86,6 +86,12 @@ export function contextBridge() {
     onCompanionReady: (cb: () => void) => {
       ipcRenderer.on("companion:ready:broadcast", () => cb());
     },
+    // Fire-and-forget, mirroring companionNotifyReady's shape — the renderer
+    // crash guard (src/renderer/platform/RendererCrashGuard.ts) forwards
+    // window-level errors/rejections here; the main process turns each one
+    // into a real Platform Runtime crash event (see ipc.ts).
+    reportPlatformRendererEvent: (payload: { message: string; stack?: string }) =>
+      ipcRenderer.send("platform:reportRendererEvent", payload),
 
     settingsGet: () => ipcRenderer.invoke("settings:get") as Promise<SettingsState>,
     settingsSet: (partial: Partial<SettingsState>) =>
@@ -149,16 +155,10 @@ export function contextBridge() {
     authValidatePasswordResetToken: (token: string) =>
       ipcRenderer.invoke("auth:validatePasswordResetToken", token) as Promise<{ valid: boolean; email?: string; reason?: string }>,
 
-    pairingBegin: (userId?: string) =>
-      ipcRenderer.invoke("pairing:begin", userId) as Promise<{ token: string; pairingUri: string; qrDataUrl: string; expiresAt: number }>,
-    pairingComplete: (token: string, deviceName: string, publicKey: string) =>
-      ipcRenderer.invoke("pairing:complete", token, deviceName, publicKey) as Promise<
-        { ok: true; device: PairedDevice } | { ok: false; reason: string }
-      >,
-    pairingList: (userId?: string) => ipcRenderer.invoke("pairing:list", userId) as Promise<PairedDevice[]>,
-    pairingRevoke: (deviceId: string) => ipcRenderer.invoke("pairing:revoke", deviceId) as Promise<boolean>,
-
     deviceGetLocalIdentity: () => ipcRenderer.invoke("device:getLocalIdentity") as Promise<LocalDeviceIdentity>,
+
+    notificationsSendPush: (subscription: { endpoint: string; p256dh: string; authKey: string }, payload: PushNotificationPayload) =>
+      ipcRenderer.invoke("notifications:sendPush", subscription, payload) as Promise<PushSendResult>,
 
     billingGetPricing: () => ipcRenderer.invoke("billing:getPricing") as Promise<PricingConfig>,
     billingGetTicketPricingConfig: () => ipcRenderer.invoke("billing:getTicketPricingConfig") as Promise<TicketPricingConfig>,
@@ -167,10 +167,12 @@ export function contextBridge() {
       ipcRenderer.invoke("billing:setSubscriptionTier", tier) as Promise<SubscriptionState>,
     billingSyncTierFromOrganization: (orgTier: SubscriptionTierId) =>
       ipcRenderer.invoke("billing:syncFromOrganization", orgTier) as Promise<SubscriptionState>,
+    billingResetSubscription: () => ipcRenderer.invoke("billing:resetSubscription") as Promise<SubscriptionState>,
     billingGetCreditBalance: () => ipcRenderer.invoke("billing:getCreditBalance") as Promise<CreditBalance>,
     billingConsumeCredit: (amount: number, reason: string, category?: AiUsageCategory) =>
       ipcRenderer.invoke("billing:consumeCredit", amount, reason, category) as Promise<CreditBalance>,
     billingGetCreditHistory: () => ipcRenderer.invoke("billing:getCreditHistory") as Promise<CreditConsumptionRecord[]>,
+    billingGrantComputeBonus: (units: number) => ipcRenderer.invoke("billing:grantComputeBonus", units) as Promise<EntitlementSnapshot>,
 
     entitlementGetSnapshot: () => ipcRenderer.invoke("entitlement:getSnapshot") as Promise<EntitlementSnapshot>,
     entitlementIsModelAvailable: (modelId: PawModelId) =>
@@ -252,6 +254,24 @@ export function contextBridge() {
 
     communicationSaveAudio: (communicationId: string, base64Data: string, mimeType: string) =>
       ipcRenderer.invoke("communication:saveAudio", communicationId, base64Data, mimeType) as Promise<{ ok: boolean; data?: { audioPath: string }; message?: string }>,
+    communicationAppendRecordingChunk: (communicationId: string, kind: "audio" | "video", base64Chunk: string, expectedChecksum?: string) =>
+      ipcRenderer.invoke("communication:appendRecordingChunk", communicationId, kind, base64Chunk, expectedChecksum) as Promise<{ ok: boolean; message?: string }>,
+    communicationFinalizeRecording: (communicationId: string, kind: "audio" | "video", mimeType: string) =>
+      ipcRenderer.invoke("communication:finalizeRecording", communicationId, kind, mimeType) as Promise<{ ok: boolean; data?: { path: string; sizeBytes: number; checksum: string } | null; message?: string }>,
+    communicationGetRecordingDiagnostics: (communicationId: string) =>
+      ipcRenderer.invoke("communication:getRecordingDiagnostics", communicationId) as Promise<Record<string, unknown> | null>,
+    communicationDeleteRecording: (communicationId: string) =>
+      ipcRenderer.invoke("communication:deleteRecording", communicationId) as Promise<{ ok: boolean; message?: string }>,
+    communicationGetRecordingTimeline: (communicationId: string) =>
+      ipcRenderer.invoke("communication:getRecordingTimeline", communicationId) as Promise<RecordingTimelineEntry[]>,
+    communicationGenerateEvidence: (communicationId: string, apiKey: string, model?: string, baseUrl?: string) =>
+      ipcRenderer.invoke("communication:generateEvidence", communicationId, apiKey, model, baseUrl) as Promise<{ ok: boolean; data?: { evidenceCount: number }; message?: string }>,
+    communicationGetEvidence: (communicationId: string) =>
+      ipcRenderer.invoke("communication:getEvidence", communicationId) as Promise<EvidenceObject[]>,
+    communicationGenerateBusinessInsights: (communicationId: string, apiKey: string, model?: string, baseUrl?: string) =>
+      ipcRenderer.invoke("communication:generateBusinessInsights", communicationId, apiKey, model, baseUrl) as Promise<{ ok: boolean; data?: { insightCount: number }; message?: string }>,
+    communicationGetBusinessInsights: (communicationId: string) =>
+      ipcRenderer.invoke("communication:getBusinessInsights", communicationId) as Promise<BusinessInsight[]>,
     onCommunicationEvent: (cb: (event: CommunicationRuntimeEvent) => void) => {
       ipcRenderer.on("communication:event", (_: any, payload: CommunicationRuntimeEvent) => cb(payload));
     },

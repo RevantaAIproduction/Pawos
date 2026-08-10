@@ -51,7 +51,7 @@ export const COMPANION_ARTICLES: HelpArticle[] = [
     permissions: ['No special OS permission is required to display the companion overlay'],
     relatedArticleIds: ['companion-studio', 'voice-conversations', 'companion-behaviors', 'personalities'],
     relatedSettings: ['Companion', 'Appearance'],
-    relatedApps: ['home', 'companionLab', 'talk'],
+    relatedApps: ['home', 'companionLab'],
     faq: [
       { question: 'Is the companion required?', answer: 'No. Paw is entirely optional and off by default — you can use PawOS’s project and coding tools without ever enabling it.' },
       { question: 'Can I move the companion window?', answer: 'The overlay is a small, fixed-size, click-through window designed to stay out of your way rather than a freely repositioned widget.' },
@@ -111,9 +111,9 @@ export const COMPANION_ARTICLES: HelpArticle[] = [
     ],
     requirements: ['A working microphone', 'A configured AI/voice provider'],
     permissions: ['Microphone access is requested the first time you use push-to-talk'],
-    relatedArticleIds: ['meet-paw', 'memory', 'conversation-history'],
+    relatedArticleIds: ['meet-paw', 'companion-memory'],
     relatedSettings: ['Voice', 'Notifications'],
-    relatedApps: ['talk', 'history'],
+    relatedApps: ['companionLab', 'history'],
     faq: [
       { question: 'Can I type instead of speaking?', answer: 'Talk with Paw is built around push-to-talk voice; text-based interaction happens through the Help Center’s Messages, not this feature.' },
       { question: 'Why does the reply start speaking before it finishes generating?', answer: 'Responses are streamed and spoken sentence-by-sentence to feel instant rather than waiting for the entire reply.' },
@@ -199,7 +199,7 @@ export const COMPANION_ARTICLES: HelpArticle[] = [
       'A local Paw Go / Paw Pro coding-mode toggle so read-only planning never accidentally executes anything',
     ],
     howItWorks:
-      'When the companion (via the Coding Intelligence Runtime or conversation actions) wants to do something ' +
+      'When the companion (via the Coding Runtime or conversation actions) wants to do something ' +
       'consequential, it describes the action and waits for your confirmation before executing. Nothing runs ' +
       'in the background without this step.',
     bestPractices: [

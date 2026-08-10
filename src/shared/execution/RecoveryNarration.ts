@@ -16,6 +16,7 @@ export type RecoveryFailureClass =
   | 'browserCrash'
   | 'gitConflict'
   | 'fileConflict'
+  | 'validationFailure'
   | 'deployment'
   | 'ciCd'
   | 'timeout'
@@ -35,6 +36,11 @@ export type RecoveryFailureClass =
 export const NOT_AUTO_RECOVERABLE: ReadonlySet<RecoveryFailureClass> = new Set(['gitConflict', 'permission']);
 
 const FAILURE_PATTERNS: [RegExp, RecoveryFailureClass][] = [
+  // Checked before every other pattern — a validation-pipeline failure message is always distinctly
+  // worded ("Validation failed: ...", Coding Runtime V2 §12/§13) and must never be reclassified by a
+  // coincidental substring match later in this list (e.g. the underlying tool output tail containing
+  // a word like "timeout").
+  [/\bvalidation (pipeline )?failed\b/i, 'validationFailure'],
   [/rate.?limit|\b429\b|too many requests/i, 'rateLimit'],
   [/merge conflict|conflicting files|CONFLICT \(/i, 'gitConflict'],
   [/failed to push|non-fast-forward|rejected.*push/i, 'gitConflict'],
@@ -65,6 +71,7 @@ const NARRATION: Record<RecoveryFailureClass, string[]> = {
   browserCrash: ['The browser session closed — reopening it now...', 'Recovering the browser environment...'],
   gitConflict: ["There's a real conflict here I can't resolve on my own — let me explain it and ask how to proceed."],
   fileConflict: ['A file was briefly locked — retrying in a moment...', 'Give me a moment, that file was in use — trying again...'],
+  validationFailure: ["That didn't pass validation — let me look at what broke...", 'Checking what the validation run found before deciding what to fix...'],
   deployment: ["The deploy didn't come up healthy — checking and rolling back if needed...", 'Verifying the deployment and recovering if necessary...'],
   ciCd: ["The pipeline reported a failure — checking whether this is recoverable..."],
   timeout: ['That took longer than expected — retrying...', 'Give me a moment, trying that again...'],

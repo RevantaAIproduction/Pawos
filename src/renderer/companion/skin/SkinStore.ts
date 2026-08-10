@@ -46,7 +46,11 @@ export class SkinStore {
   }
 
   getActive(): SkinDescriptor {
-    return this.state.skins.find((s) => s.id === this.state.activeId) ?? this.state.skins[0];
+    const found = this.state.skins.find((s) => s.id === this.state.activeId);
+    if (found) return found;
+    const first = this.state.skins[0];
+    if (!first) throw new Error('No skins exist.');
+    return first;
   }
 
   setActive(id: string) {

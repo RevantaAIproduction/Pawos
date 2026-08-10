@@ -1,8 +1,10 @@
 import { EventEmitter } from 'events';
 import type { ActionRequest, ActionRequirement, ActionResult } from '../../shared/actions/ActionTypes';
-import { DESTRUCTIVE_ACTION_TYPES, CODING_EXECUTION_ACTION_TYPES, INFRA_EXECUTION_ACTION_TYPES } from '../../shared/actions/ActionTypes';
+import { DESTRUCTIVE_ACTION_TYPES } from '../../shared/actions/ActionTypes';
 import { codingModeStore } from './CodingModeStore';
 import { infraModeStore } from '../infrastructure/InfraModeStore';
+import { entitlementService } from '../billing/EntitlementService';
+import { codingExecutionBlocked, infraExecutionBlocked } from './ThinkExecuteGate';
 import { pendingApprovalStore, deriveApprovalKey } from '../infrastructure/PendingApprovalStore';
 import { requirementGate } from '../runtime/RequirementGate';
 import type { ExecutionTrail, ObservationEvent } from '../../shared/actions/ExecutionLifecycle';
@@ -26,6 +28,12 @@ import { getProcessOutputPlugin } from './plugins/GetProcessOutputPlugin';
 import { analyzeProjectPlugin } from './plugins/AnalyzeProjectPlugin';
 import { analyzeProjectStructurePlugin } from './plugins/AnalyzeProjectStructurePlugin';
 import { analyzeFileImpactPlugin } from './plugins/AnalyzeFileImpactPlugin';
+import { buildDependencyGraphPlugin } from './plugins/BuildDependencyGraphPlugin';
+import { discoverProjectFeaturesPlugin } from './plugins/DiscoverProjectFeaturesPlugin';
+import { classifyProjectAssetsPlugin } from './plugins/ClassifyProjectAssetsPlugin';
+import { detectDomainConceptsPlugin } from './plugins/DetectDomainConceptsPlugin';
+import { buildRepositorySemanticIndexPlugin } from './plugins/BuildRepositorySemanticIndexPlugin';
+import { discoverAffectedFilesPlugin } from './plugins/DiscoverAffectedFilesPlugin';
 import { listWorkspacesPlugin } from './plugins/ListWorkspacesPlugin';
 import { getWorkspacePlugin } from './plugins/GetWorkspacePlugin';
 import { checkProcessHealthPlugin } from './plugins/CheckProcessHealthPlugin';
@@ -59,6 +67,13 @@ import { gitAddPlugin } from './plugins/GitAddPlugin';
 import { gitCommitPlugin } from './plugins/GitCommitPlugin';
 import { gitCreateBranchPlugin } from './plugins/GitCreateBranchPlugin';
 import { gitCheckoutPlugin } from './plugins/GitCheckoutPlugin';
+import { gitRevertCommitPlugin } from './plugins/GitRevertCommitPlugin';
+import { applyCodeEditPlugin } from './plugins/ApplyCodeEditPlugin';
+import { proposeCodeEditPlanPlugin } from './plugins/ProposeCodeEditPlanPlugin';
+import { runValidationPipelinePlugin } from './plugins/RunValidationPipelinePlugin';
+import { recordArchitecturalDecisionPlugin } from './plugins/RecordArchitecturalDecisionPlugin';
+import { recordCodingPreferencePlugin } from './plugins/RecordCodingPreferencePlugin';
+import { queryCodingRuntimeMemoryPlugin } from './plugins/QueryCodingRuntimeMemoryPlugin';
 import { installToolPlugin } from './plugins/InstallToolPlugin';
 import { detectSoftwarePlugin } from './plugins/DetectSoftwarePlugin';
 import { updateSoftwarePlugin } from './plugins/UpdateSoftwarePlugin';
@@ -161,6 +176,15 @@ import { saveGuestConnectorCredentialPlugin } from './plugins/infrastructure/Sav
 import { connectivityConnectPlugin } from './plugins/infrastructure/ConnectivityConnectPlugin';
 import { investigateTicketPlugin } from './plugins/infrastructure/InvestigateTicketPlugin';
 import { investigateProductionIssuePlugin } from './plugins/infrastructure/InvestigateProductionIssuePlugin';
+import { analyzeRepositoryPlugin } from './plugins/intelligence/AnalyzeRepositoryPlugin';
+import { investigateRepoBugPlugin } from './plugins/intelligence/InvestigateRepoBugPlugin';
+import { analyzeWebsitePlugin } from './plugins/intelligence/AnalyzeWebsitePlugin';
+import { crawlWebsitePlugin } from './plugins/intelligence/CrawlWebsitePlugin';
+import { reviewUxPlugin } from './plugins/intelligence/ReviewUxPlugin';
+import { analyzeMarketingPlugin } from './plugins/intelligence/AnalyzeMarketingPlugin';
+import { scoreProductPlugin } from './plugins/intelligence/ScoreProductPlugin';
+import { askFounderAdvisorPlugin } from './plugins/intelligence/AskFounderAdvisorPlugin';
+import { proposeExecutionPlanPlugin } from './plugins/intelligence/ProposeExecutionPlanPlugin';
 import { compareDeploymentsPlugin } from './plugins/infrastructure/CompareDeploymentsPlugin';
 import { discoverInfrastructurePlugin } from './plugins/infrastructure/DiscoverInfrastructurePlugin';
 import { searchInfrastructurePlugin } from './plugins/infrastructure/SearchInfrastructurePlugin';
@@ -244,6 +268,13 @@ export class DesktopExecutionEngine extends EventEmitter {
     gitCommitPlugin,
     gitCreateBranchPlugin,
     gitCheckoutPlugin,
+    gitRevertCommitPlugin,
+    applyCodeEditPlugin,
+    proposeCodeEditPlanPlugin,
+    runValidationPipelinePlugin,
+    recordArchitecturalDecisionPlugin,
+    recordCodingPreferencePlugin,
+    queryCodingRuntimeMemoryPlugin,
     installToolPlugin,
     detectSoftwarePlugin,
     updateSoftwarePlugin,
@@ -330,6 +361,12 @@ export class DesktopExecutionEngine extends EventEmitter {
     setCodingModePlugin,
     analyzeProjectStructurePlugin,
     analyzeFileImpactPlugin,
+    buildDependencyGraphPlugin,
+    discoverProjectFeaturesPlugin,
+    classifyProjectAssetsPlugin,
+    detectDomainConceptsPlugin,
+    buildRepositorySemanticIndexPlugin,
+    discoverAffectedFilesPlugin,
     setTaskChecklistPlugin,
     gitDiffStatPlugin,
     devBrowserPreviewPlugin,
@@ -347,6 +384,15 @@ export class DesktopExecutionEngine extends EventEmitter {
     getInfrastructureGraphSummaryPlugin,
     investigateTicketPlugin,
     investigateProductionIssuePlugin,
+    analyzeRepositoryPlugin,
+    investigateRepoBugPlugin,
+    analyzeWebsitePlugin,
+    crawlWebsitePlugin,
+    reviewUxPlugin,
+    analyzeMarketingPlugin,
+    scoreProductPlugin,
+    askFounderAdvisorPlugin,
+    proposeExecutionPlanPlugin,
     compareDeploymentsPlugin,
     discoverInfrastructurePlugin,
     searchInfrastructurePlugin,
@@ -397,22 +443,40 @@ export class DesktopExecutionEngine extends EventEmitter {
    * failure — never a silent stop, never an unbounded loop.
    */
   async execute(request: ActionRequest): Promise<ActionResult> {
-    if (CODING_EXECUTION_ACTION_TYPES.includes(request.type) && codingModeStore.getMode() === 'go') {
-      return {
-        ok: false,
-        reason: 'coding-mode-restricted',
-        message:
-          'Paw Go is designed for planning and analysis. Upgrade to Paw Pro to generate, modify, build, test, debug, and continuously improve your project using the full Coding Intelligence Runtime.',
-      };
+    // Real, billing-backed Think-vs-Execute wall. CodingModeStore/InfraModeStore below are local,
+    // billing-independent safety toggles (a Pro+ user can still default themselves to read-only) —
+    // they are never allowed to grant execute behavior a tier doesn't actually entitle, so a Go
+    // user's local preference file can't be edited around this gate.
+    const canExecute = entitlementService.isFeatureAvailable('advancedRuntimes');
+
+    if (codingExecutionBlocked(request.type, canExecute, codingModeStore.getMode())) {
+      return canExecute
+        ? {
+            ok: false,
+            reason: 'coding-mode-restricted',
+            message:
+              'Paw Go is designed for planning and analysis. Upgrade to Paw Pro to generate, modify, build, test, debug, and continuously improve your project using the full Coding Runtime.',
+          }
+        : {
+            ok: false,
+            reason: 'entitlement-restricted',
+            message: 'This action requires Paw Pro. Your current plan supports investigation, analysis, and planning — upgrade to generate, modify, build, test, and debug code.',
+          };
     }
 
-    if (INFRA_EXECUTION_ACTION_TYPES.includes(request.type) && infraModeStore.getMode() === 'investigate') {
-      return {
-        ok: false,
-        reason: 'infra-mode-restricted',
-        message:
-          'Infrastructure investigation mode is read-only — I can read tickets, check status, and check health, but deploying or rolling back needs Full mode enabled in Settings.',
-      };
+    if (infraExecutionBlocked(request.type, canExecute, infraModeStore.getMode())) {
+      return canExecute
+        ? {
+            ok: false,
+            reason: 'infra-mode-restricted',
+            message:
+              'Infrastructure investigation mode is read-only — I can read tickets, check status, and check health, but deploying or rolling back needs Full mode enabled in Settings.',
+          }
+        : {
+            ok: false,
+            reason: 'entitlement-restricted',
+            message: 'This action requires Paw Pro. Your current plan supports investigation, analysis, and planning — upgrade to deploy, roll back, or promote deployments.',
+          };
     }
 
     if (DESTRUCTIVE_ACTION_TYPES.includes(request.type) && !('confirmed' in request && request.confirmed)) {

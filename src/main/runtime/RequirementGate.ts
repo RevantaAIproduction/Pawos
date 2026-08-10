@@ -17,8 +17,8 @@ export interface RequirementResolver<K extends RequirementKind = RequirementKind
 class RequirementGate {
   private resolvers = new Map<RequirementKind, RequirementResolver>();
 
-  registerResolver(resolver: RequirementResolver): void {
-    this.resolvers.set(resolver.kind, resolver);
+  registerResolver<K extends RequirementKind>(resolver: RequirementResolver<K>): void {
+    this.resolvers.set(resolver.kind, resolver as unknown as RequirementResolver);
   }
 
   /**

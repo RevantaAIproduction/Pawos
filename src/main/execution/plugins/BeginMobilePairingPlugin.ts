@@ -22,7 +22,7 @@ export class BeginMobilePairingPlugin extends BasePlugin {
 
   describeDone(request: ActionRequest, result: ActionResult): string {
     if (request.type !== 'beginMobilePairing') return result.ok ? 'Done.' : describeFailure(result);
-    return result.ok ? "I've generated a pairing code — scan it from the Paw mobile app to pair your phone." : describeFailure(result);
+    return result.ok ? "I've generated a pairing code, but this pairing flow isn't hooked up to a mobile client yet — use Settings → Devices instead, which pairs a real phone browser session." : describeFailure(result);
   }
 }
 

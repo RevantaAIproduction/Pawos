@@ -12,7 +12,10 @@ const CONVERSATION_STATE_EXPRESSION: Record<ConversationState, Expression> = {
   listening: 'listening',
   transcribing: 'thinking',
   thinking: 'thinking',
+  performingAction: 'determined',
   speaking: 'happy',
+  completed: 'proud',
+  interrupted: 'concerned',
   error: 'confused',
   waitingForPermission: 'curious',
 };

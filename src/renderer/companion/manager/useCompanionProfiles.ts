@@ -8,10 +8,13 @@ export function useCompanionProfiles() {
   const [activeId, setActiveId] = useState<string>(() => companionProfileStore.getActive().id);
 
   useEffect(() => {
-    return companionProfileStore.subscribe(() => {
+    const unsubscribe = companionProfileStore.subscribe(() => {
       setProfiles(companionProfileStore.list());
       setActiveId(companionProfileStore.getActive().id);
     });
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const setActive = useCallback((id: string) => companionProfileStore.setActive(id), []);

@@ -209,7 +209,7 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
 
   // Zero-friction onboarding: a pending seat assigned to this account's email is claimed
   // automatically the moment we discover it — no Accept/Decline step. Pending invites are keyed by
-  // email, not by the invitee's current tier — a brand-new invitee starts on Paw Go, so this can't
+  // email, not by the invitee's current tier — a brand-new invitee starts on Go, so this can't
   // be gated behind the team/enterprise tier check below.
   useEffect(() => {
     if (user.isGuest) return;
@@ -263,7 +263,7 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
       <div className={styles.card}>
         <h3 className={styles.cardTitle}>No organization on a guest session</h3>
         <p className={styles.cardBody} style={{ marginTop: 6 }}>
-          Organizations require a real account on Paw Team or Paw Enterprise. Create a free account first.
+          Organizations require a real account on Team or Enterprise. Create a free account first.
         </p>
       </div>
     );
@@ -284,9 +284,9 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
   if (tier !== 'team' && tier !== 'enterprise') {
     return (
       <div className={styles.card}>
-        <h3 className={styles.cardTitle}>Organizations are available on Paw Team and Paw Enterprise</h3>
+        <h3 className={styles.cardTitle}>Organizations are available on Team and Enterprise</h3>
         <p className={styles.cardBody} style={{ marginTop: 6 }}>
-          Upgrade to Paw Team or Paw Enterprise to create an organization, invite teammates, and assign roles.
+          Upgrade to Team or Enterprise to create an organization, invite teammates, and assign roles.
         </p>
         <p className={styles.cardBody} style={{ marginTop: 10, fontSize: 12 }}>
           Team and Enterprise are designed for organizations — use your company email address. Personal
@@ -494,7 +494,7 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
           </div>
           <div>
             <p className={styles.cardBody}>Plan</p>
-            <p style={{ fontSize: 14, fontWeight: 600 }}>{tier === 'enterprise' ? 'Paw Enterprise' : 'Paw Team'}</p>
+            <p style={{ fontSize: 14, fontWeight: 600 }}>{tier === 'enterprise' ? 'Enterprise' : 'Team'}</p>
           </div>
         </div>
       </div>

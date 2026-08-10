@@ -273,6 +273,52 @@
 .planList{margin:4px 0 0;padding-left:16px;display:flex;flex-direction:column;gap:2px;}
 .planStep{font-size:11.5px;color:rgba(255,255,255,0.75);}
 
+/* Intelligence Report / Execution Plan — findings grouped by provenance, each with an independent
+   severity + confidence pill (never conflated into one scale, matching the engine's own two-axis
+   scoring discipline). Severity uses a 5-tier red->green ramp; confidence uses a neutral 3-tier
+   opacity ramp so it never visually competes with severity's own coloring. */
+.provenanceGroup{display:flex;flex-direction:column;gap:6px;}
+.provenanceGroupTitle{
+  font-size:9.5px;
+  text-transform:uppercase;
+  letter-spacing:0.06em;
+  color:rgba(255,255,255,0.45);
+}
+.findingRow{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  padding:6px 8px;
+  border-radius:8px;
+  background:rgba(255,255,255,0.03);
+  border:1px solid rgba(255,255,255,0.08);
+}
+.findingStatement{font-size:12px;color:rgba(255,255,255,0.88);}
+.findingPills{display:flex;gap:6px;flex-wrap:wrap;}
+.pill{
+  flex-shrink:0;
+  font-size:9.5px;
+  font-weight:700;
+  padding:2px 7px;
+  border-radius:999px;
+  letter-spacing:0.02em;
+}
+.severityInfo{background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.7);}
+.severityMinor{background:rgba(116,167,255,0.2);color:#bcd6ff;}
+.severityModerate{background:rgba(255,196,74,0.2);color:#ffe3ad;}
+.severityMajor{background:rgba(255,150,74,0.22);color:#ffcda8;}
+.severityCritical{background:rgba(255,86,86,0.24);color:#ffc4c4;}
+.confidenceLow{background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5);}
+.confidenceMedium{background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.7);}
+.confidenceHigh{background:rgba(255,255,255,0.16);color:rgba(255,255,255,0.9);}
+
+/* Execution Plan step status — distinct from severity's red->green ramp since a step's status is
+   a workflow state (proposed/approved/rejected/executed), not a good/bad judgment. */
+.stepProposed{background:rgba(116,167,255,0.2);color:#bcd6ff;}
+.stepApproved{background:rgba(96,215,140,0.2);color:#a8f0c2;}
+.stepRejected{background:rgba(255,110,110,0.2);color:#ffc4c4;}
+.stepExecuted{background:rgba(200,150,255,0.2);color:#dcc4ff;}
+
 .terminalOutputBlock{display:flex;flex-direction:column;gap:4px;}
 .codeBlockExpanded{max-height:none;}
 .expandOutputBtn{

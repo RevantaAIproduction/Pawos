@@ -22,8 +22,8 @@ import type { WorkspaceObservationEvent } from '../../../shared/actions/Executio
 import type { ExecutionRecord } from '../../../shared/actions/ExecutionRecordTypes';
 import type { BrowserCapabilityReport } from '../../../shared/actions/BrowserCapabilityTypes';
 import type { CommunicationRuntimeEvent, ParticipantRecord, CompanyRecord, CommunicationSummary, FollowUp } from '../../../shared/communication/CommunicationTypes';
-import type { PairedDevice } from '../../../shared/pairing/PairingTypes';
 import type { LocalDeviceIdentity } from '../../../shared/device/DeviceTypes';
+import type { PushNotificationPayload, PushSendResult } from '../../../shared/mobilePresence/MobilePresenceTypes';
 import type {
   ConnectivityScope,
   ConnectorDefinition,
@@ -227,24 +227,14 @@ export const ipc = {
   async authValidatePasswordResetToken(token: string): Promise<{ valid: boolean; email?: string; reason?: string }> {
     return getBridge().authValidatePasswordResetToken(token);
   },
-  async pairingBegin(userId?: string): Promise<{ token: string; pairingUri: string; qrDataUrl: string; expiresAt: number }> {
-    return getBridge().pairingBegin(userId);
-  },
-  async pairingComplete(
-    token: string,
-    deviceName: string,
-    publicKey: string
-  ): Promise<{ ok: true; device: PairedDevice } | { ok: false; reason: string }> {
-    return getBridge().pairingComplete(token, deviceName, publicKey);
-  },
-  async pairingList(userId?: string): Promise<PairedDevice[]> {
-    return getBridge().pairingList(userId);
-  },
-  async pairingRevoke(deviceId: string): Promise<boolean> {
-    return getBridge().pairingRevoke(deviceId);
-  },
   async deviceGetLocalIdentity(): Promise<LocalDeviceIdentity> {
     return getBridge().deviceGetLocalIdentity();
+  },
+  async notificationsSendPush(
+    subscription: { endpoint: string; p256dh: string; authKey: string },
+    payload: PushNotificationPayload
+  ): Promise<PushSendResult> {
+    return getBridge().notificationsSendPush(subscription, payload);
   },
   async billingGetPricing(): Promise<PricingConfig> {
     return getBridge().billingGetPricing();
@@ -261,6 +251,9 @@ export const ipc = {
   async billingSyncTierFromOrganization(orgTier: SubscriptionTierId): Promise<SubscriptionState> {
     return getBridge().billingSyncTierFromOrganization(orgTier);
   },
+  async billingResetSubscription(): Promise<SubscriptionState> {
+    return getBridge().billingResetSubscription();
+  },
   async billingGetCreditBalance(): Promise<CreditBalance> {
     return getBridge().billingGetCreditBalance();
   },
@@ -269,6 +262,9 @@ export const ipc = {
   },
   async billingGetCreditHistory(): Promise<CreditConsumptionRecord[]> {
     return getBridge().billingGetCreditHistory();
+  },
+  async billingGrantComputeBonus(units: number): Promise<EntitlementSnapshot> {
+    return getBridge().billingGrantComputeBonus(units);
   },
   async entitlementGetSnapshot(): Promise<EntitlementSnapshot> {
     return getBridge().entitlementGetSnapshot();
@@ -386,6 +382,33 @@ export const ipc = {
   },
   async communicationSaveAudio(communicationId: string, base64Data: string, mimeType: string) {
     return getBridge().communicationSaveAudio(communicationId, base64Data, mimeType);
+  },
+  async communicationAppendRecordingChunk(communicationId: string, kind: 'audio' | 'video', base64Chunk: string, expectedChecksum?: string) {
+    return getBridge().communicationAppendRecordingChunk(communicationId, kind, base64Chunk, expectedChecksum);
+  },
+  async communicationFinalizeRecording(communicationId: string, kind: 'audio' | 'video', mimeType: string) {
+    return getBridge().communicationFinalizeRecording(communicationId, kind, mimeType);
+  },
+  async communicationGetRecordingDiagnostics(communicationId: string) {
+    return getBridge().communicationGetRecordingDiagnostics(communicationId);
+  },
+  async communicationDeleteRecording(communicationId: string) {
+    return getBridge().communicationDeleteRecording(communicationId);
+  },
+  async communicationGetRecordingTimeline(communicationId: string) {
+    return getBridge().communicationGetRecordingTimeline(communicationId);
+  },
+  async communicationGenerateEvidence(communicationId: string, apiKey: string, model?: string, baseUrl?: string) {
+    return getBridge().communicationGenerateEvidence(communicationId, apiKey, model, baseUrl);
+  },
+  async communicationGetEvidence(communicationId: string) {
+    return getBridge().communicationGetEvidence(communicationId);
+  },
+  async communicationGenerateBusinessInsights(communicationId: string, apiKey: string, model?: string, baseUrl?: string) {
+    return getBridge().communicationGenerateBusinessInsights(communicationId, apiKey, model, baseUrl);
+  },
+  async communicationGetBusinessInsights(communicationId: string) {
+    return getBridge().communicationGetBusinessInsights(communicationId);
   },
   onCommunicationEvent(cb: (event: CommunicationRuntimeEvent) => void) {
     getBridge().onCommunicationEvent(cb);

@@ -237,9 +237,10 @@ export const FEATURES: FeatureContent[] = [
     tagline: "Real git operations, including AI-assisted PR review.",
     category: "Engineering",
     summary:
-      "PawOS's Git Write Runtime covers the everyday git workflow — add, commit, branch, checkout — plus, for Team and Enterprise workspaces, real pull request reading and AI-assisted review against your organization's connected repositories.",
+      "PawOS's Git Write Runtime covers the everyday git workflow — add, commit, branch, checkout, revert — plus, for Team and Enterprise workspaces, real pull request reading and AI-assisted review against your organization's connected repositories.",
     capabilities: [
       "Add, commit, create branches, and checkout through a real git runtime",
+      "Revert a specific commit as a real, reviewable undo — a safety net if a Paw Pro edit needs to be rolled back after it's already committed",
       "Read-only git plugins for log, diff, and status inspection",
       "Pull request review and commenting via connected source-control providers",
       "Branch ownership and task-linked repository context in Team/Enterprise workspaces",
@@ -362,7 +363,7 @@ export const FEATURES: FeatureContent[] = [
       "Vision-based tasks like recreating a design from a screenshot",
     ],
     limitations: [
-      "Reasoning quality scales with your tier's model access — Go includes no AI models",
+      "Reasoning quality scales with your tier's model access — Go includes Paw Flash for planning and analysis; execution requires Pro",
     ],
   },
   {

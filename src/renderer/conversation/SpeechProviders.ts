@@ -92,7 +92,7 @@ export function createBrowserSpeechRecognitionProvider(): SpeechRecognitionProvi
       let handledFinal = false;
 
       recognition.onresult = (event: any) => {
-        const results = Array.from(event.results ?? []);
+        const results: any[] = Array.from(event.results ?? []);
         let interimTranscript = '';
         for (const result of results) {
           const transcript = result?.[0]?.transcript?.toString?.() ?? '';

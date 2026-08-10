@@ -109,7 +109,7 @@ export class CompanionAnimationFsmController {
 
     if (now >= this.idleLifeNextAt) {
       const expression = IDLE_LIFE_FLOURISHES[Math.floor(Math.random() * IDLE_LIFE_FLOURISHES.length)];
-      this.fsm.transition(EXPRESSION_TO_CLIP[expression], this.ctx);
+      if (expression) this.fsm.transition(EXPRESSION_TO_CLIP[expression], this.ctx);
       this.idleLifeFlourishUntil = now + IDLE_LIFE_FLOURISH_DURATION_MS;
     }
   }

@@ -368,7 +368,7 @@ export function AnalyticsSection({ user }: { user: AuthUser }) {
             <strong>Organization → Credits &amp; Billing</strong> for the current balance and usage history.
           </p>
         ) : (
-          <p className={styles.cardBody}>Available on Paw Pro and above.</p>
+          <p className={styles.cardBody}>Available on Pro and above.</p>
         )}
       </div>
 

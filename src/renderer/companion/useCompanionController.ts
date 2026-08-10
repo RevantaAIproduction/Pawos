@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { SerializedCompanion as CompanionInfo } from './CompanionLoaderTypes';
-import type { SettingsState } from '../../services/settings/SettingsManager';
+import type { SettingsState } from '../services/settings/SettingsManager';
 import type { CompanionController } from './CompanionController';
 import { createCompanionController } from './CompanionController';
 

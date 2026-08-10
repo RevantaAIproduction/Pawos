@@ -9,7 +9,7 @@ import type { AuthUser } from '../../../auth/AuthTypes';
 
 const BILLING_TILES: SectionTileDef[] = [
   { id: 'subscription', title: 'Plan & Models', description: 'Your current plan, AI models, and upgrade options.', icon: CardIcon },
-  { id: 'taskCredits', title: 'Autonomous Ticket Balance', description: 'Prepaid balance for autonomous engineering tickets.', icon: GaugeIcon },
+  { id: 'taskCredits', title: 'Autonomous Ticket Balance & Pricing', description: 'Prepaid balance and per-ticket pricing for autonomous engineering tickets.', icon: GaugeIcon },
   { id: 'referral', title: 'Refer PawOS', description: 'Share your code and earn Referral Credits.', icon: OrganizationIcon },
   { id: 'usage', title: 'Usage Statistics', description: 'Runtime, companion, and storage usage this period.', icon: BarsIcon },
 ];

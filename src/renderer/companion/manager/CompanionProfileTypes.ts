@@ -63,7 +63,7 @@ export const PERSONALITY_PRESETS: Record<Exclude<PersonalityPreset, 'custom'>, {
   },
 };
 
-/** Builds the personality addendum text layered onto PAW_SYSTEM_PROMPT for a given profile's personality — combines the preset's own addendum (if any) with the user's own systemPromptOverride. Empty string when there's genuinely nothing to add. */
+/** Builds the personality addendum text layered onto the tier-aware base system prompt (see systemPrompt.ts's buildSystemPrompt) for a given profile's personality — combines the preset's own addendum (if any) with the user's own systemPromptOverride. Empty string when there's genuinely nothing to add. */
 export function buildPersonalityAddendum(personality: CompanionPersonality): string {
   const parts: string[] = [];
   if (personality.preset !== 'custom') parts.push(PERSONALITY_PRESETS[personality.preset].promptAddendum);

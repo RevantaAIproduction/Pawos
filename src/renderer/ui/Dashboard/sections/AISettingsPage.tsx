@@ -40,10 +40,11 @@ export function AISettingsPage({ onUpgrade }: { onUpgrade: () => void }) {
   if (entitlement && entitlement.models.length === 0) {
     return (
       <div className={styles.card}>
-        <h3 className={styles.cardTitle}>No AI models on Paw Go</h3>
+        <h3 className={styles.cardTitle}>No AI models available on your current plan</h3>
         <p className={styles.cardBody} style={{ marginTop: 6 }}>
-          Paw Go covers Companion Studio, desktop companion, and local workspace features without
-          any AI reasoning. Upgrade to Paw Pro to unlock Paw's AI models and talk to Paw directly.
+          Your plan doesn't currently unlock any Paw AI models. Go includes real AI (Paw Flash) for
+          planning, analysis, and investigation — upgrade to Pro to unlock the full model roster
+          and execution (generating/modifying code, running commands, deploying, voice conversations).
         </p>
         <button type="button" className={styles.primaryButton} style={{ marginTop: 12 }} onClick={onUpgrade}>
           Upgrade plan

@@ -40,7 +40,7 @@ const INDIVIDUAL_PLANS: Plan[] = [
       "Desktop Companion",
       "Basic Workspace & File Management",
       "Local Runtime Features",
-      "No AI models or AI runtimes",
+      "AI-powered planning & analysis with Paw Flash — execution requires Paw Pro",
     ],
   },
   {

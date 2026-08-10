@@ -45,4 +45,19 @@ export const referralCreditService = {
     if (error) throw error;
     return (data ?? []).map(toGrant);
   },
+
+  /**
+   * Redeems amountUsd of the caller's own Referral Credits balance — throws if the balance is
+   * insufficient (redeem_referral_credits_for_compute() re-checks server-side, never trusts a
+   * client-reported balance). Returns the remaining balance only; converting the redeemed dollar
+   * amount into bonus Paw Compute units and actually granting them is the caller's job (see
+   * useReferralCreditsRedemption.ts) — this function only ever moves money, never usage state.
+   */
+  async redeemForCompute(amountUsd: number): Promise<{ remainingBalanceUsd: number }> {
+    const supabase = await getSupabaseClient();
+    const { data, error } = await supabase.rpc('redeem_referral_credits_for_compute', { p_amount_usd: amountUsd });
+    if (error) throw error;
+    const row = (data as { remaining_balance_usd: number }[] | null)?.[0];
+    return { remainingBalanceUsd: row?.remaining_balance_usd ?? 0 };
+  },
 };

@@ -244,7 +244,7 @@ export const DOCS: DocPage[] = [
       {
         paragraphs: ["See the full Pricing page for current rates and feature comparison. In short:"],
         list: [
-          "Go — free, no AI models, local runtime features only",
+          "Go — free, real AI for planning & analysis (Paw Flash), local runtime features",
           "Pro — $20/mo, unlocks reasoning models and advanced runtimes",
           "Pro Max — $100/mo, higher usage limits and priority model access",
           "Team — $20/seat/mo (2–150 seats), adds shared workspaces and admin controls",

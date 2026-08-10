@@ -142,10 +142,9 @@ export function RemoteAssistancePanel({
     controlHost.current = host;
     const grantIsActive = (kind: ControlGrantKind) => grants.some((g) => g.kind === kind && g.status === 'granted');
     host.open(session.id, grantIsActive, () => {});
-    const unsubOutput = ipc.onProcessOutput((event) => host.forwardTerminalOutput(event.processId, event.chunk));
+    ipc.onProcessOutput((event) => host.forwardTerminalOutput(event.processId, event.chunk));
     return () => {
       host.close();
-      unsubOutput?.();
     };
   }, [session?.id, session?.status, isRequester]);
 
@@ -230,7 +229,7 @@ export function RemoteAssistancePanel({
     try {
       await hostScreenShare.current?.stop();
       await controlHost.current?.close();
-      await viewerScreenShare.current?.close?.();
+      await viewerScreenShare.current?.disconnect?.();
       await controlHelper.current?.close();
       await remoteAssistanceService.endSession(session.id);
     } catch (e) {

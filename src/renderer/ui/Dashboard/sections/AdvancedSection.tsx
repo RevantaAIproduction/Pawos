@@ -69,6 +69,11 @@ export function AdvancedSection() {
             Paw Pro — full execution
           </button>
         </div>
+        <p className={styles.cardBody} style={{ marginTop: 8, fontSize: '0.85em', opacity: 0.75 }}>
+          This is a local preference, separate from your account's subscription plan. Selecting
+          "Paw Pro" here only takes effect if your account is actually on the Paw Pro plan or
+          higher — otherwise coding actions will still be blocked until you upgrade.
+        </p>
       </div>
 
       <div className={styles.card} style={{ marginTop: 14 }}>

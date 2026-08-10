@@ -40,6 +40,26 @@ export type CommunicationPipelineStage =
   | 'updatingMemory'
   | 'done';
 
+// ---------------------------------------------------------------------------
+// Recording & Storage Foundation (Communication Intelligence Runtime, Phase 1)
+// ---------------------------------------------------------------------------
+
+/** Which physical media stream a recording chunk/file belongs to — audio always exists for every captured medium; video only for meeting mediums where a real screen/video track was available. */
+export type RecordingMediaKind = 'audio' | 'video';
+
+/**
+ * The durable-transfer status of a recording's bytes from the renderer's live capture into
+ * main-process storage — deliberately separate from CommunicationStatus (which describes the
+ * session as a whole). 'inProgress' covers the entire live-recording window (chunks are being
+ * appended); 'completed' only once finalizeRecording() has atomically renamed the partial file;
+ * 'failed' only when every retry the renderer's upload queue attempts has been exhausted, never on
+ * a single transient error.
+ */
+export type RecordingUploadStatus = 'pending' | 'inProgress' | 'completed' | 'failed' | 'paused';
+
+/** 'encrypted' only once a real per-session key was generated AND wrapped via a real, available OS-keychain mechanism (Electron safeStorage) — never claimed when the platform has no keychain available (e.g. a headless/CI environment), per the "never claim more than is true" discipline used throughout this codebase. */
+export type RecordingEncryptionState = 'none' | 'encrypted';
+
 export type CommunicationRecord = {
   id: string;
   medium: string; // CommunicationSourceDescriptor id — open-ended, validated against the registry, not a fixed union
@@ -75,9 +95,169 @@ export type CommunicationRecord = {
   speakerTimeline: SpeakerTimelineEntry[];
   /** Real screen-share/visual-context events, timestamped — only ever populated when the capture mode actually reports them (meeting-participant mode with a provider that exposes it); empty otherwise, never guessed. */
   visualEvidence: VisualEvidenceEvent[];
+  /** Durable-transfer status of this recording's bytes (Recording & Storage Foundation) — see RecordingUploadStatus. */
+  uploadStatus: RecordingUploadStatus;
+  /** Whether this session's audio/video files are stored encrypted-at-rest — see RecordingEncryptionState. */
+  encryptionState: RecordingEncryptionState;
+  /** The per-session AES-256-GCM key, wrapped via Electron safeStorage (OS-keychain-backed) — base64, never the raw key. Null whenever encryptionState is 'none'. */
+  encryptedSessionKey: string | null;
+  /** Real elapsed recording duration, computed once at finalize time from the actual number of appended bytes/chunks — null until at least one media file has been finalized. */
+  durationSeconds: number | null;
+  /** Real on-disk file size in bytes, computed at finalize time — null until finalized. */
+  audioSizeBytes: number | null;
+  videoSizeBytes: number | null;
+  /** Streamed SHA-256 of the on-disk file bytes (post-encryption, if encrypted) — the storage-layer integrity signal: does what's on disk match what was written, verified independently of whether the content is later successfully decrypted/transcribed. Null until finalized. */
+  audioChecksum: string | null;
+  videoChecksum: string | null;
+  /** Set exactly once, the moment a media file is atomically finalized (partial file renamed to its real name) — the authoritative "this file is complete, not still being written" signal crash recovery and any later reader depend on. */
+  recordingFinalizedAt: number | null;
+};
+
+// ---------------------------------------------------------------------------
+// Timeline Indexing (Communication Intelligence Runtime, Phase 2)
+// ---------------------------------------------------------------------------
+//
+// A structural, recording-lifecycle-only timeline — deliberately separate from
+// the pre-existing, AI-pipeline-built SessionTimelineEntry/timeline.json below
+// (which merges transcript/action-items/decisions/signals, and only exists
+// once processing has run). This one is built incrementally, live, the moment
+// each recording-lifecycle event happens — before any transcript or AI
+// analysis exists — and never contains AI-derived content, only timestamps
+// and structural markers. Kept deliberately open (RecordingTimelineEntryKind
+// is a plain union, not a closed enum with exhaustiveness checks anywhere) so
+// a future phase can add new entry kinds without touching this phase's writer
+// code, matching the "open EntityType/Relation" pattern already proven
+// throughout this codebase's Memory Graph.
+
+/** All timestamps are content-relative seconds since the session's own startedAt, with cumulative paused duration subtracted — never wall-clock-with-pauses, since a pause boundary must not shift the position of everything recorded after it relative to the actual audio/video content. */
+export type RecordingTimelineEntryKind =
+  | 'recordingStarted'
+  | 'chunkRecorded'
+  | 'recordingPaused'
+  | 'recordingResumed'
+  | 'recordingFinalized'
+  | 'recordingRecovered';
+
+export type RecordingTimelineEntry = {
+  atSeconds: number;
+  kind: RecordingTimelineEntryKind;
+  /** Which media stream this entry concerns — null for session-level markers (started/paused/resumed) that apply to the whole session, not one specific file. */
+  mediaKind: RecordingMediaKind | null;
 };
 
 export type SpeakerTimelineEntry = { speaker: string; startedAtSeconds: number; endedAtSeconds: number | null };
+
+// ---------------------------------------------------------------------------
+// Foundation Intelligence — Evidence Objects (Communication Intelligence Runtime, Phase 3A)
+// ---------------------------------------------------------------------------
+//
+// The factual evidence layer every later phase (Phase 3B's business intelligence,
+// CRM, Memory Graph, search, timeline navigation) must reference by evidenceId —
+// never by re-deriving from raw transcript text. An Evidence Object contains ONLY
+// mechanical output of the foundation pipeline (speech-to-text, speaker
+// separation, timestamp alignment) — never a decision, requirement, opportunity,
+// risk, opinion, or any other inferred/interpreted meaning. Those belong
+// exclusively to Phase 3B. Immutable by construction: the storage layer
+// (CommunicationSessionStore) exposes only an append operation for evidence,
+// never an update/rewrite of an already-written entry.
+
+/** Generic segment-position labels only ("Speaker 1"/"Speaker 2"/.../"Unknown") — never a real stated name. Identity resolution (mapping a speaker to a known/named person) is explicitly deferred to a later phase; this phase only distinguishes distinct voices within one recording. */
+export type EvidenceSpeakerId = string;
+
+/**
+ * Three independent, deterministic, rule-based confidence dimensions — never a
+ * fabricated ML-calibrated probability the underlying pipeline doesn't actually
+ * produce. Each is 0..1. Business-confidence (is this a real buying signal, etc.)
+ * does not exist here and never will — that belongs to Phase 3B.
+ */
+export type EvidenceConfidence = {
+  /** Did the speech-to-text step produce real, non-empty transcript text for this segment. */
+  speechRecognition: number;
+  /** Was a real, distinct speaker label assigned (not an empty/ambiguous fallback to "Unknown"). */
+  speakerSeparation: number;
+  /** Does this segment's timestamp fall within the recording's own known bounds, in order relative to the previous segment. */
+  timestampAlignment: number;
+};
+
+export type EvidenceObject = {
+  /** Permanent, minted once, never changes — the one identifier every future runtime output (decisions, requirements, risks, opportunities, coaching, Memory Graph links, CRM records, search results, timeline navigation) must reference instead of transcript text. */
+  evidenceId: string;
+  /** The recording this evidence came from — always a real, existing CommunicationRecord id. */
+  recordingId: string;
+  speakerId: EvidenceSpeakerId;
+  /** Factual transcript text only — never a summary, interpretation, or inferred meaning. */
+  transcript: string;
+  /** Content-relative seconds, aligned to the same clock as the Timeline Index (Phase 2) — never re-derived once written. */
+  startTimestamp: number;
+  endTimestamp: number;
+  confidence: EvidenceConfidence;
+  /** Best-effort detected/assumed language code (e.g. 'en') — honestly whatever the pipeline actually determined, never guessed beyond that. */
+  language: string;
+  /** Which foundation mechanism produced this evidence — open for future non-speech sources, only 'speechToText' exists in Phase 3A. */
+  source: 'speechToText';
+  /** Pipeline version tag — lets a future reprocessing pass distinguish evidence produced by an older/newer version of the foundation pipeline. */
+  processingVersion: string;
+  /** Wall-clock time this evidence object was produced — audit metadata only, never used for content ordering (use startTimestamp/endTimestamp for that). */
+  createdAt: number;
+};
+
+/** File-existence-based state, never a separate persisted status field: no evidence.jsonl/evidence.partial.jsonl means never processed; a stale .partial with no finalized file means a crashed prior run (discarded, reprocessed cleanly); a finalized evidence.jsonl means done. */
+export type EvidenceProcessingState = 'pending' | 'processing' | 'completed';
+
+// ---------------------------------------------------------------------------
+// Business Intelligence — Business Insights (Communication Intelligence Runtime, Phase 3B)
+// ---------------------------------------------------------------------------
+//
+// Every Business Insight is an INTERPRETATION built exclusively from Phase 3A's
+// already-finalized Evidence Objects — never from raw transcript text, and never
+// by re-running speech-to-text/speaker-separation/timestamp-alignment (that work
+// is Phase 3A's alone, already done and frozen by the time this pipeline runs).
+// A Business Insight's evidenceIds field is its only connection back to the
+// recording: every insight must cite at least one real, existing evidenceId, and
+// the generation pipeline is responsible for rejecting (never silently keeping)
+// any insight that cites an evidenceId it cannot verify against the recording's
+// own real Evidence Objects — "never invent a signal you can't point to real
+// evidence for" (the same discipline already proven for the pre-existing
+// detectCommunicationSignals()'s quoted-text evidence, now upgraded to a real,
+// checkable identifier instead of a quoted string).
+
+/** Kept as a plain string union, deliberately left open the same way RecordingTimelineEntryKind is — a future business-intelligence kind can be added without a breaking change to this type. */
+export type BusinessInsightKind =
+  | 'decision'
+  | 'requirement'
+  | 'risk'
+  | 'buyingSignal'
+  | 'objection'
+  | 'opportunity'
+  | 'sentiment'
+  | 'coaching';
+
+/** Reuses the exact confidence vocabulary already established by the pre-existing ExtractedSignal.confidence — a real, deliberate business-confidence scale, legitimate only starting in Phase 3B (Phase 3A explicitly deferred business-confidence to this phase). */
+export type BusinessInsightConfidence = 'low' | 'medium' | 'high';
+
+/** Only meaningful for kind === 'sentiment' — null for every other kind. */
+export type SentimentLabel = 'positive' | 'negative' | 'neutral' | 'mixed';
+
+export type BusinessInsight = {
+  /** Permanent, minted once, never changes — mirrors EvidenceObject.evidenceId's own permanence guarantee, one layer up. */
+  insightId: string;
+  /** The recording this insight was derived from — always a real, existing CommunicationRecord id. */
+  recordingId: string;
+  kind: BusinessInsightKind;
+  /** The interpreted finding, in plain language — the one place genuine AI interpretation is allowed to live in this codebase's Communication Runtime, precisely because it is never treated as fact on its own: it always carries the real evidenceIds a reader (or a future runtime) can check it against. */
+  description: string;
+  /** Every evidenceId this insight is actually based on — always non-empty, always real ids that exist in this recording's own Evidence Objects. This is the field every future consumer (CRM, Memory Graph, search, timeline navigation) must use to trace an insight back to the original recording — never the description text, never a re-derived transcript quote. */
+  evidenceIds: string[];
+  /** The EvidenceSpeakerId this insight concerns, if the insight is clearly attributable to one participant — null when it isn't (e.g. a session-wide coaching summary). */
+  participant: EvidenceSpeakerId | null;
+  confidence: BusinessInsightConfidence;
+  /** Only populated for kind === 'sentiment'; null for every other kind — never a fabricated value for a kind that isn't actually about tone. */
+  sentimentLabel: SentimentLabel | null;
+  /** Pipeline version tag — mirrors EvidenceObject.processingVersion's own purpose. */
+  processingVersion: string;
+  /** Wall-clock time this insight was produced — audit metadata only, never used for ordering (there is no content timestamp of its own; use the referenced evidenceIds' timestamps for that). */
+  createdAt: number;
+};
 
 export type VisualEvidenceEvent = {
   atSeconds: number;
@@ -555,7 +735,12 @@ export type CommunicationRuntimeEvent =
   | { type: 'pipelineStageChanged'; communicationId: string; stage: CommunicationPipelineStage }
   | { type: 'processingComplete'; communicationId: string }
   /** A real meeting app/tab was just detected running (desktop-first architecture) — no communicationId yet, since nothing has started recording. Fired once per genuine start transition, never while already recording that medium. */
-  | { type: 'meetingDetected'; medium: string; title: string; meetingId: string };
+  | { type: 'meetingDetected'; medium: string; title: string; meetingId: string }
+  /** Main-process pauseCapture()/resumeCapture() requests, relayed to whichever renderer window actually holds the live MediaRecorder handle (CommunicationAudioCapture.ts) — the main process has no direct access to the renderer's capture object, so this event is the round-trip. Never changes CommunicationStatus itself (the session stays 'recording' — pause is a live-capture concept, not a session-lifecycle one). */
+  | { type: 'recordingPauseRequested'; communicationId: string }
+  | { type: 'recordingResumeRequested'; communicationId: string }
+  /** A recording left mid-capture by a previous process crash/quit was found and safely recovered on this launch — whatever partial media existed was finalized as-is, never discarded. Purely informational (drives internal diagnostics only, never shown to the end user as a raw technical event). */
+  | { type: 'recordingRecovered'; communicationId: string; kind: RecordingMediaKind };
 
 // ---------------------------------------------------------------------------
 // Search (architecture doc §19)

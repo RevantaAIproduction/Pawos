@@ -99,7 +99,7 @@ export const ACCOUNT_ARTICLES: HelpArticle[] = [
     troubleshooting: [],
     requirements: [],
     permissions: [],
-    billing: 'Paw Go has no AI credit pool (0, by design). Other tiers are currently uncapped until specific limits are finalized.',
+    billing: 'Paw Go has a capped AI credit pool (real AI, planning/analysis only — no execution). Other tiers are currently uncapped until specific limits are finalized.',
     relatedArticleIds: ['analytics-ai-usage', 'paw-go'],
     relatedSettings: ['Usage'],
     relatedApps: ['settings', 'analytics'],

@@ -1,10 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import styles from './taskCard.module.css';
 import type { ConversationTaskAction, ConversationTaskRecord } from './ConversationTypes';
-import type { ExecutionTrail, WorkflowMetadata, BuildStatus, VisualEvidence, TodoProgress, TestRunSummary, CodeDiffStat } from '../../shared/actions/ExecutionLifecycle';
+import type { ExecutionTrail, WorkflowMetadata, BuildStatus, VisualEvidence, TodoProgress, TestRunSummary, CodeDiffStat, PlannedStep } from '../../shared/actions/ExecutionLifecycle';
 import type { ManagedProcessInfo } from '../../shared/actions/ProcessTypes';
 import type { DevBrowserConsoleEntry } from '../../shared/actions/DevBrowserTypes';
 import type { CapabilityConfirmation } from '../../shared/runtime/RequirementTypes';
+import type { Finding, FindingSeverity, FindingConfidence } from '../../shared/intelligence/IntelligenceReportTypes';
+import { groupFindingsByProvenance } from '../../shared/intelligence/IntelligenceReportTypes';
+import type { EvidenceProvenance } from '../../shared/intelligence/EvidenceProvenance';
+import { getIntelligenceReport, getExecutionPlan } from './intelligenceReportShape';
 
 /**
  * The universal execution UI for Paw — one Task Card per user request
@@ -303,16 +307,101 @@ export function getLatestVisualEvidence(task: ConversationTaskRecord): VisualEvi
   return undefined;
 }
 
-/** Shape-based — DevBrowserPreviewPlugin's real console log entries, for the Coding Canvas `browserConsole` region. */
-export function getLatestDevBrowserConsole(task: ConversationTaskRecord): DevBrowserConsoleEntry[] | undefined {
+/** Mirrors the 6 fixed pipeline stages in the main process's ValidationReportTypes.ts — kept as a
+ * local literal list rather than imported, since renderer code never imports from src/main/. */
+const VALIDATION_STEP_IDS = ['syntax', 'imports', 'typeCheck', 'lint', 'build', 'tests'] as const;
+
+export type CodingMemoryValidationStep = { id: (typeof VALIDATION_STEP_IDS)[number]; status: string; skippedReason?: string };
+
+export type CodingMemorySnapshot = {
+  editHistory: { description: string; filesChanged: string[]; appliedAt: number }[];
+  architecturalDecisions: { decision: string; rationale: string; recordedAt: number }[];
+  preferences: { preferenceKey: string; preferenceValue: string; scope: string }[];
+  latestValidation: { confidence: string; blockingIssues: string[]; warnings: string[]; steps: CodingMemoryValidationStep[] } | null;
+};
+
+/** Shape-based, same precedent as getBuildStatus — any plugin whose result.data has these three real arrays gets treated as a Coding Runtime Memory snapshot, for the Coding Canvas `codingMemory` region. */
+function getCodingMemorySnapshot(action: ConversationTaskAction): CodingMemorySnapshot | undefined {
+  const data = action.result?.data as Partial<CodingMemorySnapshot> | undefined;
+  if (!data || !Array.isArray(data.editHistory) || !Array.isArray(data.architecturalDecisions) || !Array.isArray(data.preferences)) return undefined;
+  // The real query_coding_runtime_memory result carries the FULL ValidationReport (all 6 steps,
+  // skippedReason, warnings) at data.latestValidation — this cast recovers what the narrower
+  // Partial<CodingMemorySnapshot> type above would otherwise discard before it ever reaches render.
+  const rawValidation = data.latestValidation as unknown as (Record<string, unknown> & { confidence?: string; blockingIssues?: unknown; warnings?: unknown }) | null | undefined;
+  const latestValidation = rawValidation
+    ? {
+        confidence: typeof rawValidation.confidence === 'string' ? rawValidation.confidence : 'low',
+        blockingIssues: Array.isArray(rawValidation.blockingIssues) ? (rawValidation.blockingIssues as string[]) : [],
+        warnings: Array.isArray(rawValidation.warnings) ? (rawValidation.warnings as string[]) : [],
+        steps: VALIDATION_STEP_IDS.map((id) => {
+          const step = rawValidation[id] as { status?: string; skippedReason?: string } | undefined;
+          return { id, status: step?.status ?? 'skipped', skippedReason: step?.skippedReason };
+        }),
+      }
+    : null;
+  return {
+    editHistory: data.editHistory,
+    architecturalDecisions: data.architecturalDecisions,
+    preferences: data.preferences,
+    latestValidation,
+  };
+}
+
+/** The most recent real query_coding_runtime_memory result for a task, if any — for the Coding Canvas `codingMemory` region. */
+export function getLatestCodingMemory(task: ConversationTaskRecord): CodingMemorySnapshot | undefined {
   for (const action of [...task.actions].reverse()) {
-    const data = action.result?.data as { consoleEntries?: unknown } | undefined;
-    if (Array.isArray(data?.consoleEntries) && data.consoleEntries.every((e): e is DevBrowserConsoleEntry => Boolean(e) && typeof (e as DevBrowserConsoleEntry).text === 'string')) {
-      return data.consoleEntries as DevBrowserConsoleEntry[];
-    }
+    const snapshot = getCodingMemorySnapshot(action);
+    if (snapshot) return snapshot;
   }
   return undefined;
 }
+
+const isConsoleEntryArray = (value: unknown): value is DevBrowserConsoleEntry[] =>
+  Array.isArray(value) && value.every((e): e is DevBrowserConsoleEntry => Boolean(e) && typeof (e as DevBrowserConsoleEntry).text === 'string');
+
+/**
+ * Shape-based, for the Coding Canvas `browserConsole` region. Recognizes both
+ * DevBrowserPreviewPlugin's `consoleEntries` field and ReadBrowserConsolePlugin's `entries` field —
+ * two separate plugins (dev-preview session vs. general Browser Runtime session) that both return
+ * the same DevBrowserConsoleEntry-shaped console log, just under different field names.
+ */
+export function getLatestDevBrowserConsole(task: ConversationTaskRecord): DevBrowserConsoleEntry[] | undefined {
+  for (const action of [...task.actions].reverse()) {
+    const data = action.result?.data as { consoleEntries?: unknown; entries?: unknown } | undefined;
+    if (isConsoleEntryArray(data?.consoleEntries)) return data!.consoleEntries as DevBrowserConsoleEntry[];
+    if (isConsoleEntryArray(data?.entries)) return data!.entries as DevBrowserConsoleEntry[];
+  }
+  return undefined;
+}
+
+const SEVERITY_PILL_CLASS: Record<FindingSeverity, string> = {
+  info: 'severityInfo',
+  minor: 'severityMinor',
+  moderate: 'severityModerate',
+  major: 'severityMajor',
+  critical: 'severityCritical',
+};
+const CONFIDENCE_PILL_CLASS: Record<FindingConfidence, string> = {
+  low: 'confidenceLow',
+  medium: 'confidenceMedium',
+  high: 'confidenceHigh',
+};
+const PROVENANCE_LABEL: Record<EvidenceProvenance, string> = {
+  observed: 'Observed',
+  inferred: 'Inferred',
+  requiresRepositoryAccess: 'Requires Repository Access',
+  requiresApiAccess: 'Requires API Access',
+  requiresInternalDocumentation: 'Requires Internal Documentation',
+};
+const PROVENANCE_ORDER: EvidenceProvenance[] = [
+  'observed', 'inferred', 'requiresRepositoryAccess', 'requiresApiAccess', 'requiresInternalDocumentation',
+];
+const STEP_STATUS_PILL_CLASS: Record<PlannedStep['status'], string> = {
+  proposed: 'stepProposed',
+  approved: 'stepApproved',
+  rejected: 'stepRejected',
+  executed: 'stepExecuted',
+};
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
@@ -511,7 +600,13 @@ export function TaskCard({
     const testResultActions = task.actions.filter((a) => getTestResults(a));
     const codeDiffActions = task.actions.filter((a) => getCodeDiffStat(a));
     const todoProgress = getLatestTodoProgress(task);
-    return { commands, filesCreated, filesModified, appsOpened, envChanges, verifications, errors, connectRequests, recoveries, workflows, buildStatuses, testResultActions, codeDiffActions, todoProgress };
+    const intelligenceReports = task.actions.filter((a) => getIntelligenceReport(a));
+    const executionPlans = task.actions.filter((a) => getExecutionPlan(a));
+    return {
+      commands, filesCreated, filesModified, appsOpened, envChanges, verifications, errors, connectRequests,
+      recoveries, workflows, buildStatuses, testResultActions, codeDiffActions, todoProgress,
+      intelligenceReports, executionPlans,
+    };
   }, [task.actions]);
 
   const handleCopy = () => {
@@ -627,6 +722,85 @@ export function TaskCard({
                       <span className={styles.workflowStatLabel}>Final Result</span>
                       <div className={styles.finalReport}>{a.doneText ?? (a.result?.ok ? 'Done.' : a.result?.message)}</div>
                     </div>
+                  </div>
+                );
+              })}
+            </section>
+          )}
+
+          {sections.intelligenceReports.length > 0 && (
+            <section className={styles.section}>
+              <h4 className={styles.sectionTitle}>{sections.intelligenceReports.length === 1 ? 'Intelligence Report' : 'Intelligence Reports'}</h4>
+              {sections.intelligenceReports.map((a) => {
+                const report = getIntelligenceReport(a);
+                if (!report) return null;
+                const grouped = groupFindingsByProvenance(report.findings);
+                return (
+                  <div key={a.id} className={styles.workflowBlock}>
+                    <div className={styles.workflowName}>
+                      {report.engineId.charAt(0).toUpperCase() + report.engineId.slice(1)} Intelligence — {report.subject}
+                    </div>
+                    <div className={styles.workflowGrid}>
+                      {report.overallScore !== undefined && (
+                        <div className={styles.workflowStat}>
+                          <span className={styles.workflowStatLabel}>Score</span>
+                          <span className={styles.workflowStatValue}>{report.overallScore}</span>
+                        </div>
+                      )}
+                      <div className={styles.workflowStat}>
+                        <span className={styles.workflowStatLabel}>Findings</span>
+                        <span className={styles.workflowStatValue}>{report.findings.length}</span>
+                      </div>
+                    </div>
+                    {PROVENANCE_ORDER.filter((provenance) => grouped[provenance].length > 0).map((provenance) => (
+                      <div key={provenance} className={styles.provenanceGroup}>
+                        <span className={styles.provenanceGroupTitle}>{PROVENANCE_LABEL[provenance]}</span>
+                        {grouped[provenance].map((finding: Finding) => (
+                          <div key={finding.id} className={styles.findingRow}>
+                            <span className={styles.findingStatement}>{finding.statement}</span>
+                            <span className={styles.findingPills}>
+                              <span className={`${styles.pill} ${styles[SEVERITY_PILL_CLASS[finding.severity]] ?? ''}`}>{finding.severity}</span>
+                              <span className={`${styles.pill} ${styles[CONFIDENCE_PILL_CLASS[finding.confidence]] ?? ''}`}>{finding.confidence} confidence</span>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </section>
+          )}
+
+          {sections.executionPlans.length > 0 && (
+            <section className={styles.section}>
+              <h4 className={styles.sectionTitle}>{sections.executionPlans.length === 1 ? 'Execution Plan' : 'Execution Plans'}</h4>
+              {sections.executionPlans.map((a) => {
+                const plan = getExecutionPlan(a);
+                if (!plan) return null;
+                return (
+                  <div key={a.id} className={styles.workflowBlock}>
+                    <div className={styles.workflowName}>
+                      {plan.steps.length} proposed step{plan.steps.length === 1 ? '' : 's'} — review and approve before anything runs
+                    </div>
+                    {plan.steps.length > 0 && (
+                      <ol className={styles.planList}>
+                        {plan.steps.map((step) => (
+                          <li key={step.id} className={styles.planStep}>
+                            <span className={`${styles.pill} ${styles[STEP_STATUS_PILL_CLASS[step.status]] ?? ''}`}>{step.status}</span>{' '}
+                            <strong>{step.actionRequest.type}</strong>: {step.rationale}
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                    {plan.unplannableFindingIds.length > 0 && (
+                      <div>
+                        <span className={styles.workflowStatLabel}>Not automatable</span>
+                        <div className={styles.finalReport}>
+                          {plan.unplannableFindingIds.length} approved finding{plan.unplannableFindingIds.length === 1 ? '' : 's'} had no safe automated fix and were left out of this plan.
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}

@@ -13,13 +13,17 @@ import type { BillingCheckoutResult, CheckoutOptions, SubscriptionTierId } from 
  * routes are built and typecheck clean (see pawos-web/src/app/checkout and
  * pawos-web/src/app/api/billing) — they honestly report "Business
  * Configuration Required" themselves once real Razorpay keys are missing,
- * so the remaining gate here is purely about deployment: this stays false
- * until pawos-web is actually deployed and reachable at
- * WEB_CHECKOUT_BASE_URL. Flipping it before that would send users to an
- * unreachable domain instead of a clear in-app message, which is worse.
+ * so the remaining gate here was purely about deployment. Confirmed live at
+ * WEB_CHECKOUT_BASE_URL on 2026-08-02 (real page renders, RAZORPAY_KEY_ID/
+ * SECRET are configured on pawos-web's own deployment — the checkout POST
+ * gets past the credentials check). pawos-web still self-reports "No
+ * Razorpay plan is configured for Paw <tier>" until RAZORPAY_PLAN_ID_PRO /
+ * _PROMAX / _TEAM_STANDARD / _TEAM_PREMIUM / _ENTERPRISE_BASE are created in
+ * the Razorpay Dashboard and set on pawos-web's deployment — that gap is
+ * pawos-web's own honest 503, not something this flag controls.
  */
 const WEB_CHECKOUT_BASE_URL = 'https://pawos.revantaai.com/checkout';
-const CHECKOUT_ROUTE_LIVE = false; // flip true once pawos-web is deployed and reachable at WEB_CHECKOUT_BASE_URL
+const CHECKOUT_ROUTE_LIVE = true;
 
 export class RazorpayBillingProvider implements BillingProvider {
   readonly id = 'razorpay' as const;

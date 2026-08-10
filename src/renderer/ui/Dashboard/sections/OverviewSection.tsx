@@ -63,7 +63,7 @@ export function OverviewSection({
   const activeModel = entitlement ? PAW_MODEL_CATALOG.find((m) => entitlement.models.includes(m.id)) : undefined;
   const aiUsageText = entitlement
     ? entitlement.models.length === 0
-      ? 'Paw Go — no AI models on this plan'
+      ? 'No AI models on this plan'
       : `${entitlement.creditsUsedThisPeriod} credits used${entitlement.creditLimit === null ? '' : ` / ${entitlement.creditLimit}`}${activeModel ? ` · ${activeModel.label}` : ''}`
     : '…';
 
@@ -94,8 +94,8 @@ export function OverviewSection({
             {companionPending ? 'Working…' : companionEnabled ? 'Disable' : 'Enable companion'}
           </button>
           {companionEnabled && !companionWaking && (
-            <button type="button" className={styles.chip} onClick={() => onNavigate('talk')}>
-              Talk with Paw
+            <button type="button" className={styles.chip} onClick={() => onNavigate('companionLab')}>
+              Open Companion Studio
             </button>
           )}
         </div>

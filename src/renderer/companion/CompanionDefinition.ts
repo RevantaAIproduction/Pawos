@@ -41,4 +41,5 @@ export type CompanionConfig = {
 
 export type PetAnimationsConfig = CompanionAnimationsConfig;
 export type PetConfig = CompanionConfig;
+export type CompanionDefinition = CompanionConfig;
 

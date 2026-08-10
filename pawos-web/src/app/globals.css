@@ -25,6 +25,21 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Mobile Presence PWA Foundation (MOB-4) — safe-area utilities so
+   /companion's content never sits under a real phone's notch, camera
+   cutout, or home-indicator gesture bar when installed standalone
+   (requires viewport's viewportFit: 'cover', set in layout.tsx). */
+.pawos-safe-area-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.pawos-safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.pawos-safe-area-x {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
 /* Accessibility: respect the OS-level reduced-motion preference site-wide. */
 @media (prefers-reduced-motion: reduce) {
   *,

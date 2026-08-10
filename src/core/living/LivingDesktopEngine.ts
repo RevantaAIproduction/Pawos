@@ -44,7 +44,7 @@ export class LivingDesktopEngine {
 
   private createPlan(companionId: string, nowMs: number): LivingPlan {
     const pool: LivingAction[] = ['walk', 'sit', 'stretch', 'drinkCoffee', 'readBooks', 'lookAround', 'wander', 'sleep'];
-    const action = pool[Math.floor(Math.random() * pool.length)];
+    const action = pool[Math.floor(Math.random() * pool.length)] ?? 'walk';
 
     const durationMs =
       action === 'sleep' ? randRange(45, 90) * 1000 : randRange(10, 35) * 1000;

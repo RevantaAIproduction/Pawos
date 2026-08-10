@@ -20,6 +20,6 @@ export function createIdleDetector(args: { idleLieMs: number; idleSleepMs: numbe
   };
 
   // tickless; fsm/controller can call onInput/getState
-  return { onInput, getState };
+  return { onInput, getState, idleLieMs: args.idleLieMs, idleSleepMs: args.idleSleepMs };
 }
 

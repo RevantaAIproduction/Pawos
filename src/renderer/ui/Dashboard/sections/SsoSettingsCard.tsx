@@ -79,7 +79,7 @@ export function SsoSettingsCard({ organizationId, tier }: { organizationId: stri
       <div className={styles.card}>
         <h3 className={styles.cardTitle}>Single sign-on</h3>
         <p className={styles.cardBody} style={{ marginTop: 6 }}>
-          SSO (SAML/OIDC) is available on Paw Enterprise. Upgrade from Team to configure it for this organization.
+          SSO (SAML/OIDC) is available on Enterprise. Upgrade from Team to configure it for this organization.
         </p>
       </div>
     );

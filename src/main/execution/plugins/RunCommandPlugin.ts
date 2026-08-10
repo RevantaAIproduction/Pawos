@@ -1,12 +1,10 @@
-import { exec } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { ActionRequest, ActionResult, CommandShell } from '../../../shared/actions/ActionTypes';
 import { BasePlugin } from '../BasePlugin';
 import { describeFailure } from '../describeFailure';
-import { getRefreshedEnv } from '../envRefresh';
+import { execShellCommand } from '../shellExec';
 import { firstToken, isAllowedPrefix, allowedPrefixesList } from './commandSafety';
-import { withShell } from './shellCommand';
 import { looksLikeTestCommand, parseTestOutput } from '../TestResultParser';
 
 const TIMEOUT_MS = 45_000;
@@ -22,25 +20,7 @@ function looksLikeInstall(command: string): boolean {
   return /\b(npm|yarn|pnpm)\b.*\b(install|i|add|ci)\b/i.test(command);
 }
 
-type RunResult = { code: number | null; stdout: string; stderr: string; timedOut: boolean };
-
-async function runCommand(command: string, cwd: string, shell?: CommandShell): Promise<RunResult> {
-  // Refreshed env — a PATH/env change from earlier in this same conversation
-  // (setPathEntry, setEnvironmentVariable, installTool) must be visible to
-  // the very next command, not just after an app restart. See envRefresh.ts.
-  const env = await getRefreshedEnv();
-  return new Promise((resolve) => {
-    const child = exec(withShell(command, shell), { cwd, timeout: TIMEOUT_MS, maxBuffer: 1024 * 1024 * 4, env }, (error, stdout, stderr) => {
-      resolve({
-        code: error ? (error as unknown as { code?: number }).code ?? 1 : 0,
-        stdout: stdout ?? '',
-        stderr: stderr ?? '',
-        timedOut: Boolean(error && (error as unknown as { killed?: boolean; signal?: string }).signal === 'SIGTERM'),
-      });
-    });
-    void child;
-  });
-}
+const runCommand = (command: string, cwd: string, shell?: CommandShell) => execShellCommand(command, cwd, shell, TIMEOUT_MS);
 
 export class RunCommandPlugin extends BasePlugin {
   id = 'runCommand';

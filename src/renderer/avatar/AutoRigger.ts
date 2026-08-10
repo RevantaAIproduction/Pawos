@@ -52,11 +52,7 @@ export function autoRigMeshToSkeleton(
   geometry.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(skinIndices, MAX_BONE_INFLUENCES));
   geometry.setAttribute('skinWeight', new THREE.Float32BufferAttribute(skinWeights, MAX_BONE_INFLUENCES));
 
-  const material = Array.isArray((sourceMesh as THREE.Mesh).material)
-    ? (sourceMesh as THREE.Mesh).material[0]
-    : (sourceMesh as THREE.Mesh).material;
-
-  const skinnedMesh = new THREE.SkinnedMesh(geometry, material);
+  const skinnedMesh = new THREE.SkinnedMesh(geometry, (sourceMesh as THREE.Mesh).material);
   skinnedMesh.bind(skeleton);
   return skinnedMesh;
 }
@@ -129,7 +125,9 @@ class SpatialGrid {
             const bucket = this.cells.get(`${cx + dx}|${cy + dy}|${cz + dz}`);
             if (!bucket) continue;
             for (const idx of bucket) {
-              const distSq = point.distanceToSquared(points[idx]);
+              const candidate = points[idx];
+              if (!candidate) continue;
+              const distSq = point.distanceToSquared(candidate);
               if (distSq < bestDistSq) {
                 bestDistSq = distSq;
                 best = idx;
@@ -155,6 +153,9 @@ function transferSkinWeightsFromReference(
   const refPosition = refGeometry.attributes.position;
   const refSkinIndex = refGeometry.attributes.skinIndex;
   const refSkinWeight = refGeometry.attributes.skinWeight;
+  if (!refPosition || !refSkinIndex || !refSkinWeight) {
+    throw new Error('Reference mesh is missing position/skinIndex/skinWeight attributes.');
+  }
 
   const referencePositions: THREE.Vector3[] = new Array(refPosition.count);
   const referenceSamples: WeightSample[] = new Array(refPosition.count);
@@ -171,6 +172,7 @@ function transferSkinWeightsFromReference(
   const grid = new SpatialGrid(referencePositions, Math.max(radius / 20, 1e-3));
 
   const position = targetGeometry.attributes.position;
+  if (!position) throw new Error('Target geometry is missing a position attribute.');
   const vertexCount = position.count;
   const skinIndices = new Uint16Array(vertexCount * MAX_BONE_INFLUENCES);
   const skinWeights = new Float32Array(vertexCount * MAX_BONE_INFLUENCES);
@@ -186,8 +188,8 @@ function transferSkinWeightsFromReference(
 
     for (let k = 0; k < MAX_BONE_INFLUENCES; k++) {
       const offset = i * MAX_BONE_INFLUENCES + k;
-      skinIndices[offset] = remapped.skinIndex[k];
-      skinWeights[offset] = remapped.skinWeight[k];
+      skinIndices[offset] = remapped.skinIndex[k] ?? 0;
+      skinWeights[offset] = remapped.skinWeight[k] ?? 0;
     }
   }
 
@@ -201,6 +203,7 @@ function computeSkinWeightsFromBoneSegments(
   boneRemap: Uint16Array
 ): { skinIndices: Uint16Array; skinWeights: Float32Array } {
   const position = geometry.attributes.position;
+  if (!position) throw new Error('Geometry is missing a position attribute.');
   const vertexCount = position.count;
   const boneSegments = getBoneSegments(skeleton);
 
@@ -214,9 +217,11 @@ function computeSkinWeightsFromBoneSegments(
     vertex.fromBufferAttribute(position, i);
 
     for (let b = 0; b < boneSegments.length; b++) {
+      const segment = boneSegments[b];
+      if (!segment) continue;
       candidates[b] = {
         index: b,
-        distSq: pointToSegmentDistanceSquared(vertex, boneSegments[b].start, boneSegments[b].end),
+        distSq: pointToSegmentDistanceSquared(vertex, segment.start, segment.end),
       };
     }
     candidates.sort((a, b) => a.distSq - b.distSq);
@@ -229,14 +234,14 @@ function computeSkinWeightsFromBoneSegments(
     const rawWeight: [number, number, number, number] = [0, 0, 0, 0];
     nearest.forEach((n, k) => {
       rawIndex[k] = n.index;
-      rawWeight[k] = rawWeights[k] / weightSum;
+      rawWeight[k] = (rawWeights[k] ?? 0) / weightSum;
     });
     const remapped = applyBoneRemap(rawIndex, rawWeight, boneRemap);
 
     for (let k = 0; k < MAX_BONE_INFLUENCES; k++) {
       const offset = i * MAX_BONE_INFLUENCES + k;
-      skinIndices[offset] = remapped.skinIndex[k];
-      skinWeights[offset] = remapped.skinWeight[k];
+      skinIndices[offset] = remapped.skinIndex[k] ?? 0;
+      skinWeights[offset] = remapped.skinWeight[k] ?? 0;
     }
   }
 
@@ -284,9 +289,9 @@ function applyBoneRemap(
   const merged = new Map<number, number>();
   for (let k = 0; k < 4; k++) {
     const w = rawWeight[k];
-    if (w <= 0) continue;
     const boneIndex = rawIndex[k];
-    const target = boneIndex < remap.length ? remap[boneIndex] : boneIndex;
+    if (w === undefined || boneIndex === undefined || w <= 0) continue;
+    const target = boneIndex < remap.length ? remap[boneIndex] ?? boneIndex : boneIndex;
     merged.set(target, (merged.get(target) ?? 0) + w);
   }
 

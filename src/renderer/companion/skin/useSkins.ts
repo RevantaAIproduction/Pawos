@@ -7,10 +7,13 @@ export function useSkins() {
   const [activeId, setActiveIdState] = useState<string>(() => skinStore.getActive().id);
 
   useEffect(() => {
-    return skinStore.subscribe(() => {
+    const unsubscribe = skinStore.subscribe(() => {
       setSkins(skinStore.list());
       setActiveIdState(skinStore.getActive().id);
     });
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const setActive = useCallback((id: string) => skinStore.setActive(id), []);

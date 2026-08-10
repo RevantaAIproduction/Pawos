@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { app } from 'electron';
-import type { CommunicationRecord } from '../../shared/communication/CommunicationTypes';
+import type { CommunicationRecord, RecordingMediaKind, RecordingTimelineEntry, EvidenceObject, BusinessInsight } from '../../shared/communication/CommunicationTypes';
+import { hashFile } from '../execution/plugins/hashUtils';
 
 const INDEX_FILE_NAME = 'communications.db';
 
@@ -53,7 +54,7 @@ class CommunicationSessionStore {
     const newSegment = `${path.sep}sessions${path.sep}`;
     let changed = false;
     for (const record of this.records) {
-      for (const field of ['audioPath', 'transcriptPath', 'bodyPath', 'summaryPath'] as const) {
+      for (const field of ['audioPath', 'videoPath', 'transcriptPath', 'bodyPath', 'summaryPath'] as const) {
         const value = record[field];
         if (typeof value === 'string' && value.includes(legacySegment)) {
           record[field] = value.replace(legacySegment, newSegment);
@@ -151,12 +152,96 @@ class CommunicationSessionStore {
     return this.records.filter((r) => (r.status === 'interrupted' || r.status === 'processing' || r.status === 'recording') && r.pipelineStage !== 'done');
   }
 
+  /**
+   * Every record still marked 'recording' at query time — meaningful only right after app launch,
+   * before anything genuinely new has started: if the app just started, nothing can legitimately be
+   * mid-recording yet, so any such record was left in that state by a previous process
+   * crash/force-quit. The Recording & Storage Foundation's crash-recovery entry point
+   * (CommunicationRuntime.recoverInterruptedRecordings()) calls this once at startup.
+   */
+  listStaleRecordingSessions(): CommunicationRecord[] {
+    return this.records.filter((r) => r.status === 'recording');
+  }
+
+  /** Removes both the index entry AND the session's entire on-disk folder (audio/video/transcript/summary/attachments) — the real delete that CommunicationSessionStore.delete() never was. Never throws if the folder is already gone. */
+  deleteSessionCompletely(id: string): boolean {
+    const before = this.records.length;
+    this.records = this.records.filter((r) => r.id !== id);
+    const deleted = this.records.length !== before;
+    if (deleted) {
+      this.save();
+      try {
+        fs.rmSync(this.folderFor(id), { recursive: true, force: true });
+      } catch {
+        // Folder already gone or inaccessible — the index entry is still correctly removed either way.
+      }
+    }
+    return deleted;
+  }
+
   delete(id: string): boolean {
     const before = this.records.length;
     this.records = this.records.filter((r) => r.id !== id);
     const deleted = this.records.length !== before;
     if (deleted) this.save();
     return deleted;
+  }
+
+  // -- Streaming recording storage (Recording & Storage Foundation) ---------
+  //
+  // A recording chunk is appended to disk the moment it arrives — never
+  // accumulated in memory first — via one plain fs.appendFileSync call per
+  // chunk against a `.partial` file. This is deliberately stateless across
+  // calls (no open file handle is held between IPC round-trips): simpler,
+  // and crash-safe by construction, since there is never a dangling handle
+  // to worry about if the renderer or main process dies mid-recording.
+
+  private partialRecordingPath(communicationId: string, kind: RecordingMediaKind): string {
+    return path.join(this.folderFor(communicationId), `${kind}.partial`);
+  }
+
+  hasPartialRecording(communicationId: string, kind: RecordingMediaKind): boolean {
+    return fs.existsSync(this.partialRecordingPath(communicationId, kind));
+  }
+
+  appendRecordingChunk(communicationId: string, kind: RecordingMediaKind, frame: Buffer): void {
+    this.ensureFolder(communicationId);
+    fs.appendFileSync(this.partialRecordingPath(communicationId, kind), frame);
+  }
+
+  /** Truncates a partial recording file to its last complete frame boundary — used during crash recovery to discard a chunk that was only half-written to disk, never a fully-received one. No-op if the file doesn't exist or is already exactly at a valid boundary. */
+  truncatePartialRecordingToBoundary(communicationId: string, kind: RecordingMediaKind, boundaryBytes: number): void {
+    const partialPath = this.partialRecordingPath(communicationId, kind);
+    if (!fs.existsSync(partialPath)) return;
+    const stat = fs.statSync(partialPath);
+    if (stat.size > boundaryBytes) fs.truncateSync(partialPath, boundaryBytes);
+  }
+
+  readPartialRecording(communicationId: string, kind: RecordingMediaKind): Buffer | null {
+    const partialPath = this.partialRecordingPath(communicationId, kind);
+    if (!fs.existsSync(partialPath)) return null;
+    return fs.readFileSync(partialPath);
+  }
+
+  /**
+   * Atomically finalizes a recording — renames the `.partial` file to its real name in one
+   * filesystem operation, so a reader can never observe a "half-finalized" state (either the final
+   * file exists complete, or it doesn't exist yet and `.partial` is still there). Returns the real
+   * size in bytes, or null if there is no partial data to finalize (e.g. a recording that produced
+   * zero chunks).
+   */
+  finalizeRecordingFile(communicationId: string, kind: RecordingMediaKind, finalRelativeName: string): { fullPath: string; sizeBytes: number } | null {
+    const partialPath = this.partialRecordingPath(communicationId, kind);
+    if (!fs.existsSync(partialPath)) return null;
+    const finalPath = path.join(this.folderFor(communicationId), finalRelativeName);
+    fs.renameSync(partialPath, finalPath);
+    const sizeBytes = fs.statSync(finalPath).size;
+    return { fullPath: finalPath, sizeBytes };
+  }
+
+  /** Streamed checksum (never loads the whole file into memory) over whatever bytes are actually on disk — reused unchanged from the existing file-integrity helper already proven for copy/move verification elsewhere in the app. */
+  computeChecksum(fullPath: string): Promise<string> {
+    return hashFile(fullPath);
   }
 
   writeTextFile(communicationId: string, relativeName: string, content: string): string {
@@ -179,6 +264,219 @@ class CommunicationSessionStore {
     const fullPath = path.join(this.folderFor(communicationId), relativeName);
     fs.writeFileSync(fullPath, data);
     return fullPath;
+  }
+
+  // -- Timeline Indexing (Phase 2) ------------------------------------------
+  //
+  // A structural recording-lifecycle timeline, append-only, one JSON object
+  // per line (JSON Lines) — the same "never rewrite the whole file on every
+  // event" discipline as the binary chunk storage above, so a multi-hour
+  // recording with thousands of entries costs the same O(1)-per-event write
+  // cost as a one-minute one. The only time this file is ever rewritten in
+  // full is the one-time crash-recovery repair below.
+
+  private timelineIndexPath(communicationId: string): string {
+    return path.join(this.folderFor(communicationId), 'recording-timeline.jsonl');
+  }
+
+  /** Appends one real, already-computed timeline entry the instant it happens. Never buffers, never reads the file first. */
+  appendTimelineEntry(communicationId: string, entry: RecordingTimelineEntry): void {
+    this.ensureFolder(communicationId);
+    fs.appendFileSync(this.timelineIndexPath(communicationId), `${JSON.stringify(entry)}\n`);
+  }
+
+  /**
+   * Reads every valid, complete entry. A trailing incomplete line (the only way a JSON-Lines file
+   * can be corrupted by a crash, since every earlier `fs.appendFileSync` call either fully completed
+   * or the process died mid-syscall of the very last one) stops parsing rather than throwing or
+   * skipping past it — a line after a corrupt one could itself be misaligned/meaningless, so nothing
+   * past the first parse failure is trusted.
+   */
+  readTimelineEntries(communicationId: string): RecordingTimelineEntry[] {
+    const filePath = this.timelineIndexPath(communicationId);
+    if (!fs.existsSync(filePath)) return [];
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const entries: RecordingTimelineEntry[] = [];
+    for (const line of raw.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        entries.push(JSON.parse(line) as RecordingTimelineEntry);
+      } catch {
+        break;
+      }
+    }
+    return entries;
+  }
+
+  /**
+   * Crash recovery: rewrites the timeline index to contain only its valid, complete-line prefix,
+   * discarding a half-written trailing line (if any) — the one place this file is ever rewritten in
+   * full, and only once, at startup, for a session that was mid-recording when the app crashed.
+   * Idempotent: re-running against an already-valid file reproduces the same content byte-for-byte.
+   */
+  repairTimelineIndex(communicationId: string): void {
+    const filePath = this.timelineIndexPath(communicationId);
+    if (!fs.existsSync(filePath)) return;
+    const entries = this.readTimelineEntries(communicationId);
+    const repaired = entries.map((e) => JSON.stringify(e)).join('\n') + (entries.length > 0 ? '\n' : '');
+    fs.writeFileSync(filePath, repaired, 'utf-8');
+  }
+
+  // -- Evidence Objects (Foundation Intelligence, Phase 3A) -----------------
+  //
+  // Immutable by construction: this section exposes only an append-during-
+  // generation + atomic-finalize pair, never an update/rewrite of an
+  // already-finalized evidence object. A generation run accumulates into
+  // `evidence.partial.jsonl` (mirroring the exact discipline already proven
+  // for streaming recording chunks and the Phase 2 timeline index), then is
+  // atomically renamed to `evidence.jsonl` in one filesystem operation once
+  // the whole batch is durably appended — so a crash mid-generation leaves
+  // only a `.partial` file, never a half-finalized `evidence.jsonl`. Recovery
+  // discards a stale `.partial` (see discardPartialEvidence) and lets
+  // generation restart cleanly, since the source recording itself is
+  // untouched and reprocessing is always safe (never duplicative once
+  // `evidence.jsonl` exists, per hasEvidence's own gate in the pipeline).
+
+  private evidencePartialPath(communicationId: string): string {
+    return path.join(this.folderFor(communicationId), 'evidence.partial.jsonl');
+  }
+
+  private evidenceFinalPath(communicationId: string): string {
+    return path.join(this.folderFor(communicationId), 'evidence.jsonl');
+  }
+
+  /** True once a generation run has fully completed and been atomically finalized — the gate that makes reprocessing a safe no-op. */
+  hasEvidence(communicationId: string): boolean {
+    return fs.existsSync(this.evidenceFinalPath(communicationId));
+  }
+
+  /** A `.partial` file left behind by a crashed prior run (never a currently-running one within this process — that's guarded separately, in-memory, by the caller). */
+  hasPartialEvidence(communicationId: string): boolean {
+    return fs.existsSync(this.evidencePartialPath(communicationId));
+  }
+
+  /** Appends one already-computed, immutable Evidence Object during generation — never buffers, never reads the file first, same O(1)-per-append discipline as chunk storage and the timeline index. */
+  appendEvidencePartial(communicationId: string, evidence: EvidenceObject): void {
+    this.ensureFolder(communicationId);
+    fs.appendFileSync(this.evidencePartialPath(communicationId), `${JSON.stringify(evidence)}\n`);
+  }
+
+  /** Crash-safety: discards a stale `.partial` file from an interrupted prior run, so a fresh generation attempt starts from a clean slate rather than resuming into (or duplicating on top of) unknown partial state. Safe no-op if no partial file exists. */
+  discardPartialEvidence(communicationId: string): void {
+    try {
+      fs.rmSync(this.evidencePartialPath(communicationId), { force: true });
+    } catch {
+      // Already gone or inaccessible — nothing to discard.
+    }
+  }
+
+  /**
+   * Atomically finalizes one generation run: renames `.partial` to the real filename in one
+   * filesystem operation (so a reader can never observe a half-finalized state), or — the honest
+   * "this recording genuinely produced zero evidence" case (e.g. silence, a zero-length recording) —
+   * writes an empty finalized file directly, since no partial file was ever created for zero appends.
+   * A no-op if evidence is already finalized (never overwrites real, already-completed evidence).
+   */
+  finalizeEvidence(communicationId: string): void {
+    if (this.hasEvidence(communicationId)) return;
+    this.ensureFolder(communicationId);
+    const partialPath = this.evidencePartialPath(communicationId);
+    const finalPath = this.evidenceFinalPath(communicationId);
+    if (fs.existsSync(partialPath)) {
+      fs.renameSync(partialPath, finalPath);
+    } else {
+      fs.writeFileSync(finalPath, '', 'utf-8');
+    }
+  }
+
+  /**
+   * Reads every valid, complete Evidence Object from the FINALIZED file only — a `.partial` file is
+   * never read as if it were real evidence, even if it exists (it represents either an in-flight or
+   * a crashed, discarded run). Stops at the first unparseable line rather than throwing or skipping
+   * past it, mirroring readTimelineEntries()'s exact discipline.
+   */
+  readEvidence(communicationId: string): EvidenceObject[] {
+    const filePath = this.evidenceFinalPath(communicationId);
+    if (!fs.existsSync(filePath)) return [];
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const entries: EvidenceObject[] = [];
+    for (const line of raw.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        entries.push(JSON.parse(line) as EvidenceObject);
+      } catch {
+        break;
+      }
+    }
+    return entries;
+  }
+
+  // -- Business Insights (Business Intelligence, Phase 3B) -------------------
+  //
+  // Identical atomic-finalize discipline to the Evidence Objects section above,
+  // one level up the stack: business-insights.partial.jsonl accumulates during a
+  // generation run, then is atomically renamed to business-insights.jsonl once
+  // the whole batch is durably appended. Kept as a wholly separate file/pair
+  // from evidence.jsonl — Business Insights are a different, deliberately later
+  // stage of processing with its own idempotency/crash-recovery lifecycle, never
+  // sharing a file with the evidence layer it reads from.
+
+  private businessInsightsPartialPath(communicationId: string): string {
+    return path.join(this.folderFor(communicationId), 'business-insights.partial.jsonl');
+  }
+
+  private businessInsightsFinalPath(communicationId: string): string {
+    return path.join(this.folderFor(communicationId), 'business-insights.jsonl');
+  }
+
+  hasBusinessInsights(communicationId: string): boolean {
+    return fs.existsSync(this.businessInsightsFinalPath(communicationId));
+  }
+
+  hasPartialBusinessInsights(communicationId: string): boolean {
+    return fs.existsSync(this.businessInsightsPartialPath(communicationId));
+  }
+
+  appendBusinessInsightPartial(communicationId: string, insight: BusinessInsight): void {
+    this.ensureFolder(communicationId);
+    fs.appendFileSync(this.businessInsightsPartialPath(communicationId), `${JSON.stringify(insight)}\n`);
+  }
+
+  discardPartialBusinessInsights(communicationId: string): void {
+    try {
+      fs.rmSync(this.businessInsightsPartialPath(communicationId), { force: true });
+    } catch {
+      // Already gone or inaccessible — nothing to discard.
+    }
+  }
+
+  /** Same honest-empty-file / no-op-if-already-finalized discipline as finalizeEvidence(). */
+  finalizeBusinessInsights(communicationId: string): void {
+    if (this.hasBusinessInsights(communicationId)) return;
+    this.ensureFolder(communicationId);
+    const partialPath = this.businessInsightsPartialPath(communicationId);
+    const finalPath = this.businessInsightsFinalPath(communicationId);
+    if (fs.existsSync(partialPath)) {
+      fs.renameSync(partialPath, finalPath);
+    } else {
+      fs.writeFileSync(finalPath, '', 'utf-8');
+    }
+  }
+
+  readBusinessInsights(communicationId: string): BusinessInsight[] {
+    const filePath = this.businessInsightsFinalPath(communicationId);
+    if (!fs.existsSync(filePath)) return [];
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const entries: BusinessInsight[] = [];
+    for (const line of raw.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        entries.push(JSON.parse(line) as BusinessInsight);
+      } catch {
+        break;
+      }
+    }
+    return entries;
   }
 
   copyAttachment(communicationId: string, sourcePath: string): string {

@@ -2,9 +2,17 @@ import React, { useEffect, useState } from 'react';
 import styles from './onboardingWizard.module.css';
 import { ipc } from '../../services/ipc/ipcBridgeImplementation';
 import { aiProviderConfigStore } from '../../ai/AIProviderConfigStore';
+import { pairingService } from '../../mobilePresence/PairingService';
 import type { AuthUser } from '../../auth/AuthTypes';
 import type { SubscriptionTierId } from '../../../shared/billing/BillingTypes';
+import type { PairingSessionStart } from '../../../shared/mobilePresence/MobilePresenceTypes';
 import { PAW_MODEL_CATALOG, getPawModel, type PawModelId } from '../../../shared/ai/PawModelTypes';
+
+function getErrorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (e && typeof e === 'object' && 'message' in e) return String((e as { message: unknown }).message);
+  return String(e);
+}
 
 /**
  * First-run onboarding — a resumable multi-step wizard shown once after a
@@ -31,7 +39,9 @@ export function OnboardingWizard({ user, onFinish }: { user: AuthUser; onFinish:
   const [micStatus, setMicStatus] = useState<'unrequested' | 'granted' | 'denied'>('unrequested');
   const [notifStatus, setNotifStatus] = useState<'unrequested' | 'granted' | 'denied'>('unrequested');
   const [workspacePath, setWorkspacePath] = useState<string | null>(null);
-  const [qr, setQr] = useState<{ qrDataUrl: string; pairingUri: string } | null>(null);
+  const [pairingSession, setPairingSession] = useState<PairingSessionStart | null>(null);
+  const [paired, setPaired] = useState(false);
+  const [pairingError, setPairingError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -102,15 +112,31 @@ export function OnboardingWizard({ user, onFinish }: { user: AuthUser; onFinish:
     }
   };
 
+  const canPairMobile = !user.isGuest && tier !== 'go';
+
   const generatePairingCode = async () => {
+    if (!canPairMobile) return;
+    setPairingError(null);
     setBusy(true);
     try {
-      const result = await ipc.pairingBegin(user.isGuest ? undefined : user.id);
-      setQr({ qrDataUrl: result.qrDataUrl, pairingUri: result.pairingUri });
+      await pairingService.syncEntitlementTier();
+      const result = await pairingService.beginPairing();
+      setPairingSession(result);
+    } catch (err) {
+      setPairingError(getErrorMessage(err));
     } finally {
       setBusy(false);
     }
   };
+
+  useEffect(() => {
+    if (!pairingSession || user.isGuest) return;
+    const unsubscribe = pairingService.subscribeToPairingCompletion(pairingSession.sessionId, user.id, () => {
+      setPaired(true);
+      setPairingSession(null);
+    });
+    return unsubscribe;
+  }, [pairingSession, user.id, user.isGuest]);
 
   if (!loaded) return null;
 
@@ -147,10 +173,11 @@ export function OnboardingWizard({ user, onFinish }: { user: AuthUser; onFinish:
           <section>
             <h1 className={styles.title}>Choose your plan</h1>
             <p className={styles.body}>
-              Paw Go has no AI — just Companion Studio, your desktop companion, and local workspace
-              features. Paw Pro unlocks Paw's AI models (Flash, Swift, Core, Creative, Vision, Voice)
-              and higher runtime limits. You can preview either now for free; real billing is set up
-              from Settings whenever you're ready.
+              Go includes Companion Studio, your desktop companion, local workspace features, and
+              real AI (Paw Flash) for planning and analysis — with a capped credit allowance. Pro
+              unlocks the full model roster (Flash, Swift, Core, Creative, Vision, Voice) and
+              execution: generating/modifying code, running commands, and deploying. You can preview
+              either now for free; real billing is set up from Settings whenever you're ready.
             </p>
             <div className={styles.optionRow}>
               <button
@@ -159,7 +186,7 @@ export function OnboardingWizard({ user, onFinish }: { user: AuthUser; onFinish:
                 onClick={() => chooseTier('go')}
                 disabled={busy}
               >
-                Paw Go
+                Go
               </button>
               <button
                 type="button"
@@ -167,7 +194,7 @@ export function OnboardingWizard({ user, onFinish }: { user: AuthUser; onFinish:
                 onClick={() => chooseTier('pro')}
                 disabled={busy}
               >
-                Paw Pro
+                Pro
               </button>
             </div>
           </section>
@@ -286,19 +313,33 @@ export function OnboardingWizard({ user, onFinish }: { user: AuthUser; onFinish:
         {step === 12 && (
           <section>
             <h1 className={styles.title}>Pair a mobile device (optional)</h1>
-            <p className={styles.body}>
-              Scan this from a future PawOS mobile companion app to link it to your account — no
-              mobile app exists yet, but this generates a real pairing code ready for one.
-            </p>
-            {qr ? (
-              <div className={styles.qrRow}>
-                <img src={qr.qrDataUrl} alt="Pairing QR code" className={styles.qrImage} />
-                <p className={styles.hint} style={{ wordBreak: 'break-all' }}>{qr.pairingUri}</p>
-              </div>
+            {canPairMobile ? (
+              <>
+                <p className={styles.body}>
+                  Scan this with your phone's camera to open the PawOS web app and link it as a
+                  trusted device — notifications, approvals, and a live preview of your
+                  conversation follow from there.
+                </p>
+                {paired && !pairingSession && (
+                  <p className={styles.hint} style={{ color: '#7fd9a0' }}>Device paired successfully.</p>
+                )}
+                {pairingSession ? (
+                  <div className={styles.qrRow}>
+                    <img src={pairingSession.qrDataUrl} alt="Pairing QR code" className={styles.qrImage} />
+                    <p className={styles.hint} style={{ wordBreak: 'break-all' }}>{pairingSession.pairingUrl}</p>
+                  </div>
+                ) : (
+                  <button type="button" className={styles.primaryButton} onClick={generatePairingCode} disabled={busy}>
+                    {busy ? 'Generating…' : 'Generate pairing code'}
+                  </button>
+                )}
+                {pairingError && <p className={styles.hint} style={{ color: '#e57373' }}>{pairingError}</p>}
+              </>
             ) : (
-              <button type="button" className={styles.primaryButton} onClick={generatePairingCode} disabled={busy}>
-                Generate pairing code
-              </button>
+              <p className={styles.body}>
+                Mobile pairing is a Pro feature. You can revisit this later from Settings once
+                you upgrade — Go and guest sessions can't pair a phone to this account yet.
+              </p>
             )}
           </section>
         )}

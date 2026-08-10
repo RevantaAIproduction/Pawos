@@ -73,7 +73,11 @@ export async function startGoogleSignIn(config: GoogleOAuthConfig): Promise<Goog
     );
   });
 
-  let timeoutHandle: ReturnType<typeof setTimeout>;
+  // Dummy initial value so TS's control-flow analysis can see this is definitely assigned by the
+  // time it's read outside the Promise executor below (the executor itself runs synchronously and
+  // always reassigns it, but TS can't prove that on its own).
+  let timeoutHandle: ReturnType<typeof setTimeout> = setTimeout(() => {}, 0);
+  clearTimeout(timeoutHandle);
   const resultPromise = new Promise<GoogleSignInResult>((resolve, reject) => {
     let settled = false;
     const finish = (fn: () => void) => {
@@ -88,6 +92,19 @@ export async function startGoogleSignIn(config: GoogleOAuthConfig): Promise<Goog
 
     server.on('request', (req, res) => {
       const url = new URL(req.url ?? '/', `http://127.0.0.1:${LOCAL_CALLBACK_PORT}`);
+
+      // Browsers routinely fire an automatic /favicon.ico request (and similar probes) against
+      // any origin they land on, including this loopback server — that request arrives as its
+      // own connection on this same server, unrelated to the real callback. Without filtering by
+      // path, whichever request the OS delivered first (confirmed live: favicon.ico sometimes
+      // beats the real callback) would get treated as the sign-in result and reject with "missing
+      // handoff reference" before the real /callback request ever arrived.
+      if (url.pathname !== '/callback') {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(
         '<html><body style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;text-align:center;padding:48px"><p>Signed in successfully.</p><p style="color:#666;font-size:14px">You can close this tab and return to PawOS.</p></body></html>'

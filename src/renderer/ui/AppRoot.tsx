@@ -5,7 +5,38 @@ import { Dashboard } from './Dashboard/Dashboard';
 import { OnboardingWizard } from './Onboarding/OnboardingWizard';
 import { useAuth } from '../auth/useAuth';
 import { ipc } from '../services/ipc/ipcBridgeImplementation';
+import { startNotificationDispatcher } from '../mobilePresence/NotificationRuntime';
+import { useOrganizationTierSync } from '../organization/useOrganizationTierSync';
 import type { ThemeMode } from '../services/ipc/ipcTypes';
+import type { AuthUser } from '../auth/AuthTypes';
+
+/**
+ * Notification Runtime (MOB-7) — mounted only for a real, signed-in, paid
+ * account (Guest has no Supabase session to subscribe with, and Go accounts
+ * have no push-capable trusted devices to notify anyway). Renders nothing;
+ * its only job is to keep the Cross Device Runtime subscription alive for as
+ * long as the dashboard is mounted.
+ */
+function NotificationDispatcher({ user }: { user: AuthUser }) {
+  useEffect(() => {
+    if (user.isGuest) return;
+    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
+    ipc
+      .entitlementIsFeatureAvailable('mobileNotifications')
+      .then((available) => {
+        if (cancelled || !available) return;
+        unsubscribe = startNotificationDispatcher(user.id);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  }, [user.isGuest, user.id]);
+
+  return null;
+}
 
 type Stage = 'splash' | 'auth' | 'onboarding' | 'dashboard';
 
@@ -49,6 +80,11 @@ export default function AppRoot() {
   const [splashDone, setSplashDone] = useState(false);
 
   useThemeSync();
+
+  // Runs as soon as a real signed-in session exists, before either the onboarding wizard or the
+  // dashboard renders -- so mobile pairing (reachable from both) always sees an accurate tier.
+  // See useOrganizationTierSync's own doc comment for why this can't wait for Settings -> Account.
+  useOrganizationTierSync(auth.user?.id, auth.user?.isGuest ?? true);
 
   const decidePostAuthStage = useCallback(async () => {
     const onboarding = await ipc.onboardingGet().catch(() => ({ completed: true, step: 0, defaultWorkspacePath: null }));
@@ -107,18 +143,21 @@ export default function AppRoot() {
   }
 
   return (
-    <Dashboard
-      user={auth.user}
-      onSignOut={async () => {
-        await auth.signOut();
-        setStage('auth');
-      }}
-      onUpgradeGuestWithGoogle={auth.upgradeGuestWithGoogle}
-      onUpgradeGuestWithEmail={auth.upgradeGuestWithEmail}
-      isGoogleSignInAvailable={auth.isGoogleSignInAvailable}
-      onRequestPasswordReset={auth.requestPasswordReset}
-      onVerifyPasswordResetCode={auth.verifyPasswordResetCode}
-      onCompletePasswordReset={auth.completePasswordReset}
-    />
+    <>
+      <NotificationDispatcher user={auth.user} />
+      <Dashboard
+        user={auth.user}
+        onSignOut={async () => {
+          await auth.signOut();
+          setStage('auth');
+        }}
+        onUpgradeGuestWithGoogle={auth.upgradeGuestWithGoogle}
+        onUpgradeGuestWithEmail={auth.upgradeGuestWithEmail}
+        isGoogleSignInAvailable={auth.isGoogleSignInAvailable}
+        onRequestPasswordReset={auth.requestPasswordReset}
+        onVerifyPasswordResetCode={auth.verifyPasswordResetCode}
+        onCompletePasswordReset={auth.completePasswordReset}
+      />
+    </>
   );
 }

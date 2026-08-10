@@ -26,7 +26,7 @@ export function UsageSection({ user, onGoToAccount }: { user: AuthUser; onGoToAc
         <h3 className={styles.cardTitle}>No usage tracked for guest sessions</h3>
         <p className={styles.cardBody} style={{ marginTop: 6 }}>
           Usage is only tracked once you have a real account. Create a free account to start
-          tracking runtime, companion, and storage usage on Paw Go.
+          tracking runtime, companion, and storage usage on Go.
         </p>
         <button type="button" className={styles.primaryButton} style={{ marginTop: 12 }} onClick={onGoToAccount}>
           Create free account

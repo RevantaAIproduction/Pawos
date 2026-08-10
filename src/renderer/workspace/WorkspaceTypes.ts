@@ -69,7 +69,13 @@ export type WorkspaceRegionId =
   | 'officeSearch'
   | 'officeMemory'
   | 'officeTimeline'
-  | 'recentOfficeFiles';
+  | 'recentOfficeFiles'
+  // Intelligence Canvas (Intelligence Runtime: Website/Repository/Product/UX/Marketing/Founder
+  // analysis + Execution Planner) — only rendered for a detected Intelligence task (see
+  // isIntelligenceTask in intelligenceTaskDetection.ts), same "always renders, honest placeholder
+  // when empty" discipline as the Coding/Infrastructure/Office Canvases above.
+  | 'intelligenceReport'
+  | 'executionPlan';
 
 /** null render means the region is reserved but not yet populated — no placeholder chrome is shown for it. */
 export type WorkspaceRegionSlot = {

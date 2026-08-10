@@ -9,13 +9,15 @@ import { observeProcess } from '../verification/ProcessVerification';
 import { workspaceMemoryStore } from '../WorkspaceMemoryStore';
 
 const DEFAULT_BUILD_TIMEOUT_MS = 5 * 60 * 1000;
-/** Common build-output directory names — existence is a cheap, real post-build signal, not a fabricated check. */
-const OUTPUT_DIR_CANDIDATES = ['.next', 'dist', 'build', 'out'];
+/** Common build-output directory names — existence is a cheap, real post-build signal, not a
+ * fabricated check. Exported so the Validation Pipeline's build check (Coding Runtime V2 §12) reuses
+ * the exact same candidate list rather than maintaining a second copy. */
+export const OUTPUT_DIR_CANDIDATES = ['.next', 'dist', 'build', 'out'];
 
 type BuildState = { processId: string; cwd: string; buildCommand: string; timeoutMs: number };
 
 /** Which candidate output dir actually exists, if any — real evidence, not a guess. */
-function findBuildOutputDir(cwd: string): string | null {
+export function findBuildOutputDir(cwd: string): string | null {
   return OUTPUT_DIR_CANDIDATES.find((name) => fs.existsSync(path.join(cwd, name))) ?? null;
 }
 

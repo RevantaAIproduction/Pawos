@@ -17,7 +17,7 @@ export const NARRATION_LINES: NarrationLine[] = [
     durationMs: 4200,
   },
   {
-    text: 'Paw Go is free and gives you a real companion with local features — no AI models included.',
+    text: 'Paw Go is free and gives you a real companion with local features, plus AI-assisted planning and analysis.',
     durationMs: 4000,
   },
   {

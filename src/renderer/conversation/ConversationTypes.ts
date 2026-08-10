@@ -90,6 +90,8 @@ export type ConversationSnapshot = {
   errorMessage: string | null;
   supportsSpeechRecognition: boolean;
   supportsSpeechSynthesis: boolean;
+  /** True while a destructive action is waiting on a plain "yes"/"no" reply (see ConversationRuntime's pendingConfirmation) — the structured signal the Approval Center (MOB-9) watches for, since parsing message text for confirmation language would be unreliable. */
+  pendingConfirmation: boolean;
 };
 
 export const conversationStateLabels: Record<ConversationState, string> = {

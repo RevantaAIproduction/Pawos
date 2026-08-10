@@ -122,6 +122,12 @@ export class AuthenticationProvider implements AuthService {
     window.localStorage.removeItem(STORAGE_KEY);
     window.localStorage.removeItem(REMEMBER_KEY);
     await this.emailProvider.signOut(); // clears the real Supabase session too, not just the local mirror
+    // Local subscription state (subscription.json) is one file per device install, not namespaced
+    // per account — without this reset, an account that once joined/created a Team/Enterprise org
+    // (syncFromOrganization only ever raises the tier, never lowers it) would leave every
+    // subsequently signed-in account on this device looking like a Team member. A fresh sign-in
+    // starts clean; that account's own real org membership (if any) re-elevates it correctly.
+    await ipc.billingResetSubscription().catch(() => {});
   }
 
   private readRememberMe(): boolean {

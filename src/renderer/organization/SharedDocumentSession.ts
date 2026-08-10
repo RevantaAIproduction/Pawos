@@ -8,7 +8,7 @@ const STATE_REQUEST_TIMEOUT_MS = 500;
 
 function uint8ToBase64(bytes: Uint8Array): string {
   let binary = '';
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i] ?? 0);
   return btoa(binary);
 }
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import styles from './dashboard.module.css';
 import type { SectionId } from './sections';
-import { HomeIcon, TalkIcon, CompanionIcon, HistoryIcon, WorkIcon } from './NavIcons';
+import { HomeIcon, CompanionIcon, HistoryIcon, WorkIcon } from './NavIcons';
 import { ProfileMenu, type ProfileMenuAction } from './ProfileMenu';
 
 const COLLAPSE_STORAGE_KEY = 'pawos.sidebarCollapsed';
@@ -20,7 +20,6 @@ type NavItem = { id: SectionId; label: string; icon: React.ReactNode };
 
 const PRIMARY_NAV: NavItem[] = [
   { id: 'home', label: 'Home', icon: <HomeIcon /> },
-  { id: 'talk', label: 'Talk with Paw', icon: <TalkIcon /> },
   { id: 'companionLab', label: 'Companion Studio', icon: <CompanionIcon /> },
   { id: 'projects', label: 'Projects', icon: <WorkIcon /> },
   { id: 'apps', label: 'Apps', icon: <AppsGridIcon /> },
@@ -137,7 +136,7 @@ export function Sidebar({
             onSelect={onSelect}
             collapsed={collapsed}
             badge={
-              item.id === 'talk' ? (
+              item.id === 'companionLab' ? (
                 <span
                   className={styles.statusDot}
                   data-on={companionEnabled}

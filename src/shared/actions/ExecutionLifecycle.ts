@@ -3,6 +3,7 @@
  * recover) — never required, so every existing plugin/caller that only knows
  * about {ok, data|reason/message} keeps working unchanged.
  */
+import type { ActionRequest } from './ActionTypes';
 
 /** One intermediate signal surfaced mid-execution, e.g. "Waiting for port 3000…", "Build reached 100%". */
 export type ObservationEvent = {
@@ -108,4 +109,45 @@ export type VisualEvidence = {
   ok: boolean;
   issues: string[];
   base64Png: string;
+};
+
+/**
+ * Additive result-data contract for the Intelligence Runtime's Think -> Plan
+ * boundary (ExecutionPlanner.ts) — detected the same opportunistic way as
+ * WorkflowMetadata/BuildStatus (TaskCard.tsx checks the shape, not the
+ * action type). An ExecutionPlan is produced by ProposeExecutionPlanPlugin
+ * only, is never executed by the planner itself, and every step must trace
+ * back to the specific approved Finding(s) it addresses via `findingRefs` —
+ * same evidence-linking discipline as Finding.evidenceRefs. `status` starts
+ * at 'proposed' for every step the planner builds; 'approved'/'rejected'/
+ * 'executed' are set later, outside the planner, once a user has actually
+ * reviewed the plan and a step's `actionRequest` has gone through the
+ * normal, unmodified DesktopExecutionEngine.execute() path.
+ */
+export type PlannedStepStatus = 'proposed' | 'approved' | 'rejected' | 'executed';
+
+export type PlannedStep = {
+  id: string;
+  findingRefs: string[];
+  actionRequest: ActionRequest;
+  rationale: string;
+  status: PlannedStepStatus;
+};
+
+/**
+ * The reviewable artifact ExecutionPlanner.buildPlan() returns. `sourceReportId` is the
+ * Memory Graph entity id of the IntelligenceReport this plan was built from (see
+ * intelligenceEntities.ts's recordIntelligenceReport/findLatestIntelligenceReport), not a field on
+ * the report itself. `unplannableFindingIds` names every approved finding the planner had no safe,
+ * deterministic automation rule for — the same "never silently omit a gap" discipline as a
+ * report's own requiresAccessSummary, rather than quietly dropping findings it can't act on.
+ * `approvalRequired` is always true: unlike an IntelligenceReport (always false, pure analysis),
+ * a plan proposes real mutating work and must be explicitly approved before any step executes.
+ */
+export type ExecutionPlan = {
+  id: string;
+  sourceReportId: string;
+  steps: PlannedStep[];
+  unplannableFindingIds: string[];
+  approvalRequired: true;
 };

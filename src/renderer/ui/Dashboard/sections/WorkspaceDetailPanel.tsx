@@ -19,7 +19,7 @@ const CURSOR_COLORS = ['#e0a458', '#8ab4ff', '#7ee787', '#f78ca2', '#c792ea'];
 function colorForUser(userId: string): string {
   let hash = 0;
   for (let i = 0; i < userId.length; i++) hash = (hash * 31 + userId.charCodeAt(i)) >>> 0;
-  return CURSOR_COLORS[hash % CURSOR_COLORS.length];
+  return CURSOR_COLORS[hash % CURSOR_COLORS.length]!;
 }
 
 const TASK_STATUSES: WorkspaceTaskStatus[] = ['todo', 'in_progress', 'blocked', 'done', 'cancelled'];

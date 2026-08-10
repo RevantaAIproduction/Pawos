@@ -4,6 +4,7 @@ import { CompanionLoader } from '../../shared/CompanionLoader';
 import type { CompanionCommand } from '../../shared/companion/CompanionCommand';
 import type { ActionRequest, ActionResult } from '../../shared/actions/ActionTypes';
 import { desktopExecutionEngine } from '../execution/DesktopExecutionEngine';
+import { platformEventBus } from '../platform/events/PlatformEventBus';
 import { processManager } from '../execution/ProcessManager';
 import { fileWatcherManager } from '../execution/FileWatcher';
 import { workspaceMemoryStore } from '../execution/WorkspaceMemoryStore';
@@ -14,8 +15,9 @@ import { emailService } from '../mail/EmailService';
 import { listMailTemplates, renderMailPreview } from '../mail/preview';
 import { createOtp, verifyOtp } from '../mail/otp';
 import { createPasswordResetToken, verifyPasswordResetToken } from '../mail/passwordResetToken';
-import { platformPairingStore } from '../pairing/PlatformPairingStore';
 import { deviceIdentityStore } from '../device/DeviceIdentityStore';
+import { pushNotificationService } from '../notifications/PushNotificationService';
+import type { PushNotificationPayload } from '../notifications/PushNotificationService';
 import { exportCompanionPackage, importCompanionPackage } from '../companion/CompanionPackageFormat';
 import type { CompanionPackageInput } from '../../shared/companion/CompanionPackageTypes';
 import { pricingConfigStore } from '../billing/PricingConfigStore';
@@ -95,6 +97,21 @@ export function registerIpc(opts: {
     for (const win of BrowserWindow.getAllWindows()) win.webContents.send('companion:ready:broadcast');
   });
 
+  // Forwards a renderer-detected window.onerror/unhandledrejection (see
+  // src/renderer/platform/RendererCrashGuard.ts) into the Platform Event
+  // Bus as a real crash event — the renderer process has no direct access
+  // to the bus, which lives only in the main process.
+  ipcMain.on('platform:reportRendererEvent', (_event, payload: { message?: string; stack?: string }) => {
+    platformEventBus.reportRuntimeEvent({
+      kind: 'crash',
+      runtime: 'desktop',
+      severity: 'critical',
+      processType: 'renderer',
+      message: typeof payload?.message === 'string' ? payload.message : 'Unknown renderer error',
+      stack: typeof payload?.stack === 'string' ? payload.stack : undefined,
+    });
+  });
+
   // The Desktop Execution Engine's pipeline, one IPC call per stage — lets
   // the conversation layer collect missing info and narrate naturally
   // without duplicating any plugin's own logic.
@@ -153,6 +170,9 @@ export function registerIpc(opts: {
   ipcMain.handle('settings:set', async (_evt, partial: any) => {
     SettingsStore.update(partial);
     const state = SettingsStore.getState();
+    if ('startWithWindows' in partial) {
+      app.setLoginItemSettings({ openAtLogin: state.startWithWindows, path: app.getPath('exe') });
+    }
     for (const win of BrowserWindow.getAllWindows()) win.webContents.send('settings:updated', state);
     return state;
   });
@@ -305,21 +325,16 @@ export function registerIpc(opts: {
     verifyPasswordResetToken(token, opts.app.getPath('userData'), opts.getEmailSigningSecret())
   );
 
-  // Generic platform device pairing (QR + registry) — independent of the
-  // frozen Communication Runtime's own MobilePairingStore. See
-  // src/main/pairing/PlatformPairingStore.ts.
-  ipcMain.handle('pairing:begin', (_evt, userId?: string) => platformPairingStore.beginPairing(userId));
-  ipcMain.handle('pairing:complete', (_evt, token: string, deviceName: string, publicKey: string) =>
-    platformPairingStore.completePairing(token, deviceName, publicKey)
-  );
-  ipcMain.handle('pairing:list', (_evt, userId?: string) => platformPairingStore.list(userId));
-  ipcMain.handle('pairing:revoke', (_evt, deviceId: string) => {
-    platformPairingStore.revoke(deviceId);
-    return true;
-  });
-
   // This device's own local identity — see src/main/device/DeviceIdentityStore.ts.
   ipcMain.handle('device:getLocalIdentity', () => deviceIdentityStore.getIdentity());
+
+  // Notification Runtime (MOB-7) — real Web Push send, see PushNotificationService.ts's
+  // own header comment for why this runs here (main process) rather than a server.
+  ipcMain.handle(
+    'notifications:sendPush',
+    (_evt, subscription: { endpoint: string; p256dh: string; authKey: string }, payload: PushNotificationPayload) =>
+      pushNotificationService.send(subscription, payload)
+  );
 
   // Account-level billing — subscription tier, pricing config, and AI
   // credit tracking. See src/main/billing/*.ts. Distinct from
@@ -332,6 +347,9 @@ export function registerIpc(opts: {
   ipcMain.handle('billing:getSubscription', () => subscriptionStore.get());
   ipcMain.handle('billing:setSubscriptionTier', (_evt, tier: SubscriptionTierId) => subscriptionStore.setTier(tier));
   ipcMain.handle('billing:syncFromOrganization', (_evt, orgTier: SubscriptionTierId) => subscriptionStore.syncFromOrganization(orgTier));
+  // Called on sign-out so a stale, org-elevated tier from a previous account on this device never
+  // carries over to the next account that signs in — see SubscriptionStore.reset()'s own comment.
+  ipcMain.handle('billing:resetSubscription', () => subscriptionStore.reset());
   ipcMain.handle('billing:getCreditBalance', () => ({ ...creditStore.getBalance(), limit: entitlementService.getCreditLimit() }));
   ipcMain.handle('billing:consumeCredit', (_evt, amount: number, reason: string, category?: AiUsageCategory) => {
     creditStore.consume(amount, reason, category);
@@ -355,6 +373,14 @@ export function registerIpc(opts: {
   ipcMain.handle('billing:createCreditsCheckoutSession', (_evt, amountUsd: number, organizationId?: string, callbackUrl?: string) =>
     createCreditsCheckoutUrl(amountUsd, organizationId, callbackUrl)
   );
+  // Grants bonus Paw Compute for the current period after the renderer has already redeemed the
+  // matching dollar amount from the caller's Referral Credits balance via Supabase's
+  // redeem_referral_credits_for_compute() RPC — this handler never touches money, it only ever
+  // extends the local usage counter. See EntitlementService.grantComputeBonus()'s own doc comment.
+  ipcMain.handle('billing:grantComputeBonus', (_evt, units: number) => {
+    entitlementService.grantComputeBonus(units);
+    return entitlementService.getSnapshot();
+  });
 
   // Central entitlement queries — every runtime asks these instead of
   // hard-coding a tier check. See src/main/billing/EntitlementService.ts.
@@ -479,6 +505,39 @@ export function registerIpc(opts: {
   ipcMain.handle('communication:saveAudio', (_evt, communicationId: string, base64Data: string, mimeType: string) =>
     communicationRuntime.saveAudioChunk(communicationId, base64Data, mimeType)
   );
+
+  // Recording & Storage Foundation (Phase 1) — one real chunk appended to
+  // durable storage per call, never a whole-recording payload; the
+  // renderer's upload queue (CommunicationUploadQueue.ts) is what drives
+  // retry/pause/resume on top of this single, stateless-per-call channel.
+  ipcMain.handle(
+    'communication:appendRecordingChunk',
+    (_evt, communicationId: string, kind: 'audio' | 'video', base64Chunk: string, expectedChecksum?: string) =>
+      communicationRuntime.appendRecordingChunk(communicationId, kind, base64Chunk, expectedChecksum)
+  );
+  ipcMain.handle('communication:finalizeRecording', (_evt, communicationId: string, kind: 'audio' | 'video', mimeType: string) =>
+    communicationRuntime.finalizeRecording(communicationId, kind, mimeType)
+  );
+  // Internal-only — never surfaced in any end-user UI (Administrator Visibility requirement).
+  ipcMain.handle('communication:getRecordingDiagnostics', (_evt, communicationId: string) => communicationRuntime.getRecordingDiagnostics(communicationId));
+  // Real delete — removes the on-disk folder too, unlike the pre-Phase-1 store method it replaces at the user-facing level.
+  ipcMain.handle('communication:deleteRecording', (_evt, communicationId: string) => communicationRuntime.deleteRecording(communicationId));
+  // Timeline Indexing (Phase 2) — read-only, structural recording-lifecycle timeline for one session.
+  ipcMain.handle('communication:getRecordingTimeline', (_evt, communicationId: string) => communicationRuntime.getRecordingTimeline(communicationId));
+  // Foundation Intelligence (Phase 3A) — generates/reads immutable Evidence Objects for one finalized
+  // recording. Never called from any recording/timeline lifecycle method — see CommunicationRuntime's
+  // own doc comment on generateEvidence().
+  ipcMain.handle('communication:generateEvidence', (_evt, communicationId: string, apiKey: string, model?: string, baseUrl?: string) =>
+    communicationRuntime.generateEvidence(communicationId, apiKey, { model, baseUrl })
+  );
+  ipcMain.handle('communication:getEvidence', (_evt, communicationId: string) => communicationRuntime.getEvidence(communicationId));
+  // Business Intelligence (Phase 3B) — interprets Phase 3A's Evidence Objects; never called from
+  // any recording/timeline/evidence lifecycle method — see CommunicationRuntime's own doc comment
+  // on generateBusinessInsights().
+  ipcMain.handle('communication:generateBusinessInsights', (_evt, communicationId: string, apiKey: string, model?: string, baseUrl?: string) =>
+    communicationRuntime.generateBusinessInsights(communicationId, apiKey, { model, baseUrl })
+  );
+  ipcMain.handle('communication:getBusinessInsights', (_evt, communicationId: string) => communicationRuntime.getBusinessInsights(communicationId));
 
   // Live push channel for the Communication Workspace (liveTranscript/
   // participants/actionItems/evidence regions) and Task Card status —

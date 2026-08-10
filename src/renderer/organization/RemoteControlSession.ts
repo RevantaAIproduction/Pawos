@@ -57,7 +57,10 @@ export class RemoteControlHostSession {
         channel.send({
           type: 'broadcast',
           event: 'action-result',
-          payload: { requestId, result: { ok: false, message: 'Permission was not granted or has been revoked.' } } satisfies RelayedResult,
+          payload: {
+            requestId,
+            result: { ok: false, reason: 'failed', message: 'Permission was not granted or has been revoked.' },
+          } satisfies RelayedResult,
         });
         return;
       }

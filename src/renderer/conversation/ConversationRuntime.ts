@@ -18,7 +18,7 @@ import type { VisemeFrame } from './LipSyncTypes';
 import type { ReasoningRuntime, ReasoningRuntimeCallbacks } from '../reasoning/ReasoningRuntime';
 import type { ReasoningTurnHandle } from '../reasoning/ReasoningRuntime';
 import type { ReasoningProvider } from '../reasoning/ReasoningProvider';
-import type { ReasoningToolCall } from '../reasoning/ReasoningTypes';
+import type { ReasoningToolCall, ReasoningToolDefinition } from '../reasoning/ReasoningTypes';
 import { ACTION_TOOL_DEFINITIONS, toolCallToActionRequest } from '../ai/IntentRegistry';
 import { aiProviderConfigStore } from '../ai/AIProviderConfigStore';
 // [DEBUG-TEMP] remove this import and the one voiceDebugBus.emit() call in log() once real-mic verification is done.
@@ -224,6 +224,16 @@ export class ConversationRuntime {
    * same as any other natural follow-up in this conversation.
    */
   private handleCommunicationRuntimeEvent = (event: CommunicationRuntimeEvent) => {
+    // Recording & Storage Foundation — pause/resume of the live capture itself. The main process
+    // (CommunicationRuntime.pauseCapture/resumeCapture) has no direct handle to the renderer's
+    // MediaRecorder, so it relays the request as an event; this is the only place in the renderer
+    // that actually holds the matching CaptureHandle, so it's the one that calls pause()/resume().
+    if (event.type === 'recordingPauseRequested' || event.type === 'recordingResumeRequested') {
+      const handle = this.activeCommunicationCaptures.get(event.communicationId);
+      if (event.type === 'recordingPauseRequested') handle?.pause();
+      else handle?.resume();
+      return;
+    }
     if (event.type !== 'meetingDetected') return;
     if (this.closed || this.snapshot.state !== 'idle') return;
     const platform = MEETING_PLATFORM_DISPLAY_NAMES[event.medium] ?? event.medium;
@@ -372,6 +382,7 @@ export class ConversationRuntime {
       errorMessage: null,
       supportsSpeechRecognition: args.speechRecognition.isSupported(),
       supportsSpeechSynthesis: args.speechSynthesis.isSupported(),
+      pendingConfirmation: false,
     };
 
     if (args.executeAction) {
@@ -408,6 +419,11 @@ export class ConversationRuntime {
 
   setReasoningProvider(provider: ReasoningProvider) {
     this.args.reasoningRuntime.setProvider(provider);
+  }
+
+  /** Re-points the tool list at runtime — e.g. once the entitlement snapshot loads/changes and Execute-class tools need to be added or withdrawn for the current tier, without recreating the whole runtime. */
+  setTools(tools: ReasoningToolDefinition[]) {
+    this.args.reasoningRuntime.setTools(tools);
   }
 
   /** Swaps the STT backend at runtime (e.g. once an API key finishes loading after mount) without recreating the whole runtime. */
@@ -499,6 +515,7 @@ export class ConversationRuntime {
       state: 'idle',
       draftTranscript: '',
       errorMessage: null,
+      pendingConfirmation: false,
     });
   }
 
@@ -548,6 +565,7 @@ export class ConversationRuntime {
       this.reasoningTurn = null;
       this.speechQueue = [];
       this.pendingConfirmation = null;
+      this.updateSnapshot({ pendingConfirmation: false });
       this.args.speechSynthesis.stop();
       this.finalizeCurrentTurn('interrupted', 'typed barge-in');
       this.log('interrupted', { reason: 'typed barge-in' });
@@ -575,6 +593,7 @@ export class ConversationRuntime {
       state: 'idle',
       draftTranscript: '',
       errorMessage: null,
+      pendingConfirmation: false,
     });
   }
 
@@ -589,7 +608,7 @@ export class ConversationRuntime {
     this.args.speechSynthesis.stop();
     this.finalizeCurrentTurn('interrupted', reason);
     this.log('interrupted', { reason });
-    this.updateSnapshot({ state: 'interrupted', panelOpen: true, errorMessage: null });
+    this.updateSnapshot({ state: 'interrupted', panelOpen: true, errorMessage: null, pendingConfirmation: false });
     void this.beginListening();
   }
 
@@ -676,6 +695,7 @@ export class ConversationRuntime {
     if (this.pendingConfirmation && !context) {
       const pending = this.pendingConfirmation;
       this.pendingConfirmation = null;
+      this.updateSnapshot({ pendingConfirmation: false });
       if (isAffirmativeReply(transcript)) {
         const currentTurn = ++this.turnId;
         this.stopRecognition();
@@ -1080,9 +1100,10 @@ export class ConversationRuntime {
     // time; the user's reply becomes the next turn's transcript, same
     // pipeline as everything else.
     const missing = await this.args.checkActionRequirements?.(request).catch(() => []) ?? [];
-    if (missing.length > 0) {
-      this.appendMessage('assistant', missing[0].message);
-      this.log('action-needs-info', { name: toolCall.name, requirement: missing[0].id });
+    const firstMissing = missing[0];
+    if (firstMissing) {
+      this.appendMessage('assistant', firstMissing.message);
+      this.log('action-needs-info', { name: toolCall.name, requirement: firstMissing.id });
       this.resumeAfterAction(currentTurn);
       return;
     }
@@ -1153,6 +1174,7 @@ export class ConversationRuntime {
     // handleTranscript. Not trusted to the model re-invoking the tool itself.
     if (!result.ok && result.reason === 'requires-confirmation') {
       this.pendingConfirmation = { request, toolCall };
+      this.updateSnapshot({ pendingConfirmation: true });
     }
 
     const doneText =

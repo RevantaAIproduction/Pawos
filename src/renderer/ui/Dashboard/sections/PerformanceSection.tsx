@@ -1,39 +1,24 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import styles from '../dashboard.module.css';
-import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
-import type { SettingsState } from '../../../services/settings/SettingsManager';
 
-/** The one real performance-affecting control PawOS exposes today. */
+/**
+ * Honestly disabled: the live 3D companion runtime (CompanionRuntime.ts,
+ * Avatar3DOverlay.tsx) never reads animationSpeed — it was wired only to the
+ * dormant legacy 2D companion controller, which no longer mounts. Kept here,
+ * disabled, so it's ready the moment the 3D stack gains a speed control,
+ * rather than implying it already works.
+ */
 export function PerformanceSection() {
-  const [draft, setDraft] = useState<SettingsState | null>(null);
-
-  useEffect(() => {
-    ipc.settingsGet().then(setDraft).catch(() => {});
-  }, []);
-
-  const save = async () => {
-    if (!draft) return;
-    await ipc.settingsSet({ animationSpeed: draft.animationSpeed });
-  };
-
   return (
     <div className={styles.card}>
       <h3 className={styles.cardTitle}>Companion animation</h3>
       <label className={styles.settingsSliderRow}>
-        <span>Animation speed: {(draft?.animationSpeed ?? 1).toFixed(2)}x</span>
-        <input
-          type="range"
-          min={0.5}
-          max={1.8}
-          step={0.05}
-          value={draft?.animationSpeed ?? 1}
-          onChange={(e) => setDraft((d) => (d ? { ...d, animationSpeed: Number(e.target.value) } : d))}
-          onMouseUp={save}
-          onTouchEnd={save}
-        />
+        <span>Animation speed: 1.00x</span>
+        <input type="range" min={0.5} max={1.8} step={0.05} value={1} disabled onChange={() => {}} />
       </label>
       <p className={styles.cardBody} style={{ marginTop: 8 }}>
-        Lower speeds use less CPU for idle animations.
+        The 3D companion doesn't support adjustable animation speed yet, so this control has no
+        effect today — it's shown here so it's ready the moment that ships.
       </p>
     </div>
   );

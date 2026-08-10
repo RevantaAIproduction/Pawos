@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import { autonomousTaskBillingService } from '../../../organization/AutonomousTaskBillingService';
-import { MIN_TICKET_BALANCE_TOPUP_USD, TICKET_BALANCE_TOPUP_PRESETS_USD, getTicketUnitPriceUsd } from '../../../../shared/organization/AutonomousTaskBillingTypes';
+import { MIN_TICKET_BALANCE_TOPUP_USD, TICKET_BALANCE_TOPUP_PRESETS_USD, TICKET_PRICING_TIERS, getTicketUnitPriceUsd } from '../../../../shared/organization/AutonomousTaskBillingTypes';
 import type { OrganizationBillingEvent, TicketBalance, TicketBalanceTopup } from '../../../../shared/organization/AutonomousTaskBillingTypes';
 import type { AuthUser } from '../../../auth/AuthTypes';
 import type { SubscriptionTierId, TicketPricingConfig } from '../../../../shared/billing/BillingTypes';
@@ -134,10 +134,29 @@ export function TaskCreditsSection({ user }: { user: AuthUser }) {
   if (tier !== 'pro' && tier !== 'proMax') {
     return (
       <div className={styles.card}>
-        <h3 className={styles.cardTitle}>Autonomous Ticket System</h3>
+        <h3 className={styles.cardTitle}>Autonomous Ticket System — Pricing</h3>
         <p className={styles.cardBody} style={{ marginTop: 6 }}>
-          Available on every paid plan (Paw Pro and above) — upgrade to add funds to a Ticket Balance and let Paw ship
-          real code changes end to end.
+          Available on every paid plan (Pro and above) — upgrade to add funds to a Ticket Balance and let Paw ship
+          real code changes end to end. Funds are only ever deducted once a ticket investigation reaches successful
+          completion, at the volume-tiered rate below.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12 }}>
+          {TICKET_PRICING_TIERS.map((t) => (
+            <div
+              key={t.minTicketNumber}
+              style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+            >
+              <span>
+                {t.maxTicketNumber === null
+                  ? `Ticket ${t.minTicketNumber.toLocaleString()}+`
+                  : `Tickets ${t.minTicketNumber.toLocaleString()}–${t.maxTicketNumber.toLocaleString()}`}
+              </span>
+              <span style={{ fontWeight: 600 }}>${t.pricePerTicketUsd.toFixed(2)}/ticket</span>
+            </div>
+          ))}
+        </div>
+        <p className={styles.cardBody} style={{ fontSize: 11.5, marginTop: 10 }}>
+          Minimum top-up ${MIN_TICKET_BALANCE_TOPUP_USD} once you're on a Pro plan or above.
         </p>
       </div>
     );

@@ -14,24 +14,36 @@ import { getDevWindowIconPath } from './assets/AssetPathResolver';
 import { conversationSessionStore } from './conversation/ConversationSessionStore';
 import { communicationRuntime } from './communication/CommunicationRuntime';
 import { workspaceMemoryStore } from './execution/WorkspaceMemoryStore';
+import { dependencyGraphCache } from './execution/dependencyGraph/DependencyGraphCache';
+import { repositorySemanticIndexStore } from './execution/semanticIndex/RepositorySemanticIndexStore';
+import { languageProviderRegistry } from './execution/languageProviders/LanguageProviderRegistry';
+import { typeScriptLanguageProvider } from './execution/languageProviders/TypeScriptLanguageProvider';
+import { domainConceptRegistry } from './execution/domainIntelligence/DomainConceptRegistry';
+import { BUILTIN_DOMAIN_CONCEPT_PACKS } from './execution/domainIntelligence/builtinConceptPacks';
 import { errorMemoryStore } from './execution/ErrorMemoryStore';
 import { executionMemoryStore } from './execution/ExecutionMemoryStore';
+import { platformEventBus } from './platform/events/PlatformEventBus';
+import { platformHealthStore } from './platform/health/PlatformHealthStore';
+import { installPlatformCrashGuard } from './platform/health/PlatformCrashGuard';
+import { startPlatformResourceSampler, stopPlatformResourceSampler } from './platform/health/PlatformResourceSampler';
 import { trashStore } from './execution/plugins/recycleBin';
 import { memoryGraphStore } from './memory/MemoryGraphStore';
 import { observationEngine } from './memory/ObservationEngine';
 import { browserPreferences } from './execution/browser/browserPreferences';
 import { browserCapabilityStatus } from './execution/browser/browserCapabilityStatus';
 import { codingModeStore } from './execution/CodingModeStore';
-import { platformPairingStore } from './pairing/PlatformPairingStore';
 import { deviceIdentityStore } from './device/DeviceIdentityStore';
 import { pricingConfigStore } from './billing/PricingConfigStore';
 import { ticketPricingConfigStore } from './billing/TicketPricingConfigStore';
 import { subscriptionStore } from './billing/SubscriptionStore';
 import { creditStore } from './billing/CreditStore';
+import { usageQuotaConfigStore } from './billing/UsageQuotaConfigStore';
+import { usageStore } from './billing/UsageStore';
 import { onboardingStore } from './onboarding/OnboardingStore';
 import { initInfrastructureConnectors } from './infrastructure/bootstrap';
 import { requirementGate } from './runtime/RequirementGate';
 import { capabilityRequirementResolver } from './connectivity/CapabilityRequirementResolver';
+import { entitlementRequirementResolver } from './billing/EntitlementRequirementResolver';
 import { engineeringMemoryStore } from './infrastructure/EngineeringMemoryStore';
 import { infraModeStore } from './infrastructure/InfraModeStore';
 import { provisionedInstanceStore } from './infrastructure/ProvisionedInstanceStore';
@@ -72,6 +84,12 @@ let overlayWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let companionEnabled = false;
 let envVars: Record<string, string> = {};
+
+// Installed at module scope, before app.whenReady() and before any window
+// exists — process.on('uncaughtException'/'unhandledRejection') can fire
+// during this earliest startup window, and installing the guard any later
+// would leave that window uncovered.
+installPlatformCrashGuard();
 
 // Real OAuth deep-link delivery (see OAuthProtocolBridge.ts): pawos-web's
 // hosted /auth/google/callback and /auth/github/callback routes redirect the
@@ -134,6 +152,13 @@ function attachDiagnostics(win: BrowserWindow, label: string) {
   });
   win.webContents.on('render-process-gone', (_event, details) => {
     console.error(`[${label} render-process-gone]`, details.reason);
+    platformEventBus.reportRuntimeEvent({
+      kind: 'crash',
+      runtime: 'desktop',
+      severity: 'critical',
+      processType: 'renderer',
+      message: `[${label}] renderer process gone: ${details.reason}`,
+    });
   });
   win.webContents.on('unresponsive', () => {
     console.error(`[${label}] webContents became unresponsive`);
@@ -295,12 +320,16 @@ app.whenReady().then(async () => {
   // permission requests by default for file://-loaded content — which is
   // how every window here loads. That silently breaks SpeechRecognition
   // before any audio is ever captured (recognition.start() fails
-  // immediately with a 'not-allowed' error). This app only ever asks for
-  // microphone access (voice input) — nothing else needs granting.
+  // immediately with a 'not-allowed' error). 'notifications' must also be
+  // allowed here — the onboarding wizard's "Enable notifications" step
+  // calls the real Notification.requestPermission() API, and this handler
+  // used to blanket-deny anything other than 'media', so that step always
+  // silently resolved to 'denied' with no real OS prompt ever shown.
+  const ALLOWED_PERMISSIONS = new Set(['media', 'notifications']);
   session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
-    callback(permission === 'media');
+    callback(ALLOWED_PERMISSIONS.has(permission));
   });
-  session.defaultSession.setPermissionCheckHandler((_webContents, permission) => permission === 'media');
+  session.defaultSession.setPermissionCheckHandler((_webContents, permission) => ALLOWED_PERMISSIONS.has(permission));
 
   // Ensure settings store initialized (creates file on first run)
   SettingsStore.init();
@@ -310,8 +339,12 @@ app.whenReady().then(async () => {
   // here since fixing it is unrelated to this feature).
   conversationSessionStore.init();
   workspaceMemoryStore.init();
+  dependencyGraphCache.init();
+  repositorySemanticIndexStore.init();
   errorMemoryStore.init();
   executionMemoryStore.init();
+  platformHealthStore.init();
+  startPlatformResourceSampler();
   trashStore.init();
   memoryGraphStore.init();
   observationEngine.init();
@@ -319,12 +352,13 @@ app.whenReady().then(async () => {
   browserCapabilityStatus.init();
   codingModeStore.init();
   communicationRuntime.init();
-  platformPairingStore.init();
   deviceIdentityStore.init();
   pricingConfigStore.init();
   ticketPricingConfigStore.init();
   subscriptionStore.init();
   creditStore.init();
+  usageQuotaConfigStore.init();
+  usageStore.init();
   onboardingStore.init();
   engineeringMemoryStore.init();
   infraModeStore.init();
@@ -436,10 +470,22 @@ app.whenReady().then(async () => {
 
   initInfrastructureConnectors(envVars);
 
-  // RequirementGate — the runtime's general requirement-resolution engine. Only one resolver
-  // exists today (capability access, checked against the Infrastructure Runtime registry above);
-  // future resolver kinds (confirmation/approval/selection/etc.) register here the same way.
+  // RequirementGate — the runtime's general requirement-resolution engine. Two resolvers exist
+  // today (capability access, checked against the Infrastructure/Connectivity Runtime registries
+  // above; entitlement access, checked against the subscription tier); future resolver kinds
+  // (confirmation/approval/selection/etc.) register here the same way.
   requirementGate.registerResolver(capabilityRequirementResolver);
+  requirementGate.registerResolver(entitlementRequirementResolver);
+
+  // Language Provider Registry — the seam DependencyGraphBuilder/FeatureMapBuilder call through
+  // instead of hardcoding TypeScript's compiler API directly. TypeScript is the only registered
+  // provider today; a future language is a new registerProvider() call here, nothing else.
+  languageProviderRegistry.registerProvider(typeScriptLanguageProvider);
+
+  // Domain Concept Registry — the seam DetectDomainConceptsPlugin calls through instead of
+  // hardcoding a fixed vocabulary list. Three built-in packs (auth/billing/crudResource) today; a
+  // future pack (e.g. notifications, search) is a new registerPack() call here, nothing else.
+  for (const pack of BUILTIN_DOMAIN_CONCEPT_PACKS) domainConceptRegistry.registerPack(pack);
 
   createMainWindow();
   createAppTray();
@@ -502,11 +548,13 @@ app.on('window-all-closed', () => {
 // Global shortcuts are handled in renderer via input hooks (per requirements), but we keep an escape hatch here.
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+  stopPlatformResourceSampler();
 });
 
-// Auto start with Windows
+// Auto start with Windows — reflects the persisted Settings > General toggle
+// (GeneralSection.tsx's startWithWindows), not a hardcoded always-on default.
 // electron-builder.yml config uses nsis; also set in main for immediate behavior.
 app.setLoginItemSettings({
-  openAtLogin: true,
+  openAtLogin: SettingsStore.getState().startWithWindows,
   path: app.getPath('exe'),
 });

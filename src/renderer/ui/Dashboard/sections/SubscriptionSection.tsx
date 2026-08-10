@@ -13,11 +13,11 @@ import {
 } from '../../../../shared/billing/BillingTypes';
 
 const TIER_LABELS: Record<SubscriptionTierId, string> = {
-  go: 'Paw Go',
-  pro: 'Paw Pro',
-  proMax: 'Paw Pro Max',
-  team: 'Paw Team',
-  enterprise: 'Paw Enterprise',
+  go: 'Go',
+  pro: 'Pro',
+  proMax: 'Pro Max',
+  team: 'Team',
+  enterprise: 'Enterprise',
 };
 
 function formatPrice(plan: PricingPlan | undefined): string {
@@ -153,7 +153,7 @@ export function SubscriptionSection({
           </p>
           <p className={styles.cardBody} style={{ marginTop: 4 }}>
             {entitlement?.models.length === 0
-              ? 'No AI credits on Paw Go.'
+              ? 'No AI credits on this plan.'
               : entitlement?.hasCreditsRemaining === false
                 ? 'Credits exhausted for this period.'
                 : 'AI credits available.'}

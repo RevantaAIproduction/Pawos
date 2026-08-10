@@ -30,6 +30,7 @@ const CONNECTORS: { kind: OrgCredentialConnectorKind; id: string; label: string 
   { kind: 'hosting', id: 'vercel', label: 'Vercel' },
   { kind: 'hosting', id: 'netlify', label: 'Netlify' },
 ];
+const DEFAULT_CONNECTOR = CONNECTORS[0]!;
 
 /**
  * Section 2/3's "shared infrastructure" gap, closed: one org-wide
@@ -44,7 +45,7 @@ export function CredentialVaultCard({ organizationId }: { organizationId: string
   const [canManage, setCanManage] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState(CONNECTORS[0]);
+  const [selected, setSelected] = useState(DEFAULT_CONNECTOR);
   const [label, setLabel] = useState('');
   const [secret, setSecret] = useState('');
   const [busy, setBusy] = useState(false);
@@ -129,7 +130,7 @@ export function CredentialVaultCard({ organizationId }: { organizationId: string
             <select
               style={inputStyle}
               value={`${selected.kind}:${selected.id}`}
-              onChange={(e) => setSelected(CONNECTORS.find((c) => `${c.kind}:${c.id}` === e.target.value) ?? CONNECTORS[0])}
+              onChange={(e) => setSelected(CONNECTORS.find((c) => `${c.kind}:${c.id}` === e.target.value) ?? DEFAULT_CONNECTOR)}
             >
               {CONNECTORS.map((c) => (
                 <option key={`${c.kind}:${c.id}`} value={`${c.kind}:${c.id}`}>{c.label}</option>

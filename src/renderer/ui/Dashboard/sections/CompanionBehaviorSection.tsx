@@ -1,43 +1,32 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import styles from '../dashboard.module.css';
-import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
-import type { SettingsState } from '../../../services/settings/SettingsManager';
 import { Toggle } from '../Toggle';
 
 /**
  * Global desktop-companion behavior toggles only — personality, memory, and
  * per-companion voice/appearance are edited in Companion Studio, not here.
+ * The reaction toggles below are honestly disabled: the live 3D companion
+ * has no keyboard/mouse reaction behavior to wire them to (see
+ * CompanionController.ts's dormant legacy 2D pipeline).
  */
 export function CompanionBehaviorSection({ onOpenCompanionStudio }: { onOpenCompanionStudio: () => void }) {
-  const [settings, setSettingsState] = useState<SettingsState | null>(null);
-
-  useEffect(() => {
-    ipc.settingsGet().then(setSettingsState).catch(() => {});
-  }, []);
-
-  const update = async (patch: Partial<SettingsState>) => {
-    setSettingsState((s) => (s ? { ...s, ...patch } : s));
-    await ipc.settingsSet(patch);
-  };
-
   return (
     <div>
       <div className={styles.card}>
         <h3 className={styles.cardTitle}>Desktop reactions</h3>
         <label className={styles.settingsToggleRow}>
           <span>React to keyboard activity</span>
-          <Toggle
-            checked={settings?.enableKeyboardReactions ?? true}
-            onChange={(checked) => update({ enableKeyboardReactions: checked })}
-          />
+          <Toggle checked={false} onChange={() => {}} disabled />
         </label>
         <label className={styles.settingsToggleRow}>
           <span>React to mouse activity</span>
-          <Toggle
-            checked={settings?.enableMouseReactions ?? true}
-            onChange={(checked) => update({ enableMouseReactions: checked })}
-          />
+          <Toggle checked={false} onChange={() => {}} disabled />
         </label>
+        <p className={styles.cardBody} style={{ marginTop: 8 }}>
+          The live 3D companion doesn't react to keyboard or mouse input yet, so these can't do
+          anything today — shown here so they're ready the moment that ships, not to imply they
+          already work.
+        </p>
       </div>
 
       <div className={styles.card} style={{ marginTop: 14 }}>

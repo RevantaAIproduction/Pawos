@@ -2,24 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import styles from './dashboard.module.css';
 import { SettingsIcon, LanguageIcon, HelpBubbleIcon, InfoIcon, ChevronRightIcon } from './NavIcons';
 import { ipc } from '../../services/ipc/ipcBridgeImplementation';
+import { LANGUAGES } from './languages';
 
 export type ProfileMenuAction = 'settings' | 'upgrade' | 'logout' | 'help';
-
-/**
- * Real, usable languages — each is a genuine BCP-47 code passed straight to
- * the Web Speech API for push-to-talk speech recognition (see
- * SpeechProviders.ts), persisted via Settings so it survives a restart.
- * Also editable from Settings → Preferences → General — both surfaces read
- * and write the same persisted setting, so there's nothing to keep in sync.
- */
-const LANGUAGES: { label: string; code: string }[] = [
-  { label: 'English (United States)', code: 'en-US' },
-  { label: 'Français (France)', code: 'fr-FR' },
-  { label: 'Deutsch (Deutschland)', code: 'de-DE' },
-  { label: 'हिन्दी (भारत)', code: 'hi-IN' },
-  { label: 'Español (España)', code: 'es-ES' },
-  { label: '日本語 (日本)', code: 'ja-JP' },
-];
 
 const LEARN_MORE_LINKS = [
   { label: 'About PawOS', url: 'https://pawos.revantaai.com/about' },

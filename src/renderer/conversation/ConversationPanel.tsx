@@ -4,7 +4,7 @@ import type { ConversationSnapshot, SubmittedInputContext } from './Conversation
 import { conversationStateLabels } from './ConversationTypes';
 import { TaskCard } from './TaskCard';
 import { CreditsRequiredNotice } from '../ui/billing/CreditsRequiredNotice';
-import type { SubscriptionTierId } from '../../shared/billing/BillingTypes';
+import type { SeatTier, SubscriptionTierId } from '../../shared/billing/BillingTypes';
 
 /** Below this, a paste is probably just a short phrase someone copied — above it, it reads as reference material to skim/summarize rather than a spoken command. */
 const PASTE_LENGTH_THRESHOLD = 200;
@@ -39,7 +39,19 @@ export function ConversationPanel({
   onConnectCapability,
   onNavigateToSettingsConnector,
   creditsNoticeTier,
+  creditsNoticeSeatTier,
+  creditsNoticePooled,
+  enterpriseContactAvailable,
   onDismissCreditsNotice,
+  onUpgrade,
+  onBuyCompute,
+  onContactSales,
+  onContactAdmin,
+  onRequestMoreCompute,
+  pawCreditsBalanceUsd,
+  onUseCredits,
+  redeemingCredits,
+  redeemCreditsError,
 }: {
   snapshot: ConversationSnapshot;
   onClose: () => void;
@@ -61,7 +73,25 @@ export function ConversationPanel({
   onNavigateToSettingsConnector?: (connectorId: string) => void;
   /** Set when the last submit was blocked by the entitlement/credit gate (see useConversationController). */
   creditsNoticeTier?: SubscriptionTierId | null;
+  /** Only meaningful when tier === 'team' — which seat rate determines the exhaustion notice's upgrade target. */
+  creditsNoticeSeatTier?: SeatTier;
+  /** True only for Enterprise (pooled Paw Compute) — see EntitlementSnapshot.pooled. */
+  creditsNoticePooled?: boolean;
+  /** Whether the Pro Max -> Enterprise "Contact Sales" path is reachable from this screen. */
+  enterpriseContactAvailable?: boolean;
   onDismissCreditsNotice?: () => void;
+  /** Opens the in-app upgrade flow for the next tier up — omit where there's no real navigation target yet. */
+  onUpgrade?: () => void;
+  /** Opens the Paw Compute top-up flow — omit where there's no real navigation target yet. */
+  onBuyCompute?: () => void;
+  /** Opens the Enterprise info/signup page — omit where there's no real navigation target yet. */
+  onContactSales?: () => void;
+  onContactAdmin?: () => void;
+  onRequestMoreCompute?: () => void;
+  pawCreditsBalanceUsd?: number;
+  onUseCredits?: () => void;
+  redeemingCredits?: boolean;
+  redeemCreditsError?: string | null;
 }) {
   const [draft, setDraft] = useState('');
   const [wasPasted, setWasPasted] = useState(false);
@@ -191,7 +221,22 @@ export function ConversationPanel({
       </div>
 
       {creditsNoticeTier && onDismissCreditsNotice && (
-        <CreditsRequiredNotice tier={creditsNoticeTier} onDismiss={onDismissCreditsNotice} />
+        <CreditsRequiredNotice
+          tier={creditsNoticeTier}
+          seatTier={creditsNoticeSeatTier}
+          pooled={creditsNoticePooled ?? false}
+          enterpriseContactAvailable={enterpriseContactAvailable}
+          onDismiss={onDismissCreditsNotice}
+          onUpgrade={onUpgrade}
+          onBuyCompute={onBuyCompute}
+          onContactSales={onContactSales}
+          onContactAdmin={onContactAdmin}
+          onRequestMoreCompute={onRequestMoreCompute}
+          pawCreditsBalanceUsd={pawCreditsBalanceUsd}
+          onUseCredits={onUseCredits}
+          redeeming={redeemingCredits}
+          redeemError={redeemCreditsError}
+        />
       )}
 
       <div ref={transcriptRef} className={styles.transcript} role="log" aria-live="polite" aria-relevant="additions text">

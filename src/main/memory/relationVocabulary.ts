@@ -33,6 +33,22 @@ export const RELATION = {
   DEPENDS_ON: 'dependsOn',
   CONTAINS: 'contains',
   ROUTES_TO: 'routesTo',
+  // Intelligence Runtime — how a website/repository/product entity relates
+  // to the reports Paw has produced analyzing it.
+  ANALYZED_AS: 'analyzedAs',
+  SCORED_AS: 'scoredAs',
+  COMPETES_WITH: 'competesWith',
+  RECOMMENDS: 'recommends',
+  // Coding Runtime V2, Feature Discovery Engine — a codingFeature entity to each real file
+  // (codeFile entity) that structurally implements it (route/component/data-model/config/test file
+  // clustered into that feature). Distinct from CONTAINS/BELONGS_TO, which express containment/
+  // ownership, not "this file is part of what makes this feature work."
+  IMPLEMENTED_BY: 'implementedBy',
+  // Coding Runtime V2, Coding Runtime Memory — a codingEditHistory entity to each real file
+  // (codeFile entity) a specific edit batch touched. Distinct from IMPLEMENTED_BY, which expresses
+  // "this file is part of what makes this feature work" (ownership), not "this file was edited by
+  // this specific event."
+  MODIFIED: 'modified',
 } as const;
 
 export type RelationName = (typeof RELATION)[keyof typeof RELATION];

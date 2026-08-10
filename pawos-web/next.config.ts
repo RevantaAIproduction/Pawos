@@ -8,6 +8,21 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(__dirname),
   },
+  // Mobile Presence PWA Foundation (MOB-4) — the service worker must never
+  // be cached (a stale cached sw.js is a classic PWA bug: users get stuck
+  // on an old service worker indefinitely since the browser only checks
+  // for updates when it re-fetches this exact file).
+  async headers() {
+    return [
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

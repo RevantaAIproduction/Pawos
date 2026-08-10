@@ -10,7 +10,8 @@ import { useCompanionController } from '../companion/useCompanionController';
 import { useCompanionProfiles } from '../companion/manager/useCompanionProfiles';
 import { buildPersonalityAddendum } from '../companion/manager/CompanionProfileTypes';
 import { useConversationController } from '../conversation/useConversationController';
-import { PAW_SYSTEM_PROMPT } from '../conversation/systemPrompt';
+import { useConversationSyncPublisher } from '../mobilePresence/ConversationSyncPublisher';
+import { useApprovalCenterBridge } from '../mobilePresence/ApprovalCenterBridge';
 import { aiProviderConfigStore } from '../ai/AIProviderConfigStore';
 import type { VisemeFrame } from '../conversation/LipSyncTypes';
 // [DEBUG-TEMP] remove this import and its usage below once real-mic verification is done.
@@ -38,6 +39,8 @@ export default function CompanionExperience() {
     },
   });
   const conversationSnapshot = conversation.snapshot;
+  useConversationSyncPublisher(conversationSnapshot);
+  useApprovalCenterBridge(conversationSnapshot, conversation.submitTranscript);
 
   // Personality preset/custom addendum (see CompanionProfileTypes.ts) is
   // layered onto the base system prompt whenever the active companion's
@@ -49,8 +52,8 @@ export default function CompanionExperience() {
     const parts = [buildPersonalityAddendum(activeProfile.personality)];
     if (activeProfile.behavior.interactionStyle.trim()) parts.push(activeProfile.behavior.interactionStyle.trim());
     const addendum = parts.filter(Boolean).join(' ');
-    conversation.setReasoningSystemPrompt(addendum ? `${PAW_SYSTEM_PROMPT}\n\n${addendum}` : PAW_SYSTEM_PROMPT);
-  }, [activeProfile, conversation.setReasoningSystemPrompt]);
+    conversation.setPersonalityAddendum(addendum);
+  }, [activeProfile, conversation.setPersonalityAddendum]);
 
   // Same real-wiring gap as personality above: CompanionProfile.voice
   // (provider/voiceId/speed) previously had no effect on anything — the TTS
@@ -72,7 +75,7 @@ export default function CompanionExperience() {
   const activeTask = useMemo(() => {
     const messages = conversationSnapshot.messages;
     for (let i = messages.length - 1; i >= 0; i--) {
-      const task = messages[i].task;
+      const task = messages[i]?.task;
       if (task && task.status === 'running') return task;
     }
     return undefined;
@@ -278,7 +281,19 @@ export default function CompanionExperience() {
             onOpenPath={(path, kind) => conversation.openPath(path, kind)}
             onConnectCapability={(taskId, actionId, connectorId, fields, opts) => conversation.connectCapability(taskId, actionId, connectorId, fields, opts)}
             creditsNoticeTier={conversation.creditsNoticeTier}
+            creditsNoticeSeatTier={conversation.entitlement?.seatTier}
+            creditsNoticePooled={conversation.entitlement?.pooled ?? false}
+            enterpriseContactAvailable
             onDismissCreditsNotice={() => conversation.dismissCreditsNotice()}
+            onUpgrade={() => setSettingsOpen(true)}
+            onBuyCompute={() => setSettingsOpen(true)}
+            onContactSales={() => void ipc.executeAction({ type: 'openUrl', url: 'https://pawos.revantaai.com/enterprise' })}
+            onContactAdmin={() => setSettingsOpen(true)}
+            onRequestMoreCompute={() => setSettingsOpen(true)}
+            pawCreditsBalanceUsd={conversation.pawCreditsBalanceUsd}
+            onUseCredits={() => conversation.useCreditsForCompute()}
+            redeemingCredits={conversation.redeemingCredits}
+            redeemCreditsError={conversation.redeemCreditsError}
           />
         </div>
       )}

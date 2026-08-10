@@ -3,7 +3,6 @@ import styles from './dashboard.module.css';
 import { Sidebar } from './Sidebar';
 import type { ProfileMenuAction } from './ProfileMenu';
 import { OverviewSection } from './sections/OverviewSection';
-import { TalkSection } from './sections/TalkSection';
 import { CompanionLabSection } from './sections/CompanionLabSection';
 import { ConversationHistorySection } from './sections/ConversationHistorySection';
 import { WorkHistorySection } from './sections/WorkHistorySection';
@@ -20,7 +19,7 @@ import { SettingsSection, type SettingsTab } from './sections/SettingsSection';
 import { UpgradeSection } from './sections/UpgradeSection';
 import { RatingFeedbackModal } from './RatingFeedbackModal';
 import { HelpWidgetPanel } from '../HelpWidget/HelpWidgetPanel';
-import { SECTION_TITLES, type SectionId } from './sections';
+import type { SectionId } from './sections';
 import { useIpcBridge } from '../../services/ipc/useIpcBridge';
 import type { AuthUser, EmailCreateAccountOptions } from '../../auth/AuthTypes';
 import type { SubscriptionTierId } from '../../../shared/billing/BillingTypes';
@@ -29,11 +28,11 @@ import { referralService } from '../../organization/ReferralService';
 import { ipc as ipcBridge } from '../../services/ipc/ipcBridgeImplementation';
 
 const TIER_LABELS: Record<SubscriptionTierId, string> = {
-  go: 'Paw Go',
-  pro: 'Paw Pro',
-  proMax: 'Paw Pro Max',
-  team: 'Paw Team',
-  enterprise: 'Paw Enterprise',
+  go: 'Go',
+  pro: 'Pro',
+  proMax: 'Pro Max',
+  team: 'Team',
+  enterprise: 'Enterprise',
 };
 
 export function Dashboard({
@@ -74,7 +73,7 @@ export function Dashboard({
       wakeTimeoutRef.current = null;
     }
   }, []);
-  const [tierLabel, setTierLabel] = useState(user.isGuest ? 'Guest Preview' : 'Paw Go');
+  const [tierLabel, setTierLabel] = useState(user.isGuest ? 'Guest Preview' : 'Go');
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('Account');
   const [helpWidgetOpen, setHelpWidgetOpen] = useState(false);
   const [helpWidgetInitialTab, setHelpWidgetInitialTab] = useState<'home' | 'messages' | 'help'>('home');
@@ -207,9 +206,6 @@ export function Dashboard({
         onOpenUrl={openUrl}
       />
       <main className={styles.main}>
-        <header className={styles.header}>
-          <h1 className={styles.headerTitle}>{SECTION_TITLES[active]}</h1>
-        </header>
         <div className={styles.content}>
           {active === 'home' && (
             <OverviewSection
@@ -221,8 +217,8 @@ export function Dashboard({
               onDisableCompanion={handleDisable}
             />
           )}
-          {active === 'talk' && (
-            <TalkSection
+          {active === 'companionLab' && (
+            <CompanionLabSection
               enabled={companionEnabled}
               pending={pending}
               waking={companionWaking}
@@ -230,7 +226,6 @@ export function Dashboard({
               onDisable={handleDisable}
             />
           )}
-          {active === 'companionLab' && <CompanionLabSection />}
           {active === 'projects' && (
             <ProjectsSection onOpenFolder={(path) => void ipc.executeAction({ type: 'openFolder', path })} />
           )}

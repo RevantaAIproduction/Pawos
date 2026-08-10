@@ -1,12 +1,31 @@
 import type { ExecutionTrail } from './ExecutionLifecycle';
 import type { ConnectivityScope } from '../connectivity/ConnectivityTypes';
 import type { CapabilityConfirmation, Requirement } from '../runtime/RequirementTypes';
+import type { IntelligenceReport } from '../intelligence/IntelligenceReportTypes';
 
 /** Kept as a plain string union here (not imported from src/main/execution/browser/) so this shared file never depends on main-process-only code — the real BrowserAdapter/BrowserId types there are the source of truth for values, this is just the wire shape. */
 export type BrowserId = 'chrome' | 'edge' | 'brave' | 'firefox' | 'electron';
 
 /** Which shell interprets a runCommand/startProcess command string — see shellCommand.ts for how each is actually invoked. */
 export type CommandShell = 'cmd' | 'powershell' | 'gitbash';
+
+/**
+ * Coding Runtime V2, Multi-file Editing Engine (§10) — a simplified, model-friendly unit smaller
+ * than a raw unified diff. Each array is a list of exact lines (no embedded newlines). contextBefore/
+ * contextAfter anchor the edit's real location in the file (matched verbatim by patchApplier.ts, no
+ * fuzzing); oldLines is what's being replaced (empty for a pure insertion); newLines is what replaces
+ * it (empty for a pure deletion). At least one of contextBefore/oldLines must be non-empty — otherwise
+ * there is nothing to anchor the edit's location to (see ApplyCodeEditPlugin.requirements()). When a
+ * file needs multiple hunks, list them in ascending file order — patchApplier.ts locates each one
+ * strictly after the previous, so out-of-order or overlapping hunks fail to apply rather than
+ * silently landing in the wrong place.
+ */
+export type CodeEditHunk = {
+  contextBefore: string[];
+  oldLines: string[];
+  newLines: string[];
+  contextAfter: string[];
+};
 
 /**
  * Desktop actions the companion can perform. Each variant is either:
@@ -52,6 +71,87 @@ export type ActionRequest = { scope?: ConnectivityScope } & (
   // "File impact analysis" — best-effort substring search for other project
   // files that reference the given file's basename. Read-only.
   | { type: 'analyzeFileImpact'; rootPath: string; filePath: string }
+  // Coding Runtime V2, Context Understanding Engine — a real import graph (via the
+  // LanguageProviderRegistry, TypeScript today), not a basename substring search. Forked into a
+  // standalone child process (DependencyGraphBuilder), cached incrementally (DependencyGraphCache).
+  // Read-only — available in both Paw Go and Paw Pro, same as analyzeProjectStructure.
+  | { type: 'buildDependencyGraph'; rootPath: string }
+  // Coding Runtime V2, Feature Discovery Engine — deterministic route+component+data-model+
+  // config+test clustering (union-find over traced routes/API calls/import edges), upserted as
+  // codingFeature Memory Graph entities. Read-only — available in both Paw Go and Paw Pro.
+  | { type: 'discoverProjectFeatures'; rootPath: string }
+  // Coding Runtime V2, Asset Understanding Engine — deterministic extension/exact-name asset
+  // classification (image/stylesheet/config/markdown/buildFile/sourceCode/test/other) plus real
+  // image dimension metadata (image-size), no AI call. Read-only — available in both Paw Go and
+  // Paw Pro.
+  | { type: 'classifyProjectAssets'; rootPath: string }
+  // Coding Runtime V2, Domain Intelligence Engine — generic, pluggable domain-vocabulary detection
+  // (auth/billing/crudResource built-in packs) against an arbitrary third-party project, each
+  // requiring real structural evidence (a dependency, a path convention, a traced route quad), never
+  // a vocabulary word alone. Read-only — available in both Paw Go and Paw Pro.
+  | { type: 'detectDomainConcepts'; rootPath: string }
+  // Coding Runtime V2, Repository Semantic Index — orchestrates the dependency graph, feature
+  // discovery, domain concepts, and asset classification (in that dependency order) into one
+  // queryable composition. Read-only from the target project's perspective (only writes to PawOS's
+  // own index cache) — available in both Paw Go and Paw Pro.
+  | { type: 'buildRepositorySemanticIndex'; rootPath: string }
+  // Coding Runtime V2, Intelligent File Discovery — given a natural-language feature request,
+  // locates every plausibly-affected file via three combined, confidence-tiered signals (feature-map
+  // hit, dependency-graph expansion, scoped fuzzy path search). A real improvement over
+  // analyzeFileImpact's basename-substring heuristic for this broader "what does this request touch"
+  // question — analyzeFileImpact is kept unreplaced for its own narrower job. Read-only — available
+  // in both Paw Go and Paw Pro.
+  | { type: 'discoverAffectedFiles'; rootPath: string; query: string }
+  // Coding Runtime V2, Multi-file Editing Engine (§10) — a real patch-based edit primitive,
+  // additive alongside writeFile's whole-file overwrite (kept unchanged for its own create/
+  // replace-everything job). Applying a patch inherently requires the target file to already exist
+  // (there's nothing to locate contextBefore/oldLines within otherwise), so — mirroring writeFile's
+  // own `exists && !confirmed` self-check exactly — confirmation is handled inside the plugin itself
+  // rather than a blanket DESTRUCTIVE_ACTION_TYPES entry; unlike writeFile (which has a genuine
+  // no-confirmation-needed "brand new file" mode), every real applyCodeEdit call touches existing
+  // content, so its self-check is never a no-op the way writeFile's can be.
+  // `planId` (added for Coding Runtime Memory, §14) is optional and purely for provenance — when
+  // this call executes one step of a `proposeCodeEditPlan` batch, the model echoes back the plan's
+  // id (as seen on that step's own actionRequest) so the auto-recorded codingEditHistory entry can
+  // tie itself back to the reviewable plan the user approved. Omitted for an ad hoc single-file edit.
+  | { type: 'applyCodeEdit'; path: string; edits: CodeEditHunk[]; confirmed?: boolean; planId?: string }
+  // The Think -> Plan boundary for code edits, mirroring proposeExecutionPlan exactly — never
+  // executes anything itself (CodeEditPlanner.buildCodeEditPlan is a pure function, same
+  // never-calls-execute() discipline as ExecutionPlanner.buildPlan()). `description` is a short
+  // human-readable summary of the whole batch, recorded into a new codingEditRequest Memory Graph
+  // entity purely so the resulting ExecutionPlan's sourceReportId still points at something real
+  // (see ExecutionLifecycle.ts's doc comment on that field, and codingEditRequestEntities.ts).
+  | {
+      type: 'proposeCodeEditPlan';
+      description: string;
+      edits: { path: string; edits: CodeEditHunk[]; rationale: string }[];
+    }
+  // Coding Runtime V2, Validation Pipeline (§12) — a real, code-enforced syntax -> imports ->
+  // typeCheck -> lint -> build -> tests sequence, aggregated into one structured ValidationReport
+  // (never fabricating a result for a step the project doesn't define) and persisted through the
+  // Memory Graph so the Self-Healing Workflow (§13) and future sessions can reuse a real historical
+  // record instead of re-deriving one. `affectedFiles` scopes the cheap syntax/imports checks to
+  // just the files an edit batch touched; omitted means the whole project (via the Repository
+  // Semantic Index, built on demand if missing/stale — same self-sufficiency principle as
+  // DiscoverAffectedFilesPlugin). Not destructive — same reasoning as buildProject: running
+  // lint/typecheck/build/test scripts doesn't deploy or overwrite anything sensitive.
+  | { type: 'runValidationPipeline'; rootPath: string; affectedFiles?: string[] }
+  // Coding Runtime V2, Coding Runtime Memory (§14) — deliberately model-driven, not auto-detected,
+  // the same discipline as recordErrorFix: only recorded once the model or user has actually
+  // articulated a decision and its reasoning, never inferred from a diff. Read-only understanding
+  // like every other memory-write here — absent from CODING_EXECUTION_ACTION_TYPES on purpose, so
+  // it stays available in Paw Go, not just Pro.
+  | { type: 'recordArchitecturalDecision'; rootPath: string; decision: string; rationale: string; alternativesConsidered?: string[] }
+  // A project-scoped preference requires rootPath; a global one (applies across every project) omits it.
+  // Named `preferenceScope`, not `scope` — every ActionRequest already carries an unrelated,
+  // optional `scope?: ConnectivityScope` field (see the top-level intersection type below); reusing
+  // that name here would collide with it.
+  | { type: 'recordCodingPreference'; preferenceScope: 'project' | 'global'; preferenceKey: string; preferenceValue: string; rootPath?: string }
+  // Read-only — answers "what do you remember about this project's decisions/preferences/edit
+  // history," the query behind the previously-dead `codingMemory` Workspace region. Composes
+  // codingEditHistory/codingArchitecturalDecision/codingUserPreference with Phase 8's
+  // codingValidationReport, never fabricating a field for a project with no memory yet.
+  | { type: 'queryCodingRuntimeMemory'; rootPath: string }
   | { type: 'listWorkspaces' }
   | { type: 'getWorkspace'; rootPath: string }
   // Composes log-pattern-then-HTTP (or exit-code, for finite scripts) into
@@ -146,6 +246,11 @@ export type ActionRequest = { scope?: ConnectivityScope } & (
   | { type: 'gitCommit'; cwd: string; message: string; confirmed?: boolean }
   | { type: 'gitCreateBranch'; cwd: string; branchName: string; confirmed?: boolean }
   | { type: 'gitCheckout'; cwd: string; ref: string; confirmed?: boolean }
+  // Coding Runtime V2, Multi-file Editing Engine (§10) — the safety net for a committed
+  // applyCodeEdit batch: `git revert --no-edit <commitSha>` via the same execFile-based runGit()
+  // helper as every other git plugin. Always confirmed, same as gitCommit/gitCreateBranch/
+  // gitCheckout.
+  | { type: 'gitRevertCommit'; cwd: string; commitSha: string; confirmed?: boolean }
   // Software Installation Runtime — generic across winget/npm/pip/VS Code
   // extensions, no per-application data. Installing/updating/uninstalling/
   // repairing software is inherently system-changing, so all four are
@@ -459,6 +564,52 @@ export type ActionRequest = { scope?: ConnectivityScope } & (
   // is failing" — the same real evidence-gathering pipeline as
   // investigateTicket, just without a ticket to read first. Read-only, never gated.
   | { type: 'investigateProductionIssue'; description: string; cwd?: string }
+  // Intelligence Runtime (Think-class, always available regardless of tier —
+  // see THINK_ONLY_BLOCKED_ACTION_TYPES's absence of these two types).
+  // Repository Intelligence — real evidence-gather -> deterministic-correlate
+  // -> report pipeline (EvidenceCorrelationReportEngine.ts), read-only,
+  // never gated. remoteFullName is optional — omit for a purely local
+  // analysis; include ("owner/repo") to also pull real remote facts via a
+  // connected source-control connector.
+  | { type: 'analyzeRepository'; repoPath: string; remoteFullName?: string }
+  // Same evidence pipeline as analyzeRepository, framed around a described
+  // symptom rather than a general analysis — honestly scoped to what static
+  // repository facts can actually support, never a fabricated root-cause
+  // diagnosis of the specific bug.
+  | { type: 'investigateRepoBug'; repoPath: string; symptom: string; remoteFullName?: string }
+  // Website Intelligence — single-page real HTTP fetch, gathered/correlated/
+  // reported through the same shared EvidenceCorrelationReportEngine.
+  // Read-only, never gated, no confirmation needed (same risk class as
+  // reading one web page).
+  | { type: 'analyzeWebsite'; url: string }
+  // Bounded, robots.txt-compliant multi-page crawl of the same origin —
+  // unlike browseWeb's once-per-session approval, this always requires
+  // fresh confirmation (checked by the plugin itself, not a blanket
+  // DESTRUCTIVE_ACTION_TYPES entry — see BrowseWebPlugin's precedent).
+  // maxPages/maxDepth are requests, clamped to hard maximums by the plugin.
+  | { type: 'crawlWebsite'; url: string; maxPages?: number; maxDepth?: number; confirmed?: boolean }
+  // UX Intelligence — bounded multi-page review of the same origin reusing crawlWebsite's crawler
+  // and confirmation discipline (always fresh confirmation, never remembered — same reasoning as
+  // crawlWebsite: reviewing multiple pages of a third-party site is a bigger action each time).
+  // maxPages/maxDepth are requests, clamped to hard maximums by the plugin.
+  | { type: 'reviewUx'; url: string; maxPages?: number; maxDepth?: number; confirmed?: boolean }
+  // Marketing Intelligence — bounded multi-page marketing/SEO-signal review, reusing
+  // crawlWebsite/reviewUx's crawler and confirmation discipline (always fresh confirmation, never
+  // remembered). maxPages/maxDepth are requests, clamped to hard maximums by the plugin.
+  | { type: 'analyzeMarketing'; url: string; maxPages?: number; maxDepth?: number; confirmed?: boolean }
+  // Product Intelligence — pure aggregation over already-persisted Website/UX/Marketing/
+  // Repository reports (no new fetch/crawl of its own), so no confirmation is needed. At least
+  // one of url/repoPath is required; both may be given to aggregate a web product's repo too.
+  | { type: 'scoreProduct'; url?: string; repoPath?: string }
+  // Founder Intelligence — a composer over the same already-persisted reports Product
+  // Intelligence reads (no separate evidence-gathering engine), producing role-framed strategic
+  // recommendations. Also read-only/instantaneous, no confirmation needed.
+  | { type: 'askFounderAdvisor'; url?: string; repoPath?: string }
+  // Execution Planner — the Think -> Plan boundary. The ONE Execute-class action in the entire
+  // Intelligence capability area (see CODING_EXECUTION_ACTION_TYPES below): every other
+  // Intelligence action is read-only analysis. Builds a reviewable ExecutionPlan from a report's
+  // user-approved findings; never executes anything itself — see ExecutionPlanner.ts.
+  | { type: 'proposeExecutionPlan'; engineId: IntelligenceReport['engineId']; subject: string; approvedFindingIds: string[] }
   // Autonomous Engineering Task billing (PAWOS_PRICING_AUDIT.md) — these
   // three never touch the local filesystem or run any code themselves;
   // they only report the lifecycle of an autonomous, org-scoped ticket
@@ -580,7 +731,7 @@ export type ActionResult =
   // not just a message string.
   | {
       ok: false;
-      reason: 'not-implemented' | 'requires-confirmation' | 'coding-mode-restricted' | 'infra-mode-restricted' | 'failed';
+      reason: 'not-implemented' | 'requires-confirmation' | 'coding-mode-restricted' | 'infra-mode-restricted' | 'entitlement-restricted' | 'failed';
       message?: string;
       data?: unknown;
       trail?: ExecutionTrail;
@@ -618,6 +769,7 @@ export const DESTRUCTIVE_ACTION_TYPES: ActionRequest['type'][] = [
   'gitCommit',
   'gitCreateBranch',
   'gitCheckout',
+  'gitRevertCommit',
   'deployProject',
   'rollbackDeployment',
   'promoteDeployment',
@@ -651,13 +803,17 @@ export const DESTRUCTIVE_ACTION_TYPES: ActionRequest['type'][] = [
 
 /**
  * Coding Intelligence Runtime Phase 2 — Paw Go/Pro gate. Everything here is
- * refused up front in `go` mode with a fixed message (see
- * DesktopExecutionEngine.execute()), before the destructive-action gate
- * above is ever reached. Read-only coding actions (analyzeProject,
- * explainRelationship, queryProvenance, gitDiff, listProcesses, and the new
- * Phase 2.3 AnalyzeProjectStructurePlugin/AnalyzeFileImpactPlugin) are
- * deliberately NOT here — Paw Go's "read-only Coding Canvas / Project
- * Memory / Coding Memory / dependency & file-impact analysis" stays available.
+ * refused up front with a fixed message (see DesktopExecutionEngine.execute()),
+ * before the destructive-action gate above is ever reached, whenever either
+ * (a) the subscription tier itself lacks the 'advancedRuntimes' entitlement
+ * (Go tier — always refused, regardless of the local mode file) or (b) the
+ * tier has it but the user's own local CodingModeStore preference is still
+ * 'go' (a safety default even Pro+ users can choose). Read-only coding
+ * actions (analyzeProject, explainRelationship, queryProvenance, gitDiff,
+ * listProcesses, and the new Phase 2.3
+ * AnalyzeProjectStructurePlugin/AnalyzeFileImpactPlugin) are deliberately NOT
+ * here — Paw Go's "read-only Coding Canvas / Project Memory / Coding Memory /
+ * dependency & file-impact analysis" stays available.
  */
 export const CODING_EXECUTION_ACTION_TYPES: ActionRequest['type'][] = [
   'writeFile',
@@ -666,19 +822,33 @@ export const CODING_EXECUTION_ACTION_TYPES: ActionRequest['type'][] = [
   'gitCommit',
   'gitCreateBranch',
   'gitCheckout',
+  'gitRevertCommit',
   'runCommand',
   'startProcess',
   'buildProject',
   'devBrowserPreview',
+  // Execution Planner's one Execute-class action — see proposeExecutionPlan's own comment above.
+  // Generating a plan is gated Pro+ alongside every other real mutating action; every other
+  // Intelligence action (analyze/crawl/review/score/advise) is deliberately NOT in this list.
+  'proposeExecutionPlan',
+  // Coding Runtime V2, Multi-file Editing Engine — the same real-mutating-work gating as writeFile;
+  // every other Coding Runtime V2 analysis action (buildDependencyGraph/discoverProjectFeatures/
+  // classifyProjectAssets/detectDomainConcepts/buildRepositorySemanticIndex/discoverAffectedFiles)
+  // is deliberately NOT here — Paw Go's read-only understanding stays available, only real edits
+  // require Pro+.
+  'applyCodeEdit',
+  'proposeCodeEditPlan',
+  'runValidationPipeline',
 ];
 
 /**
  * Infrastructure Runtime — "read-only investigation mode" gate. Refused
- * unconditionally in 'investigate' mode (see InfraModeStore), before the
- * destructive-action confirmation gate is ever reached, same two-gate order
- * as Paw Go/Pro above. Read-only infra actions (investigateTicket,
- * getDeploymentStatus, listConfiguredInfraConnectors) are deliberately NOT
- * here — investigation always stays available.
+ * before the destructive-action confirmation gate is ever reached, same
+ * tier-then-local-toggle order as Paw Go/Pro above: unconditionally when the
+ * tier lacks 'advancedRuntimes' (Go — regardless of InfraModeStore's local
+ * file), otherwise only in 'investigate' mode. Read-only infra actions
+ * (investigateTicket, getDeploymentStatus, listConfiguredInfraConnectors)
+ * are deliberately NOT here — investigation always stays available.
  */
 export const INFRA_EXECUTION_ACTION_TYPES: ActionRequest['type'][] = ['deployProject', 'rollbackDeployment', 'promoteDeployment'];
 

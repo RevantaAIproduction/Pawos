@@ -222,7 +222,7 @@ export function createCompanionController(args: {
     // This MVP uses a local activity provider and forwards activity to FSM.
     const activityProvider = new RendererActivityProviderImpl();
     // Expose activity signals from input events.
-    runtimeHost = new CompanionRuntimeHost((newApp as any).fsmController ?? (newApp as any).fsm ?? (newApp as any).animationFsmController, {} as any);
+    runtimeHost = new CompanionRuntimeHost((newApp as any).fsmController ?? (newApp as any).fsm ?? (newApp as any).animationFsmController);
     runtimeLoop = createCompanionRuntimeHostLoop({
       host: runtimeHost,
       activityProvider,

@@ -132,7 +132,8 @@ export const remoteAssistanceService = {
       .limit(1)
       .returns<SessionRow[]>();
     if (error) throw error;
-    return data && data.length > 0 ? toSession(data[0]) : null;
+    const first = data?.[0];
+    return first ? toSession(first) : null;
   },
 
   async getSession(sessionId: string): Promise<RemoteAssistanceSession> {

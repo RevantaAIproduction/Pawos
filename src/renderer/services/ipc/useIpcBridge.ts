@@ -100,6 +100,7 @@ export function useIpcBridge() {
       billingGetSubscription: async (): Promise<SubscriptionState> => ipc.billingGetSubscription(),
       billingConsumeCredit: async (amount: number, reason: string, category?: AiUsageCategory): Promise<CreditBalance> =>
         ipc.billingConsumeCredit(amount, reason, category),
+      billingGrantComputeBonus: async (units: number): Promise<EntitlementSnapshot> => ipc.billingGrantComputeBonus(units),
     }),
     [ipc]
   );

@@ -47,6 +47,21 @@ class SubscriptionStore {
     return this.state;
   }
 
+  /**
+   * Resets local subscription state back to the free default. This file is one JSON file per
+   * device install, not namespaced per signed-in account (see AuthenticationProvider's own comment
+   * on why none of PawOS's local stores are per-user yet) — so without this, an account that once
+   * joined/created a Team/Enterprise org (which only ever raises the tier via syncFromOrganization,
+   * never lowers it) leaves every subsequently signed-in account on the same device looking like a
+   * Team member forever. Called on sign-out so a fresh sign-in starts clean; the next account's own
+   * real org membership (if any) re-elevates it correctly via syncFromOrganization on that sign-in.
+   */
+  reset(): SubscriptionState {
+    this.state = defaultState();
+    this.save();
+    return this.state;
+  }
+
   /** Called only from CheckoutSyncServer's verified local callback after a real Razorpay payment completed — the one path where status legitimately becomes 'active'. */
   confirmPurchase(tier: SubscriptionTierId): SubscriptionState {
     this.state = { tier, status: 'active', renewsAt: Date.now() + 30 * 24 * 60 * 60 * 1000 };

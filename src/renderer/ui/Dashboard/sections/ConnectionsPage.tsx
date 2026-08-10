@@ -22,8 +22,8 @@ import type { EntitlementSnapshot } from '../../../../shared/billing/BillingType
 const UPGRADE_TIER_LABEL: Record<string, string> = {
   connectLinear: 'Team',
   connectGoogleWorkspace: 'Team',
-  connectJira: 'Enterprise',
-  connectSlack: 'Enterprise',
+  connectJira: 'Team',
+  connectSlack: 'Team',
 };
 
 function getErrorMessage(e: unknown): string {

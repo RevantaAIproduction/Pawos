@@ -1,4 +1,7 @@
 import * as fs from 'fs';
+import { communicationSessionStore } from './CommunicationSessionStore';
+import { unwrapSessionKey, decryptFramedBuffer } from './CommunicationEncryption';
+import type { CommunicationRecord } from '../../shared/communication/CommunicationTypes';
 
 /**
  * Real Gemini audio-understanding calls for the Intelligence Layer
@@ -21,7 +24,8 @@ function mimeTypeForAudioPath(audioPath: string): string {
   return 'audio/webm';
 }
 
-async function callGemini(params: { apiKey: string; parts: unknown[]; responseSchema: unknown; model?: string; baseUrl?: string }): Promise<any> {
+/** Exported so other same-purpose pipelines (e.g. the Business Intelligence pipeline, Phase 3B) can reuse the exact same fetch/schema mechanism rather than duplicating it — the function itself is unchanged, only its visibility. */
+export async function callGemini(params: { apiKey: string; parts: unknown[]; responseSchema: unknown; model?: string; baseUrl?: string }): Promise<any> {
   const { apiKey, parts, responseSchema, model = DEFAULT_MODEL, baseUrl = DEFAULT_BASE_URL } = params;
   const res = await fetch(`${baseUrl}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`, {
     method: 'POST',
@@ -46,9 +50,25 @@ async function callGemini(params: { apiKey: string; parts: unknown[]; responseSc
 export type TranscriptSegment = { speaker: string; text: string; atSeconds: number };
 export type TranscriptionResult = { segments: TranscriptSegment[]; plainText: string; detectedParticipants: string[] };
 
+/**
+ * Reads a recorded media file's real bytes back off disk — transparently decrypting first when the
+ * owning session's encryptionState is 'encrypted' (Recording & Storage Foundation, Phase 1). Plain
+ * fs.readFileSync for every unencrypted session (the overwhelming majority — safeStorage isn't
+ * available on every platform/session, and every session recorded before this integration point
+ * existed), so this is a strict behavioral no-op for anything already working today.
+ */
+function readRecordingBuffer(filePath: string, record?: CommunicationRecord): Buffer {
+  const raw = fs.readFileSync(filePath);
+  if (!record || record.encryptionState !== 'encrypted' || !record.encryptedSessionKey) return raw;
+  const key = unwrapSessionKey(record.encryptedSessionKey);
+  if (!key) return raw; // keychain unavailable/locked at read time — honest fallback, never silently returns garbage as if it were plaintext
+  return decryptFramedBuffer(raw, key);
+}
+
 /** Real transcription of a captured audio file — speaker-tagged where the model can tell speakers apart, plain text always. */
-export async function transcribeCommunicationAudio(params: { apiKey: string; audioPath: string; model?: string; baseUrl?: string }): Promise<TranscriptionResult> {
-  const audioBuffer = fs.readFileSync(params.audioPath);
+export async function transcribeCommunicationAudio(params: { apiKey: string; audioPath: string; communicationId?: string; model?: string; baseUrl?: string }): Promise<TranscriptionResult> {
+  const record = params.communicationId ? communicationSessionStore.get(params.communicationId) : undefined;
+  const audioBuffer = readRecordingBuffer(params.audioPath, record);
   const base64Audio = audioBuffer.toString('base64');
   const mimeType = mimeTypeForAudioPath(params.audioPath);
 

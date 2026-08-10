@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import styles from './workspaceRuntime.module.css';
 import {
   TaskCard,
@@ -12,11 +12,22 @@ import {
   getLatestCodeDiffStat,
   getErrorTimeline,
   getLatestDevBrowserConsole,
+  getLatestCodingMemory,
 } from '../conversation/TaskCard';
 import type { ConversationTaskRecord } from '../conversation/ConversationTypes';
 import type { WorkspaceRegionSlot } from './WorkspaceTypes';
 import { ipc } from '../services/ipc/ipcBridgeImplementation';
 import type { ActionRequest } from '../../shared/actions/ActionTypes';
+import { isIntelligenceTask, getLatestIntelligenceReport, getLatestExecutionPlan } from './intelligenceTaskDetection';
+import {
+  getCodingWorkspaceRoots,
+  getLatestActiveFilePath,
+  getPathBasename,
+  getPathDirname,
+  joinWorkspacePath,
+  sortDirectoryEntries,
+  type CodingWorkspaceDirEntry,
+} from './codingWorkspaceModel';
 
 /**
  * Action types that mark a task as a coding task — shape-based detection
@@ -55,6 +66,22 @@ const CODING_TASK_ACTION_TYPES = new Set<ActionRequest['type']>([
   'setTaskChecklist',
   'gitDiffStat',
   'devBrowserPreview',
+  // Coding Runtime V2 (Phases 1-9) — added so a task consisting solely of these calls (e.g. "what
+  // features does this app have?" -> discover_project_features alone) still renders the Coding
+  // Canvas instead of falling through to the universal regions.
+  'buildDependencyGraph',
+  'discoverProjectFeatures',
+  'classifyProjectAssets',
+  'detectDomainConcepts',
+  'buildRepositorySemanticIndex',
+  'discoverAffectedFiles',
+  'applyCodeEdit',
+  'proposeCodeEditPlan',
+  'runValidationPipeline',
+  'recordArchitecturalDecision',
+  'recordCodingPreference',
+  'queryCodingRuntimeMemory',
+  'gitRevertCommit',
 ]);
 
 /**
@@ -343,6 +370,13 @@ export function WorkspaceRuntime({
     };
   }, [infraServiceName]);
 
+  const intelligenceTask = isIntelligenceTask(task);
+  const intelligenceReport = intelligenceTask ? getLatestIntelligenceReport(task) : undefined;
+  // ExecutionPlan is shape-shared by both Intelligence Runtime's proposeExecutionPlan and Coding
+  // Runtime V2's proposeCodeEditPlan (same ExecutionPlan/PlannedStep type, no plan-type
+  // discriminant) — so this region must be reachable for codingTask, not just intelligenceTask.
+  const executionPlan = (intelligenceTask || codingTask) ? getLatestExecutionPlan(task) : undefined;
+
   const officeTask = isOfficeTask(task);
   const officeDocuments = officeTask ? getOfficeDocumentsCreated(task) : [];
   const officeEmail = officeTask ? getLatestOfficeEmail(task) : undefined;
@@ -359,6 +393,106 @@ export function WorkspaceRuntime({
       cancelled = true;
     };
   }, [officeTask, task.actions.length]);
+
+  const workspaceRoots = useMemo(() => getCodingWorkspaceRoots(task), [task]);
+  const inferredActiveFile = useMemo(() => getLatestActiveFilePath(task), [task]);
+  const [activeRoot, setActiveRoot] = useState<string | null>(null);
+  const [projectContextCleared, setProjectContextCleared] = useState(false);
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [directoryEntries, setDirectoryEntries] = useState<Record<string, CodingWorkspaceDirEntry[]>>({});
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+  const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set());
+  const [directoryErrors, setDirectoryErrors] = useState<Record<string, string>>({});
+  const [fileSearch, setFileSearch] = useState('');
+  const [searchResults, setSearchResults] = useState<string[]>([]);
+  const [searchStatus, setSearchStatus] = useState<'idle' | 'searching' | 'error'>('idle');
+
+  useEffect(() => {
+    setProjectContextCleared(false);
+    setDirectoryEntries({});
+    setExpandedPaths(new Set());
+    setDirectoryErrors({});
+    setSearchResults([]);
+    setFileSearch('');
+    setSearchStatus('idle');
+  }, [task.id]);
+
+  useEffect(() => {
+    if (projectContextCleared) return;
+    if (activeRoot && workspaceRoots.includes(activeRoot)) return;
+    setActiveRoot(workspaceRoots[workspaceRoots.length - 1] ?? null);
+  }, [activeRoot, projectContextCleared, workspaceRoots]);
+
+  useEffect(() => {
+    if (inferredActiveFile) setSelectedPath(inferredActiveFile);
+  }, [inferredActiveFile]);
+
+  async function loadDirectory(path: string) {
+    if (directoryEntries[path] || loadingPaths.has(path)) return;
+    setLoadingPaths((prev) => new Set(prev).add(path));
+    setDirectoryErrors((prev) => {
+      const next = { ...prev };
+      delete next[path];
+      return next;
+    });
+    try {
+      const result = await ipc.actionExecute({ type: 'listDirectory', path });
+      if (!result.ok) {
+        setDirectoryErrors((prev) => ({ ...prev, [path]: result.message ?? 'Could not list this folder.' }));
+        return;
+      }
+      const entries = (result.data as { entries?: CodingWorkspaceDirEntry[] } | undefined)?.entries ?? [];
+      setDirectoryEntries((prev) => ({ ...prev, [path]: sortDirectoryEntries(entries) }));
+    } finally {
+      setLoadingPaths((prev) => {
+        const next = new Set(prev);
+        next.delete(path);
+        return next;
+      });
+    }
+  }
+
+  useEffect(() => {
+    if (activeRoot) void loadDirectory(activeRoot);
+  }, [activeRoot]);
+
+  function toggleDirectory(path: string) {
+    const open = expandedPaths.has(path);
+    setExpandedPaths((prev) => {
+      const next = new Set(prev);
+      if (open) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+    if (!open) void loadDirectory(path);
+  }
+
+  function selectPath(path: string, kind: 'file' | 'folder') {
+    setSelectedPath(path);
+    if (kind === 'folder') {
+      if (!expandedPaths.has(path)) toggleDirectory(path);
+      return;
+    }
+    onOpenPath?.(path, 'file');
+  }
+
+  async function runFileSearch(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!activeRoot || !fileSearch.trim()) {
+      setSearchResults([]);
+      setSearchStatus('idle');
+      return;
+    }
+    setSearchStatus('searching');
+    const result = await ipc.actionExecute({ type: 'searchFiles', rootPath: activeRoot, query: fileSearch.trim(), fuzzy: true, maxResults: 30 });
+    if (!result.ok) {
+      setSearchResults([]);
+      setSearchStatus('error');
+      return;
+    }
+    setSearchResults(Array.isArray(result.data) ? result.data.filter((item): item is string => typeof item === 'string') : []);
+    setSearchStatus('idle');
+  }
 
   const regions: WorkspaceRegionSlot[] = [
     {
@@ -639,12 +773,66 @@ export function WorkspaceRuntime({
       },
       {
         id: 'codingMemory',
-        render: () => (
-          <div className={styles.codingSection}>
-            <span className={styles.codingSectionTitle}>Coding Memory</span>
-            <span className={styles.codingSectionEmpty}>Ask me what I remember about this project once I've analyzed it.</span>
-          </div>
-        ),
+        render: () => {
+          const memory = getLatestCodingMemory(task);
+          if (!memory) {
+            return (
+              <div className={styles.codingSection}>
+                <span className={styles.codingSectionTitle}>Coding Memory</span>
+                <span className={styles.codingSectionEmpty}>Ask me what I remember about this project once I've analyzed it.</span>
+              </div>
+            );
+          }
+          const total = memory.editHistory.length + memory.architecturalDecisions.length + memory.preferences.length;
+          return (
+            <div className={styles.codingSection}>
+              <span className={styles.codingSectionTitle}>Coding Memory</span>
+              {total === 0 && !memory.latestValidation ? (
+                <span className={styles.codingSectionEmpty}>I don't have any memory of this project yet.</span>
+              ) : (
+                <ul className={styles.todoList}>
+                  {memory.editHistory.slice(0, 5).map((e, i) => (
+                    <li key={`edit-${i}`} className={styles.todoItem}>
+                      <span>✎</span>
+                      <span>{e.description}</span>
+                    </li>
+                  ))}
+                  {memory.architecturalDecisions.slice(0, 5).map((d, i) => (
+                    <li key={`decision-${i}`} className={styles.todoItem}>
+                      <span>◆</span>
+                      <span>{d.decision} — {d.rationale}</span>
+                    </li>
+                  ))}
+                  {memory.preferences.map((p, i) => (
+                    <li key={`pref-${i}`} className={styles.todoItem}>
+                      <span>·</span>
+                      <span>{p.preferenceKey}: {p.preferenceValue} ({p.scope})</span>
+                    </li>
+                  ))}
+                  {memory.latestValidation && (
+                    <>
+                      <li className={styles.todoItem}>
+                        <span>{memory.latestValidation.blockingIssues.length === 0 ? '✓' : '✗'}</span>
+                        <span>
+                          Last validation: {memory.latestValidation.blockingIssues.length === 0 ? 'passed' : 'failed'} ({memory.latestValidation.confidence} confidence)
+                        </span>
+                      </li>
+                      {memory.latestValidation.steps.map((step) => (
+                        <li key={`validation-step-${step.id}`} className={styles.todoItem}>
+                          <span>{step.status === 'passed' ? '✓' : step.status === 'failed' ? '✗' : '–'}</span>
+                          <span>
+                            {step.id}: {step.status}
+                            {step.status === 'skipped' && step.skippedReason ? ` — ${step.skippedReason}` : ''}
+                          </span>
+                        </li>
+                      ))}
+                    </>
+                  )}
+                </ul>
+              )}
+            </div>
+          );
+        },
       }
     );
   }
@@ -1034,6 +1222,255 @@ export function WorkspaceRuntime({
           </div>
         ),
       }
+    );
+  }
+
+  if (intelligenceTask) {
+    regions.push(
+      {
+        id: 'intelligenceReport',
+        render: () => (
+          <div className={styles.codingSection}>
+            <span className={styles.codingSectionTitle}>Intelligence Report</span>
+            {intelligenceReport ? (
+              <ul className={styles.todoList}>
+                <li className={styles.todoItem}>
+                  <span>◆</span>
+                  <span>
+                    {intelligenceReport.engineId} — {intelligenceReport.subject}
+                    {intelligenceReport.overallScore !== undefined ? ` (score ${intelligenceReport.overallScore})` : ''}
+                  </span>
+                </li>
+                <li className={styles.todoItem}>
+                  <span>◆</span>
+                  <span>
+                    {intelligenceReport.findings.length} finding{intelligenceReport.findings.length === 1 ? '' : 's'}
+                    {intelligenceReport.requiresAccessSummary.length > 0 ? `, ${intelligenceReport.requiresAccessSummary.length} requiring further access` : ''}
+                  </span>
+                </li>
+              </ul>
+            ) : (
+              <span className={styles.codingSectionEmpty}>No Intelligence report generated yet in this session.</span>
+            )}
+          </div>
+        ),
+      }
+    );
+  }
+
+  // Reachable for both Intelligence Runtime and Coding Runtime V2 tasks — see the executionPlan
+  // computation above for why this can't stay nested inside the intelligenceTask-only block.
+  if (intelligenceTask || codingTask) {
+    regions.push({
+      id: 'executionPlan',
+      render: () => (
+        <div className={styles.codingSection}>
+          <span className={styles.codingSectionTitle}>Execution Plan</span>
+          {executionPlan ? (
+            <ul className={styles.todoList}>
+              <li className={styles.todoItem}>
+                <span>◆</span>
+                <span>
+                  {executionPlan.steps.length} proposed step{executionPlan.steps.length === 1 ? '' : 's'} — review before anything runs
+                </span>
+              </li>
+              {executionPlan.unplannableFindingIds.length > 0 && (
+                <li className={styles.todoItem}>
+                  <span>◆</span>
+                  <span>
+                    {executionPlan.unplannableFindingIds.length} approved finding{executionPlan.unplannableFindingIds.length === 1 ? '' : 's'} had no safe automated fix
+                  </span>
+                </li>
+              )}
+            </ul>
+          ) : (
+            <span className={styles.codingSectionEmpty}>No execution plan proposed yet in this session.</span>
+          )}
+        </div>
+      ),
+    });
+  }
+
+  const renderRegion = (id: WorkspaceRegionSlot['id']) => regions.find((region) => region.id === id)?.render?.() ?? null;
+
+  const renderDirectory = (path: string, depth = 0): React.ReactNode => {
+    const entries = directoryEntries[path];
+    if (loadingPaths.has(path) && !entries) {
+      return <div className={styles.explorerHint}>Loading...</div>;
+    }
+    if (directoryErrors[path]) {
+      return <div className={styles.explorerError}>{directoryErrors[path]}</div>;
+    }
+    if (!entries) return null;
+    if (entries.length === 0) return <div className={styles.explorerHint}>Empty folder</div>;
+    return entries.map((entry) => {
+      const fullPath = joinWorkspacePath(path, entry.name);
+      const expanded = expandedPaths.has(fullPath);
+      const active = selectedPath === fullPath;
+      return (
+        <div key={fullPath}>
+          <button
+            type="button"
+            className={`${styles.explorerRow} ${active ? styles.explorerRowActive : ''}`}
+            style={{ paddingLeft: 10 + depth * 14 }}
+            onClick={() => selectPath(fullPath, entry.isDirectory ? 'folder' : 'file')}
+          >
+            <span className={styles.explorerDisclosure}>{entry.isDirectory ? (expanded ? '▾' : '▸') : ''}</span>
+            <span className={styles.explorerIcon}>{entry.isDirectory ? '□' : '·'}</span>
+            <span className={styles.explorerName}>{entry.name}</span>
+          </button>
+          {entry.isDirectory && expanded && <div>{renderDirectory(fullPath, depth + 1)}</div>}
+        </div>
+      );
+    });
+  };
+
+  if (codingTask) {
+    const terminalOutput = getLatestTerminalOutput(task);
+    const selectedLabel = selectedPath ? getPathBasename(selectedPath) : activeRoot ? getPathBasename(activeRoot) : 'No project selected';
+    const selectedParent = selectedPath ? getPathDirname(selectedPath) : activeRoot;
+    const contextRegions: WorkspaceRegionSlot['id'][] = [
+      'projectUnderstanding',
+      'todoProgress',
+      'runningProcesses',
+      'codeDiff',
+      'buildStatus',
+      'testResults',
+      'browserConsole',
+      'errorTimeline',
+      'codingMemory',
+      'executionPlan',
+      'evidence',
+      'browserPreview',
+      'floatingSurface',
+    ];
+
+    return (
+      <div className={styles.workspaceBorder}>
+        <div className={styles.codingWorkspaceShell}>
+          <aside className={styles.workspaceExplorer}>
+            <div className={styles.panelHeader}>
+              <div>
+                <span className={styles.panelTitle}>Project</span>
+                <span className={styles.panelSubtitle}>{activeRoot ? getPathBasename(activeRoot) : 'Context not set'}</span>
+              </div>
+              {activeRoot && (
+                <button
+                  type="button"
+                  className={styles.clearContextButton}
+                  onClick={() => {
+                    setProjectContextCleared(true);
+                    setActiveRoot(null);
+                    setSelectedPath(null);
+                    setSearchResults([]);
+                    setExpandedPaths(new Set());
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {workspaceRoots.length > 1 && (
+              <div className={styles.rootSwitcher}>
+                {workspaceRoots.map((root) => (
+                  <button
+                    type="button"
+                    key={root}
+                    className={`${styles.rootButton} ${root === activeRoot ? styles.rootButtonActive : ''}`}
+                    onClick={() => {
+                      setActiveRoot(root);
+                      setProjectContextCleared(false);
+                    }}
+                  >
+                    {getPathBasename(root)}
+                  </button>
+                ))}
+              </div>
+            )}
+            {activeRoot ? (
+              <>
+                <form className={styles.fileSearchForm} onSubmit={runFileSearch}>
+                  <input
+                    className={styles.fileSearchInput}
+                    value={fileSearch}
+                    onChange={(event) => setFileSearch(event.target.value)}
+                    placeholder="Search files"
+                    aria-label="Search project files"
+                  />
+                  <button type="submit" className={styles.fileSearchButton} disabled={searchStatus === 'searching'}>
+                    Search
+                  </button>
+                </form>
+                {searchStatus === 'error' && <div className={styles.explorerError}>Search failed.</div>}
+                {searchResults.length > 0 && (
+                  <div className={styles.searchResults}>
+                    {searchResults.map((result) => (
+                      <button type="button" key={result} className={styles.searchResultRow} onClick={() => selectPath(result, 'file')}>
+                        <span className={styles.searchResultName}>{getPathBasename(result)}</span>
+                        <span className={styles.searchResultPath}>{getPathDirname(result)}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className={styles.explorerTree}>
+                  <button
+                    type="button"
+                    className={`${styles.explorerRow} ${selectedPath === activeRoot ? styles.explorerRowActive : ''}`}
+                    onClick={() => selectPath(activeRoot, 'folder')}
+                  >
+                    <span className={styles.explorerDisclosure}>{expandedPaths.has(activeRoot) ? '▾' : '▸'}</span>
+                    <span className={styles.explorerIcon}>□</span>
+                    <span className={styles.explorerName}>{getPathBasename(activeRoot)}</span>
+                  </button>
+                  {(expandedPaths.has(activeRoot) || directoryEntries[activeRoot]) && renderDirectory(activeRoot, 1)}
+                </div>
+              </>
+            ) : (
+              <div className={styles.emptyExplorer}>
+                {projectContextCleared ? 'Project context cleared for this workspace.' : 'No project root was produced by this Coding Runtime task yet.'}
+              </div>
+            )}
+          </aside>
+
+          <main className={styles.workspaceMain}>
+            {renderRegion('goal')}
+            <div className={styles.selectedFilePanel}>
+              <span className={styles.selectedFileEyebrow}>Active File</span>
+              <span className={styles.selectedFileName}>{selectedLabel}</span>
+              {selectedParent && <span className={styles.selectedFilePath}>{selectedParent}</span>}
+              <span className={styles.codingSectionEmpty}>
+                File viewing and diffs are reserved for the next workspace phase. Phase A keeps navigation and project context live against real runtime APIs.
+              </span>
+            </div>
+          </main>
+
+          <aside className={styles.workspaceContext}>
+            <div className={styles.contextScroll}>
+              {renderRegion('liveExecution')}
+              {contextRegions.map((id) => {
+                const node = renderRegion(id);
+                return node ? <div key={id}>{node}</div> : null;
+              })}
+            </div>
+          </aside>
+
+          <section className={styles.workspaceTerminal}>
+            <div className={styles.panelHeader}>
+              <div>
+                <span className={styles.panelTitle}>Terminal</span>
+                <span className={styles.panelSubtitle}>Runtime output</span>
+              </div>
+            </div>
+            {terminalOutput ? (
+              <pre className={styles.terminalOutputArea}>{terminalOutput.slice(-4000)}</pre>
+            ) : (
+              <div className={styles.emptyExplorer}>
+                {proOnlyPlaceholder('Paw Go is planning & analysis only, so no terminal output is expected.', 'No command output yet.')}
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
     );
   }
 

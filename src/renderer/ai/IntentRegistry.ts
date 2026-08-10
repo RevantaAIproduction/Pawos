@@ -1,5 +1,7 @@
 import type { ReasoningToolDefinition, ReasoningToolCall } from '../reasoning/ReasoningTypes';
-import type { ActionRequest, KnownAppId } from '../../shared/actions/ActionTypes';
+import type { ActionRequest, CodeEditHunk, KnownAppId } from '../../shared/actions/ActionTypes';
+import type { IntelligenceReport } from '../../shared/intelligence/IntelligenceReportTypes';
+import { CODING_EXECUTION_ACTION_TYPES, INFRA_EXECUTION_ACTION_TYPES } from '../../shared/actions/ActionTypes';
 import { companionProfileStore } from '../companion/manager/CompanionProfileStore';
 
 /** Shared wording for every `confirmed` parameter — repeated per-tool (not just in the system prompt) so the model sees it right where it matters, at the moment it's filling the field in. */
@@ -211,6 +213,185 @@ export const ACTION_TOOL_DEFINITIONS: ReasoningToolDefinition[] = [
         filePath: { type: 'string', description: 'Absolute path of the file whose impact to check.' },
       },
       required: ['rootPath', 'filePath'],
+    },
+  },
+  {
+    name: 'build_dependency_graph',
+    description:
+      "Build the project's real import/dependency graph (Coding Runtime V2, Context Understanding Engine) — walks the project via a registered language provider (TypeScript today), resolving each file's actual import statements to real files on disk, not a basename-substring guess like analyze_file_impact. Cached incrementally (unchanged files are reused, not re-parsed). Read-only, available in both Paw Go and Paw Pro. Call this before answering structural questions like \"what does this file import\" or \"what would break if I changed this.\"",
+    parameters: {
+      type: 'object',
+      properties: { rootPath: { type: 'string', description: 'Absolute path of the project root to map.' } },
+      required: ['rootPath'],
+    },
+  },
+  {
+    name: 'classify_project_assets',
+    description:
+      "Classifies every real file in a project by kind (image, stylesheet, config, markdown, buildFile, sourceCode, test, other) using deterministic extension/exact-name rules — no AI guessing. Images get real width/height metadata. Use this to answer questions like 'what images does this project have' or 'how many config files vs source files does this project contain'.",
+    parameters: {
+      type: 'object',
+      properties: { rootPath: { type: 'string', description: 'Absolute path of the project root to classify assets within.' } },
+      required: ['rootPath'],
+    },
+  },
+  {
+    name: 'discover_affected_files',
+    description:
+      "Given a natural-language feature request, finds every file plausibly affected by it, ranked by confidence (high: part of a matching feature; medium/low: reachable via imports or a fuzzy path match). Use this before editing code to find every file a change should touch, instead of guessing from file names alone.",
+    parameters: {
+      type: 'object',
+      properties: {
+        rootPath: { type: 'string', description: 'Absolute path of the project root to search within.' },
+        query: { type: 'string', description: "The user's natural-language request, e.g. 'add a dark mode toggle to the settings page'." },
+      },
+      required: ['rootPath', 'query'],
+    },
+  },
+  {
+    name: 'apply_code_edit',
+    description:
+      "Makes a precise, minimal change to an existing file using one or more patch-style edit hunks — never a whole-file rewrite (use write_file for that). Each hunk locates its change by exact surrounding lines: contextBefore/contextAfter anchor the location (matched verbatim), oldLines is what's being replaced (empty for a pure insertion), newLines is what replaces it (empty for a pure deletion). Include enough real, verbatim context lines (copied exactly from the file you just read) that the edit's location is unambiguous. List multiple hunks for the same file in ascending file order. Always requires confirmation before it actually changes anything.",
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Absolute path of the file to edit. The file must already exist.' },
+        edits: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              contextBefore: { type: 'array', items: { type: 'string' }, description: 'Real lines immediately before the change, copied verbatim from the file.' },
+              oldLines: { type: 'array', items: { type: 'string' }, description: 'The exact lines being replaced. Empty for a pure insertion.' },
+              newLines: { type: 'array', items: { type: 'string' }, description: 'The lines that replace oldLines. Empty for a pure deletion.' },
+              contextAfter: { type: 'array', items: { type: 'string' }, description: 'Real lines immediately after the change, copied verbatim from the file.' },
+            },
+            required: ['contextBefore', 'oldLines', 'newLines', 'contextAfter'],
+          },
+        },
+        confirmed: { type: 'boolean', description: 'Set true only after the user has explicitly agreed to this edit.' },
+        planId: { type: 'string', description: "Optional — copy this from the plan's own step if this call is executing one step of an approved propose_code_edit_plan batch, so the recorded edit history ties back to that plan." },
+      },
+      required: ['path', 'edits'],
+    },
+  },
+  {
+    name: 'propose_code_edit_plan',
+    description:
+      "Builds a reviewable multi-file edit plan — one proposed apply_code_edit step per file — without applying anything itself. Use this instead of calling apply_code_edit directly whenever a change spans more than one file, so the user can review the whole batch (which files, what changes, why) before any of it actually runs.",
+    parameters: {
+      type: 'object',
+      properties: {
+        description: { type: 'string', description: 'A short human-readable summary of the whole batch, e.g. "Rename getUser to fetchUser across the API client and its callers".' },
+        edits: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              path: { type: 'string', description: 'Absolute path of the file this step edits.' },
+              edits: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    contextBefore: { type: 'array', items: { type: 'string' } },
+                    oldLines: { type: 'array', items: { type: 'string' } },
+                    newLines: { type: 'array', items: { type: 'string' } },
+                    contextAfter: { type: 'array', items: { type: 'string' } },
+                  },
+                  required: ['contextBefore', 'oldLines', 'newLines', 'contextAfter'],
+                },
+              },
+              rationale: { type: 'string', description: 'Why this specific file needs this specific change.' },
+            },
+            required: ['path', 'edits', 'rationale'],
+          },
+        },
+      },
+      required: ['description', 'edits'],
+    },
+  },
+  {
+    name: 'run_validation_pipeline',
+    description:
+      "Runs a real, structured validation sweep — syntax, imports, type check, lint, build, tests — and returns one report with blocking issues, warnings, a confidence level, and (if something failed) the single most likely place to start fixing it. Use this after applying a code edit batch to confirm it's actually sound, instead of trusting the edit alone. Pass affectedFiles to scope the cheap syntax/imports checks to just what changed; omit it to validate the whole project.",
+    parameters: {
+      type: 'object',
+      properties: {
+        rootPath: { type: 'string', description: 'Absolute path of the project root to validate.' },
+        affectedFiles: { type: 'array', items: { type: 'string' }, description: 'Absolute paths of files a recent edit touched, to scope the syntax/imports checks. Omit to check the whole project.' },
+      },
+      required: ['rootPath'],
+    },
+  },
+  {
+    name: 'record_architectural_decision',
+    description:
+      "Remembers an architectural decision and why it was made, so a future session doesn't ask again or contradict it. Only call this once a decision has actually been made and articulated (by you or the user) — never guess or infer one from code alone. Available in both Paw Go and Paw Pro.",
+    parameters: {
+      type: 'object',
+      properties: {
+        rootPath: { type: 'string', description: 'Absolute path of the project root this decision applies to.' },
+        decision: { type: 'string', description: 'What was decided, e.g. "Use Zustand instead of Redux for client state."' },
+        rationale: { type: 'string', description: 'Why — the real reasoning behind the decision.' },
+        alternativesConsidered: { type: 'array', items: { type: 'string' }, description: 'Optional — other options that were considered and rejected.' },
+      },
+      required: ['rootPath', 'decision', 'rationale'],
+    },
+  },
+  {
+    name: 'record_coding_preference',
+    description:
+      "Remembers a coding preference for this project (or globally, across all projects) — e.g. named vs. default exports, a preferred testing library. Only call this once the user has actually stated a preference, never inferred from a single observed instance of code style. Re-recording the same key updates it, so this always reflects the current preference. Available in both Paw Go and Paw Pro.",
+    parameters: {
+      type: 'object',
+      properties: {
+        preferenceScope: { type: 'string', enum: ['project', 'global'], description: '"project" applies only to rootPath; "global" applies across every project.' },
+        preferenceKey: { type: 'string', description: 'A short identifier for the preference, e.g. "exportStyle".' },
+        preferenceValue: { type: 'string', description: 'The actual preference, e.g. "named".' },
+        rootPath: { type: 'string', description: 'Required when preferenceScope is "project" — the project this preference applies to.' },
+      },
+      required: ['preferenceScope', 'preferenceKey', 'preferenceValue'],
+    },
+  },
+  {
+    name: 'query_coding_runtime_memory',
+    description:
+      "Answers \"what do you remember about this project\" — real recorded edit history, architectural decisions, preferences (project-scoped and global), and the most recent validation report. Use this before assuming a project has no history, and before repeating an architectural decision or preference the user already told you. Available in both Paw Go and Paw Pro.",
+    parameters: {
+      type: 'object',
+      properties: { rootPath: { type: 'string', description: 'Absolute path of the project root to recall memory for.' } },
+      required: ['rootPath'],
+    },
+  },
+  {
+    name: 'build_repository_semantic_index',
+    description:
+      "Builds a full semantic map of a project — imports/exports, features, domain concepts, and asset kinds for every real file — by running dependency-graph analysis, feature discovery, domain-concept detection, and asset classification together and composing the results into one queryable index. Use this before answering broad questions like 'give me a full picture of this codebase' rather than calling each narrower analysis tool separately.",
+    parameters: {
+      type: 'object',
+      properties: { rootPath: { type: 'string', description: 'Absolute path of the project root to index.' } },
+      required: ['rootPath'],
+    },
+  },
+  {
+    name: 'detect_domain_concepts',
+    description:
+      "Detects recognizable domain concepts (authentication, billing, CRUD resources) in a third-party project using real structural evidence — a matching dependency, a matching file-path convention, or a full GET+POST+PUT+DELETE route quad. Never guesses from vocabulary alone. Use this to answer questions like 'does this project have auth' or 'what does this codebase actually do'.",
+    parameters: {
+      type: 'object',
+      properties: { rootPath: { type: 'string', description: 'Absolute path of the project root to detect domain concepts within.' } },
+      required: ['rootPath'],
+    },
+  },
+  {
+    name: 'discover_project_features',
+    description:
+      "Feature Discovery Engine (Coding Runtime V2) — auto-discovers a project's coherent \"features\" (route + component + data-model + config + test files clustered around one user-facing capability), deterministically via traced routes, matched API calls, and import edges — never invented ML clustering. Builds or reuses the project's dependency graph automatically. Stored as codingFeature memories so later questions (\"what files make up the checkout feature\") don't require re-scanning. Read-only, available in both Paw Go and Paw Pro.",
+    parameters: {
+      type: 'object',
+      properties: { rootPath: { type: 'string', description: 'Absolute path of the project root to scan for features.' } },
+      required: ['rootPath'],
     },
   },
   {
@@ -598,6 +779,19 @@ export const ACTION_TOOL_DEFINITIONS: ReasoningToolDefinition[] = [
         confirmed: { type: 'boolean', description: 'Set true only after the user has explicitly agreed.' },
       },
       required: ['cwd', 'ref'],
+    },
+  },
+  {
+    name: 'git_revert_commit',
+    description: 'Undo a committed change by creating a new commit that inverts it (git revert --no-edit) — the safety net for a code-edit batch the user wants to back out of after it was already committed. Can fail with a real conflict if later commits touched the same lines; that failure is expected and never forced.',
+    parameters: {
+      type: 'object',
+      properties: {
+        cwd: { type: 'string', description: 'Absolute path of the repository.' },
+        commitSha: { type: 'string', description: 'The commit hash to revert.' },
+        confirmed: { type: 'boolean', description: 'Set true only after the user has explicitly agreed.' },
+      },
+      required: ['cwd', 'commitSha'],
     },
   },
   {
@@ -1760,6 +1954,127 @@ export const ACTION_TOOL_DEFINITIONS: ReasoningToolDefinition[] = [
     },
   },
   {
+    name: 'analyze_repository',
+    description:
+      'Repository Intelligence — real evidence-gather -> deterministic-correlate -> report pipeline over a local repository (language/framework/build tool detection, git status, recent commit activity, test/Docker presence), the same shared engine Website Intelligence uses. Optionally include a connected source-control connector\'s remote facts (pull requests, remote commit history) by naming the remote as "owner/repo". Read-only, never gated.',
+    parameters: {
+      type: 'object',
+      properties: {
+        repoPath: { type: 'string', description: 'Absolute path to the local repository root.' },
+        remoteFullName: { type: 'string', description: 'Optional "owner/repo" to also pull real remote facts via a connected source-control connector.' },
+      },
+      required: ['repoPath'],
+    },
+  },
+  {
+    name: 'investigate_repo_bug',
+    description:
+      'Same Repository Intelligence pipeline as analyze_repository, framed around a specific described bug/symptom rather than a general analysis — e.g. "Users report the login page hangs." Honestly scoped: static repository facts alone can\'t confirm a root cause, so the report always names that as an explicit gap rather than fabricating a diagnosis. Read-only, never gated.',
+    parameters: {
+      type: 'object',
+      properties: {
+        repoPath: { type: 'string', description: 'Absolute path to the local repository root.' },
+        symptom: { type: 'string', description: 'What the user actually said is wrong, in their own words.' },
+        remoteFullName: { type: 'string', description: 'Optional "owner/repo" to also pull real remote facts via a connected source-control connector.' },
+      },
+      required: ['repoPath', 'symptom'],
+    },
+  },
+  {
+    name: 'analyze_website',
+    description:
+      'Website Intelligence — single-page analysis of a public URL: real HTTP fetch (title, meta tags, security response headers, word count, link counts), deterministically correlated into scored findings via the same shared engine Repository Intelligence uses. Does not execute JavaScript, so client-side-rendered content isn\'t covered (the report names this gap explicitly). Read-only, never gated, no confirmation needed.',
+    parameters: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'The full http(s) URL to analyze, e.g. "https://example.com".' },
+      },
+      required: ['url'],
+    },
+  },
+  {
+    name: 'crawl_website',
+    description:
+      'Website Intelligence — bounded, same-origin, robots.txt-compliant multi-page crawl (up to 50 pages, 5 links deep, real per-origin rate limiting), then the same evidence-correlate-report pipeline as analyze_website. Unlike browsing, this ALWAYS requires fresh user confirmation before running, every time — crawling multiple pages of a third-party site unattended is a bigger action than reading one page.',
+    parameters: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'The full http(s) URL to start crawling from.' },
+        maxPages: { type: 'number', description: 'Maximum pages to fetch (default 15, hard cap 50).' },
+        maxDepth: { type: 'number', description: 'Maximum link-following depth from the start page (default 2, hard cap 5).' },
+      },
+      required: ['url'],
+    },
+  },
+  {
+    name: 'review_ux',
+    description:
+      'UX Intelligence — bounded, same-origin, robots.txt-compliant multi-page structural review (up to 50 pages, 5 links deep), checking real static-HTML accessibility/UX signals: heading structure, image alt text, form field labeling, empty interactive elements, navigation landmarks, and the lang attribute. Does not capture rendered layout, color contrast, or tap-target sizing (the report names this gap explicitly). Like crawl_website, this ALWAYS requires fresh user confirmation before running, every time.',
+    parameters: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'The full http(s) URL to start reviewing from.' },
+        maxPages: { type: 'number', description: 'Maximum pages to fetch (default 15, hard cap 50).' },
+        maxDepth: { type: 'number', description: 'Maximum link-following depth from the start page (default 2, hard cap 5).' },
+      },
+      required: ['url'],
+    },
+  },
+  {
+    name: 'analyze_marketing',
+    description:
+      'Marketing Intelligence — bounded, same-origin, robots.txt-compliant multi-page marketing/SEO-signal review (up to 50 pages, 5 links deep), checking real static-HTML signals: Open Graph/Twitter Card tags, schema.org structured data, known analytics/tracking scripts, call-to-action phrasing, social media links, contact info (mailto/tel), favicon, and sitemap.xml presence. Does not capture dynamically-injected marketing tooling like chat widgets or A/B test variants (the report names this gap explicitly). Like crawl_website/review_ux, this ALWAYS requires fresh user confirmation before running, every time.',
+    parameters: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'The full http(s) URL to start reviewing from.' },
+        maxPages: { type: 'number', description: 'Maximum pages to fetch (default 15, hard cap 50).' },
+        maxDepth: { type: 'number', description: 'Maximum link-following depth from the start page (default 2, hard cap 5).' },
+      },
+      required: ['url'],
+    },
+  },
+  {
+    name: 'score_product',
+    description:
+      'Product Intelligence — pure aggregation over already-generated Website/UX/Marketing/Repository Intelligence reports (never re-fetches or re-crawls anything itself). Reads whichever reports already exist for the given URL and/or repository path, cross-correlates them, and names any requested domain that hasn\'t been analyzed yet rather than fabricating one. Read-only, never gated, no confirmation needed. Run analyze_website/review_ux/analyze_marketing/analyze_repository first for the domains you want included.',
+    parameters: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'The website URL whose Website/UX/Marketing Intelligence reports should be aggregated.' },
+        repoPath: { type: 'string', description: 'The local repository path whose Repository Intelligence report should be aggregated.' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'ask_founder_advisor',
+    description:
+      'Founder Intelligence — a composer over the same already-generated Website/UX/Marketing/Repository reports Product Intelligence reads (no separate evidence-gathering, no new fetch/crawl). Produces role-framed strategic recommendations (growth advisor, technical architect, etc.) and a real cross-report "top priority" — a specific finding lifted from one of the underlying reports, not a freeform LLM judgment. Read-only, never gated, no confirmation needed.',
+    parameters: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'The website URL whose Website/UX/Marketing Intelligence reports should inform the advice.' },
+        repoPath: { type: 'string', description: 'The local repository path whose Repository Intelligence report should inform the advice.' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'propose_execution_plan',
+    description:
+      'Execution Planner — the Think -> Plan boundary. Converts a set of user-approved findings from an already-generated Intelligence report into a reviewable ExecutionPlan of concrete steps; never executes anything itself (running a step later goes through the normal action-execution path with the user\'s own confirmation, exactly like any other action). Every step names which finding(s) it addresses and why. Only a narrow set of findings have a safe, deterministic automation today (e.g. Repository Intelligence\'s "no test suite" finding) — approved findings without one are honestly listed as not automatable rather than papered over with a fabricated fix. This is the one Execute-class action in the whole Intelligence area — requires Paw Pro.',
+    parameters: {
+      type: 'object',
+      properties: {
+        engineId: { type: 'string', description: 'Which Intelligence engine produced the report: "website", "repository", "product", "ux", "marketing", or "founder".' },
+        subject: { type: 'string', description: 'The report\'s subject — the same URL or repository path the analysis was run against.' },
+        approvedFindingIds: { type: 'array', items: { type: 'string' }, description: 'The specific Finding.id values the user approved acting on.' },
+      },
+      required: ['engineId', 'subject', 'approvedFindingIds'],
+    },
+  },
+  {
     name: 'compare_deployments',
     description: 'Deployment Intelligence\'s deployment comparison — diffs the two most recent real deployment records for a service (status, environment, hosting connector, time between them). Fails honestly if fewer than 2 deployments are on record. Never gated.',
     parameters: {
@@ -1992,6 +2307,44 @@ export const ACTION_TOOL_DEFINITIONS: ReasoningToolDefinition[] = [
   },
 ];
 
+const EXECUTE_CLASS_ACTION_TYPES = new Set<string>([...CODING_EXECUTION_ACTION_TYPES, ...INFRA_EXECUTION_ACTION_TYPES]);
+
+/** Tool names are the snake_case form of their ActionRequest['type'] (e.g. 'write_file' -> 'writeFile', 'deploy_project' -> 'deployProject') — the same naming convention toolCallToActionRequest's switch below relies on implicitly. */
+function toolNameToActionType(name: string): string {
+  return name.replace(/_([a-z])/g, (_match, letter: string) => letter.toUpperCase());
+}
+
+/**
+ * Filters ACTION_TOOL_DEFINITIONS down to what the current tier can actually use. Execute-class
+ * tools (writeFile/gitCommit/runCommand/deployProject/etc. — see CODING_EXECUTION_ACTION_TYPES/
+ * INFRA_EXECUTION_ACTION_TYPES) are omitted outright when `canExecute` is false, so a Go-tier
+ * session's model never even considers calling a tool it can't use, rather than being refused only
+ * at execution time by DesktopExecutionEngine's entitlement gate. Every Think-class tool (including
+ * every future Intelligence Runtime tool) stays available regardless of tier.
+ */
+export function getToolDefinitionsForEntitlement(canExecute: boolean): ReasoningToolDefinition[] {
+  if (canExecute) return ACTION_TOOL_DEFINITIONS;
+  return ACTION_TOOL_DEFINITIONS.filter((tool) => !EXECUTE_CLASS_ACTION_TYPES.has(toolNameToActionType(tool.name)));
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((v) => typeof v === 'string');
+}
+
+/** Validates one raw tool-call hunk into a real CodeEditHunk — every field must be a real string array, never coerced from a missing/malformed value. */
+function toCodeEditHunk(value: unknown): CodeEditHunk | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Record<string, unknown>;
+  if (!isStringArray(v.contextBefore) || !isStringArray(v.oldLines) || !isStringArray(v.newLines) || !isStringArray(v.contextAfter)) return null;
+  return { contextBefore: v.contextBefore, oldLines: v.oldLines, newLines: v.newLines, contextAfter: v.contextAfter };
+}
+
+function toCodeEditHunks(value: unknown): CodeEditHunk[] | null {
+  if (!Array.isArray(value)) return null;
+  const hunks = value.map(toCodeEditHunk);
+  return hunks.every((h): h is CodeEditHunk => h !== null) ? hunks : null;
+}
+
 /** Converts a validated tool call into the corresponding ActionRequest, or null if malformed/unknown. */
 export function toolCallToActionRequest(toolCall: ReasoningToolCall): ActionRequest | null {
   const args = (toolCall.arguments ?? {}) as Record<string, unknown>;
@@ -2079,6 +2432,77 @@ export function toolCallToActionRequest(toolCall: ReasoningToolCall): ActionRequ
 
     case 'analyze_project_structure':
       return typeof args.rootPath === 'string' ? { type: 'analyzeProjectStructure', rootPath: args.rootPath } : null;
+
+    case 'build_dependency_graph':
+      return typeof args.rootPath === 'string' ? { type: 'buildDependencyGraph', rootPath: args.rootPath } : null;
+
+    case 'discover_project_features':
+      return typeof args.rootPath === 'string' ? { type: 'discoverProjectFeatures', rootPath: args.rootPath } : null;
+
+    case 'classify_project_assets':
+      return typeof args.rootPath === 'string' ? { type: 'classifyProjectAssets', rootPath: args.rootPath } : null;
+
+    case 'detect_domain_concepts':
+      return typeof args.rootPath === 'string' ? { type: 'detectDomainConcepts', rootPath: args.rootPath } : null;
+
+    case 'build_repository_semantic_index':
+      return typeof args.rootPath === 'string' ? { type: 'buildRepositorySemanticIndex', rootPath: args.rootPath } : null;
+
+    case 'discover_affected_files':
+      return typeof args.rootPath === 'string' && typeof args.query === 'string'
+        ? { type: 'discoverAffectedFiles', rootPath: args.rootPath, query: args.query }
+        : null;
+
+    case 'apply_code_edit': {
+      if (typeof args.path !== 'string') return null;
+      const edits = toCodeEditHunks(args.edits);
+      if (!edits || edits.length === 0) return null;
+      return { type: 'applyCodeEdit', path: args.path, edits, confirmed: args.confirmed === true, planId: typeof args.planId === 'string' ? args.planId : undefined };
+    }
+
+    case 'propose_code_edit_plan': {
+      if (typeof args.description !== 'string' || !Array.isArray(args.edits)) return null;
+      const fileEdits: { path: string; edits: CodeEditHunk[]; rationale: string }[] = [];
+      for (const raw of args.edits) {
+        if (typeof raw !== 'object' || raw === null) return null;
+        const entry = raw as Record<string, unknown>;
+        const hunks = toCodeEditHunks(entry.edits);
+        if (typeof entry.path !== 'string' || !hunks || typeof entry.rationale !== 'string') return null;
+        fileEdits.push({ path: entry.path, edits: hunks, rationale: entry.rationale });
+      }
+      if (fileEdits.length === 0) return null;
+      return { type: 'proposeCodeEditPlan', description: args.description, edits: fileEdits };
+    }
+
+    case 'run_validation_pipeline':
+      return typeof args.rootPath === 'string'
+        ? { type: 'runValidationPipeline', rootPath: args.rootPath, affectedFiles: isStringArray(args.affectedFiles) ? args.affectedFiles : undefined }
+        : null;
+
+    case 'record_architectural_decision':
+      return typeof args.rootPath === 'string' && typeof args.decision === 'string' && typeof args.rationale === 'string'
+        ? {
+            type: 'recordArchitecturalDecision',
+            rootPath: args.rootPath,
+            decision: args.decision,
+            rationale: args.rationale,
+            alternativesConsidered: isStringArray(args.alternativesConsidered) ? args.alternativesConsidered : undefined,
+          }
+        : null;
+
+    case 'record_coding_preference':
+      return (args.preferenceScope === 'project' || args.preferenceScope === 'global') && typeof args.preferenceKey === 'string' && typeof args.preferenceValue === 'string'
+        ? {
+            type: 'recordCodingPreference',
+            preferenceScope: args.preferenceScope,
+            preferenceKey: args.preferenceKey,
+            preferenceValue: args.preferenceValue,
+            rootPath: typeof args.rootPath === 'string' ? args.rootPath : undefined,
+          }
+        : null;
+
+    case 'query_coding_runtime_memory':
+      return typeof args.rootPath === 'string' ? { type: 'queryCodingRuntimeMemory', rootPath: args.rootPath } : null;
 
     case 'analyze_file_impact':
       return typeof args.rootPath === 'string' && typeof args.filePath === 'string'
@@ -2246,6 +2670,11 @@ export function toolCallToActionRequest(toolCall: ReasoningToolCall): ActionRequ
     case 'git_checkout':
       return typeof args.cwd === 'string' && typeof args.ref === 'string'
         ? { type: 'gitCheckout', cwd: args.cwd, ref: args.ref, confirmed: args.confirmed === true }
+        : null;
+
+    case 'git_revert_commit':
+      return typeof args.cwd === 'string' && typeof args.commitSha === 'string'
+        ? { type: 'gitRevertCommit', cwd: args.cwd, commitSha: args.commitSha, confirmed: args.confirmed === true }
         : null;
 
     case 'install_tool': {
@@ -2845,6 +3274,81 @@ export function toolCallToActionRequest(toolCall: ReasoningToolCall): ActionRequ
 
     case 'investigate_production_issue':
       return typeof args.description === 'string' && typeof args.cwd === 'string' ? { type: 'investigateProductionIssue', description: args.description, cwd: args.cwd } : null;
+
+    case 'analyze_repository':
+      return typeof args.repoPath === 'string'
+        ? { type: 'analyzeRepository', repoPath: args.repoPath, remoteFullName: typeof args.remoteFullName === 'string' ? args.remoteFullName : undefined }
+        : null;
+
+    case 'investigate_repo_bug':
+      return typeof args.repoPath === 'string' && typeof args.symptom === 'string'
+        ? {
+            type: 'investigateRepoBug',
+            repoPath: args.repoPath,
+            symptom: args.symptom,
+            remoteFullName: typeof args.remoteFullName === 'string' ? args.remoteFullName : undefined,
+          }
+        : null;
+
+    case 'analyze_website':
+      return typeof args.url === 'string' ? { type: 'analyzeWebsite', url: args.url } : null;
+
+    case 'crawl_website':
+      return typeof args.url === 'string'
+        ? {
+            type: 'crawlWebsite',
+            url: args.url,
+            maxPages: typeof args.maxPages === 'number' ? args.maxPages : undefined,
+            maxDepth: typeof args.maxDepth === 'number' ? args.maxDepth : undefined,
+          }
+        : null;
+
+    case 'review_ux':
+      return typeof args.url === 'string'
+        ? {
+            type: 'reviewUx',
+            url: args.url,
+            maxPages: typeof args.maxPages === 'number' ? args.maxPages : undefined,
+            maxDepth: typeof args.maxDepth === 'number' ? args.maxDepth : undefined,
+          }
+        : null;
+
+    case 'analyze_marketing':
+      return typeof args.url === 'string'
+        ? {
+            type: 'analyzeMarketing',
+            url: args.url,
+            maxPages: typeof args.maxPages === 'number' ? args.maxPages : undefined,
+            maxDepth: typeof args.maxDepth === 'number' ? args.maxDepth : undefined,
+          }
+        : null;
+
+    case 'score_product':
+      return {
+        type: 'scoreProduct',
+        url: typeof args.url === 'string' ? args.url : undefined,
+        repoPath: typeof args.repoPath === 'string' ? args.repoPath : undefined,
+      };
+
+    case 'ask_founder_advisor':
+      return {
+        type: 'askFounderAdvisor',
+        url: typeof args.url === 'string' ? args.url : undefined,
+        repoPath: typeof args.repoPath === 'string' ? args.repoPath : undefined,
+      };
+
+    case 'propose_execution_plan': {
+      const knownEngineIds: IntelligenceReport['engineId'][] = ['website', 'repository', 'product', 'ux', 'marketing', 'founder'];
+      if (typeof args.engineId !== 'string' || !(knownEngineIds as string[]).includes(args.engineId)) return null;
+      if (typeof args.subject !== 'string') return null;
+      const approvedFindingIds = Array.isArray(args.approvedFindingIds) ? args.approvedFindingIds.filter((id): id is string => typeof id === 'string') : [];
+      return {
+        type: 'proposeExecutionPlan',
+        engineId: args.engineId as IntelligenceReport['engineId'],
+        subject: args.subject,
+        approvedFindingIds,
+      };
+    }
 
     case 'start_autonomous_engineering_task':
       return {

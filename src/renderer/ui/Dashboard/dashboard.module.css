@@ -365,17 +365,6 @@ select optgroup {
   overflow-y: auto;
 }
 
-.header {
-  padding: 24px 32px 0;
-}
-
-.headerTitle {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
 .content {
   padding: 24px 32px 48px;
 }

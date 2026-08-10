@@ -5,28 +5,30 @@ export const SUBSCRIPTION_ARTICLES: HelpArticle[] = [
     id: 'paw-go',
     category: 'subscription',
     title: 'Paw Go',
-    summary: 'PawOS’s real, genuinely free tier — no AI models, no AI credits, by design.',
+    summary: 'PawOS’s real, genuinely free tier — real AI for planning, analysis & investigation; execution requires Paw Pro.',
     overview:
-      'Paw Go is PawOS’s free tier. It is a real, deliberate product decision, not a limited trial: Go has ' +
-      'zero AI models available and a monthly AI credit limit of exactly 0. Everything non-AI — companion ' +
-      'visuals, Projects, git tooling, and basic workspace features — works fully on Go.',
+      'Paw Go is PawOS’s free tier. It is a real, deliberate product decision, not a limited trial: Go includes ' +
+      'real AI (Paw Flash) for investigation, analysis, and planning, drawing from a capped monthly AI credit ' +
+      'allowance — but it never executes anything on your behalf. Generating or modifying code, running ' +
+      'commands, and deploying always require Paw Pro. Everything non-AI — companion visuals, Projects, git ' +
+      'tooling, and basic workspace features — also works fully on Go.',
     features: [
       'Companion Studio and desktop companion visuals',
       'Basic workspace and file management',
       'Local runtime features (Projects, git, history)',
-      'No AI models, no AI reasoning, no AI credits',
+      'Real AI for planning, analysis & investigation (Paw Flash), with a capped credit allowance',
     ],
-    howItWorks: 'Go is the default, unauthenticated-friendly tier. It is not gated behind a trial countdown — it stays free indefinitely, with the tradeoff that AI-powered features (voice conversations, AI coding assistance) are unavailable until you upgrade.',
-    bestPractices: ['Use Go if you want PawOS purely as a companion-visual and project/git tool without AI', 'Upgrade to Pro when you want voice conversations or AI coding help'],
+    howItWorks: 'Go is the default, unauthenticated-friendly tier. It is not gated behind a trial countdown — it stays free indefinitely. Go can investigate, analyze, and plan with real AI; upgrading to Pro is what unlocks execution — generating and modifying code, running commands, deploying, and voice conversations.',
+    bestPractices: ['Use Go if you want PawOS as a companion-visual and project/git tool with AI-assisted planning and analysis, but no execution', 'Upgrade to Pro when you want Paw to actually generate/modify code, run commands, deploy, or hold voice conversations'],
     examples: [],
-    troubleshooting: ['If AI features are unavailable, this is expected on Go — upgrade to unlock AI models'],
+    troubleshooting: ['If an execution action (writing code, running commands, deploying) is refused, this is expected on Go — upgrade to Pro to unlock execution'],
     requirements: [],
     permissions: [],
     administration: 'Go has no organization/seat concept — it is an individual, single-account tier.',
-    billing: 'Free — $0. No payment method required.',
+    billing: 'Free — $0. No payment method required. AI usage on Go draws from a capped monthly credit allowance (exact limit still being finalized).',
     faq: [
-      { question: 'Is Paw Go a trial?', answer: 'No — it is a genuinely free, ongoing tier with zero AI models by design, not a time-limited trial.' },
-      { question: 'Who is Paw Go for?', answer: 'Anyone who wants the companion and project/git tooling without needing AI-powered conversation or coding assistance.' },
+      { question: 'Is Paw Go a trial?', answer: 'No — it is a genuinely free, ongoing tier with real AI for planning and analysis by design, not a time-limited trial.' },
+      { question: 'Who is Paw Go for?', answer: 'Anyone who wants the companion, project/git tooling, and AI-assisted planning/analysis without needing Paw to execute changes on their behalf.' },
     ],
     relatedArticleIds: ['paw-pro', 'account-usage'],
     relatedSettings: ['Billing'],
@@ -90,7 +92,7 @@ export const SUBSCRIPTION_ARTICLES: HelpArticle[] = [
     administration: 'Individual tier — no organization/seat concept.',
     billing: 'Currently uncapped monthly AI credit limit (pricing marked "Business Configuration Required" until finalized).',
     faq: [{ question: 'What’s different between Pro and Pro Max?', answer: 'They share the same model roster and features today; Pro Max is the higher individual pricing tier. Organization capability begins at Team, not Pro Max.' }],
-    relatedArticleIds: ['paw-pro', 'paw-team'],
+    relatedArticleIds: ['paw-pro', 'team'],
     relatedSettings: ['Billing'],
     relatedApps: ['upgrade', 'settings'],
     keywords: ['paw pro max', 'subscription'],

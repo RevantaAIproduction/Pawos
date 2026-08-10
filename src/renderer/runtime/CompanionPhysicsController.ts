@@ -30,7 +30,7 @@ export class CompanionPhysicsController {
     this.x = args.initial.x;
     this.y = args.initial.y;
     this.size = { ...args.pet.bodySize };
-    this.restitution = args.pet.physics.restitution;
+    this.restitution = args.pet.restitution ?? this.restitution;
     this.gravity = 1200;
     this.linearDrag = 2.3;
   }
@@ -61,7 +61,7 @@ export class CompanionPhysicsController {
       const dist = Math.hypot(dx, dy);
 
       const speed =
-        (this.args.pet.physics.speed ?? 160) * (this.args.settings.animationSpeed ?? 1) * this.emotionSpeedMultiplier;
+        (this.args.pet.speed ?? 160) * (this.args.settings.animationSpeed ?? 1) * this.emotionSpeedMultiplier;
       const move = Math.min(dist, speed * dt);
       if (dist > 1) {
         const nx = dx / dist;

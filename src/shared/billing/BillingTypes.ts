@@ -90,9 +90,11 @@ export type TicketPricingConfig = {
 };
 
 export type CreditBalance = {
-  /** null = no cap configured yet — usage is tracked but never blocks anything. "Business Configuration Required". */
+  /** Always null here — CreditStore itself never stores a limit; EntitlementService resolves the real one from UsageQuotaConfigStore. */
   limit: number | null;
   usedThisPeriod: number;
+  /** Bonus Paw Compute headroom granted for the current period only (e.g. via Referral Credits redemption) — added on top of the tier's own configured limit, never replacing it. */
+  bonusThisPeriod: number;
   periodResetsAt: number;
 };
 
@@ -153,14 +155,18 @@ export type FeatureId =
   | 'connectJira'
   | 'connectSlack'
   | 'ssoConfiguration'
-  | 'autonomousTaskBilling';
+  | 'autonomousTaskBilling'
+  | 'mobilePairing'
+  | 'crossDeviceSync'
+  | 'mobileNotifications'
+  | 'organizationCrossDeviceAlerts';
 
 export type TierEntitlements = {
   tier: SubscriptionTierId;
-  /** Empty array = no AI models at all (Paw Go). */
+  /** Paw Go includes only paw-flash (Think-class planning/analysis); Pro+ unlock the full roster. Empty would mean no AI at all — no tier is configured that way today. */
   models: PawModelId[];
   features: FeatureId[];
-  /** null = uncapped for this tier's own credit pool (still subject to Business Configuration Required until a real limit is set). */
+  /** null = uncapped. Resolved live from UsageQuotaConfigStore's single 'aiReasoning' config (Pro Max derives 20x Pro automatically) — never a static per-tier literal. */
   monthlyCreditLimit: number | null;
   /** Only set when tier === 'team' — echoes which seat rate produced this entitlement set. */
   seatTier?: SeatTier;
@@ -175,7 +181,20 @@ export type EntitlementSnapshot = {
   features: FeatureId[];
   creditLimit: number | null;
   creditsUsedThisPeriod: number;
+  /** Extra Paw Compute headroom redeemed from Referral Credits ("Paw Credits") for the current period — see EntitlementService.grantComputeBonus(). Always 0 unless the user has redeemed credits this period. */
+  bonusComputeThisPeriod: number;
   hasCreditsRemaining: boolean;
+  /**
+   * True only for Enterprise — the account's Paw Compute allowance is pooled
+   * organization-wide and enforced server-side by
+   * increment_organization_usage(), never by this local snapshot's own
+   * hasCreditsRemaining (which is unconditionally true for a pooled tier at
+   * this layer). Callers that gate a new AI request must, for a pooled
+   * tier, call organizationUsageService.recordUsage(orgId, 'aiReasoning', 1)
+   * themselves and treat a thrown error as "blocked" — see
+   * useConversationController.ts.
+   */
+  pooled: boolean;
   /** Only set when tier === 'team' — which seat rate (Standard/Premium) this account holds. */
   seatTier?: SeatTier;
 };

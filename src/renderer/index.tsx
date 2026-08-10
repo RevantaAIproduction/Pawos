@@ -2,6 +2,9 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import './theme.css';
 import App from './ui/App';
+import { installRendererCrashGuard } from './platform/RendererCrashGuard';
+
+installRendererCrashGuard();
 
 const container = document.getElementById('root');
 if (!container) throw new Error('Missing #root');

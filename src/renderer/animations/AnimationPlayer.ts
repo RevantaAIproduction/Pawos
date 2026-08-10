@@ -111,7 +111,7 @@ export class AnimationPlayer {
     this.timeInStateMs += dtMs;
 
     const asset = this.animToDesc[this.current as string];
-    if (asset.kind === 'gif') {
+    if (!asset || asset.kind === 'gif') {
       // GIF advances internally with browser; no manual frame stepping.
       return;
     }

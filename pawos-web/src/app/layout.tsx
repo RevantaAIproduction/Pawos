@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Nav } from "../components/layout/Nav";
@@ -6,6 +6,8 @@ import { Footer } from "../components/layout/Footer";
 import { Analytics } from "../components/analytics/Analytics";
 import { CookieConsent } from "../components/analytics/CookieConsent";
 import { SiteCompanion } from "../components/site-companion/SiteCompanion";
+import { ServiceWorkerRegistration } from "../components/pwa/ServiceWorkerRegistration";
+import { InstallPrompt } from "../components/pwa/InstallPrompt";
 import { createClient } from "../lib/supabase/server";
 
 const geistSans = Geist({
@@ -43,6 +45,15 @@ export const metadata: Metadata = {
       "PawOS is an AI companion that lives on your desktop, plans and executes real work, and helps you code, browse, deploy, and communicate.",
   },
   robots: { index: true, follow: true },
+};
+
+// Mobile Presence PWA Foundation (MOB-4) — themeColor matches manifest.ts's
+// background_color/theme_color; viewportFit: 'cover' plus the safe-area
+// CSS in globals.css is what lets /companion sit correctly behind a real
+// phone's notch/home-indicator instead of clipping under it.
+export const viewport: Viewport = {
+  themeColor: "#0a0a0a",
+  viewportFit: "cover",
 };
 
 export default async function RootLayout({
@@ -106,6 +117,8 @@ export default async function RootLayout({
         <CookieConsent />
         <Analytics />
         <SiteCompanion />
+        <ServiceWorkerRegistration />
+        <InstallPrompt />
       </body>
     </html>
   );

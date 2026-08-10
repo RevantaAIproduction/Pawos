@@ -11,8 +11,8 @@ import type { CompanionPackageInput, ImportedCompanionPackage } from '../../../s
 import type { ActionRequest, ActionRequirement, ActionResult } from '../../../shared/actions/ActionTypes';
 import type { ForegroundWindowInfo } from '../../../shared/system/ForegroundWindowInfo';
 import type { GoogleSignInResult } from '../../../shared/auth/AccountTypes';
-import type { PairedDevice } from '../../../shared/pairing/PairingTypes';
 import type { LocalDeviceIdentity } from '../../../shared/device/DeviceTypes';
+import type { PushNotificationPayload, PushSendResult } from '../../../shared/mobilePresence/MobilePresenceTypes';
 import type {
   PricingConfig,
   TicketPricingConfig,
@@ -39,7 +39,7 @@ import type { WorkspaceFileChangeEvent } from '../../../shared/actions/Workspace
 import type { WorkspaceObservationEvent } from '../../../shared/actions/ExecutionLifecycle';
 import type { ExecutionRecord } from '../../../shared/actions/ExecutionRecordTypes';
 import type { BrowserCapabilityReport } from '../../../shared/actions/BrowserCapabilityTypes';
-import type { CommunicationRuntimeEvent, ParticipantRecord, CompanyRecord, CommunicationSummary, FollowUp } from '../../../shared/communication/CommunicationTypes';
+import type { CommunicationRuntimeEvent, ParticipantRecord, CompanyRecord, CommunicationSummary, FollowUp, RecordingTimelineEntry, EvidenceObject, BusinessInsight } from '../../../shared/communication/CommunicationTypes';
 import type {
   ConnectivityScope,
   ConnectorDefinition,
@@ -89,6 +89,8 @@ export function contextBridge() {
     onCompanionCommand: (cb: (command: CompanionCommand) => void) => on('companion:command', cb),
     companionNotifyReady: () => ipcApi?.send('companion:ready'),
     onCompanionReady: (cb: () => void) => on('companion:ready:broadcast', cb),
+    reportPlatformRendererEvent: (payload: { message: string; stack?: string }) =>
+      ipcApi?.send('platform:reportRendererEvent', payload),
 
     settingsGet: async (): Promise<SettingsState> => ipcApi.invoke('settings:get'),
     settingsSet: async (partial: Partial<SettingsState>) => ipcApi.invoke('settings:set', partial),
@@ -144,18 +146,12 @@ export function contextBridge() {
     authValidatePasswordResetToken: async (token: string): Promise<{ valid: boolean; email?: string; reason?: string }> =>
       ipcApi.invoke('auth:validatePasswordResetToken', token),
 
-    pairingBegin: async (userId?: string): Promise<{ token: string; pairingUri: string; qrDataUrl: string; expiresAt: number }> =>
-      ipcApi.invoke('pairing:begin', userId),
-    pairingComplete: async (
-      token: string,
-      deviceName: string,
-      publicKey: string
-    ): Promise<{ ok: true; device: PairedDevice } | { ok: false; reason: string }> =>
-      ipcApi.invoke('pairing:complete', token, deviceName, publicKey),
-    pairingList: async (userId?: string): Promise<PairedDevice[]> => ipcApi.invoke('pairing:list', userId),
-    pairingRevoke: async (deviceId: string): Promise<boolean> => ipcApi.invoke('pairing:revoke', deviceId),
-
     deviceGetLocalIdentity: async (): Promise<LocalDeviceIdentity> => ipcApi.invoke('device:getLocalIdentity'),
+
+    notificationsSendPush: async (
+      subscription: { endpoint: string; p256dh: string; authKey: string },
+      payload: PushNotificationPayload
+    ): Promise<PushSendResult> => ipcApi.invoke('notifications:sendPush', subscription, payload),
 
     billingGetPricing: async (): Promise<PricingConfig> => ipcApi.invoke('billing:getPricing'),
     billingGetTicketPricingConfig: async (): Promise<TicketPricingConfig> => ipcApi.invoke('billing:getTicketPricingConfig'),
@@ -164,10 +160,12 @@ export function contextBridge() {
       ipcApi.invoke('billing:setSubscriptionTier', tier),
     billingSyncTierFromOrganization: async (orgTier: SubscriptionTierId): Promise<SubscriptionState> =>
       ipcApi.invoke('billing:syncFromOrganization', orgTier),
+    billingResetSubscription: async (): Promise<SubscriptionState> => ipcApi.invoke('billing:resetSubscription'),
     billingGetCreditBalance: async (): Promise<CreditBalance> => ipcApi.invoke('billing:getCreditBalance'),
     billingConsumeCredit: async (amount: number, reason: string, category?: AiUsageCategory): Promise<CreditBalance> =>
       ipcApi.invoke('billing:consumeCredit', amount, reason, category),
     billingGetCreditHistory: async (): Promise<CreditConsumptionRecord[]> => ipcApi.invoke('billing:getCreditHistory'),
+    billingGrantComputeBonus: async (units: number): Promise<EntitlementSnapshot> => ipcApi.invoke('billing:grantComputeBonus', units),
     entitlementGetSnapshot: async (): Promise<EntitlementSnapshot> => ipcApi.invoke('entitlement:getSnapshot'),
     entitlementIsModelAvailable: async (modelId: PawModelId): Promise<boolean> =>
       ipcApi.invoke('entitlement:isModelAvailable', modelId),
@@ -227,6 +225,38 @@ export function contextBridge() {
 
     communicationSaveAudio: async (communicationId: string, base64Data: string, mimeType: string): Promise<{ ok: boolean; data?: { audioPath: string }; message?: string }> =>
       ipcApi.invoke('communication:saveAudio', communicationId, base64Data, mimeType),
+    communicationAppendRecordingChunk: async (communicationId: string, kind: 'audio' | 'video', base64Chunk: string, expectedChecksum?: string): Promise<{ ok: boolean; message?: string }> =>
+      ipcApi.invoke('communication:appendRecordingChunk', communicationId, kind, base64Chunk, expectedChecksum),
+    communicationFinalizeRecording: async (
+      communicationId: string,
+      kind: 'audio' | 'video',
+      mimeType: string
+    ): Promise<{ ok: boolean; data?: { path: string; sizeBytes: number; checksum: string } | null; message?: string }> =>
+      ipcApi.invoke('communication:finalizeRecording', communicationId, kind, mimeType),
+    communicationGetRecordingDiagnostics: async (communicationId: string): Promise<Record<string, unknown> | null> =>
+      ipcApi.invoke('communication:getRecordingDiagnostics', communicationId),
+    communicationDeleteRecording: async (communicationId: string): Promise<{ ok: boolean; message?: string }> =>
+      ipcApi.invoke('communication:deleteRecording', communicationId),
+    communicationGetRecordingTimeline: async (communicationId: string): Promise<RecordingTimelineEntry[]> =>
+      ipcApi.invoke('communication:getRecordingTimeline', communicationId),
+    communicationGenerateEvidence: async (
+      communicationId: string,
+      apiKey: string,
+      model?: string,
+      baseUrl?: string
+    ): Promise<{ ok: boolean; data?: { evidenceCount: number }; message?: string }> =>
+      ipcApi.invoke('communication:generateEvidence', communicationId, apiKey, model, baseUrl),
+    communicationGetEvidence: async (communicationId: string): Promise<EvidenceObject[]> =>
+      ipcApi.invoke('communication:getEvidence', communicationId),
+    communicationGenerateBusinessInsights: async (
+      communicationId: string,
+      apiKey: string,
+      model?: string,
+      baseUrl?: string
+    ): Promise<{ ok: boolean; data?: { insightCount: number }; message?: string }> =>
+      ipcApi.invoke('communication:generateBusinessInsights', communicationId, apiKey, model, baseUrl),
+    communicationGetBusinessInsights: async (communicationId: string): Promise<BusinessInsight[]> =>
+      ipcApi.invoke('communication:getBusinessInsights', communicationId),
     onCommunicationEvent: (cb: (event: CommunicationRuntimeEvent) => void) => on('communication:event', cb),
     communicationListLocalParticipants: async (): Promise<ParticipantRecord[]> => ipcApi.invoke('communication:listLocalParticipants'),
     communicationListLocalCompanies: async (): Promise<CompanyRecord[]> => ipcApi.invoke('communication:listLocalCompanies'),

@@ -4,26 +4,12 @@ import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import type { SettingsState } from '../../../services/settings/SettingsManager';
 import type { ThemeMode } from '../../../services/ipc/ipcTypes';
 import { Toggle } from '../Toggle';
+import { LANGUAGES } from '../languages';
 
 const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' },
   { value: 'system', label: 'System' },
-];
-
-/**
- * Real, usable languages — each is a genuine BCP-47 code passed straight to
- * the Web Speech API for push-to-talk speech recognition (see
- * SpeechProviders.ts). Governs speech-to-text language only, not full UI
- * translation (PawOS has no i18n string system yet).
- */
-const LANGUAGES: { label: string; code: string }[] = [
-  { label: 'English (United States)', code: 'en-US' },
-  { label: 'Français (France)', code: 'fr-FR' },
-  { label: 'Deutsch (Deutschland)', code: 'de-DE' },
-  { label: 'हिन्दी (भारत)', code: 'hi-IN' },
-  { label: 'Español (España)', code: 'es-ES' },
-  { label: '日本語 (日本)', code: 'ja-JP' },
 ];
 
 /** A tiny visual stand-in for what each theme actually looks like, not just its name. */

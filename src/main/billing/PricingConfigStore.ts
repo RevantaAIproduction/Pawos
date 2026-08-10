@@ -21,7 +21,7 @@ function defaultConfig(): PricingConfig {
     plans: [
       {
         id: 'go',
-        label: 'Paw Go',
+        label: 'Go',
         priceCents: 0,
         currency: 'USD',
         billingPeriod: 'month',
@@ -32,17 +32,17 @@ function defaultConfig(): PricingConfig {
           'Basic Workspace',
           'Basic File Management',
           'Local Runtime Features',
-          'No AI models or AI runtimes',
+          'AI-powered planning & analysis with Paw Flash — execution requires Pro',
         ],
       },
       {
         id: 'pro',
-        label: 'Paw Pro',
+        label: 'Pro',
         priceCents: 2000,
         currency: 'USD',
         billingPeriod: 'month',
         features: [
-          'Everything in Paw Go',
+          'Everything in Go',
           'Full AI models: Paw Flash, Swift, Core, Creative, Vision & Voice',
           'Talk to Paw to run terminal commands, browse the web, and automate your desktop',
           'Install software, manage files, and run dev workflows through conversation',
@@ -51,19 +51,19 @@ function defaultConfig(): PricingConfig {
       },
       {
         id: 'proMax',
-        label: 'Paw Pro Max',
+        label: 'Pro Max',
         priceCents: 10000,
         currency: 'USD',
         billingPeriod: 'month',
         features: [
-          'Everything in Paw Pro',
-          '20x the usage headroom of Paw Pro',
+          'Everything in Pro',
+          '20x the usage headroom of Pro',
           'Priority access to new Paw models',
         ],
       },
       {
         id: 'team',
-        label: 'Paw Team',
+        label: 'Team',
         tagline: 'Predictable usage per seat',
         priceCents: 2000,
         currency: 'USD',
@@ -76,7 +76,7 @@ function defaultConfig(): PricingConfig {
             seatTier: 'standard',
             label: 'Standard',
             priceCents: 2000,
-            description: 'Everything in Paw Pro Max, shared across your organization.',
+            description: 'Everything in Pro Max, shared across your organization.',
           },
           {
             seatTier: 'premium',
@@ -86,7 +86,7 @@ function defaultConfig(): PricingConfig {
           },
         ],
         features: [
-          'Everything in Paw Pro Max',
+          'Everything in Pro Max',
           'Shared Workspaces',
           'Organization Members',
           'Shared Companions',
@@ -105,7 +105,7 @@ function defaultConfig(): PricingConfig {
       },
       {
         id: 'enterprise',
-        label: 'Paw Enterprise',
+        label: 'Enterprise',
         tagline: 'Flexible pooled usage',
         priceCents: 2000,
         currency: 'USD',
@@ -118,7 +118,7 @@ function defaultConfig(): PricingConfig {
             '$20/seat + tax. Usage cost scales with model and task, billed per genuinely completed Autonomous Engineering Task — never for a failed, cancelled, retry-limit-reached, or approval-denied run.',
         },
         features: [
-          'Everything in Paw Team',
+          'Everything in Team',
           'Uniform $20/seat base rate — no Standard/Premium split',
           'Autonomous Ticket System usage billed at pass-through API rates instead of tiered Ticket Balance pricing',
           'Additional RBAC roles: IT Administrator, Security Administrator, Department Manager',

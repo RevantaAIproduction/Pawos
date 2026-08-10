@@ -11,11 +11,11 @@ import {
 } from '../../../../shared/billing/BillingTypes';
 
 const TIER_LABELS: Record<SubscriptionTierId, string> = {
-  go: 'Paw Go',
-  pro: 'Paw Pro',
-  proMax: 'Paw Pro Max',
-  team: 'Paw Team',
-  enterprise: 'Paw Enterprise',
+  go: 'Go',
+  pro: 'Pro',
+  proMax: 'Pro Max',
+  team: 'Team',
+  enterprise: 'Enterprise',
 };
 
 /** Only Team/Enterprise get a plan icon here — matches how the reference layout distinguishes the

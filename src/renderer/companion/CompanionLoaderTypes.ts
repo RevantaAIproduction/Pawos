@@ -1,4 +1,4 @@
-import type { CompanionAnimationsConfig, CompanionConfig } from '../CompanionDefinition';
+import type { CompanionAnimationsConfig, CompanionConfig } from './CompanionDefinition';
 
 export type SerializedCompanion = {
   id: string;

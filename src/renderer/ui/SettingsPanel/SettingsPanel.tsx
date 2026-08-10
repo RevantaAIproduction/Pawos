@@ -68,42 +68,33 @@ export function SettingsPanel({
 
         <label className={styles.row}>
           Animation speed
-          <input
-            type="range"
-            min={0.5}
-            max={1.8}
-            step={0.05}
-            value={draft.animationSpeed}
-            onChange={(e) => setDraft((d) => ({ ...d, animationSpeed: Number(e.target.value) }))}
-          />
+          <input type="range" min={0.5} max={1.8} step={0.05} value={1} disabled onChange={() => {}} />
         </label>
 
         <label className={styles.row}>
           Sound volume
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.01}
-            value={draft.soundVolume}
-            onChange={(e) => setDraft((d) => ({ ...d, soundVolume: Number(e.target.value) }))}
-          />
+          <input type="range" min={0} max={1} step={0.01} value={0.6} disabled onChange={() => {}} />
         </label>
 
         <label className={styles.row}>
           Muted
-          <Toggle checked={draft.muted} onChange={(checked) => setDraft((d) => ({ ...d, muted: checked }))} />
+          <Toggle checked={false} onChange={() => {}} disabled />
         </label>
 
         <label className={styles.row}>
           Keyboard reactions
-          <Toggle checked={draft.enableKeyboardReactions} onChange={(checked) => setDraft((d) => ({ ...d, enableKeyboardReactions: checked }))} />
+          <Toggle checked={false} onChange={() => {}} disabled />
         </label>
 
         <label className={styles.row}>
           Mouse reactions
-          <Toggle checked={draft.enableMouseReactions} onChange={(checked) => setDraft((d) => ({ ...d, enableMouseReactions: checked }))} />
+          <Toggle checked={false} onChange={() => {}} disabled />
         </label>
+        <p style={{ fontSize: 12, opacity: 0.7, marginTop: -4 }}>
+          The five controls above have no effect today — the live 3D companion doesn't yet read
+          animation speed, sound volume/mute, or keyboard/mouse reaction settings. Shown here so
+          they're ready the moment that's wired up, not to imply they already work.
+        </p>
 
         <div className={styles.row} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
           <span>Coding mode</span>
@@ -127,6 +118,10 @@ export function SettingsPanel({
               Paw Pro — full execution
             </button>
           </div>
+          <span style={{ fontSize: 12, opacity: 0.7 }}>
+            Selecting "Paw Pro" here only takes effect if your account's subscription is actually
+            Paw Pro or higher — otherwise coding actions will still be blocked until you upgrade.
+          </span>
         </div>
 
         <div className={styles.row} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>

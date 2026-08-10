@@ -129,7 +129,11 @@ export class CompanionProfileStore {
   }
 
   getActive(): CompanionProfile {
-    return this.state.profiles.find((p) => p.id === this.state.activeId) ?? this.state.profiles[0];
+    const found = this.state.profiles.find((p) => p.id === this.state.activeId);
+    if (found) return found;
+    const first = this.state.profiles[0];
+    if (!first) throw new Error('No companion profiles exist.');
+    return first;
   }
 
   setActive(id: string) {

@@ -154,11 +154,12 @@ export class FaceRig {
 
   private setMouthShape(name: MouthShapeName, weight: number) {
     const mesh = this.mouthMesh;
-    if (!mesh || !mesh.morphTargetDictionary || !mesh.morphTargetInfluences) return;
+    const influences = mesh?.morphTargetInfluences;
+    if (!mesh || !mesh.morphTargetDictionary || !influences) return;
     const index = mesh.morphTargetDictionary[name];
     if (index === undefined) return;
-    mesh.morphTargetInfluences.forEach((_, i) => {
-      mesh.morphTargetInfluences![i] = i === index ? weight : mesh.morphTargetInfluences![i] * 0.7;
+    influences.forEach((current, i) => {
+      influences[i] = i === index ? weight : current * 0.7;
     });
   }
 

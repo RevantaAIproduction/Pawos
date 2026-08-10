@@ -46,7 +46,7 @@ export const ANALYTICS_ARTICLES: HelpArticle[] = [
     troubleshooting: ['If you hit your limit, you’ll see a real, friendly notice rather than a silent failure'],
     requirements: [],
     permissions: [],
-    billing: 'Paw Go has a zero AI credit pool by design (no AI models at all). Pro, Pro Max, Team, and Enterprise are currently uncapped until specific limits are finalized.',
+    billing: 'Paw Go has a capped AI credit pool (real AI, planning/analysis only — no execution). Pro, Pro Max, Team, and Enterprise are currently uncapped until specific limits are finalized.',
     relatedArticleIds: ['analytics-productivity', 'paw-go', 'paw-pro'],
     relatedSettings: ['Usage', 'Billing'],
     relatedApps: ['analytics', 'settings'],
@@ -69,7 +69,7 @@ export const ANALYTICS_ARTICLES: HelpArticle[] = [
       'live in the Coding Canvas during a coding task, aggregated for a broader view of your development ' +
       'activity over time.',
     features: ['Real build/test outcome history', 'Error timeline aggregation'],
-    howItWorks: 'Every build, test run, and error event recorded by the Coding Intelligence Runtime feeds this same real data — nothing here is invented or estimated.',
+    howItWorks: 'Every build, test run, and error event recorded by the Coding Runtime feeds this same real data — nothing here is invented or estimated.',
     bestPractices: [],
     examples: [],
     troubleshooting: [],

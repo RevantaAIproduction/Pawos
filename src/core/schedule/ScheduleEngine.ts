@@ -19,6 +19,7 @@ export class ScheduleEngine {
 
     for (let i = 0; i < sorted.length; i++) {
       const cur = sorted[i];
+      if (!cur) continue;
       const next = sorted[i + 1];
       const end = cur.endMinute ?? next?.startMinute;
 

@@ -1,7 +1,7 @@
 import type { HelpArticle } from '../HelpArticleTypes';
 
 /**
- * Help Center articles for the Development category — the Coding Intelligence
+ * Help Center articles for the Development category — the Coding
  * Runtime (Paw Go / Paw Pro capability modes, the Coding Canvas, VS Code
  * launch, live code diff, the Error Timeline + ErrorMemoryStore, the
  * allowlisted terminal/process manager, and the build/test pipeline).
@@ -14,10 +14,10 @@ export const DEVELOPMENT_ARTICLES: HelpArticle[] = [
     summary:
       'How Paw plans, understands, and (in Paw Pro) writes and runs code in your projects — and the hard line between Paw Go and Paw Pro.',
     overview:
-      'PawOS can act as a coding collaborator inside your own projects through the Coding Intelligence Runtime. This is controlled by a local capability toggle — Paw Go and Paw Pro — that is completely separate from your account subscription tier of the same name. Paw Go and Paw Pro here describe what Paw is allowed to *do* on your machine, not what you paid for. Paw Go is a read-only, analysis-first mode: Paw can understand your project structure, reason about dependencies and file impact, keep a running coding memory, and help you plan — but it cannot generate or edit a single line of code, write files, run git commands, or execute anything in a terminal. Paw Pro unlocks the rest: real code generation and editing, live diffs as changes happen, terminal and process execution, build and test automation, browser preview with console monitoring, an error timeline, and a bounded automatic build-run-test-fix loop that always stops to report back rather than looping forever or bypassing confirmation on anything destructive.',
+      'PawOS can act as a coding collaborator inside your own projects through the Coding Runtime. This is controlled by a local capability toggle — Paw Go and Paw Pro — that is completely separate from your account subscription tier of the same name. Paw Go and Paw Pro here describe what Paw is allowed to *do* on your machine, not what you paid for. Paw Go is a read-only, analysis-first mode: Paw can understand your project structure, reason about dependencies and file impact, keep a running coding memory, and help you plan — but it cannot generate or edit a single line of code, write files, run git commands, or execute anything in a terminal. Paw Pro unlocks the rest: real code generation and editing, live diffs as changes happen, terminal and process execution, build and test automation, browser preview with console monitoring, an error timeline, and a bounded automatic build-run-test-fix loop that always stops to report back rather than looping forever or bypassing confirmation on anything destructive.',
     features: [
       'Local Paw Go / Paw Pro capability toggle, independent of your billing plan',
-      'Paw Go: project understanding, dependency and file-impact analysis, read-only coding memory, planning',
+      'Paw Go: project understanding, feature discovery, dependency and file-impact analysis, coding memory (recall project history plus record architectural decisions and preferences), planning',
       'Paw Pro: full code generation/editing, live diffs, terminal execution, build & test automation',
       'Minimal Change Philosophy system prompt: prefer editing existing code over creating new files, reuse existing architecture, touch the fewest files and lines necessary',
       'Bounded automatic build → run → test → fix loop (a few iterations max) that stops to report rather than looping indefinitely',
@@ -115,7 +115,7 @@ export const DEVELOPMENT_ARTICLES: HelpArticle[] = [
       'Paw Go',
       'Paw Pro',
       'coding mode',
-      'Coding Intelligence Runtime',
+      'Coding Runtime',
       'Coding Canvas',
       'Minimal Change Philosophy',
       'AI coding',

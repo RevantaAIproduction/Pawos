@@ -109,6 +109,13 @@ class WorkspaceMemoryStore {
     this.save();
   }
 
+  recordDependencyGraphBuilt(rootPath: string, at: number = Date.now()): void {
+    const record = this.workspaces.get(normalizeRoot(rootPath));
+    if (!record) return;
+    record.dependencyGraphBuiltAt = at;
+    this.save();
+  }
+
   /** Every workspace's own recorded deployment URL — the Development Browser's only allowed non-localhost origins. */
   listDeploymentUrls(): string[] {
     return [...this.workspaces.values()].map((r) => r.deploymentUrl).filter((url): url is string => Boolean(url));

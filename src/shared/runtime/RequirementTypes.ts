@@ -1,16 +1,30 @@
 import type { ConnectorCategory } from '../connectivity/ConnectivityTypes';
 import type { ActionResult } from '../actions/ActionTypes';
+import type { FeatureId } from '../billing/BillingTypes';
 
 /**
  * The runtime's general requirement-resolution vocabulary — not connectivity-specific. 'capability'
- * is the only kind implemented today. The union is deliberately left open for later kinds
- * (confirmation, approval, workspaceSelection, repositorySelection, organizationSelection,
- * environmentSelection, billing, policy) — each one lands as one more interface here and one more
- * resolver registered with RequirementGate, never a change to an existing member or to
- * RequirementGate itself. No resolver for any of those kinds exists yet; this is the extension
- * point, not an implementation.
+ * and 'entitlement' are the two kinds implemented today. The union is deliberately left open for
+ * later kinds (confirmation, approval, workspaceSelection, repositorySelection,
+ * organizationSelection, environmentSelection, policy) — each one lands as one more interface here
+ * and one more resolver registered with RequirementGate, never a change to an existing member or to
+ * RequirementGate itself.
  */
-export type RequirementKind = 'capability';
+export type RequirementKind = 'capability' | 'entitlement';
+
+/**
+ * "Does the current subscription tier unlock this feature" — distinct from CapabilityRequirement's
+ * "is a connector for this category connected." A plugin that's genuinely Execute-class but not
+ * covered by the blanket CODING_EXECUTION_ACTION_TYPES/INFRA_EXECUTION_ACTION_TYPES gate (e.g. a
+ * future Intelligence Runtime plugin like ProposeExecutionPlanPlugin) declares this instead of a
+ * new bespoke tier check.
+ */
+export interface EntitlementRequirement {
+  kind: 'entitlement';
+  feature: FeatureId;
+  /** Contextual reason shown to the user, e.g. 'Creating an execution plan requires Paw Pro.' */
+  reasonHint?: string;
+}
 
 export interface CapabilityRequirement {
   kind: 'capability';
@@ -29,7 +43,7 @@ export interface CapabilityRequirement {
   capability?: string;
 }
 
-export type Requirement = CapabilityRequirement;
+export type Requirement = CapabilityRequirement | EntitlementRequirement;
 
 export interface RequirementResolution {
   satisfied: boolean;

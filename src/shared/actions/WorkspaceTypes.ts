@@ -24,4 +24,6 @@ export type WorkspaceRecord = {
   stale: boolean;
   /** Recorded by the Deployment Runtime once this workspace has actually been deployed somewhere — lets the Development Browser visit it without treating it as an arbitrary third-party site. */
   deploymentUrl?: string;
+  /** Set by BuildDependencyGraphPlugin (Coding Runtime V2, Context Understanding Engine) — when the real import graph in DependencyGraphCache was last built for this workspace, so staleness is visible without opening the (potentially large) cache file itself. */
+  dependencyGraphBuiltAt?: number;
 };

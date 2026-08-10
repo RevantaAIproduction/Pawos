@@ -78,7 +78,7 @@ class CommunicationPipeline extends EventEmitter {
     try {
       if (record.pipelineStage === 'transcribing' || !record.transcriptPath) {
         if (!record.audioPath) throw new Error('No audio to transcribe.');
-        const transcription = await transcribeCommunicationAudio({ apiKey, audioPath: record.audioPath });
+        const transcription = await transcribeCommunicationAudio({ apiKey, audioPath: record.audioPath, communicationId });
         const transcriptPath = communicationSessionStore.writeTextFile(communicationId, 'transcript.txt', transcription.plainText);
         communicationSessionStore.writeTextFile(communicationId, 'transcript.json', JSON.stringify(transcription, null, 2));
         communicationSessionStore.update(communicationId, {

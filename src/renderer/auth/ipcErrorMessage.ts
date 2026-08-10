@@ -7,5 +7,5 @@
 export function cleanIpcErrorMessage(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err);
   const match = raw.match(/Error invoking remote method '[^']*':\s*(?:Error:\s*)?([\s\S]*)$/);
-  return (match ? match[1] : raw).trim();
+  return (match?.[1] ?? raw).trim();
 }

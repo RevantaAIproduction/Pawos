@@ -3,7 +3,7 @@ export type FaqItem = { category: string; q: string; a: string };
 export const FAQ_ITEMS: FaqItem[] = [
   { category: "Installation", q: "What platforms does PawOS support?", a: "Windows, macOS, and Linux — see the Download page for current build availability per platform." },
   { category: "Installation", q: "Do I need to install anything else first?", a: "No. PawOS ships as a self-contained Electron application; no separate runtime installation is required." },
-  { category: "Billing", q: "Is there a free plan?", a: "Yes — Paw Go is free, with local runtime features and no AI model access. See Pricing for the full tier ladder." },
+  { category: "Billing", q: "Is there a free plan?", a: "Yes — Paw Go is free, with local runtime features and real AI for planning & analysis (Paw Flash); execution requires Paw Pro. See Pricing for the full tier ladder." },
   { category: "Billing", q: "How is Autonomous Ticket Resolution billed?", a: "As a completed Autonomous Engineering Task, billed only once a real pull request is opened and the ticket is updated — never for a failed, cancelled, or denied run." },
   { category: "Billing", q: "Can I cancel anytime?", a: "Yes, subscriptions are self-serve — upgrade, downgrade, or cancel from Settings → Billing without a sales call." },
   { category: "Providers", q: "Which AI models power PawOS?", a: "You interact with named Paw models (Flash, Swift, Core, Creative, Vision, Voice); the underlying provider is routed internally and matched to your tier." },
