@@ -5,74 +5,22 @@ import type { ReactNode } from "react";
 import { Button } from "../../components/ui/Button";
 import { Container } from "../../components/ui/Container";
 import { CompanionPreview } from "../../components/companion-preview/CompanionPreview";
+import { MiniCompanionCanvas } from "../../components/companion-preview/MiniCompanionCanvas";
 import { OsDownloadPicker } from "./OsDownloadPicker";
 import { getDownloadPlatforms, type DownloadPlatform } from "../../lib/config/downloadConfig";
 
 export const metadata: Metadata = {
   title: "Download PawOS",
   description:
-    "Download PawOS Desktop and see the real PawOS runtime surfaces across coding, office work, communication, browser automation, planning, execution, mobile presence, and companion workflows.",
+    "Download PawOS Desktop and see the real PawOS runtime surfaces for coding, execution, communication, office work, browser evidence, mobile presence, and the Paw companion.",
   openGraph: {
     title: "Download PawOS Desktop",
-    description:
-      "Direct PawOS website downloads and an honest runtime showcase built from existing PawOS UI surfaces.",
+    description: "Direct PawOS website downloads and a product-first runtime showcase.",
     url: "/download",
   },
 };
 
 const DOWNLOAD_PLATFORMS = getDownloadPlatforms();
-
-const REAL_UI_MAP = [
-  {
-    runtime: "Coding Runtime",
-    source: "src/renderer/workspace/WorkspaceRuntime.tsx",
-    status: "Production renderer UI exists",
-    detail:
-      "Project explorer, root switching, file search, active-file state, context panel, and terminal output come from the real WorkspaceRuntime shell.",
-  },
-  {
-    runtime: "Office Runtime",
-    source: "WorkspaceRuntime office regions and src/main/execution/plugins/office",
-    status: "Production renderer regions exist",
-    detail:
-      "Documents, email, office timeline, and recent office files are rendered by the existing workspace runtime when office actions produce real data.",
-  },
-  {
-    runtime: "Communication Intelligence",
-    source: "src/renderer/communication/CommunicationWorkspaceRuntime.tsx",
-    status: "Production renderer UI exists",
-    detail:
-      "Recording state, evidence timing, participants, transcript, speaker timeline, action items, decisions, and visual context only appear from real events.",
-  },
-  {
-    runtime: "Planning + Execution",
-    source: "src/renderer/conversation/TaskCard.tsx",
-    status: "Production renderer UI exists",
-    detail:
-      "Task stages, execution plans, approval pauses, validation, terminal output, files touched, errors, and final reports are rendered by TaskCard.",
-  },
-  {
-    runtime: "Browser Runtime",
-    source: "src/main/execution/browser and browser plugins",
-    status: "Backend and task-card evidence exist",
-    detail:
-      "Navigation, extraction, console, network, screenshots, uploads, downloads, and PDF capture surface through real task evidence. No standalone polished browser runtime UI is claimed here.",
-  },
-  {
-    runtime: "Mobile Presence",
-    source: "pawos-web/src/app/companion and src/renderer/mobilePresence",
-    status: "Production website and renderer bridge exist",
-    detail:
-      "Pairing, trusted-device presence, notifications, conversation sync, and mobile approval center are represented by the existing companion PWA components.",
-  },
-  {
-    runtime: "Universal Companion",
-    source: "pawos-web/src/components/companion-preview and src/renderer/ui/CompanionCanvas",
-    status: "Production visuals exist",
-    detail:
-      "The public site uses the existing PawOS companion preview assets. The desktop renderer owns the live companion canvas.",
-  },
-];
 
 const SYSTEM_REQUIREMENTS = [
   { platform: "Windows", spec: "Windows 10 (64-bit) or later, 4 GB RAM minimum.", href: "/download/windows" },
@@ -80,49 +28,49 @@ const SYSTEM_REQUIREMENTS = [
   { platform: "Linux", spec: "Modern glibc-based distribution such as Ubuntu 22.04+.", href: "/download/linux" },
 ];
 
-function primaryVariant(platform: DownloadPlatform) {
-  return platform.variants.find((variant) => variant.status === "available" && variant.url) ?? platform.variants[0];
-}
+const RUNTIME_TRUTH = [
+  ["Coding", "Production workspace UI"],
+  ["Planning", "Production task UI"],
+  ["Communication", "Production workspace UI"],
+  ["Office", "Production workspace regions"],
+  ["Browser", "Task evidence UI"],
+  ["Mobile", "Production PWA surfaces"],
+  ["Companion", "Production site assets"],
+];
 
 function getPlatform(id: DownloadPlatform["id"]) {
   return DOWNLOAD_PLATFORMS.find((platform) => platform.id === id);
 }
 
-function RuntimeWindow({
-  title,
-  source,
-  children,
-  className = "",
-}: {
-  title: string;
-  source: string;
-  children: ReactNode;
-  className?: string;
-}) {
+function primaryVariant(platform: DownloadPlatform) {
+  return platform.variants.find((variant) => variant.status === "available" && variant.url) ?? platform.variants[0];
+}
+
+function ProductFrame({ title, children, className = "" }: { title: string; children: ReactNode; className?: string }) {
   return (
-    <div className={`overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a10]/90 shadow-2xl shadow-black/40 ${className}`}>
-      <div className="flex items-center justify-between gap-4 border-b border-white/10 px-4 py-3">
+    <div className={`overflow-hidden rounded-2xl border border-white/10 bg-[#08090f]/95 shadow-2xl shadow-black/40 ${className}`}>
+      <div className="flex items-center justify-between gap-4 border-b border-white/10 bg-white/[0.025] px-4 py-3">
         <div className="flex items-center gap-2" aria-hidden>
           <span className="h-2.5 w-2.5 rounded-full bg-rose-400/80" />
           <span className="h-2.5 w-2.5 rounded-full bg-amber-300/80" />
           <span className="h-2.5 w-2.5 rounded-full bg-emerald-300/80" />
         </div>
-        <div className="min-w-0 text-right">
-          <p className="truncate text-xs font-semibold text-neutral-200">{title}</p>
-          <p className="truncate text-[10px] text-neutral-500">{source}</p>
-        </div>
+        <p className="truncate text-xs font-semibold text-neutral-300">{title}</p>
       </div>
       {children}
     </div>
   );
 }
 
-function SourceBadge({ children }: { children: ReactNode }) {
-  return (
-    <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold text-neutral-300">
-      {children}
-    </span>
-  );
+function Pill({ children, tone = "neutral" }: { children: ReactNode; tone?: "neutral" | "blue" | "green" | "amber" | "red" }) {
+  const toneClass = {
+    neutral: "bg-white/10 text-neutral-300",
+    blue: "bg-blue-300/20 text-blue-100",
+    green: "bg-emerald-300/20 text-emerald-100",
+    amber: "bg-amber-300/20 text-amber-100",
+    red: "bg-rose-300/20 text-rose-100",
+  }[tone];
+  return <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${toneClass}`}>{children}</span>;
 }
 
 function ExplorerRow({ name, depth = 0, active = false, folder = false }: { name: string; depth?: number; active?: boolean; folder?: boolean }) {
@@ -138,217 +86,397 @@ function ExplorerRow({ name, depth = 0, active = false, folder = false }: { name
   );
 }
 
-function CodingRuntimeVisual() {
+function TaskCardSurface({ compact = false }: { compact?: boolean }) {
   return (
-    <RuntimeWindow title="Coding Runtime / WorkspaceRuntime" source="src/renderer/workspace/WorkspaceRuntime.tsx">
-      <div className="grid min-h-[520px] gap-2 bg-[#0a0a10]/90 p-2 lg:grid-cols-[220px_minmax(260px,1fr)_300px] lg:grid-rows-[1fr_150px]">
-        <aside className="min-h-0 rounded-xl border border-white/10 bg-white/[0.045]">
-          <div className="flex items-center justify-between border-b border-white/10 p-3">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">Project</p>
-              <p className="text-xs font-bold text-neutral-100">PawOS</p>
-            </div>
-            <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-bold text-neutral-300">Clear</span>
-          </div>
-          <div className="flex gap-1 p-2">
-            <span className="rounded-full bg-blue-300/20 px-2 py-1 text-[10px] font-bold text-blue-100">PawOS</span>
-            <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-bold text-neutral-300">web</span>
-          </div>
-          <div className="grid grid-cols-[1fr_auto] gap-1 p-2">
-            <div className="rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-xs text-neutral-500">Search files</div>
-            <div className="rounded-full bg-white/10 px-2 py-1.5 text-[10px] font-bold text-neutral-300">Search</div>
-          </div>
-          <div className="p-2">
-            <ExplorerRow name="PawOS" folder active />
-            <ExplorerRow name="src" folder depth={1} />
-            <ExplorerRow name="renderer" folder depth={2} />
-            <ExplorerRow name="workspace" folder depth={3} active />
-            <ExplorerRow name="WorkspaceRuntime.tsx" depth={4} active />
-            <ExplorerRow name="workspaceRuntime.module.css" depth={4} />
-          </div>
-        </aside>
-
-        <main className="rounded-xl border border-white/10 bg-white/[0.045] p-3">
-          <div className="border-b border-white/10 pb-3">
-            <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-emerald-300" />
-              <p className="truncate text-sm font-bold text-neutral-100">Wire project workspace foundation</p>
-            </div>
-          </div>
-          <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">Active File</p>
-            <p className="mt-1 text-lg font-extrabold text-neutral-50">WorkspaceRuntime.tsx</p>
-            <p className="font-mono text-[11px] text-neutral-500">src/renderer/workspace</p>
-            <p className="mt-3 text-[11.5px] leading-5 text-neutral-400">
-              File viewing and diffs are reserved for the next workspace phase. Phase A keeps navigation and project context live against real runtime APIs.
-            </p>
-          </div>
-        </main>
-
-        <aside className="rounded-xl border border-white/10 bg-white/[0.045] p-3 lg:row-span-2">
-          <div className="rounded-xl border border-white/10 bg-white/[0.05]">
-            <div className="flex items-center gap-2 p-3">
-              <span className="rounded-full bg-blue-300/20 px-2 py-1 text-[10px] font-bold text-blue-100">RUNNING</span>
-              <span className="truncate text-xs font-bold text-neutral-100">Validate TypeScript</span>
-            </div>
-            <div className="border-t border-white/10 p-3">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">Execution Plan</p>
-              <ol className="mt-2 list-decimal space-y-1 pl-4 text-[11.5px] text-neutral-300">
-                <li>Read project context</li>
-                <li>Apply minimal test-only fix</li>
-                <li>Run validation pipeline</li>
-              </ol>
-            </div>
-          </div>
-          {["Project Understanding", "Live TODO Progress", "Build Status", "Test Results", "Coding Memory"].map((label) => (
-            <div key={label} className="border-t border-white/10 py-2">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-300">{label}</p>
-              <p className="mt-1 text-[11.5px] text-neutral-500">Shown only when real action data exists.</p>
-            </div>
-          ))}
-        </aside>
-
-        <section className="rounded-xl border border-white/10 bg-white/[0.045] lg:col-span-2">
-          <div className="border-b border-white/10 p-3">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">Terminal</p>
-            <p className="text-xs font-bold text-neutral-100">Runtime output</p>
-          </div>
-          <pre className="m-0 h-28 overflow-auto bg-black/25 p-3 font-mono text-[11px] leading-5 text-neutral-300">{`$ npm run typecheck:renderer
- renderer TypeScript passed
- validation report saved to Coding Runtime Memory`}</pre>
-        </section>
+    <div className="rounded-xl border border-white/10 bg-white/[0.05]">
+      <div className="flex flex-wrap items-center gap-2 p-3">
+        <Pill tone="blue">RUNNING</Pill>
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-neutral-100">Validate the release build</span>
+        <span className="text-[10px] text-neutral-500">4 actions</span>
       </div>
-    </RuntimeWindow>
+      <div className="space-y-2 border-t border-white/10 p-3">
+        {[
+          ["Preparation", "Read workspace context", "green"],
+          ["Execution", "Run validation pipeline", "blue"],
+          ["Approval", "Waiting only when required", "amber"],
+          ["Verification", "Build and tests report back", "green"],
+        ].slice(0, compact ? 3 : 4).map(([stage, text, tone]) => (
+          <div key={stage} className="flex items-center gap-3 rounded-lg bg-white/[0.045] px-3 py-2">
+            <span className={`h-2 w-2 rounded-full ${tone === "green" ? "bg-emerald-300" : tone === "amber" ? "bg-amber-300" : "bg-blue-300"}`} />
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">{stage}</p>
+              <p className="truncate text-xs text-neutral-200">{text}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
-function TaskCardVisual() {
+function CodingWorkspaceSurface({ compact = false }: { compact?: boolean }) {
   return (
-    <RuntimeWindow title="Planning + Execution / TaskCard" source="src/renderer/conversation/TaskCard.tsx">
-      <div className="space-y-4 bg-[#0a0a10] p-4">
-        <div className="rounded-xl border border-white/10 bg-white/[0.05]">
-          <div className="flex flex-wrap items-center gap-2 p-3">
-            <span className="rounded-full bg-blue-300/20 px-2 py-1 text-[10px] font-bold text-blue-100">RUNNING</span>
-            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-neutral-100">Run production verification</span>
-            <span className="text-[10px] text-neutral-500">5 stages</span>
+    <div className={`grid gap-2 bg-[#0a0a10]/90 p-2 ${compact ? "grid-cols-[0.75fr_1fr]" : "min-h-[520px] lg:grid-cols-[220px_minmax(260px,1fr)_300px] lg:grid-rows-[1fr_150px]"}`}>
+      <aside className="min-h-0 rounded-xl border border-white/10 bg-white/[0.045]">
+        <div className="flex items-center justify-between border-b border-white/10 p-3">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">Project</p>
+            <p className="text-xs font-bold text-neutral-100">PawOS</p>
           </div>
-          <div className="space-y-3 border-t border-white/10 p-3">
-            {["Preparation", "Execution", "Verification"].map((stage) => (
-              <div key={stage} className="rounded-lg bg-white/[0.05] px-3 py-2">
-                <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wide text-neutral-300">
-                  <span>{stage}</span>
-                  <span className="text-neutral-500">real action trail</span>
+          <Pill>Clear</Pill>
+        </div>
+        {!compact && (
+          <div className="grid grid-cols-[1fr_auto] gap-1 p-2">
+            <div className="rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-xs text-neutral-500">Search files</div>
+            <Pill>Search</Pill>
+          </div>
+        )}
+        <div className="p-2">
+          <ExplorerRow name="PawOS" folder active />
+          <ExplorerRow name="src" folder depth={1} />
+          <ExplorerRow name="renderer" folder depth={2} />
+          <ExplorerRow name="app" folder depth={3} active />
+          <ExplorerRow name="download-page" depth={4} active />
+          {!compact && <ExplorerRow name="release-config" depth={3} />}
+        </div>
+      </aside>
+
+      <main className="rounded-xl border border-white/10 bg-white/[0.045] p-3">
+        <div className="flex items-center gap-2 border-b border-white/10 pb-3">
+          <span className="h-2 w-2 rounded-full bg-emerald-300" />
+          <p className="truncate text-sm font-bold text-neutral-100">Project workspace foundation</p>
+        </div>
+        <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">Active File</p>
+          <p className="mt-1 text-lg font-extrabold text-neutral-50">download-page</p>
+          <p className="mt-3 text-[11.5px] leading-5 text-neutral-400">Navigation, project context, active file state, and runtime output are visible in the workspace.</p>
+        </div>
+      </main>
+
+      {!compact && (
+        <>
+          <aside className="rounded-xl border border-white/10 bg-white/[0.045] p-3 lg:row-span-2">
+            <TaskCardSurface compact />
+            {["Project Understanding", "Live TODO Progress", "Build Status", "Test Results", "Coding Memory"].map((label) => (
+              <div key={label} className="border-t border-white/10 py-2">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-300">{label}</p>
+                <div className="mt-2 h-2 rounded-full bg-white/10">
+                  <div className="h-2 w-2/3 rounded-full bg-blue-300/60" />
                 </div>
               </div>
             ))}
-            <div className="rounded-lg border border-amber-300/20 bg-amber-300/10 p-3 text-xs text-amber-100">
-              Waiting to Connect or waiting for approval appears as a pause, not a fabricated success state.
+          </aside>
+          <section className="rounded-xl border border-white/10 bg-white/[0.045] lg:col-span-2">
+            <div className="border-b border-white/10 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">Terminal</p>
+              <p className="text-xs font-bold text-neutral-100">Runtime output</p>
             </div>
-          </div>
-        </div>
-      </div>
-    </RuntimeWindow>
+            <pre className="m-0 h-28 overflow-auto bg-black/25 p-3 font-mono text-[11px] leading-5 text-neutral-300">{`$ npm run typecheck
+ renderer TypeScript passed
+ validation report saved`}</pre>
+          </section>
+        </>
+      )}
+    </div>
   );
 }
 
-function CommunicationVisual() {
+function CommunicationSurface({ compact = false }: { compact?: boolean }) {
   return (
-    <RuntimeWindow title="Communication Workspace" source="src/renderer/communication/CommunicationWorkspaceRuntime.tsx">
-      <div className="mx-auto max-w-md space-y-3 bg-[#0a0a10] p-4">
+    <div className={`grid gap-3 bg-[#0a0a10] p-4 ${compact ? "" : "md:grid-cols-[0.9fr_1.1fr]"}`}>
+      <div className="rounded-xl border border-white/10 bg-white/[0.045] p-4">
         <div className="flex items-center gap-2 border-b border-white/10 pb-3">
           <span className="h-2 w-2 rounded-full bg-rose-400 shadow-[0_0_6px_#fb7185]" />
           <span className="text-xs font-bold text-neutral-100">Recording</span>
-          <span className="ml-auto rounded-full bg-blue-300/20 px-2 py-1 text-[10px] font-semibold text-blue-100">Desktop capture</span>
+          <Pill tone="blue">Desktop capture</Pill>
         </div>
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Evidence</p>
-          <p className="text-sm text-neutral-200">0:37</p>
-        </div>
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Transcript</p>
-          <div className="mt-1 max-h-28 space-y-1 overflow-auto text-[11.5px] text-neutral-300">
-            <p>Live transcript appears only after transcript events are received.</p>
-            <p>Speaker timeline is derived after processing completes.</p>
+        <div className="mt-4">
+          <div className="h-2 rounded-full bg-white/10">
+            <div className="h-2 w-3/5 rounded-full bg-rose-300" />
+          </div>
+          <div className="mt-3 flex justify-between text-xs text-neutral-400">
+            <span>0:37</span>
+            <span>audio evidence active</span>
           </div>
         </div>
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Decisions and action items</p>
-          <ul className="mt-1 list-disc pl-4 text-xs text-neutral-300">
-            <li>Rendered from detected runtime events.</li>
-            <li>No meeting SDK participant screen is simulated.</li>
-          </ul>
+        <div className="mt-4 grid gap-2 text-[11px] text-neutral-300">
+          {["Avery", "Jordan", "Sam"].map((name) => <Pill key={name}>{name}</Pill>)}
         </div>
       </div>
-    </RuntimeWindow>
+      <div className="rounded-xl border border-white/10 bg-white/[0.045] p-4">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">Transcript</p>
+        <div className="mt-3 space-y-2 text-xs text-neutral-300">
+          <p><span className="text-neutral-500">00:12</span> We should ship the Windows build first.</p>
+          <p><span className="text-neutral-500">00:26</span> Keep Linux direct download behind configured release URL.</p>
+          <p><span className="text-neutral-500">00:34</span> macOS remains coming soon until a real build exists.</p>
+        </div>
+        {!compact && (
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            <div className="rounded-lg bg-emerald-300/10 p-3 text-xs text-emerald-100">Decision detected</div>
+            <div className="rounded-lg bg-blue-300/10 p-3 text-xs text-blue-100">Follow-up drafted</div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
-function OfficeVisual() {
+function OfficeSurface({ compact = false }: { compact?: boolean }) {
   return (
-    <RuntimeWindow title="Office Runtime Regions" source="WorkspaceRuntime officeDocuments / officeEmail / recentOfficeFiles">
-      <div className="grid gap-3 bg-[#0a0a10] p-4 sm:grid-cols-2">
-        {[
-          ["Documents", "Created documents, spreadsheets, presentations, and merged PDFs appear only after a real outputPath exists."],
-          ["Email", "Drafted or confirmed email state appears from existing mail action results."],
-          ["Office Timeline", "Recent office files are read from the existing Office Runtime store."],
-          ["Honest gaps", "There is no separate fake Office editor on this page."],
-        ].map(([title, body]) => (
-          <div key={title} className="rounded-xl border border-white/10 bg-white/[0.045] p-4">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-300">{title}</p>
-            <p className="mt-2 text-xs leading-5 text-neutral-500">{body}</p>
+    <div className={`grid gap-3 bg-[#0a0a10] p-4 ${compact ? "" : "sm:grid-cols-2"}`}>
+      {[
+        ["Documents", "release-notes.docx", "Document created"],
+        ["Spreadsheet", "usage-summary.xlsx", "Spreadsheet created"],
+        ["Presentation", "launch-review.pptx", "Presentation created"],
+        ["Email", "Draft waiting for confirmation", "Mail compose"],
+        ["Recent Files", "3 office files", "Runtime memory"],
+      ].slice(0, compact ? 3 : 5).map(([title, primary, meta]) => (
+        <div key={title} className="rounded-xl border border-white/10 bg-white/[0.045] p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500">{title}</p>
+            <span className="h-2 w-2 rounded-full bg-emerald-300" />
           </div>
-        ))}
-      </div>
-    </RuntimeWindow>
+          <p className="mt-3 truncate text-sm font-semibold text-neutral-100">{primary}</p>
+          <p className="mt-1 text-xs text-neutral-500">{meta}</p>
+        </div>
+      ))}
+      {!compact && (
+        <div className="rounded-xl border border-amber-300/20 bg-amber-300/10 p-4 text-xs leading-5 text-amber-100">
+          PawOS does not show a fake document editor here. It shows real output/status regions from the Office Runtime.
+        </div>
+      )}
+    </div>
   );
 }
 
-function BrowserVisual() {
+function BrowserSurface({ compact = false }: { compact?: boolean }) {
   return (
-    <RuntimeWindow title="Browser Runtime Evidence" source="src/main/execution/browser and Browser Runtime plugins">
-      <div className="space-y-3 bg-[#0a0a10] p-4">
-        {[
-          "Open or reuse a real browser session",
-          "Navigate, read, click, fill, upload, download, print, and screenshot",
-          "Console, network, and screenshot evidence surface in TaskCard and WorkspaceRuntime",
-          "No standalone polished browser runtime UI exists yet, so this showcase does not invent one",
-        ].map((item) => (
-          <div key={item} className="rounded-xl border border-white/10 bg-white/[0.045] p-3 text-xs text-neutral-300">
-            {item}
+    <div className="bg-[#0a0a10] p-4">
+      <div className="rounded-xl border border-white/10 bg-white/[0.045]">
+        <div className="flex items-center gap-2 border-b border-white/10 p-3">
+          <Pill tone="blue">BROWSER</Pill>
+          <div className="min-w-0 flex-1 rounded-full bg-black/25 px-3 py-1.5 font-mono text-[11px] text-neutral-400">https://example.test/release</div>
+        </div>
+        <div className={`grid gap-3 p-3 ${compact ? "" : "sm:grid-cols-[1.1fr_0.9fr]"}`}>
+          <div className="rounded-lg border border-white/10 bg-black/25 p-3">
+            <div className="h-16 rounded-lg bg-white/[0.06]" />
+            <div className="mt-3 h-2 w-4/5 rounded-full bg-white/10" />
+            <div className="mt-2 h-2 w-2/3 rounded-full bg-white/10" />
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="h-10 rounded-lg bg-blue-300/10" />
+              <div className="h-10 rounded-lg bg-emerald-300/10" />
+            </div>
           </div>
-        ))}
-      </div>
-    </RuntimeWindow>
-  );
-}
-
-function MobileVisual() {
-  return (
-    <RuntimeWindow title="Mobile Presence PWA" source="pawos-web/src/app/companion and src/renderer/mobilePresence">
-      <div className="grid gap-4 bg-[#0a0a10] p-4 sm:grid-cols-[0.9fr_1.1fr]">
-        <div className="mx-auto w-56 rounded-[2rem] border border-white/15 bg-black p-3">
-          <div className="rounded-[1.5rem] border border-white/10 bg-neutral-950 p-4">
-            <div className="mx-auto mb-4 h-1 w-14 rounded-full bg-white/20" />
-            {["Pair this device", "Trusted device required", "Conversation sync", "Approval center"].map((item, index) => (
-              <div key={item} className={`mb-3 rounded-2xl p-3 text-xs ${index === 0 ? "bg-blue-300/15 text-blue-100" : "bg-white/[0.05] text-neutral-300"}`}>
+          <div className="space-y-2">
+            {["Navigate", "Extract page data", "Read console", "Capture screenshot"].map((item, index) => (
+              <div key={item} className="flex items-center gap-2 rounded-lg bg-white/[0.045] px-3 py-2 text-xs text-neutral-300">
+                <span className={`h-2 w-2 rounded-full ${index < 2 ? "bg-emerald-300" : "bg-blue-300"}`} />
                 {item}
               </div>
             ))}
           </div>
         </div>
-        <div className="space-y-3">
-          {[
-            "Presence starts only after a real trusted_devices id is stored by pairing.",
-            "Notifications and sync use the existing companion PWA components.",
-            "Approvals publish approvalResponse events back to the desktop; the phone does not execute actions itself.",
-          ].map((item) => (
-            <div key={item} className="rounded-xl border border-white/10 bg-white/[0.045] p-3 text-xs leading-5 text-neutral-300">
-              {item}
-            </div>
-          ))}
+      </div>
+      {!compact && <p className="mt-3 text-xs text-neutral-500">Shown as task evidence because PawOS does not currently expose a separate browser IDE UI.</p>}
+    </div>
+  );
+}
+
+function ConversationControlSurface() {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#10131c]/95 p-4 shadow-xl shadow-black/30">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-500">Tell Paw</p>
+          <p className="text-sm font-bold text-neutral-100">Control surface</p>
+        </div>
+        <div className="flex gap-2">
+          <Pill tone="blue">Listen</Pill>
+          <Pill>Send</Pill>
         </div>
       </div>
-    </RuntimeWindow>
+      <div className="mt-4 rounded-xl bg-[#1a2436] p-3 text-xs leading-5 text-neutral-200">
+        Prepare the release, verify the build, update the docs, and send me the result.
+      </div>
+      <div className="mt-3 rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-xs text-neutral-500">
+        Type a message if speech input is unavailable
+      </div>
+    </div>
+  );
+}
+
+function CompanionIdentitySurface() {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035]">
+      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-500">Paw</p>
+          <p className="text-sm font-bold text-neutral-100">Companion identity</p>
+        </div>
+        <Pill tone="blue">Desktop</Pill>
+      </div>
+      <div className="h-56 bg-[radial-gradient(circle_at_center,_rgba(96,165,250,0.16),_transparent_58%)]">
+        <MiniCompanionCanvas />
+      </div>
+    </div>
+  );
+}
+
+function VerifiedResultSurface() {
+  return (
+    <div className="rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-4">
+      <div className="flex items-center gap-2">
+        <span className="h-2.5 w-2.5 rounded-full bg-emerald-300" />
+        <p className="text-sm font-bold text-emerald-100">Verified Result</p>
+      </div>
+      <div className="mt-4 grid gap-2 text-xs text-neutral-200">
+        {["Build completed", "Renderer typecheck passed", "Download page updated", "Release notes ready"].map((item) => (
+          <div key={item} className="flex items-center gap-2 rounded-lg bg-black/20 px-3 py-2">
+            <span className="text-emerald-200">+</span>
+            <span>{item}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function OperatingLayerHeroVisual() {
+  return (
+    <div className="relative mx-auto mt-14 max-w-6xl rounded-[2rem] border border-white/10 bg-black/30 p-4 shadow-2xl shadow-black/40">
+      <div className="mb-4 grid gap-2 text-center text-[11px] font-bold uppercase tracking-[0.18em] text-neutral-500 sm:grid-cols-5">
+        <span>Goal</span>
+        <span className="hidden text-blue-300 sm:block">-&gt;</span>
+        <span>PawOS</span>
+        <span className="hidden text-blue-300 sm:block">-&gt;</span>
+        <span>Verified result</span>
+      </div>
+      <div className="grid gap-4 xl:grid-cols-[0.75fr_1.1fr_0.85fr]">
+        <div className="space-y-4">
+          <ConversationControlSurface />
+          <CompanionIdentitySurface />
+          <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-500">Goal</p>
+            <p className="mt-2 text-sm font-semibold text-neutral-100">User intent enters once. PawOS coordinates the work.</p>
+          </div>
+        </div>
+
+        <div className="flex flex-col items-center justify-center gap-4">
+          <div className="flex h-36 w-36 flex-col items-center justify-center rounded-[2rem] border border-white/15 bg-neutral-950/95 shadow-[0_0_70px_rgba(96,165,250,0.35)]">
+            <Image src="/logo-icon.png" alt="" width={64} height={64} className="rounded-2xl" priority />
+            <span className="mt-3 text-sm font-bold">PawOS</span>
+            <span className="mt-1 text-[10px] text-neutral-500">Operating layer</span>
+          </div>
+          <div className="grid w-full gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-blue-200">Planning</p>
+              <TaskCardSurface compact />
+            </div>
+            <VerifiedResultSurface />
+          </div>
+        </div>
+
+        <div className="grid gap-3">
+          <ProductFrame title="Workspace Runtime" className="shadow-none">
+            <CodingWorkspaceSurface compact />
+          </ProductFrame>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+            <div className="h-40 overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a10]">
+              <OfficeSurface compact />
+            </div>
+            <div className="h-40 overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a10]">
+              <CommunicationSurface compact />
+            </div>
+          </div>
+        </div>
+      </div>
+      <p className="mt-5 text-center text-sm text-neutral-400">
+        Conversation is the entry point. PawOS operates through workspaces, applications, connected services, and verified outputs.
+      </p>
+    </div>
+  );
+}
+
+function PhoneSurface() {
+  return (
+    <div className="w-60 rounded-[2.25rem] border border-white/15 bg-black p-3 shadow-2xl shadow-blue-950/40">
+      <div className="rounded-[1.75rem] border border-white/10 bg-neutral-950 p-4">
+        <div className="mx-auto mb-4 h-1 w-16 rounded-full bg-white/20" />
+        <div className="rounded-2xl bg-blue-300/15 p-4 text-blue-100">
+          <p className="text-xs font-bold">PawOS Mobile</p>
+          <p className="mt-1 text-[11px] text-blue-100/70">Desktop connected</p>
+        </div>
+        {[
+          ["Pair device", "Trusted device"],
+          ["Conversation", "Synced"],
+          ["Notifications", "Enabled"],
+          ["Approval center", "1 waiting"],
+        ].map(([title, meta]) => (
+          <div key={title} className="mt-3 rounded-2xl bg-white/[0.05] p-3">
+            <p className="text-xs text-neutral-200">{title}</p>
+            <p className="mt-1 text-[11px] text-neutral-500">{meta}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MobileSurface() {
+  return (
+    <div className="grid gap-5 bg-[#0a0a10] p-5 md:grid-cols-[1fr_auto] md:items-center">
+      <ProductFrame title="PawOS Desktop" className="shadow-none">
+        <div className="p-4">
+          <TaskCardSurface compact />
+          <div className="mt-3 rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-xs text-amber-100">
+            Approval required: install update package?
+          </div>
+        </div>
+      </ProductFrame>
+      <div className="flex flex-col items-center gap-3">
+        <div className="hidden h-px w-20 bg-gradient-to-r from-blue-300 to-emerald-300 md:block" />
+        <PhoneSurface />
+      </div>
+    </div>
+  );
+}
+
+function RuntimeMiniature({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-3">
+      <p className="mb-3 text-center text-[11px] font-bold uppercase tracking-wide text-neutral-400">{label}</p>
+      <div className="h-52 overflow-hidden rounded-xl border border-white/10 bg-[#0a0a10]">{children}</div>
+    </div>
+  );
+}
+
+function RuntimeOverview() {
+  return (
+    <section id="runtime-showcase" className="py-20">
+      <Container>
+        <div className="mx-auto max-w-3xl text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-300">Runtime showcase</p>
+          <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-5xl">A goal becomes work across runtimes.</h2>
+          <p className="mt-5 text-neutral-400">
+            Conversation is only the control surface. PawOS turns the goal into plans, workspace actions, application evidence, mobile approvals, and verified results.
+          </p>
+        </div>
+        <div className="relative mx-auto mt-12 max-w-6xl rounded-[2rem] border border-white/10 bg-black/30 p-5">
+          <div className="mx-auto mb-5 flex w-fit flex-col items-center">
+            <Image src="/logo-icon.png" alt="" width={72} height={72} className="rounded-2xl" />
+            <p className="mt-3 text-sm font-bold">PawOS</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <RuntimeMiniature label="Coding"><CodingWorkspaceSurface compact /></RuntimeMiniature>
+            <RuntimeMiniature label="Office"><OfficeSurface compact /></RuntimeMiniature>
+            <RuntimeMiniature label="Communication"><CommunicationSurface compact /></RuntimeMiniature>
+            <RuntimeMiniature label="Browser"><BrowserSurface compact /></RuntimeMiniature>
+            <RuntimeMiniature label="Planning"><div className="p-3"><TaskCardSurface compact /></div></RuntimeMiniature>
+            <RuntimeMiniature label="Mobile"><div className="flex h-full items-center justify-center p-3"><PhoneSurface /></div></RuntimeMiniature>
+          </div>
+        </div>
+      </Container>
+    </section>
   );
 }
 
@@ -359,7 +487,7 @@ function DownloadCard({ platform }: { platform: DownloadPlatform }) {
   const isMac = platform.id === "macos";
 
   return (
-    <div className={`rounded-2xl border border-white/10 bg-white/[0.035] p-5 ${isMac ? "opacity-85" : ""}`}>
+    <div className={`rounded-2xl border border-white/10 bg-white/[0.035] p-5 ${isMac && !available ? "opacity-85" : ""}`}>
       <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{available ? platform.label : "Coming soon"}</p>
       <h3 className="mt-1 text-xl font-bold text-neutral-50">{platform.label}</h3>
       <p className="mt-1 min-h-10 text-xs leading-5 text-neutral-400">
@@ -377,7 +505,7 @@ function DownloadCard({ platform }: { platform: DownloadPlatform }) {
         </a>
       ) : (
         <span className="mt-4 inline-flex w-full items-center justify-center rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-neutral-400">
-          Notify me
+          Coming Soon
         </span>
       )}
       <div className="mt-3 flex flex-wrap gap-3 text-[11px] text-neutral-500">
@@ -404,13 +532,13 @@ function DownloadSection() {
               <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-emerald-300">Download PawOS</p>
               <h2 className="mt-3 text-4xl font-bold tracking-tight text-neutral-50">Get PawOS Desktop</h2>
               <p className="mt-4 text-sm leading-6 text-neutral-400">
-                Install PawOS on your machine and connect it to your workspace. PawOS is distributed directly from this website; no Microsoft Store redirect is used here.
+                Download directly from pawos.revantaai.com. PawOS website downloads use configured release URLs only, with no Microsoft Store requirement.
               </p>
               <div className="mt-6 grid gap-3 text-[11px] text-neutral-400 sm:grid-cols-2">
-                {["Secure by Design", "Runs Locally", "Always Evolving", "Enterprise Ready"].map((item) => (
+                {["Secure by Design", "Runs Locally", "Direct Website Download", "Enterprise Ready"].map((item) => (
                   <div key={item} className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
                     <p className="font-semibold text-neutral-200">{item}</p>
-                    <p className="mt-1 text-neutral-500">{item === "Runs Locally" ? "Private and offline capable" : item === "Always Evolving" ? "Frequent updates" : item === "Enterprise Ready" ? "Built for teams" : "Your data stays with you"}</p>
+                    <p className="mt-1 text-neutral-500">{item === "Runs Locally" ? "Private and offline capable" : item === "Direct Website Download" ? "No store redirect" : item === "Enterprise Ready" ? "Built for teams" : "Your data stays with you"}</p>
                   </div>
                 ))}
               </div>
@@ -459,10 +587,10 @@ export default function DownloadPage() {
             <Image src="/logo-icon.png" alt="" width={72} height={72} className="mx-auto rounded-2xl" priority />
             <p className="mt-6 text-xs font-semibold uppercase tracking-[0.3em] text-blue-300">PawOS Desktop</p>
             <h1 className="mt-5 text-5xl font-bold tracking-tight text-balance sm:text-7xl">
-              The real PawOS product, ready from the web.
+              Give PawOS a goal. PawOS operates across your work.
             </h1>
             <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-neutral-300">
-              Download PawOS Desktop and see the runtime surfaces as they exist in the product: workspace, task cards, communication capture, office regions, browser evidence, mobile presence, and the Paw companion.
+              PawOS is not just an answer box. Tell Paw what you want, then watch the operating layer plan, act through runtimes, and return verified results.
             </p>
             <div className="mt-10 flex flex-wrap justify-center gap-4">
               {firstAvailable?.variant.url ? (
@@ -472,38 +600,90 @@ export default function DownloadPage() {
               ) : (
                 <Button href="#desktop">View Downloads</Button>
               )}
-              <Button href="#runtime-showcase" variant="secondary">See Runtime UI</Button>
+              <Button href="#runtime-showcase" variant="secondary">See PawOS UI</Button>
+            </div>
+          </div>
+          <OperatingLayerHeroVisual />
+        </Container>
+      </section>
+
+      <RuntimeOverview />
+
+      <section className="border-y border-white/10 bg-neutral-900/30 py-20">
+        <Container>
+          <div className="mb-10 max-w-3xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-blue-300">Coding Runtime</p>
+            <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-5xl">The goal becomes a project workspace.</h2>
+          </div>
+          <ProductFrame title="PawOS Coding Workspace">
+            <CodingWorkspaceSurface />
+          </ProductFrame>
+        </Container>
+      </section>
+
+      <section className="py-20">
+        <Container>
+          <div className="grid gap-8 lg:grid-cols-2">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-300">Planning + Execution</p>
+              <h2 className="mt-4 text-3xl font-bold tracking-tight">The control surface becomes a task lifecycle.</h2>
+              <div className="mt-8">
+                <ProductFrame title="PawOS Task Card">
+                  <div className="p-4"><TaskCardSurface /></div>
+                </ProductFrame>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-blue-300">Communication Intelligence</p>
+              <h2 className="mt-4 text-3xl font-bold tracking-tight">Meetings become evidence, transcript, speakers.</h2>
+              <div className="mt-8">
+                <ProductFrame title="PawOS Communication Workspace">
+                  <CommunicationSurface />
+                </ProductFrame>
+              </div>
             </div>
           </div>
         </Container>
       </section>
 
-      <section id="runtime-showcase" className="py-20">
+      <section className="border-y border-white/10 bg-neutral-900/30 py-20">
         <Container>
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-300">Runtime showcase</p>
-              <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-5xl">Mapped to existing PawOS UI.</h2>
+          <div className="grid gap-8 lg:grid-cols-2">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-300">Office Runtime</p>
+              <h2 className="mt-4 text-3xl font-bold tracking-tight">Office work appears as files, drafts, and recent output.</h2>
+              <div className="mt-8">
+                <ProductFrame title="PawOS Office Runtime">
+                  <OfficeSurface />
+                </ProductFrame>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-blue-300">Browser Runtime</p>
+              <h2 className="mt-4 text-3xl font-bold tracking-tight">Browser work becomes navigation and evidence.</h2>
+              <div className="mt-8">
+                <ProductFrame title="PawOS Browser Evidence">
+                  <BrowserSurface />
+                </ProductFrame>
+              </div>
+            </div>
+          </div>
+        </Container>
+      </section>
+
+      <section className="py-20">
+        <Container>
+          <div className="grid gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
+            <ProductFrame title="Desktop PawOS to Mobile PawOS">
+              <MobileSurface />
+            </ProductFrame>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-300">Mobile Presence</p>
+              <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-5xl">Desktop PawOS, connected to mobile.</h2>
               <p className="mt-5 text-neutral-400">
-                These visuals are based on existing PawOS renderer and website components. Where a runtime has backend capability but no polished production UI, the page says so instead of inventing a screen.
+                Pairing, trusted device state, conversation sync, notifications, and approval center are shown as mobile connectivity surfaces. The phone reviews and responds; it does not independently execute desktop actions.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <SourceBadge>Real components</SourceBadge>
-              <SourceBadge>No fake screenshots</SourceBadge>
-              <SourceBadge>Website-only presentation</SourceBadge>
-            </div>
-          </div>
-
-          <div className="mt-12">
-            <CodingRuntimeVisual />
-          </div>
-
-          <div className="mt-8 grid gap-8 lg:grid-cols-2">
-            <TaskCardVisual />
-            <CommunicationVisual />
-            <OfficeVisual />
-            <BrowserVisual />
           </div>
         </Container>
       </section>
@@ -512,10 +692,10 @@ export default function DownloadPage() {
         <Container>
           <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-blue-300">Universal companion</p>
-              <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-5xl">The PawOS companion uses real site assets.</h2>
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-blue-300">Universal Companion</p>
+              <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-5xl">The real PawOS companion belongs inside the product.</h2>
               <p className="mt-5 text-neutral-400">
-                This preview uses the existing PawOS companion preview component and bundled companion animation assets. It is not a generated replacement screenshot.
+                This section uses the existing PawOS companion preview and bundled companion animation assets.
               </p>
             </div>
             <CompanionPreview />
@@ -523,39 +703,19 @@ export default function DownloadPage() {
         </Container>
       </section>
 
-      <section className="py-20">
+      <section className="py-16">
         <Container>
-          <div className="grid gap-10 lg:grid-cols-[1fr_0.95fr] lg:items-center">
-            <MobileVisual />
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-300">Mobile Presence</p>
-              <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-5xl">Mobile connectivity is shown only where implemented.</h2>
-              <p className="mt-5 text-neutral-400">
-                Pairing, trusted-device presence, conversation sync, notifications, and approvals are represented from existing mobile presence components and bridges. The phone never claims to execute desktop actions itself.
-              </p>
-            </div>
-          </div>
-        </Container>
-      </section>
-
-      <section className="border-y border-white/10 bg-neutral-900/30 py-20">
-        <Container>
-          <div className="mx-auto max-w-3xl text-center">
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-blue-300">Source mapping</p>
-            <h2 className="mt-4 text-3xl font-bold tracking-tight sm:text-5xl">What is real UI, and what is not claimed.</h2>
-          </div>
-          <div className="mt-12 grid gap-4">
-            {REAL_UI_MAP.map((item) => (
-              <div key={item.runtime} className="grid gap-4 rounded-2xl border border-white/10 bg-white/[0.035] p-5 md:grid-cols-[0.7fr_0.7fr_1.6fr]">
-                <div>
-                  <p className="text-sm font-semibold text-neutral-100">{item.runtime}</p>
-                  <p className="mt-1 text-xs text-neutral-500">{item.status}</p>
+          <details className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+            <summary className="cursor-pointer text-sm font-semibold text-neutral-200">How this showcase stays truthful</summary>
+            <div className="mt-5 grid gap-3 text-sm text-neutral-400 md:grid-cols-2">
+              {RUNTIME_TRUTH.map(([runtime, status]) => (
+                <div key={runtime} className="rounded-xl bg-black/20 p-3">
+                  <p className="font-semibold text-neutral-100">{runtime}</p>
+                  <p className="mt-1 text-xs text-neutral-500">{status}</p>
                 </div>
-                <p className="font-mono text-[11px] leading-5 text-blue-200">{item.source}</p>
-                <p className="text-sm leading-6 text-neutral-400">{item.detail}</p>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </details>
         </Container>
       </section>
 
@@ -581,7 +741,7 @@ export default function DownloadPage() {
             PawOS Desktop downloads stay direct from the website.
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-neutral-400">
-            Windows and Linux use configured PawOS release URLs when present. macOS remains coming soon unless a real macOS release URL is configured.
+            Windows and Linux download only when configured release URLs exist. macOS remains coming soon unless a real macOS release URL is configured.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-4">
             <Button href="#desktop">View Downloads</Button>
