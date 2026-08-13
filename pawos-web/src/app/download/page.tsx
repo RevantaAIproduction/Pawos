@@ -7,6 +7,7 @@ import { Container } from "../../components/ui/Container";
 import { CompanionPreview } from "../../components/companion-preview/CompanionPreview";
 import { MiniCompanionCanvas } from "../../components/companion-preview/MiniCompanionCanvas";
 import { OsDownloadPicker } from "./OsDownloadPicker";
+import { NotifyButton } from "./NotifyButton";
 import { getDownloadPlatforms, type DownloadPlatform } from "../../lib/config/downloadConfig";
 
 export const metadata: Metadata = {
@@ -21,7 +22,6 @@ export const metadata: Metadata = {
 };
 
 const DOWNLOAD_PLATFORMS = getDownloadPlatforms();
-const NOTIFY_HREF = "/signup?intent=pawos-desktop-waitlist";
 
 const SYSTEM_REQUIREMENTS = [
   { platform: "Windows", spec: "Windows 10 (64-bit) or later, 4 GB RAM minimum.", href: "/download/windows" },
@@ -497,12 +497,10 @@ function DownloadCard({ platform }: { platform: DownloadPlatform }) {
         {platform.id === "linux" && "For Ubuntu 20.04+ / Debian 11+."}
         {platform.id === "macos" && "Stay tuned for the macOS release."}
       </p>
-      <a
-        href={NOTIFY_HREF}
+      <NotifyButton
+        platform={platform.id}
         className="mt-4 inline-flex w-full items-center justify-center rounded-full border border-blue-400/40 px-4 py-2 text-sm font-semibold text-blue-200 transition hover:border-blue-300 hover:text-blue-100"
-      >
-        Notify me
-      </a>
+      />
       <div className="mt-3 flex flex-wrap gap-3 text-[11px] text-neutral-500">
         <span>SHA256</span>
         <Link href={`/download/${platform.id}`} className="text-blue-300 hover:underline">
@@ -582,7 +580,7 @@ export default function DownloadPage() {
               PawOS is not just an answer box. Tell Paw what you want, then watch the operating layer plan, act through runtimes, and return verified results.
             </p>
             <div className="mt-10 flex flex-wrap justify-center gap-4">
-              <Button href={NOTIFY_HREF}>Notify me</Button>
+              <NotifyButton className="inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950 bg-gradient-to-r from-indigo-500 to-blue-400 text-black hover:opacity-90 focus-visible:ring-blue-400" />
               <Button href="#runtime-showcase" variant="secondary">See PawOS UI</Button>
             </div>
           </div>
@@ -727,7 +725,7 @@ export default function DownloadPage() {
             Public installers are not available yet. Join the notification list for launch updates, then explore the product while PawOS Desktop is prepared for release.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-4">
-            <Button href={NOTIFY_HREF}>Notify me</Button>
+            <NotifyButton className="inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950 bg-gradient-to-r from-indigo-500 to-blue-400 text-black hover:opacity-90 focus-visible:ring-blue-400" />
             <Button href="/docs" variant="secondary">Read Docs</Button>
           </div>
         </Container>

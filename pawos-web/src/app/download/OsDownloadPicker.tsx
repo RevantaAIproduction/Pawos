@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { trackEvent } from "../../components/analytics/Analytics";
+import { NotifyButton } from "./NotifyButton";
 import { getDownloadPlatforms, type DownloadPlatformId } from "../../lib/config/downloadConfig";
 
 const PLATFORMS = getDownloadPlatforms();
-const NOTIFY_HREF = "/signup?intent=pawos-desktop-waitlist";
 
 function detectOs(): DownloadPlatformId {
   if (typeof navigator === "undefined") return "windows";
@@ -53,13 +53,11 @@ export function OsDownloadPicker() {
                 <p className="text-sm font-medium text-neutral-100">{v.label}</p>
                 <p className="text-xs text-neutral-500">Coming soon</p>
               </div>
-              <a
-                href={NOTIFY_HREF}
-                onClick={() => trackEvent("download_notify_click", { platform: activePlatform.label, variant: v.label })}
+              <NotifyButton
+                platform={activePlatform.id}
+                onNotifyClick={() => trackEvent("download_notify_click", { platform: activePlatform.label, variant: v.label })}
                 className="rounded-full border border-blue-400/40 px-4 py-1.5 text-xs font-semibold text-blue-200 transition hover:border-blue-300 hover:text-blue-100"
-              >
-                Notify me
-              </a>
+              />
             </div>
           ))}
         </div>
