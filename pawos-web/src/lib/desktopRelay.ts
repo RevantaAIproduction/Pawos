@@ -1,24 +1,30 @@
 import { stashGoogleAuthPayload } from "./googleAuthRelayStore";
 
 /**
- * Shared by auth/google/callback and auth/github/callback: both routes
- * exist only to receive the OAuth provider's redirect when a PawOS desktop
- * sign-in is in progress, and hand the result back to the desktop app.
+ * auth/github/callback's relay — receives Supabase's redirect when a PawOS desktop GitHub
+ * sign-in is in progress, and hands the raw PKCE `code` back to the desktop app so its own
+ * renderer can call supabase.auth.exchangeCodeForSession() (that call must run in the same
+ * Supabase client instance that started the flow, since the code_verifier lives in its local
+ * storage — this route never does the exchange itself).
  *
- * This used to fetch http://127.0.0.1:PORT from here — which only ever
- * worked when this Next.js server and the Electron app ran on the same
- * machine. Now that pawos-web runs on a real remote host, this process has
- * no network path to a port on the user's own computer. Instead, the page
- * below redirects the browser itself to a pawos:// custom-protocol URL,
- * which Windows/macOS/Linux route directly to the already-running PawOS
- * app (see OAuthProtocolBridge.ts / main.ts's protocol registration) — no
- * server-to-desktop network hop involved at all.
+ * This used to redirect the browser to a pawos://github-auth-callback custom-protocol URL —
+ * confirmed unreliable in production ("GitHub sign-in not responding"): browsers silently
+ * throttle a script-driven navigation to a custom protocol when the full OAuth redirect chain
+ * doesn't read as a fresh direct user gesture, with no error and no dialog show up, so the page
+ * just sits there forever. relayGoogleToDesktop below already solved this identical problem for
+ * Google via a same-machine loopback HTTP redirect (RFC 8252 "OAuth for Native Apps") instead of
+ * a custom protocol — this reuses that same fix. See GitHubOAuthFlow.ts's own doc comment for
+ * the matching Electron-side listener. No Supabase dashboard change is needed: the hosted
+ * callback URL Supabase itself redirects the browser to is unchanged; only what this page does
+ * next (loopback redirect instead of a pawos:// deep link) is different.
  */
-export function relayToDesktop(scheme: "google-auth-callback" | "github-auth-callback", code: string | null, error: string | null): Response {
-  const params = new URLSearchParams();
-  if (code) params.set("code", code);
-  if (error) params.set("error", error);
-  return buildRelayResponse(`pawos://${scheme}?${params.toString()}`, error);
+export function relayGitHubToDesktop(code: string | null, error: string | null): Response {
+  if (error) return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error }).toString()}`, error);
+  if (!code) {
+    const missing = "missing_code";
+    return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error: missing }).toString()}`, missing);
+  }
+  return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ code }).toString()}`, null);
 }
 
 /**

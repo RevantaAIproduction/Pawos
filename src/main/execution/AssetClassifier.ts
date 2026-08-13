@@ -3,6 +3,7 @@ import * as path from 'path';
 import { imageSize } from 'image-size';
 import { TEST_FILE_PATTERN } from './ProjectAnalyzer';
 import { KNOWN_BUILD_FILE_NAMES, KNOWN_CONFIG_FILE_NAMES } from './knownConfigFileNames';
+import { isImageMetadataFormatAllowed } from './safeImageMetadata';
 
 // Same SKIP_DIRS/depth-cap convention as ProjectMapBuilder/DependencyGraphWorker/FeatureMapBuilder's
 // schema walk — kept as its own copy per the Phase 1 Technical Debt Register's "duplicate walk-bound
@@ -70,6 +71,7 @@ function classifyByExtensionAndName(relPath: string): AssetKind {
 /** Best-effort image dimension read — a corrupt/truncated/oversized file yields no metadata rather than throwing, matching every other reader in this codebase's "one bad file never breaks the whole analysis" discipline (e.g. FeatureMapBuilder.ts's readTextFile). */
 function readImageMetadata(absPath: string): ImageAssetMetadata | undefined {
   try {
+    if (!isImageMetadataFormatAllowed(absPath)) return undefined;
     const stat = fs.statSync(absPath);
     if (!stat.isFile() || stat.size === 0 || stat.size > MAX_IMAGE_METADATA_BYTES) return undefined;
     const buffer = fs.readFileSync(absPath);

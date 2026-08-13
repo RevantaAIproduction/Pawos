@@ -4,7 +4,7 @@ import type { SectionId } from './index';
 import { useIpcBridge } from '../../../services/ipc/useIpcBridge';
 import type { ExecutionRecord } from '../../../../shared/actions/ExecutionRecordTypes';
 import type { EntitlementSnapshot } from '../../../../shared/billing/BillingTypes';
-import { PAW_MODEL_CATALOG } from '../../../../shared/ai/PawModelTypes';
+import { formatPawComputeSummary, formatPlanAndRuntimeSummary } from '../../../billing/EntitlementDisplay';
 
 function timeAgo(ts: number): string {
   const diffMs = Date.now() - ts;
@@ -18,9 +18,8 @@ function timeAgo(ts: number): string {
 
 /**
  * Layout only, per Phase 1: one clear primary action (enable/talk to the
- * companion), a compact status strip, and a single merged activity feed —
- * no runtime shortcuts here (that's what Apps is for) and no invented
- * notifications section. Same real data sources as before this pass.
+ * companion), a compact status strip, and a single merged activity feed.
+ * Same real data sources as before this pass.
  */
 export function OverviewSection({
   onNavigate,
@@ -29,6 +28,7 @@ export function OverviewSection({
   companionWaking,
   onEnableCompanion,
   onDisableCompanion,
+  onOpenWorkRecord,
 }: {
   onNavigate: (id: SectionId) => void;
   companionEnabled: boolean;
@@ -37,6 +37,7 @@ export function OverviewSection({
   companionWaking?: boolean;
   onEnableCompanion: () => void;
   onDisableCompanion: () => void;
+  onOpenWorkRecord: (id: string) => void;
 }) {
   const ipc = useIpcBridge();
   const [executions, setExecutions] = useState<ExecutionRecord[] | null>(null);
@@ -60,12 +61,8 @@ export function OverviewSection({
     .sort((a, b) => b.startedAt - a.startedAt)
     .slice(0, 6);
 
-  const activeModel = entitlement ? PAW_MODEL_CATALOG.find((m) => entitlement.models.includes(m.id)) : undefined;
-  const aiUsageText = entitlement
-    ? entitlement.models.length === 0
-      ? 'No AI models on this plan'
-      : `${entitlement.creditsUsedThisPeriod} credits used${entitlement.creditLimit === null ? '' : ` / ${entitlement.creditLimit}`}${activeModel ? ` · ${activeModel.label}` : ''}`
-    : '…';
+  const pawComputeText = formatPawComputeSummary(entitlement);
+  const planText = formatPlanAndRuntimeSummary(entitlement);
 
   return (
     <div>
@@ -75,11 +72,11 @@ export function OverviewSection({
           <div className={styles.companionOrb} data-on={companionEnabled} />
         </div>
         <h3 className={styles.companionState} style={{ fontSize: 16 }}>
-          {companionWaking ? 'Waking up your companion…' : companionEnabled ? 'Your companion is active' : 'Your companion is off'}
+          {companionWaking ? 'Waking up your companion...' : companionEnabled ? 'Your companion is active' : 'Your companion is off'}
         </h3>
         <p className={styles.cardBody}>
           {companionWaking
-            ? 'Loading its animations and voice — this only takes a few seconds.'
+            ? 'Loading its animations and voice. This only takes a few seconds.'
             : companionEnabled
               ? 'Ask it to do something, or open Talk with Paw to continue a conversation.'
               : 'Enable it to start working with Paw.'}
@@ -91,7 +88,7 @@ export function OverviewSection({
             disabled={companionPending}
             onClick={companionEnabled ? onDisableCompanion : onEnableCompanion}
           >
-            {companionPending ? 'Working…' : companionEnabled ? 'Disable' : 'Enable companion'}
+            {companionPending ? 'Working...' : companionEnabled ? 'Disable' : 'Enable companion'}
           </button>
           {companionEnabled && !companionWaking && (
             <button type="button" className={styles.chip} onClick={() => onNavigate('companionLab')}>
@@ -103,43 +100,47 @@ export function OverviewSection({
 
       <div className={styles.statusStrip}>
         <div className={styles.statusStripItem} onClick={() => onNavigate('analytics')} style={{ cursor: 'pointer' }}>
-          <span className={styles.statusStripLabel}>AI usage</span>
-          <span className={styles.statusStripValue}>{aiUsageText}</span>
+          <span className={styles.statusStripLabel}>Paw Compute</span>
+          <span className={styles.statusStripValue}>{pawComputeText}</span>
+        </div>
+        <div className={styles.statusStripItem} onClick={() => onNavigate('upgrade')} style={{ cursor: 'pointer' }}>
+          <span className={styles.statusStripLabel}>Plan & runtimes</span>
+          <span className={styles.statusStripValue}>{planText}</span>
         </div>
         <div className={styles.statusStripItem}>
           <span className={styles.statusStripLabel}>Version</span>
-          <span className={styles.statusStripValue}>{appVersion ?? '…'}</span>
+          <span className={styles.statusStripValue}>{appVersion ?? '...'}</span>
         </div>
         <div className={styles.statusStripItem} onClick={() => onNavigate('projects')} style={{ cursor: 'pointer' }}>
           <span className={styles.statusStripLabel}>Projects</span>
-          <span className={styles.statusStripValue}>View recent →</span>
+          <span className={styles.statusStripValue}>View recent</span>
         </div>
       </div>
 
       <h3 className={styles.subheading}>Recent activity</h3>
       {active.length === 0 && recent.length === 0 ? (
         <div className={styles.compactEmptyState}>
-          No activity yet — enable your companion and ask it to do something to start building a history.
+          No activity yet. Enable your companion and ask it to do something to start building a history.
         </div>
       ) : (
         <div className={styles.activityList}>
           {active.map((e) => (
-            <div key={e.id} className={styles.activityRow}>
+            <button key={e.id} type="button" className={styles.activityRow} onClick={() => onOpenWorkRecord(e.id)}>
               <span className={styles.statusBadge} data-status={e.status}>
                 Running
               </span>
               <span className={styles.activityGoal}>{e.goal}</span>
               <span className={styles.activityMeta}>{timeAgo(e.startedAt)}</span>
-            </div>
+            </button>
           ))}
           {recent.map((e) => (
-            <div key={e.id} className={styles.activityRow}>
+            <button key={e.id} type="button" className={styles.activityRow} onClick={() => onOpenWorkRecord(e.id)}>
               <span className={styles.statusBadge} data-status={e.status}>
                 {e.status === 'completed' ? 'Done' : e.status === 'failed' ? 'Failed' : 'Stopped'}
               </span>
               <span className={styles.activityGoal}>{e.goal}</span>
               <span className={styles.activityMeta}>{timeAgo(e.startedAt)}</span>
-            </div>
+            </button>
           ))}
         </div>
       )}

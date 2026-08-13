@@ -144,7 +144,7 @@ const AGENT_EXECUTION_TYPES = new Set([
 ]);
 
 const OTHER_TYPES = new Set([
-  'connectJiraCredential', 'saveGuestConnectorCredential', 'connectivityConnect', 'mergePdfs',
+  'connectJiraCredential', 'connectivityConnect', 'mergePdfs',
   'createDocx', 'createSpreadsheet', 'analyzeSpreadsheet', 'createPresentation',
   'listRecentOfficeFiles',
 ]);

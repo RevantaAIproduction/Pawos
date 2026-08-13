@@ -1,7 +1,15 @@
 import { subscriptionStore } from './SubscriptionStore';
 import { creditStore } from './CreditStore';
 import { usageQuotaConfigStore } from './UsageQuotaConfigStore';
-import type { EntitlementSnapshot, FeatureId, SeatTier, SubscriptionTierId, TierEntitlements } from '../../shared/billing/BillingTypes';
+import type {
+  EntitlementSnapshot,
+  FeatureId,
+  RuntimeEntitlementId,
+  SeatTier,
+  SubscriptionTierId,
+  TierEntitlements,
+} from '../../shared/billing/BillingTypes';
+import { ALL_RUNTIME_ENTITLEMENT_IDS } from '../../shared/billing/RuntimeCatalog';
 import type { PawModelId } from '../../shared/ai/PawModelTypes';
 
 const GO_FEATURES: FeatureId[] = [
@@ -92,6 +100,16 @@ const TEAM_FEATURES: FeatureId[] = [
  */
 const ENTERPRISE_FEATURES: FeatureId[] = [...TEAM_FEATURES, 'autonomousTaskBilling', 'organizationCrossDeviceAlerts'];
 
+export const LEGACY_PLAN_RUNTIME_ENTITLEMENTS: RuntimeEntitlementId[] = ALL_RUNTIME_ENTITLEMENT_IDS;
+
+export const PLAN_DERIVED_RUNTIME_ENTITLEMENTS: Record<SubscriptionTierId, RuntimeEntitlementId[]> = {
+  go: [],
+  pro: [],
+  proMax: [],
+  team: LEGACY_PLAN_RUNTIME_ENTITLEMENTS,
+  enterprise: LEGACY_PLAN_RUNTIME_ENTITLEMENTS,
+};
+
 /**
  * The single source of truth for what a tier unlocks (models/features only
  * — monthlyCreditLimit is resolved dynamically from UsageQuotaConfigStore's
@@ -121,13 +139,13 @@ const TIER_ENTITLEMENTS: Record<SubscriptionTierId, Omit<TierEntitlements, 'mont
  */
 class EntitlementService {
   private currentTier(): SubscriptionTierId {
-    return subscriptionStore.get().tier;
+    return subscriptionStore.getEffective().tier;
   }
 
   /** Only meaningful for 'team' — which seat rate (Standard/Premium) this account was assigned. */
   getSeatTier(): SeatTier | undefined {
-    const state = subscriptionStore.get();
-    return state.tier === 'team' ? state.seatTier : undefined;
+    const effective = subscriptionStore.getEffective();
+    return effective.tier === 'team' ? effective.seatTier : undefined;
   }
 
   /**
@@ -158,6 +176,24 @@ class EntitlementService {
 
   isFeatureAvailable(featureId: FeatureId): boolean {
     return this.getEntitlements().features.includes(featureId);
+  }
+
+  getRuntimeEntitlements(): RuntimeEntitlementId[] {
+    const tier = this.currentTier();
+    const ids = new Set<RuntimeEntitlementId>(PLAN_DERIVED_RUNTIME_ENTITLEMENTS[tier]);
+    for (const grant of subscriptionStore.getPurchasedRuntimeEntitlements()) {
+      ids.add(grant.runtimeId);
+    }
+    return [...ids];
+  }
+
+  isRuntimeEntitled(runtimeId: RuntimeEntitlementId): boolean {
+    return this.getRuntimeEntitlements().includes(runtimeId);
+  }
+
+  diffRuntimeEntitlements(requested: RuntimeEntitlementId[]): RuntimeEntitlementId[] {
+    const owned = new Set(this.getRuntimeEntitlements());
+    return requested.filter((runtimeId, index) => requested.indexOf(runtimeId) === index && !owned.has(runtimeId));
   }
 
   getCreditLimit(): number | null {
@@ -207,6 +243,7 @@ class EntitlementService {
       tier: entitlements.tier,
       models: entitlements.models,
       features: entitlements.features,
+      runtimeEntitlements: this.getRuntimeEntitlements(),
       creditLimit: entitlements.monthlyCreditLimit,
       creditsUsedThisPeriod: balance.usedThisPeriod,
       bonusComputeThisPeriod: balance.bonusThisPeriod,

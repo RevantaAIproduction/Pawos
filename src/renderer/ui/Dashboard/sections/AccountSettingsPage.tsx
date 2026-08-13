@@ -1,10 +1,9 @@
 import React from 'react';
 import styles from '../dashboard.module.css';
 import { AccountSection } from './AccountSection';
-import { UpgradeGuestPanel } from './UpgradeGuestPanel';
 import { ChangePasswordCard } from './ChangePasswordCard';
 import { OrganizationSection } from './OrganizationSection';
-import type { AuthUser, EmailCreateAccountOptions } from '../../../auth/AuthTypes';
+import type { AuthUser } from '../../../auth/AuthTypes';
 
 function formatMemberSince(createdAt: number): string {
   return new Date(createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
@@ -14,9 +13,6 @@ function formatMemberSince(createdAt: number): string {
 export function AccountSettingsPage({
   user,
   onSignOut,
-  onUpgradeGuestWithGoogle,
-  onUpgradeGuestWithEmail,
-  isGoogleSignInAvailable,
   onRequestPasswordReset,
   onVerifyPasswordResetCode,
   onCompletePasswordReset,
@@ -24,9 +20,6 @@ export function AccountSettingsPage({
 }: {
   user: AuthUser;
   onSignOut: () => void;
-  onUpgradeGuestWithGoogle: () => Promise<unknown>;
-  onUpgradeGuestWithEmail: (options: EmailCreateAccountOptions) => Promise<unknown>;
-  isGoogleSignInAvailable: () => Promise<boolean>;
   onRequestPasswordReset: (email: string) => Promise<{ expiresInMinutes: number }>;
   onVerifyPasswordResetCode: (email: string, code: string) => Promise<{ valid: boolean; reason?: string; resetToken?: string }>;
   onCompletePasswordReset: (resetToken: string, newPassword: string) => Promise<{ ok: boolean; reason?: string }>;
@@ -35,16 +28,6 @@ export function AccountSettingsPage({
   return (
     <div>
       <AccountSection user={user} onSignOut={onSignOut} />
-
-      {user.isGuest && (
-        <div style={{ marginTop: 14 }}>
-          <UpgradeGuestPanel
-            onUpgradeGuestWithGoogle={onUpgradeGuestWithGoogle}
-            onUpgradeGuestWithEmail={onUpgradeGuestWithEmail}
-            isGoogleSignInAvailable={isGoogleSignInAvailable}
-          />
-        </div>
-      )}
 
       {!user.isGuest && (
         <div className={styles.card} style={{ marginTop: 14 }}>

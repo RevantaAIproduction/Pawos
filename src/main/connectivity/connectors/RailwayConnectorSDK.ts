@@ -4,7 +4,6 @@ import { RailwayConnector } from '../../infrastructure/connectors/hosting/Railwa
 import { infrastructureConnectorRegistry } from '../../infrastructure/InfrastructureConnectorRegistry';
 import { oauthManager } from '../OAuthManager';
 import { credentialVaultBridge } from '../CredentialVaultBridge';
-import { guestConnectorCredentialStore } from '../../infrastructure/GuestConnectorCredentialStore';
 
 const RAILWAY_API = 'https://backboard.railway.app/graphql/v2';
 
@@ -87,7 +86,6 @@ export class RailwayConnectorSDK implements ConnectorSDK {
         expiresAt: token.expiresAt,
         grantedScopes: token.grantedScopes,
       });
-      if (scope.userId === 'guest') guestConnectorCredentialStore.save(this.definition.id, { bundle: JSON.stringify(this.credential) });
       this.registerLiveConnector();
       this.currentStatus = { state: 'connected', capabilities: this.capabilities(), connectedAt: new Date().toISOString(), detail: identity.name };
     } catch (error) {
@@ -108,7 +106,6 @@ export class RailwayConnectorSDK implements ConnectorSDK {
   async disconnect(scope: ConnectivityScope): Promise<void> {
     this.credential = undefined;
     await credentialVaultBridge.revoke(this.definition.id, scope);
-    guestConnectorCredentialStore.remove(this.definition.id);
     infrastructureConnectorRegistry.register('hosting', new RailwayConnector(undefined, undefined, undefined));
     this.currentStatus = { state: 'disconnected', capabilities: [] };
   }

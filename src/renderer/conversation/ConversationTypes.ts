@@ -37,7 +37,7 @@ export type ConversationTaskAction = {
  * wrongly read an interrupted task as 'completed'. See finalizeTask in
  * ConversationRuntime.ts, the one place this is ever set.
  */
-export type ConversationTaskStatus = 'running' | 'completed' | 'failed' | 'interrupted';
+export type ConversationTaskStatus = 'running' | 'completed' | 'failed' | 'interrupted' | 'stopped';
 
 /**
  * One user request that triggered real desktop work ("Install Java.") —
@@ -90,6 +90,8 @@ export type ConversationSnapshot = {
   errorMessage: string | null;
   supportsSpeechRecognition: boolean;
   supportsSpeechSynthesis: boolean;
+  voiceOutputEnabled: boolean;
+  speechPlaybackState: 'off' | 'on' | 'speaking' | 'paused';
   /** True while a destructive action is waiting on a plain "yes"/"no" reply (see ConversationRuntime's pendingConfirmation) — the structured signal the Approval Center (MOB-9) watches for, since parsing message text for confirmation language would be unreliable. */
   pendingConfirmation: boolean;
 };

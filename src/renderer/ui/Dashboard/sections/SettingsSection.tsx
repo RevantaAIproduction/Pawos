@@ -14,7 +14,7 @@ import { BillingSettingsPage } from './BillingSettingsPage';
 import { DevelopersSettingsPage } from './DevelopersSettingsPage';
 import { ConnectionsPage } from './ConnectionsPage';
 import { useConnectivityBootstrap } from '../../../connectivity/useConnectivityBootstrap';
-import type { AuthUser, EmailCreateAccountOptions } from '../../../auth/AuthTypes';
+import type { AuthUser } from '../../../auth/AuthTypes';
 
 const SETTINGS_TABS = [
   'Home',
@@ -35,9 +35,6 @@ export type SettingsTab = (typeof SETTINGS_TABS)[number];
 export function SettingsSection({
   user,
   onSignOut,
-  onUpgradeGuestWithGoogle,
-  onUpgradeGuestWithEmail,
-  isGoogleSignInAvailable,
   initialTab,
   onUpgrade,
   onOpenCompanionStudio,
@@ -48,9 +45,6 @@ export function SettingsSection({
 }: {
   user: AuthUser;
   onSignOut: () => void;
-  onUpgradeGuestWithGoogle: () => Promise<unknown>;
-  onUpgradeGuestWithEmail: (options: EmailCreateAccountOptions) => Promise<unknown>;
-  isGoogleSignInAvailable: () => Promise<boolean>;
   /** Set when arriving from the profile menu's shortcuts — otherwise defaults to Account. */
   initialTab?: SettingsTab;
   /** Navigates to the dedicated plan-comparison page — not a Settings tab itself. */
@@ -97,9 +91,6 @@ export function SettingsSection({
             <AccountSettingsPage
               user={user}
               onSignOut={onSignOut}
-              onUpgradeGuestWithGoogle={onUpgradeGuestWithGoogle}
-              onUpgradeGuestWithEmail={onUpgradeGuestWithEmail}
-              isGoogleSignInAvailable={isGoogleSignInAvailable}
               onRequestPasswordReset={onRequestPasswordReset}
               onVerifyPasswordResetCode={onVerifyPasswordResetCode}
               onCompletePasswordReset={onCompletePasswordReset}

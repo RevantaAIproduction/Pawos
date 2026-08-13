@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import type { ActionRequest, ActionResult } from '../../../../shared/actions/ActionTypes';
 import { BasePlugin } from '../../BasePlugin';
 import { describeFailure } from '../../describeFailure';
+import { assertSpreadsheetWithinReadLimit } from './spreadsheetSafety';
 
 export type ColumnStats = { column: string; count: number; sum: number; average: number; min: number; max: number };
 export type SpreadsheetAnalysis = { sheetName: string; rowCount: number; columns: ColumnStats[] };
@@ -34,6 +35,7 @@ export class AnalyzeSpreadsheetPlugin extends BasePlugin {
     if (!fs.existsSync(request.filePath)) return { ok: false, reason: 'failed', message: `I can't find "${request.filePath}".` };
 
     try {
+      assertSpreadsheetWithinReadLimit(request.filePath);
       const workbook = XLSX.readFile(request.filePath);
       const sheetName = request.sheetName ?? workbook.SheetNames[0];
       const worksheet = sheetName ? workbook.Sheets[sheetName] : undefined;

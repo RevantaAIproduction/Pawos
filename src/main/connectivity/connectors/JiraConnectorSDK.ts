@@ -4,7 +4,6 @@ import { JiraConnector } from '../../infrastructure/connectors/projectManagement
 import { infrastructureConnectorRegistry } from '../../infrastructure/InfrastructureConnectorRegistry';
 import { oauthManager } from '../OAuthManager';
 import { credentialVaultBridge } from '../CredentialVaultBridge';
-import { guestConnectorCredentialStore } from '../../infrastructure/GuestConnectorCredentialStore';
 
 interface JiraCredential {
   accessToken: string;
@@ -102,9 +101,6 @@ export class JiraConnectorSDK implements ConnectorSDK {
         expiresAt: token.expiresAt,
         grantedScopes: token.grantedScopes,
       });
-      if (scope.userId === 'guest') {
-        guestConnectorCredentialStore.save(this.definition.id, { bundle: JSON.stringify(this.credential) });
-      }
       this.registerLiveConnector();
       this.currentStatus = { state: 'connected', capabilities: this.capabilities(), connectedAt: new Date().toISOString(), detail: resource.siteName };
     } catch (error) {
@@ -128,7 +124,6 @@ export class JiraConnectorSDK implements ConnectorSDK {
     }
     this.credential = undefined;
     await credentialVaultBridge.revoke(this.definition.id, scope);
-    guestConnectorCredentialStore.remove(this.definition.id);
     // No unregister() exists on InfrastructureConnectorRegistry (deliberately not added this
     // pass) — replacing the live connector with an unconfigured instance is an honest, equivalent
     // way to report "not connected" without widening that registry's API.

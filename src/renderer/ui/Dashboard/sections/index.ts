@@ -4,7 +4,6 @@ export type SectionId =
   | 'projects'
   | 'apps'
   | 'analytics'
-  | 'history'
   | 'workHistory'
   | 'browserCapabilities'
   | 'communicationDrafts'
@@ -21,8 +20,7 @@ export const SECTION_TITLES: Record<SectionId, string> = {
   projects: 'Projects',
   apps: 'Apps',
   analytics: 'Analytics',
-  history: 'Conversation History',
-  workHistory: 'Work History',
+  workHistory: 'Working History',
   browserCapabilities: 'Research',
   communicationDrafts: 'Communication',
   office: 'Office',

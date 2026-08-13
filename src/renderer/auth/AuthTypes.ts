@@ -1,7 +1,7 @@
-export type AuthProviderId = 'google' | 'github' | 'microsoft' | 'apple' | 'email' | 'guest';
+export type AuthProviderId = 'google' | 'github' | 'microsoft' | 'apple' | 'email';
 
 /** Providers wired up and working in this version. Microsoft/Apple are visible in the UI as "Coming soon" but have no IdentityProvider behind them yet. */
-export const SUPPORTED_PROVIDERS: ReadonlySet<AuthProviderId> = new Set(['google', 'github', 'email', 'guest']);
+export const SUPPORTED_PROVIDERS: ReadonlySet<AuthProviderId> = new Set(['google', 'github', 'email']);
 
 export type AuthUser = {
   id: string;
@@ -27,10 +27,6 @@ export interface AuthService {
   signInWithGithub(): Promise<AuthUser>;
   signInWithEmail(options: EmailSignInOptions): Promise<AuthUser>;
   createEmailAccount(options: EmailCreateAccountOptions): Promise<AuthUser>;
-  continueAsGuest(): Promise<AuthUser>;
-  /** Signs the current guest in as a real account, keeping the same local id (see providers/GuestAuthProvider.ts for why nothing needs to be "merged" today). */
-  upgradeGuestWithGoogle(): Promise<AuthUser>;
-  upgradeGuestWithEmail(options: EmailCreateAccountOptions): Promise<AuthUser>;
   /** Sends a real 6-digit password-reset code to the given email (independent OTP namespace from sendVerificationCode). */
   requestPasswordReset(email: string): Promise<{ expiresInMinutes: number }>;
   /** Verifies the reset code; on success returns a short-lived signed token that authorizes completePasswordReset. */

@@ -3,6 +3,8 @@ import styles from './conversationPanel.module.css';
 import type { ConversationSnapshot, SubmittedInputContext } from './ConversationTypes';
 import { conversationStateLabels } from './ConversationTypes';
 import { TaskCard } from './TaskCard';
+import { ProjectPlanCard } from './ProjectPlanCard';
+import { isProjectPlanMessage } from './ProjectPlanningUX';
 import { CreditsRequiredNotice } from '../ui/billing/CreditsRequiredNotice';
 import type { SeatTier, SubscriptionTierId } from '../../shared/billing/BillingTypes';
 
@@ -33,7 +35,11 @@ export function ConversationPanel({
   snapshot,
   onClose,
   onStartListening,
+  onStopListening,
   onSendTranscript,
+  onSetVoiceOutputEnabled,
+  onStopSpeechPlayback,
+  onSpeakMessage,
   onRetryAction,
   onOpenPath,
   onConnectCapability,
@@ -56,7 +62,11 @@ export function ConversationPanel({
   snapshot: ConversationSnapshot;
   onClose: () => void;
   onStartListening: () => void;
+  onStopListening: () => void;
   onSendTranscript: (text: string, context?: SubmittedInputContext) => void;
+  onSetVoiceOutputEnabled: (enabled: boolean) => void;
+  onStopSpeechPlayback: () => void;
+  onSpeakMessage: (text: string) => void;
   /** "Retry failed step" in a Task Card's Details panel — re-runs one action from its own recorded request. */
   onRetryAction?: (taskId: string, actionId: string) => void;
   /** "Open" next to a file/folder a Task Card touched. */
@@ -99,6 +109,7 @@ export function ConversationPanel({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
+  const lastSyncedVoiceDraftRef = useRef('');
 
   const latestMessage = useMemo(() => snapshot.messages[snapshot.messages.length - 1], [snapshot.messages]);
 
@@ -112,6 +123,15 @@ export function ConversationPanel({
     const el = transcriptRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [snapshot.messages, snapshot.draftTranscript]);
+
+  useEffect(() => {
+    if (!snapshot.draftTranscript || (snapshot.state !== 'listening' && snapshot.state !== 'idle')) return;
+    if (draft && draft !== lastSyncedVoiceDraftRef.current) return;
+    setDraft(snapshot.draftTranscript);
+    lastSyncedVoiceDraftRef.current = snapshot.draftTranscript;
+    setWasPasted(false);
+    requestAnimationFrame(resizeTextarea);
+  }, [draft, snapshot.draftTranscript, snapshot.state]);
   // While performing an action, show what's actually happening ("Opening VS
   // Code…") instead of the generic "Performing action" — Desktop Status
   // should always name the real activity, not just the state machine's name for it.
@@ -140,6 +160,7 @@ export function ConversationPanel({
     }
     onSendTranscript(text, wasPasted ? { source: 'pasted' } : undefined);
     setDraft('');
+    lastSyncedVoiceDraftRef.current = '';
     setWasPasted(false);
     requestAnimationFrame(resizeTextarea);
   };
@@ -202,13 +223,28 @@ export function ConversationPanel({
           <div className={styles.title}>{stateLabel}</div>
         </div>
         <div className={styles.headerActions}>
-          <button className={styles.listenBtn} onClick={onStartListening} type="button">
-            {snapshot.state === 'listening'
-              ? 'Listening'
-              : snapshot.state === 'waitingForPermission' || snapshot.state === 'error'
-                ? 'Retry'
-                : 'Listen'}
+          <button
+            className={snapshot.voiceOutputEnabled ? styles.voiceToggleOn : styles.voiceToggle}
+            onClick={() => onSetVoiceOutputEnabled(!snapshot.voiceOutputEnabled)}
+            type="button"
+            aria-pressed={snapshot.voiceOutputEnabled}
+          >
+            Voice Output: {snapshot.voiceOutputEnabled ? 'ON' : 'OFF'}
           </button>
+          {snapshot.speechPlaybackState === 'speaking' && (
+            <button className={styles.voiceToggle} onClick={onStopSpeechPlayback} type="button">
+              Pause
+            </button>
+          )}
+          {snapshot.state === 'listening' ? (
+            <button className={styles.stopRecordBtn} onClick={onStopListening} type="button">
+              Stop Recording
+            </button>
+          ) : (
+            <button className={styles.listenBtn} onClick={onStartListening} type="button">
+              {snapshot.state === 'waitingForPermission' || snapshot.state === 'error' ? 'Retry Recording' : 'Start Recording'}
+            </button>
+          )}
           <button className={styles.closeBtn} onClick={onClose} type="button">
             Close
           </button>
@@ -217,7 +253,16 @@ export function ConversationPanel({
 
       <div className={styles.meta}>
         <span>{snapshot.supportsSpeechRecognition ? 'Speech recognition ready' : 'Type mode fallback'}</span>
-        <span>{snapshot.supportsSpeechSynthesis ? 'Speech synthesis ready' : 'Speech output fallback'}</span>
+        <span>Voice Output: {snapshot.voiceOutputEnabled ? 'ON' : 'OFF'}</span>
+        <span>
+          {snapshot.speechPlaybackState === 'speaking'
+            ? 'Speaking...'
+            : snapshot.speechPlaybackState === 'paused'
+              ? 'Paused'
+              : snapshot.supportsSpeechSynthesis
+                ? 'Speech output available'
+                : 'Speech output fallback'}
+        </span>
       </div>
 
       {creditsNoticeTier && onDismissCreditsNotice && (
@@ -265,13 +310,34 @@ export function ConversationPanel({
               </div>
             )
           ) : (
-            <article
-              key={message.id}
-              className={`${styles.message} ${message.role === 'assistant' ? styles.assistant : styles.user}`}
-            >
-              <div className={styles.role}>{message.role}</div>
-              <div className={message.status === 'streaming' ? styles.streaming : ''}>{message.content}</div>
-            </article>
+            <React.Fragment key={message.id}>
+              {message.role === 'assistant' && message.status !== 'streaming' && isProjectPlanMessage(message.content) ? (
+                // A finished project-plan message renders only as the structured
+                // card below — never also as a raw markdown-looking text bubble.
+                // While still streaming, the raw bubble below is shown instead
+                // (the card can't be built from a plan that's mid-generation).
+                <ProjectPlanCard
+                  content={message.content}
+                  onBuild={() => onSendTranscript('Build Project from the approved PROJECT PLAN.')}
+                  onModify={() => onSendTranscript('Modify Plan. I want to adjust the PROJECT PLAN before building.')}
+                  onAccept={() => onSendTranscript('I approve this plan as written.')}
+                />
+              ) : (
+                <article
+                  className={`${styles.message} ${message.role === 'assistant' ? styles.assistant : styles.user}`}
+                >
+                  <div className={styles.messageHeader}>
+                    <span className={styles.role}>{message.role}</span>
+                    {message.role === 'assistant' && message.status !== 'streaming' && message.content.trim() && (
+                      <button className={styles.speakMessageBtn} onClick={() => onSpeakMessage(message.content)} type="button">
+                        Speak
+                      </button>
+                    )}
+                  </div>
+                  <div className={message.status === 'streaming' ? styles.streaming : ''}>{message.content}</div>
+                </article>
+              )}
+            </React.Fragment>
           )
         )}
         {snapshot.draftTranscript && snapshot.state === 'listening' && (
@@ -327,7 +393,7 @@ export function ConversationPanel({
               send();
             }
           }}
-          placeholder="Type a message if speech input is unavailable"
+          placeholder="Type, or record speech then review before sending"
         />
         <button className={styles.sendBtn} onClick={send} type="button">
           Send

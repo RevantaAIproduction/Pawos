@@ -34,7 +34,7 @@ export const DOCS: DocPage[] = [
         heading: "The fastest path to value",
         paragraphs: ["Once installed, the shortest useful loop is:"],
         list: [
-          "Sign in (or use Guest mode to try it without an account)",
+          "Sign in with a PawOS account (Paw Go is free)",
           "Ask Paw to do something real — open a project, organize a folder, run a build",
           "Watch it plan, confirm anything risky, and execute",
           "Check the Coding Canvas for live progress on multi-step tasks",
@@ -245,10 +245,10 @@ export const DOCS: DocPage[] = [
         paragraphs: ["See the full Pricing page for current rates and feature comparison. In short:"],
         list: [
           "Go — free, real AI for planning & analysis (Paw Flash), local runtime features",
-          "Pro — $20/mo, unlocks reasoning models and advanced runtimes",
-          "Pro Max — $100/mo, higher usage limits and priority model access",
+          "Pro — $20/mo, unlocks reasoning models and eligibility to purchase/select production-ready runtime entitlements",
+          "Pro Max — $100/mo, higher usage limits and priority model access; runtime purchases remain cumulative",
           "Team — $20/seat/mo (2–150 seats), adds shared workspaces and admin controls",
-          "Enterprise — $100/seat/mo (20+ seats), adds advanced security, custom limits, and dedicated support",
+          "Enterprise — $20/seat/mo base fee (20+ seats) plus approved usage billing, adds advanced security, custom limits, and dedicated support",
         ],
       },
     ],
@@ -308,7 +308,7 @@ export const DOCS: DocPage[] = [
       {
         paragraphs: [
           "Every signed-in account has its own shareable referral code, visible in Settings → Billing. Share it with anyone — a referral is created the moment they apply your code to their account (one-time, from their own Settings → Billing).",
-          "A referral only counts once it converts: the referred account has to genuinely subscribe to Pro or Pro Max. Signing up alone, staying on Go, or using Guest mode never counts — this is enforced server-side at the moment their own subscription purchase is confirmed, not self-reported.",
+          "A referral only counts once it converts: the referred account has to genuinely subscribe to Pro or Pro Max. Signing up alone or staying on Go never counts — this is enforced server-side at the moment their own subscription purchase is confirmed, not self-reported.",
         ],
       },
       {
@@ -364,7 +364,7 @@ export const DOCS: DocPage[] = [
     body: [
       {
         paragraphs: [
-          "See the Infrastructure Runtime documentation for the full architecture. In practice: tell Paw to deploy, and it picks (or you specify) a connected provider, runs a real deploy through that provider's own CLI/API, and verifies health afterward.",
+          "See the Infrastructure Runtime documentation for the full architecture. In practice: tell Paw to deploy through an already-supported connector, and it uses that connector's existing local CLI/API path and verifies health afterward. SSH, Docker, CI/CD, and broad cloud execution adapters are future work.",
         ],
       },
     ],

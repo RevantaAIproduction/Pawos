@@ -83,4 +83,8 @@ export const KNOWN_CAPABILITIES = [
   'permissions.grant',
   'repositories.manage',
   'remote_assistance.provide',
+  'work.plan.manage',
+  'work.assign',
+  'work.allocate.pawos',
+  'work.activity.view',
 ] as const;

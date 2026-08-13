@@ -4,12 +4,12 @@ import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import { useCompanionProfiles } from '../../../companion/manager/useCompanionProfiles';
 import type { AuthUser } from '../../../auth/AuthTypes';
 import type { EntitlementSnapshot } from '../../../../shared/billing/BillingTypes';
+import { formatPawComputeSummary, formatPlanAndRuntimeSummary } from '../../../billing/EntitlementDisplay';
 
 /**
- * Real usage numbers only — Runtime Usage and Companion Usage come from the
- * entitlement service and companion profile store. Storage Usage stays
- * "Not tracked yet" since no real measurement exists. Guests never see
- * usage — there's no account to track usage against yet.
+ * Real usage numbers only. Paw Compute comes from the entitlement snapshot,
+ * companion count comes from the profile store, and storage stays "Not tracked
+ * yet" because no real measurement exists.
  */
 export function UsageSection({ user, onGoToAccount }: { user: AuthUser; onGoToAccount: () => void }) {
   const [entitlement, setEntitlement] = useState<EntitlementSnapshot | null>(null);
@@ -23,10 +23,9 @@ export function UsageSection({ user, onGoToAccount }: { user: AuthUser; onGoToAc
   if (user.isGuest) {
     return (
       <div className={styles.card}>
-        <h3 className={styles.cardTitle}>No usage tracked for guest sessions</h3>
+        <h3 className={styles.cardTitle}>Account required</h3>
         <p className={styles.cardBody} style={{ marginTop: 6 }}>
-          Usage is only tracked once you have a real account. Create a free account to start
-          tracking runtime, companion, and storage usage on Go.
+          Usage is tracked for authenticated PawOS accounts. Create a free Paw Go account to view Paw Compute.
         </p>
         <button type="button" className={styles.primaryButton} style={{ marginTop: 12 }} onClick={onGoToAccount}>
           Create free account
@@ -37,11 +36,15 @@ export function UsageSection({ user, onGoToAccount }: { user: AuthUser; onGoToAc
 
   return (
     <div className={styles.card}>
-      <h3 className={styles.cardTitle}>Usage Statistics</h3>
+      <h3 className={styles.cardTitle}>Paw Compute</h3>
       <div className={styles.grid} style={{ marginTop: 8 }}>
         <div>
-          <p className={styles.cardBody}>Runtime Usage</p>
-          <p className={styles.cardTitle}>{entitlement?.creditsUsedThisPeriod ?? 0} AI turns this period</p>
+          <p className={styles.cardBody}>Usage</p>
+          <p className={styles.cardTitle}>{formatPawComputeSummary(entitlement)}</p>
+        </div>
+        <div>
+          <p className={styles.cardBody}>Plan & Runtime Access</p>
+          <p className={styles.cardTitle}>{formatPlanAndRuntimeSummary(entitlement)}</p>
         </div>
         <div>
           <p className={styles.cardBody}>Companion Usage</p>

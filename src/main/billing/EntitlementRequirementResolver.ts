@@ -13,7 +13,10 @@ import type { RequirementResolver } from '../runtime/RequirementGate';
 export const entitlementRequirementResolver: RequirementResolver<'entitlement'> = {
   kind: 'entitlement',
   async resolve(requirement) {
-    if (entitlementService.isFeatureAvailable(requirement.feature)) {
+    const featureSatisfied = requirement.feature ? entitlementService.isFeatureAvailable(requirement.feature) : true;
+    const runtimeSatisfied = requirement.runtimeId ? entitlementService.isRuntimeEntitled(requirement.runtimeId) : true;
+
+    if (featureSatisfied && runtimeSatisfied) {
       return { satisfied: true };
     }
 
@@ -22,7 +25,7 @@ export const entitlementRequirementResolver: RequirementResolver<'entitlement'> 
       blockingResult: {
         ok: false,
         reason: 'entitlement-restricted',
-        message: requirement.reasonHint ?? 'This action requires a higher Paw plan.',
+        message: requirement.reasonHint ?? (requirement.runtimeId ? 'This action requires access to this PawOS runtime.' : 'This action requires a higher Paw plan.'),
       },
     };
   },

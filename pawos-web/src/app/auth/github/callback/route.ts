@@ -1,4 +1,4 @@
-import { relayToDesktop } from "../../../../lib/desktopRelay";
+import { relayGitHubToDesktop } from "../../../../lib/desktopRelay";
 
 /**
  * Desktop-only relay — this is the GITHUB_REDIRECT_URI Electron's renderer
@@ -11,5 +11,5 @@ import { relayToDesktop } from "../../../../lib/desktopRelay";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const error = searchParams.get("error_description") ?? searchParams.get("error");
-  return relayToDesktop("github-auth-callback", searchParams.get("code"), error);
+  return relayGitHubToDesktop(searchParams.get("code"), error);
 }

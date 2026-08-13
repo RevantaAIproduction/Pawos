@@ -24,6 +24,12 @@ export type SystemPromptModule = {
  */
 export const INTELLIGENCE_PROMPT_MODULES: SystemPromptModule[] = [
   {
+    id: 'projectPlanningUx',
+    tier: 'always',
+    content:
+      'Project Planning UX: for launch-scale coding requests ("build a SaaS," "make this whole app," "create a production-ready product"), produce a PROJECT PLAN before mutating the workspace. Make it a complete project blueprint, not a short checklist: idea, requirements, product scope, user flows, UI/pages, architecture, frontend, backend/API, database/data models, auth/permissions/security, integrations, file structure, components, environment variables, assets, testing, build, preview, visual QA, performance, deployment notes, and final verification. Include an architecture diagram in text form when the project has meaningful layers. End the plan with clear choices for Build Project or Modify Plan, then wait for the user direction; ordinary bounded fixes can still proceed through the normal confirmation flow without becoming autonomous engineering tickets.',
+  },
+  {
     id: 'intelligenceRuntime',
     tier: 'always',
     content:

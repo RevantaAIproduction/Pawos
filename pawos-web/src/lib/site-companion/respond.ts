@@ -46,7 +46,7 @@ const NAV_INTENTS: NavIntent[] = [
     id: "pricing",
     keywords: ["pricing", "price", "cost", "how much", "plans", "subscription", "tier", "free plan"],
     text:
-      "Paw Go is free with local runtime features. Paw Pro is $20/mo, Paw Pro Max is $100/mo, and Team ($20/seat) and Enterprise ($100/seat) are seat-based for organizations. Full detail, including a feature comparison, is on the Pricing page.",
+      "Paw Go is free with local runtime features. Paw Pro is $20/mo, Paw Pro Max is $100/mo, Team starts at $20/seat, and Enterprise has a $20/seat base fee plus approved usage billing. Individual paid plans are eligible to purchase/select production-ready runtime entitlements; runtime purchases are cumulative. Full detail is on the Pricing page.",
     href: "/pricing",
     linkLabel: "View pricing",
   },

@@ -2,19 +2,17 @@ import type { HelpArticle } from '../HelpArticleTypes';
 
 export const ACCOUNT_ARTICLES: HelpArticle[] = [
   {
-    id: 'guest-session',
+    id: 'account-required',
     category: 'account',
-    title: 'Guest Session',
-    summary: 'Using PawOS with no account, and what that honestly means.',
+    title: 'Account Required',
+    summary: 'PawOS requires a real account. Paw Go remains the free plan.',
     overview:
-      'Guest mode is fully local: no cloud data, no fabricated subscription tier (the UI honestly shows ' +
-      '"Guest Preview," never a made-up plan name), and no Organization/Team features, since those require a ' +
-      'real signed-in account. You can upgrade to a real account (Google or Email) at any time without losing ' +
-      'your local data.',
-    features: ['No account required to use PawOS', 'Strictly local data, nothing uploaded', 'Honest UI — never shows a fake tier or fake usage numbers', 'Upgrade to a real account anytime, keeping local data'],
-    howItWorks: 'Choosing "Continue as Guest" on the auth screen skips sign-in entirely. All your data (settings, companion, history) stays local to this device until and unless you upgrade to a real account.',
-    bestPractices: ['Use Guest mode to try PawOS risk-free', 'Upgrade to a real account before you need Devices pairing or Organization/Team features, since those require one'],
-    examples: [{ title: 'Upgrading from Guest to a real account', steps: ['Open Settings → Account', 'Choose to create a real account (Google or Email)', 'Complete sign-in', 'Your local data carries over to the new account'] }],
+      'PawOS now requires a signed-in account. Paw Go remains the free authenticated plan, while paid plans ' +
+      'unlock additional runtime access according to your entitlements.',
+    features: ['Email, Google, and GitHub sign-in', 'Paw Go as the free authenticated plan', 'Real account-scoped billing, usage, and entitlement state'],
+    howItWorks: 'Sign in or create an account on the auth screen. After authentication, PawOS starts you on Paw Go unless your account or organization grants a higher plan.',
+    bestPractices: ['Use a real email or supported OAuth provider you control', 'Review Settings → Billing to confirm your current plan and runtime access'],
+    examples: [{ title: 'Starting with Paw Go', steps: ['Open PawOS', 'Sign in with Email, Google, or GitHub', 'Use Paw Go planning, analysis, and guidance features', 'Upgrade only when you need paid runtime execution'] }],
     troubleshooting: [],
     requirements: [],
     permissions: [],
@@ -22,11 +20,11 @@ export const ACCOUNT_ARTICLES: HelpArticle[] = [
     relatedSettings: ['Account'],
     relatedApps: ['settings'],
     faq: [
-      { question: 'Does Guest mode cost anything?', answer: 'No — it is free and requires no account.' },
-      { question: 'Will I lose my data if I upgrade from Guest?', answer: 'No — upgrading to a real account carries your existing local data over.' },
+      { question: 'Is there still a free plan?', answer: 'Yes. Paw Go is free, but it requires an authenticated account.' },
+      { question: 'Can I continue without signing in?', answer: 'No. PawOS requires an account before the app opens.' },
     ],
-    keywords: ['guest', 'guest session', 'guest mode'],
-    aliases: ['Guest Session', 'Continue as Guest', 'Guest Preview'],
+    keywords: ['account required', 'paw go', 'free plan', 'sign in'],
+    aliases: ['Account Required', 'Paw Go', 'Free plan'],
     pawosVersion: '0.1.0',
     updated: '2026-07-20',
     lastReviewed: '2026-07-20',
@@ -38,7 +36,7 @@ export const ACCOUNT_ARTICLES: HelpArticle[] = [
     category: 'account',
     title: 'Profile',
     summary: 'Your account name, email, and sign-out control.',
-    overview: 'The Account settings tab shows your real signed-in name and email, and lets you sign out. It reflects your actual authentication provider (Guest, Google, or Email) honestly.',
+    overview: 'The Account settings tab shows your real signed-in name and email, and lets you sign out. It reflects your actual authentication provider honestly.',
     features: ['View your real account name and email', 'Sign out'],
     howItWorks: 'Open Settings → Account to see your profile details, sourced directly from your authentication session.',
     bestPractices: [],
@@ -46,7 +44,7 @@ export const ACCOUNT_ARTICLES: HelpArticle[] = [
     troubleshooting: [],
     requirements: [],
     permissions: [],
-    relatedArticleIds: ['guest-session', 'account-security'],
+    relatedArticleIds: ['account-required', 'account-security'],
     relatedSettings: ['Account'],
     relatedApps: ['settings'],
     faq: [],
@@ -66,18 +64,18 @@ export const ACCOUNT_ARTICLES: HelpArticle[] = [
     overview:
       'PawOS has a real device-pairing system: generate a QR code and a paired device registers itself against ' +
       'your account. This was built as generic pairing infrastructure with a future mobile companion in mind ' +
-      '(see Mobile), and requires a real account — Guest sessions cannot pair devices.',
+      '(see Mobile), and requires a real account.',
     features: ['QR-code-based device pairing', 'A real device registry per account'],
     howItWorks: 'Open Settings → Devices, generate a pairing QR code, and scan it from the other device to register it against your account.',
     bestPractices: ['Pair devices only from Settings you trust — a paired device is tied to your real account'],
     examples: [],
-    troubleshooting: ['If pairing is unavailable, confirm you are signed into a real account, not a Guest session'],
-    requirements: ['A real (non-Guest) account'],
+    troubleshooting: ['If pairing is unavailable, confirm you are signed into the correct account and plan'],
+    requirements: ['A real PawOS account'],
     permissions: [],
-    relatedArticleIds: ['guest-session', 'mobile'],
+    relatedArticleIds: ['account-required', 'mobile'],
     relatedSettings: ['Devices'],
     relatedApps: ['settings'],
-    faq: [{ question: 'Can a Guest session pair devices?', answer: 'No — device pairing requires a real account.' }],
+    faq: [{ question: 'Can I pair devices without an account?', answer: 'No. Device pairing requires a real account.' }],
     keywords: ['devices', 'device pairing', 'qr code'],
     aliases: ['Devices', 'Pair device'],
     pawosVersion: '0.1.0',

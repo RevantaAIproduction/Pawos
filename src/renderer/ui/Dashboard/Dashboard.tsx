@@ -4,7 +4,6 @@ import { Sidebar } from './Sidebar';
 import type { ProfileMenuAction } from './ProfileMenu';
 import { OverviewSection } from './sections/OverviewSection';
 import { CompanionLabSection } from './sections/CompanionLabSection';
-import { ConversationHistorySection } from './sections/ConversationHistorySection';
 import { WorkHistorySection } from './sections/WorkHistorySection';
 import { BrowserCapabilitiesSection } from './sections/BrowserCapabilitiesSection';
 import { CommunicationDraftsSection } from './sections/CommunicationDraftsSection';
@@ -19,9 +18,10 @@ import { SettingsSection, type SettingsTab } from './sections/SettingsSection';
 import { UpgradeSection } from './sections/UpgradeSection';
 import { RatingFeedbackModal } from './RatingFeedbackModal';
 import { HelpWidgetPanel } from '../HelpWidget/HelpWidgetPanel';
+import { HelpBubbleIcon } from './NavIcons';
 import type { SectionId } from './sections';
 import { useIpcBridge } from '../../services/ipc/useIpcBridge';
-import type { AuthUser, EmailCreateAccountOptions } from '../../auth/AuthTypes';
+import type { AuthUser } from '../../auth/AuthTypes';
 import type { SubscriptionTierId } from '../../../shared/billing/BillingTypes';
 import { autonomousTaskBillingService } from '../../organization/AutonomousTaskBillingService';
 import { referralService } from '../../organization/ReferralService';
@@ -38,18 +38,12 @@ const TIER_LABELS: Record<SubscriptionTierId, string> = {
 export function Dashboard({
   user,
   onSignOut,
-  onUpgradeGuestWithGoogle,
-  onUpgradeGuestWithEmail,
-  isGoogleSignInAvailable,
   onRequestPasswordReset,
   onVerifyPasswordResetCode,
   onCompletePasswordReset,
 }: {
   user: AuthUser;
   onSignOut: () => void;
-  onUpgradeGuestWithGoogle: () => Promise<unknown>;
-  onUpgradeGuestWithEmail: (options: EmailCreateAccountOptions) => Promise<unknown>;
-  isGoogleSignInAvailable: () => Promise<boolean>;
   onRequestPasswordReset: (email: string) => Promise<{ expiresInMinutes: number }>;
   onVerifyPasswordResetCode: (email: string, code: string) => Promise<{ valid: boolean; reason?: string; resetToken?: string }>;
   onCompletePasswordReset: (resetToken: string, newPassword: string) => Promise<{ ok: boolean; reason?: string }>;
@@ -77,6 +71,7 @@ export function Dashboard({
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('Account');
   const [helpWidgetOpen, setHelpWidgetOpen] = useState(false);
   const [helpWidgetInitialTab, setHelpWidgetInitialTab] = useState<'home' | 'messages' | 'help'>('home');
+  const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null);
 
   const openSupportMessages = useCallback(() => {
     setHelpWidgetInitialTab('messages');
@@ -168,17 +163,18 @@ export function Dashboard({
     setActive('settings');
   };
 
+  const openWorkRecord = (id: string) => {
+    setSelectedWorkId(id);
+    setActive('workHistory');
+  };
+
   const handleProfileAction = (action: ProfileMenuAction) => {
     switch (action) {
       case 'settings':
         openSettingsTab('Account');
         break;
       case 'upgrade':
-        // Guests have no plan to upgrade — route to Account so they can
-        // create a real account first. Real accounts get the dedicated,
-        // full plan-comparison page, not just a Settings tab.
-        if (user.isGuest) openSettingsTab('Account');
-        else setActive('upgrade');
+        setActive('upgrade');
         break;
       case 'logout':
         onSignOut();
@@ -215,6 +211,7 @@ export function Dashboard({
               companionWaking={companionWaking}
               onEnableCompanion={handleEnable}
               onDisableCompanion={handleDisable}
+              onOpenWorkRecord={openWorkRecord}
             />
           )}
           {active === 'companionLab' && (
@@ -231,8 +228,7 @@ export function Dashboard({
           )}
           {active === 'apps' && <AppsHubSection onNavigate={setActive} />}
           {active === 'analytics' && <AnalyticsSection user={user} />}
-          {active === 'history' && <ConversationHistorySection />}
-          {active === 'workHistory' && <WorkHistorySection />}
+          {active === 'workHistory' && <WorkHistorySection selectedWorkId={selectedWorkId} />}
           {active === 'browserCapabilities' && <BrowserCapabilitiesSection />}
           {active === 'communicationDrafts' && <CommunicationDraftsSection />}
           {active === 'office' && <OfficeRuntimeSection />}
@@ -243,9 +239,6 @@ export function Dashboard({
             <SettingsSection
               user={user}
               onSignOut={onSignOut}
-              onUpgradeGuestWithGoogle={onUpgradeGuestWithGoogle}
-              onUpgradeGuestWithEmail={onUpgradeGuestWithEmail}
-              isGoogleSignInAvailable={isGoogleSignInAvailable}
               initialTab={settingsInitialTab}
               onUpgrade={() => setActive('upgrade')}
               onOpenCompanionStudio={() => setActive('companionLab')}
@@ -258,6 +251,19 @@ export function Dashboard({
           {active === 'upgrade' && <UpgradeSection onBack={() => openSettingsTab('Billing')} />}
         </div>
       </main>
+      {!helpWidgetOpen && (
+        <button
+          type="button"
+          className={styles.helpLauncher}
+          aria-label="Open Help and Support"
+          onClick={() => {
+            setHelpWidgetInitialTab('home');
+            setHelpWidgetOpen(true);
+          }}
+        >
+          <HelpBubbleIcon />
+        </button>
+      )}
       {helpWidgetOpen && <HelpWidgetPanel initialTab={helpWidgetInitialTab} onClose={() => setHelpWidgetOpen(false)} />}
     </div>
   );

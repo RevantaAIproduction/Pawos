@@ -19,7 +19,7 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
       'Push-to-talk voice conversations with real text-to-speech and speech-to-text',
       'A Projects section that reflects real folders you have opened, with real git and framework detection',
       'A Coding Canvas that shows live task, terminal, diff, build, and test data while coding tasks run',
-      'Guest, Google, and Email sign-in, each backed by real authentication (Supabase)',
+      'Email, Google, and GitHub sign-in, each backed by real authentication',
       'A persistent Work History and Conversation History so nothing you did is hidden or fabricated',
       'A gated execution engine so the companion never takes destructive actions without your confirmation',
     ],
@@ -31,7 +31,7 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
       'explicitly from Home, and any action that touches your files or git history requires your confirmation ' +
       'before it happens.',
     bestPractices: [
-      'Start on Guest mode if you just want to try PawOS — you can upgrade to a full account at any time without losing local data',
+      'Start on Paw Go if you want the free authenticated plan before upgrading',
       'Enable the companion only when you want it visible; it stays off by default so it never surprises you',
       'Open your real project folders through Import rather than expecting PawOS to invent projects for you',
       'Review the Work History page periodically — it is the ground truth for what PawOS has actually done',
@@ -42,7 +42,7 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
         title: 'A first session in five minutes',
         steps: [
           'Launch PawOS and wait for the splash screen to pass',
-          'Choose "Continue as Guest" (or sign in) on the auth screen',
+          'Sign in or create an account on the auth screen',
           'Land on Home and review the sidebar sections',
           'Click "Enable companion" on Home if you want to see Paw',
           'Open Projects and Import an existing folder to see real analysis results',
@@ -68,7 +68,7 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
       {
         question: 'Is PawOS free to use?',
         answer:
-          'Yes, you can use PawOS as a Guest with no account and no cost. Guest mode is strictly local-only and does not show any fake subscription tier — it is simply the free, unauthenticated way to use the app.',
+          'Yes. Paw Go is free, but PawOS requires an authenticated account.',
       },
       {
         question: 'Do I need the companion to use PawOS?',
@@ -82,7 +82,7 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
       {
         question: 'Does PawOS work offline?',
         answer:
-          'Guest mode keeps your data local, but voice conversations, AI-driven coding tasks, and sign-in all require an internet connection to reach the configured AI provider or Supabase.',
+          'Local project data stays on your machine, but voice conversations, AI-driven coding tasks, and sign-in require an internet connection to reach the configured AI provider or Supabase.',
       },
       {
         question: 'Where do I see everything PawOS has done for me?',
@@ -90,11 +90,11 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
           'Work History and Conversation History, both reachable from the sidebar, give you a real, unfiltered record of tasks and conversations — nothing is summarized away or fabricated.',
       },
       {
-        question: 'Can I switch from Guest to a real account later?',
-        answer: 'Yes, Guest sessions can be upgraded to a Google or Email account at any time without losing your local data.',
+        question: 'Can I use PawOS without an account?',
+        answer: 'No. PawOS requires an account. Paw Go is the free authenticated plan.',
       },
     ],
-    relatedArticleIds: ['installing-pawos', 'first-launch', 'guest-sessions', 'navigation', 'meet-paw'],
+    relatedArticleIds: ['installing-pawos', 'first-launch', 'account-required', 'navigation', 'meet-paw'],
     relatedSettings: ['Account', 'General'],
     relatedApps: ['home'],
     keywords: ['pawos', 'overview', 'introduction', 'what is pawos', 'revanta ai', 'electron desktop app'],
@@ -115,7 +115,7 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
       'PawOS ships as a native Windows desktop application, packaged with electron-builder. Installing it is a ' +
       'standard Windows installer flow: download the installer, run it, and launch PawOS from the Start menu ' +
       'or desktop shortcut like any other application. There is no separate account required to install — ' +
-      'sign-in and Guest mode are handled inside the app after installation.',
+      'sign-in is handled inside the app after installation.',
     features: [
       'A standard Windows installer built with electron-builder',
       'Desktop and Start-menu shortcuts created automatically on install',
@@ -140,7 +140,7 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
           'Download the PawOS Windows installer from the official source',
           'Run the installer and follow the on-screen prompts',
           'Launch PawOS from the Start menu or the new desktop shortcut',
-          'Wait for the splash screen, then choose Guest, Google, or Email on the auth screen',
+          'Wait for the splash screen, then sign in with Email, Google, or GitHub on the auth screen',
         ],
       },
     ],
@@ -166,7 +166,7 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
       },
       {
         question: 'Do I need to create an account to install PawOS?',
-        answer: 'No, installation does not require an account. You choose Guest, Google, or Email sign-in after installing, when the app first launches.',
+        answer: 'No, installation does not require an account. You sign in after installing, when the app first launches.',
       },
       {
         question: 'How do I update PawOS?',
@@ -174,14 +174,14 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
       },
       {
         question: 'Where is my data stored after installing?',
-        answer: 'PawOS keeps local data such as Guest projects and companion data in your local user profile, separate from the application installation files.',
+        answer: 'PawOS keeps local project and companion data in your local user profile, separate from the application installation files.',
       },
       {
         question: 'Can I uninstall PawOS like any other Windows app?',
         answer: 'Yes, PawOS can be removed through the standard Windows "Apps & features" uninstall flow.',
       },
     ],
-    relatedArticleIds: ['welcome-to-pawos', 'first-launch', 'guest-sessions'],
+    relatedArticleIds: ['welcome-to-pawos', 'first-launch', 'account-required'],
     relatedSettings: ['General', 'Updates'],
     relatedApps: ['home', 'settings'],
     keywords: ['install', 'installer', 'download', 'setup', 'electron-builder', 'windows app', 'update'],
@@ -206,18 +206,17 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
       'provider) left as an explicit choice you make afterward.',
     features: [
       'A splash screen shown while PawOS initializes',
-      'An authentication screen offering Guest, Google Sign-In, and Email sign-in',
+      'An authentication screen offering Email, Google, and GitHub sign-in',
       'A Dashboard (Home) landing screen once you are signed in',
       'No forced tutorial or wizard blocking access to the app',
     ],
     howItWorks:
       'On launch, PawOS displays a splash screen briefly while core services start up. It then shows the ' +
-      'authentication screen with three choices: continue as Guest (local-only, no account), sign in with ' +
-      'Google (real OAuth via Supabase), or sign in with Email (Supabase Auth with OTP verification). Once you ' +
+      'authentication screen with Email, Google, and GitHub sign-in. Once you ' +
       'have picked one, PawOS takes you straight to the Dashboard, where the sidebar and Home section are ready ' +
       'to use. The companion is not enabled automatically — you decide if and when to bring Paw on screen.',
     bestPractices: [
-      'Pick Guest first if you are only exploring — you lose nothing by upgrading to a real account later',
+      'Use Paw Go first if you are exploring before upgrading to paid runtime execution',
       'Have your Google account or email ready if you want your data tied to an account from the start',
       'Visit Settings early to add an AI provider/API key so voice and coding features work right away',
       'Take a moment on Home to look at the sidebar before diving into a specific section',
@@ -227,8 +226,8 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
         title: 'First-launch walkthrough',
         steps: [
           'Open PawOS and watch the splash screen',
-          'On the authentication screen, choose Guest, Google, or Email',
-          'Complete sign-in (or skip it entirely with Guest)',
+          'On the authentication screen, choose Email, Google, or GitHub',
+          'Complete sign-in',
           'Arrive at the Dashboard (Home)',
           'Explore the sidebar: Home, Talk with Paw, Companion Studio, Projects, Apps, Analytics',
         ],
@@ -242,7 +241,7 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
     ],
     requirements: [
       'An internet connection for the authentication step',
-      'A Google account (for Google Sign-In) or an email address (for Email sign-in), if not using Guest',
+      'A Google or GitHub account, or an email address for Email sign-in',
     ],
     permissions: [
       'No file system or microphone permissions are requested during first launch itself',
@@ -251,7 +250,7 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
     faq: [
       {
         question: 'Can I skip signing in entirely?',
-        answer: 'Yes, choosing "Continue as Guest" skips account creation and takes you straight into a local-only session.',
+        answer: 'No. PawOS requires an authenticated account before opening the Dashboard.',
       },
       {
         question: 'What happens if I close PawOS during first launch?',
@@ -270,7 +269,7 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
         answer: 'Not currently. PawOS takes you directly to the Dashboard, and this Help Center is the place to learn what each section does.',
       },
     ],
-    relatedArticleIds: ['welcome-to-pawos', 'guest-sessions', 'google-sign-in', 'navigation'],
+    relatedArticleIds: ['welcome-to-pawos', 'account-required', 'google-sign-in', 'navigation'],
     relatedSettings: ['Account', 'General'],
     relatedApps: ['home'],
     keywords: ['first launch', 'splash screen', 'onboarding', 'auth screen', 'sign in'],
@@ -282,88 +281,77 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
     readingTimeMinutes: 2,
   },
   {
-    id: 'guest-sessions',
+    id: 'account-required',
     category: 'gettingStarted',
-    title: 'Guest Sessions',
-    summary: 'Using PawOS without an account, and what Guest mode does and does not include.',
+    title: 'Account Required',
+    summary: 'PawOS requires an authenticated account. Paw Go remains free.',
 
     overview:
-      'Guest mode lets you use PawOS immediately with no account and no cloud data. Everything you do as a ' +
-      'Guest — projects you open, companions you create, history that accumulates — is kept locally on your ' +
-      'machine. Guest mode is strictly a free, no-tier way to use the app: it never shows a fake subscription ' +
-      'tier or paywall dressed up as a plan. You can upgrade a Guest session to a real Google or Email account ' +
-      'at any time, and your local data carries forward.',
+      'PawOS requires a signed-in account before opening the Dashboard. Paw Go remains the free authenticated ' +
+      'plan for planning, analysis, guidance, local workspace use, and account-scoped settings.',
     features: [
-      'Instant access to PawOS with no sign-up step',
-      'Strictly local-only data — nothing is sent to the cloud while in Guest mode',
-      'No fake or placeholder subscription tier shown to Guests',
-      'One-click upgrade path from Guest to a full Google or Email account',
-      'Full access to Projects, Companion Studio, and the Coding Canvas while in Guest mode',
+      'Email, Google, and GitHub sign-in',
+      'Paw Go as the free authenticated plan',
+      'Runtime execution gated by account entitlements',
+      'Paw Credits extend compute only and do not unlock runtime access',
     ],
     howItWorks:
-      'Choosing "Continue as Guest" on the authentication screen skips sign-in entirely and drops you straight ' +
-      'into the Dashboard. Behind the scenes, PawOS stores your projects, companion data, and history locally ' +
-      'instead of syncing them to a Supabase-backed account. When you are ready for an account, an "upgrade" ' +
-      'action (available from the profile menu or account prompts) walks you through Google or Email sign-in ' +
-      'and links your existing local data to the new account rather than starting over.',
+      'Choose Email, Google, or GitHub on the authentication screen. Once authenticated, your account starts ' +
+      'on Paw Go unless your subscription or organization membership grants a higher plan.',
     bestPractices: [
-      'Use Guest mode to try PawOS before committing to an account',
-      'Upgrade to a real account before switching machines, since Guest data is local to the device it was created on',
-      'Do not expect cloud backup while in Guest mode — treat local data as the only copy',
-      'Upgrade whenever you are ready; there is no urgency or penalty for staying a Guest',
+      'Use Paw Go to explore before upgrading to paid runtime execution',
+      'Use a real email or OAuth account you control',
+      'Review Settings → Billing to confirm your current plan and runtime access',
     ],
     examples: [
       {
-        title: 'Starting and later upgrading a Guest session',
+        title: 'Starting on Paw Go',
         steps: [
-          'On the auth screen, choose "Continue as Guest"',
-          'Use PawOS normally: import a project, enable the companion, run a coding task',
-          'When ready for an account, open the profile menu and choose to upgrade',
-          'Sign in with Google or Email to complete the upgrade',
-          'Confirm your existing projects and companion data are still present after upgrading',
+          'On the auth screen, sign in with Email, Google, or GitHub',
+          'Use Paw Go planning, analysis, and guidance features',
+          'Upgrade only when you need paid runtime execution',
         ],
       },
     ],
     troubleshooting: [
-      'If you switch machines, remember Guest data does not follow you — it stays on the original device',
-      'If the upgrade prompt does not appear, look for it in the profile menu at the bottom of the sidebar',
-      'If you are unsure whether you are in Guest mode, check the account area of Settings, which reflects your current sign-in state',
+      'If sign-in fails, confirm your internet connection and authentication provider configuration',
+      'If your plan looks wrong, open Settings → Billing and refresh your subscription state',
     ],
     requirements: [
-      'No account or internet connection is required to start a Guest session',
-      'An internet connection is required only when you choose to upgrade to Google or Email',
+      'A PawOS account',
+      'An internet connection for sign-in',
     ],
     permissions: [
-      'Guest mode requests file system access only when you create or import a project',
-      'Guest mode requests microphone access only when you use voice conversations',
+      'File system access is requested only when you create or import a project',
+      'Microphone access is requested only when you use voice conversations',
     ],
     faq: [
       {
-        question: 'Is Guest mode really free with no hidden tier?',
-        answer: 'Yes. Guest mode is a genuinely free, no-tier way to use PawOS — it does not display any fabricated subscription plan.',
+        question: 'Is PawOS still free to start?',
+        answer: 'Yes. Paw Go is free, but it requires an authenticated account.',
       },
       {
-        question: 'What happens to my data if I upgrade from Guest?',
-        answer: 'Your local projects, companion data, and history are carried forward and linked to your new Google or Email account during the upgrade.',
+        question: 'Do Paw Credits unlock runtime access?',
+        answer: 'No. Paw Credits extend compute only; runtime access is controlled by entitlement.',
       },
       {
-        question: 'Can I use Guest mode on more than one computer with the same data?',
-        answer: 'No, Guest data is local to the machine it was created on. To access the same data across devices, upgrade to a real account.',
+        question: 'Can I use PawOS without signing in?',
+        answer: 'No. PawOS requires an authenticated account.',
       },
       {
-        question: 'Does Guest mode limit which features I can use?',
-        answer: 'No, Guest mode has full access to Projects, Companion Studio, voice conversations, and the Coding Canvas — the difference is that data stays local rather than syncing to an account.',
+        question: 'What does Paw Go include?',
+        answer: 'Paw Go includes authenticated free-plan access with existing planning, analysis, and guidance restrictions.',
       },
       {
-        question: 'Can I go back to Guest mode after upgrading?',
-        answer: 'The upgrade path moves you from Guest to a signed-in account; use Sign out and "Continue as Guest" again if you want a separate local-only session.',
+        question: 'Can I downgrade to Paw Go?',
+        answer: 'Plan changes use the existing billing and subscription flow.',
       },
     ],
     relatedArticleIds: ['first-launch', 'google-sign-in', 'welcome-to-pawos'],
     relatedSettings: ['Account', 'Billing'],
     relatedApps: ['home', 'settings'],
-    keywords: ['guest mode', 'guest session', 'no account', 'local only', 'upgrade guest'],
-    aliases: ['Continue as Guest', 'Guest mode', 'Local-only mode'],
+    keywords: ['account required', 'paw go', 'free plan', 'runtime entitlement'],
+    aliases: ['Account Required', 'Paw Go', 'Free plan'],
     pawosVersion: '0.1.0',
     updated: '2026-07-20',
     lastReviewed: '2026-07-20',
@@ -374,29 +362,27 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
     id: 'google-sign-in',
     category: 'gettingStarted',
     title: 'Google Sign In',
-    summary: 'Signing in to PawOS with Google, and how it compares to Guest and Email sign-in.',
+    summary: 'Signing in to PawOS with Google, and how it compares to Email sign-in.',
 
     overview:
       'Google Sign-In gives you a full PawOS account backed by real OAuth, handled through Supabase. Signing in ' +
-      'with Google links your PawOS data to your Google identity so it can sync to an account rather than ' +
-      'staying local to one device. When you link Google Sign-In (including when upgrading from a Guest ' +
-      'session), PawOS sends a confirmation email to the associated address as part of completing the link.',
+      'with Google links your PawOS data to your Google identity. When you link Google Sign-In, PawOS sends ' +
+      'a confirmation email to the associated address as part of completing the link.',
     features: [
       'Real Google OAuth sign-in, not a mock or placeholder flow',
       'Backed by Supabase Auth for account and session management',
       'A confirmation email sent when a Google account is linked',
-      'Works both as a fresh sign-in and as an upgrade path from Guest mode',
+      'Works as an account sign-in path',
     ],
     howItWorks:
       'Choosing "Continue with Google" on the authentication screen opens the standard Google OAuth consent ' +
       'flow. After you approve access, Google redirects back to PawOS with your identity, and Supabase Auth ' +
-      'establishes your PawOS session. If this Google account is being linked for the first time (including ' +
-      'from an existing Guest session), PawOS sends a confirmation email so you have a record that the link ' +
-      'was made.',
+      'establishes your PawOS session. If this Google account is being linked for the first time, PawOS sends ' +
+      'a confirmation email so you have a record that the link was made.',
     bestPractices: [
       'Use the Google account you want your PawOS data permanently associated with',
       'Check your inbox for the confirmation email after linking, and keep it for your records',
-      'If upgrading from Guest, complete the Google flow fully rather than closing the browser window mid-flow',
+      'Complete the Google flow fully rather than closing the browser window mid-flow',
       'Make sure pop-ups or the OAuth browser window are not being blocked by your system',
     ],
     examples: [
@@ -410,21 +396,12 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
           'Arrive at the Dashboard signed in with your Google account',
         ],
       },
-      {
-        title: 'Upgrading an existing Guest session with Google',
-        steps: [
-          'While using PawOS as a Guest, open the profile menu',
-          'Choose the option to upgrade using Google',
-          'Complete the Google OAuth consent flow',
-          'Confirm your existing Guest projects and companion data are now tied to the Google account',
-        ],
-      },
     ],
     troubleshooting: [
       'If the Google window does not open, check for blocked pop-ups and try again',
       'If sign-in completes in the browser but PawOS does not update, return to the PawOS window and wait a moment for the session to sync',
       'If you do not receive the confirmation email, check spam/junk folders before retrying the link',
-      'If Google Sign-In is unavailable, use Email sign-in or Guest mode instead',
+      'If Google Sign-In is unavailable, use Email sign-in instead',
     ],
     requirements: [
       'A Google account',
@@ -445,8 +422,8 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
         answer: 'A confirmation email is sent specifically when a Google account is linked to a PawOS account, so you have a record of the link.',
       },
       {
-        question: 'Can I use Google Sign-In to upgrade from Guest mode?',
-        answer: 'Yes, the profile menu offers an upgrade path that links your existing Guest data to a Google account.',
+        question: 'Can I use Google Sign-In for my PawOS account?',
+        answer: 'Yes, Google Sign-In is one supported authenticated account path.',
       },
       {
         question: 'What if I have multiple Google accounts?',
@@ -457,7 +434,7 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
         answer: 'Yes, Email sign-in uses Supabase Auth with OTP (one-time code) verification instead of Google OAuth, and includes its own Forgot Password flow.',
       },
     ],
-    relatedArticleIds: ['first-launch', 'guest-sessions', 'welcome-to-pawos'],
+    relatedArticleIds: ['first-launch', 'account-required', 'welcome-to-pawos'],
     relatedSettings: ['Account'],
     relatedApps: ['home', 'settings'],
     keywords: ['google sign in', 'oauth', 'supabase auth', 'continue with google', 'link account'],
@@ -515,7 +492,7 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
       'If you cannot find Settings or Sign out, look at the profile menu at the very bottom of the sidebar rather than inside a content section',
       'If the sidebar seems to be missing a section, confirm you are fully signed in rather than still on the authentication screen',
     ],
-    requirements: ['None beyond having completed sign-in or Guest entry'],
+    requirements: ['None beyond having completed sign-in'],
     permissions: ['Navigation itself requires no special permissions'],
     faq: [
       {
@@ -532,7 +509,7 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
       },
       {
         question: 'Does the sidebar change based on account type?',
-        answer: 'The core sidebar layout is the same for Guest and signed-in accounts; account-specific options like Upgrade appear in the profile menu.',
+        answer: 'The core sidebar layout is the same for all signed-in accounts; account-specific options like Upgrade appear in the profile menu.',
       },
       {
         question: 'Can I rearrange the sidebar?',

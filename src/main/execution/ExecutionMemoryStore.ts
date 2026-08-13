@@ -39,7 +39,9 @@ class ExecutionMemoryStore {
   }
 
   record(entry: ExecutionRecord): void {
-    this.records.push(entry);
+    const existingIndex = this.records.findIndex((record) => record.id === entry.id);
+    if (existingIndex >= 0) this.records[existingIndex] = entry;
+    else this.records.push(entry);
     if (this.records.length > MAX_RECORDS) this.records = this.records.slice(-MAX_RECORDS);
     this.save();
   }

@@ -1,5 +1,6 @@
 import { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, screen, session } from 'electron';
 import * as path from 'path';
+import { pathToFileURL } from 'url';
 import { createTray } from './tray/trayManager';
 import { registerIpc } from './ipc/ipc';
 import { SettingsStore } from '../shared/settings/SettingsStore';
@@ -62,7 +63,6 @@ import { vercelConnectorSDK } from './connectivity/connectors/VercelConnectorSDK
 import { netlifyConnectorSDK } from './connectivity/connectors/NetlifyConnectorSDK';
 import { railwayConnectorSDK } from './connectivity/connectors/RailwayConnectorSDK';
 import { slackConnectorSDK } from './connectivity/connectors/SlackConnectorSDK';
-import { guestConnectorCredentialStore } from './infrastructure/GuestConnectorCredentialStore';
 import { startRatingPromptScheduler } from './feedback/RatingPromptScheduler';
 // One constant size, always — the overlay window itself never resizes at
 // runtime. A native window resize inherently reads as "an application
@@ -209,7 +209,18 @@ function createMainWindow() {
   });
 
   attachDiagnostics(mainWindow, 'main');
-  mainWindow.loadURL(`file://${path.join(__dirname, '../renderer/index.html')}?window=main`);
+  // pathToFileURL() (not a plain `file://${path.join(...)}` template) is
+  // required here: on Windows, path.join() returns backslash-separated paths
+  // like `C:\Users\...`, and naively prepending `file://` produces a
+  // malformed URL (`file://C:\Users\...` — only two slashes, backslashes
+  // instead of forward slashes) that Chromium's URL parser rejects outright
+  // with ERR_FAILED. loadURL() then silently fails (its returned promise
+  // rejects, but nothing awaited it), leaving the window created but never
+  // showing any content — 'ready-to-show' never fires since nothing ever
+  // loaded, so the window (and the whole app, with no other window open)
+  // appeared to do nothing at all. pathToFileURL() builds a correct,
+  // percent-encoded file:/// URL on every platform.
+  mainWindow.loadURL(`${pathToFileURL(path.join(__dirname, '../renderer/index.html')).href}?window=main`);
 
   mainWindow.once('ready-to-show', () => mainWindow?.show());
 
@@ -240,7 +251,7 @@ function createOverlayWindow() {
   });
 
   attachDiagnostics(overlayWindow, 'companion');
-  overlayWindow.loadURL(`file://${path.join(__dirname, '../renderer/index.html')}?window=companion`);
+  overlayWindow.loadURL(`${pathToFileURL(path.join(__dirname, '../renderer/index.html')).href}?window=companion`);
 
   // Click-through by default (see setOverlayInteractive) — the transparent
   // canvas must never block the real desktop underneath until the
@@ -367,7 +378,6 @@ app.whenReady().then(async () => {
   feedbackStore.init();
   helpActivityStore.init();
   supportConversationStore.init();
-  guestConnectorCredentialStore.init();
 
   // Connectivity Runtime — populates the registry with real, locally-
   // detected tools (Git, Docker, kubectl, VS Code, etc.) so the
@@ -379,43 +389,13 @@ app.whenReady().then(async () => {
   // into the Infrastructure Runtime that InvestigateTicketPlugin actually reads from.
   connectorRegistry.register(jiraConnectorSDK);
 
-  // Restart durability for Guest-mode sessions (no Supabase session to read a Vault-stored
-  // credential from) — a signed-in user's Jira credential is instead reconnected by the renderer
-  // once it confirms an authenticated session. Bundle-JSON shape, same as Google Workspace below,
-  // since Jira moved from an apiToken form to real Atlassian OAuth (see JiraConnectorSDK.ts).
-  const savedGuestJira = guestConnectorCredentialStore.load('jira');
-  if (savedGuestJira?.bundle) {
-    try {
-      const credential = JSON.parse(savedGuestJira.bundle);
-      jiraConnectorSDK.authenticate({ userId: 'guest' }, credential).catch((e) => console.error('[connectivity] Jira reconnect from Guest store failed:', e));
-    } catch (e) {
-      console.error('[connectivity] Jira Guest store credential was corrupt:', e);
-    }
-  }
-
   // Connector #2: Google Workspace — first OAuth2/PKCE ConnectorSDK, bridging Drive/Gmail/
   // Calendar/Contacts into the pre-existing officeConnectorRegistry scaffold (OFF-1).
   connectorRegistry.register(googleWorkspaceConnectorSDK);
 
-  // Guest-mode restart durability, same shape as Jira's above — the credential bundle is
-  // JSON-packed into one field since GuestConnectorCredentialStore is a flat string map.
-  const savedGuestGoogleWorkspace = guestConnectorCredentialStore.load('googleWorkspace');
-  if (savedGuestGoogleWorkspace?.bundle) {
-    try {
-      const credential = JSON.parse(savedGuestGoogleWorkspace.bundle);
-      googleWorkspaceConnectorSDK
-        .authenticate({ userId: 'guest' }, credential)
-        .catch((e) => console.error('[connectivity] Google Workspace reconnect from Guest store failed:', e));
-    } catch (e) {
-      console.error('[connectivity] Google Workspace Guest store credential was corrupt:', e);
-    }
-  }
-
   // Connectors #3-#9: GitHub/GitLab/Linear/Vercel/Netlify/Railway/Slack — every remaining PawOS
-  // v1 Connections provider, all real OAuth2 ConnectorSDKs sharing this same registration +
-  // Guest-mode restart-durability shape (bundle-JSON via GuestConnectorCredentialStore, exactly
-  // like Google Workspace above). GitHub/GitLab/Linear/Vercel/Netlify/Railway replace what used
-  // to be read-only, env-var-only entries in the older InfrastructureConnectorRegistry-only path.
+  // v1 Connections provider. Signed-in credential persistence is restored by the renderer after
+  // it confirms an authenticated Supabase session.
   const oauthConnectorSDKs = [
     gitHubConnectorSDK,
     gitLabConnectorSDK,
@@ -427,15 +407,6 @@ app.whenReady().then(async () => {
   ] as const;
   for (const sdk of oauthConnectorSDKs) {
     connectorRegistry.register(sdk);
-    const saved = guestConnectorCredentialStore.load(sdk.definition.id);
-    if (saved?.bundle) {
-      try {
-        const credential = JSON.parse(saved.bundle);
-        sdk.authenticate({ userId: 'guest' }, credential).catch((e) => console.error(`[connectivity] ${sdk.definition.id} reconnect from Guest store failed:`, e));
-      } catch (e) {
-        console.error(`[connectivity] ${sdk.definition.id} Guest store credential was corrupt:`, e);
-      }
-    }
   }
 
   // .env next to the installed exe (packaged) or at the repo root (dev

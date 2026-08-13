@@ -39,6 +39,7 @@ export function CheckoutClient() {
   const searchParams = useSearchParams();
   const plan = searchParams.get("plan") ?? "pro";
   const callback = searchParams.get("callback");
+  const runtimeIds = searchParams.get("runtimeIds");
   const seatCountParam = searchParams.get("seatCount");
   const seatCount = seatCountParam ? Number(seatCountParam) : undefined;
   const [seatTier, setSeatTier] = useState<"standard" | "premium">(
@@ -56,6 +57,7 @@ export function CheckoutClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           plan,
+          ...(runtimeIds ? { runtimeIds: runtimeIds.split(",").map((runtimeId) => runtimeId.trim()).filter(Boolean) } : {}),
           ...(plan === "team" ? { seatTier } : {}),
           ...(seatCount ? { seatCount } : {}),
         }),
@@ -80,14 +82,19 @@ export function CheckoutClient() {
         subscription_id: result.subscriptionId,
         name: "PawOS",
         description: `${TIER_LABELS[plan] ?? plan} subscription`,
-        handler: () => {
+        handler: (payment: { razorpay_subscription_id?: string; razorpay_payment_id?: string }) => {
           // Pings the Electron app's local loopback server (see
           // CheckoutSyncServer.ts) so it can mark the subscription active
           // immediately, without waiting on the user to refocus the app.
           // Best-effort only — the real webhook is authoritative once a
           // shared account backend exists.
           if (callback) {
-            fetch(`${callback}?plan=${plan}`).catch(() => {});
+            const syncUrl = new URL(callback);
+            syncUrl.searchParams.set("plan", plan);
+            if (runtimeIds) syncUrl.searchParams.set("runtimeIds", runtimeIds);
+            const orderId = payment.razorpay_subscription_id ?? payment.razorpay_payment_id;
+            if (orderId) syncUrl.searchParams.set("orderId", orderId);
+            fetch(syncUrl.toString()).catch(() => {});
           }
           setStatus("idle");
           setMessage("Payment complete — your PawOS app will sync the new plan automatically.");

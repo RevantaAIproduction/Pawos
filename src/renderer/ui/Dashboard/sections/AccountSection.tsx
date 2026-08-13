@@ -5,7 +5,6 @@ import type { AuthUser } from '../../../auth/AuthTypes';
 const PROVIDER_LABEL: Record<AuthUser['provider'], string> = {
   google: 'Google',
   email: 'Email',
-  guest: 'Guest',
   github: 'GitHub',
   microsoft: 'Microsoft',
   apple: 'Apple',
@@ -38,21 +37,10 @@ export function AccountSection({ user, onSignOut }: { user: AuthUser; onSignOut:
           </h3>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <span className={styles.chip}>{PROVIDER_LABEL[user.provider]} account</span>
-            {user.isGuest && <span className={styles.chip}>Guest Session</span>}
           </div>
           {user.email && <p className={styles.cardBody} style={{ marginTop: 6 }}>{user.email}</p>}
         </div>
       </div>
-
-      {user.isGuest && (
-        <div className={styles.card} style={{ marginTop: 14 }}>
-          <p className={styles.cardBody}>
-            You're on a Guest Session — no cloud sync, subscriptions, token purchases, backup, or
-            cross-device sync. Go to <strong>Settings → Account</strong> to upgrade to a real
-            account without losing your companion, memories, or settings.
-          </p>
-        </div>
-      )}
 
       <button type="button" className={styles.dangerButton} style={{ marginTop: 20 }} onClick={onSignOut}>
         Sign Out

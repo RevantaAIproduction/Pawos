@@ -126,7 +126,6 @@ export default function AppRoot() {
         onSignInWithGithub={() => goToDashboardAfter(auth.signInWithGithub())}
         onSignInWithEmail={(options) => goToDashboardAfter(auth.signInWithEmail(options))}
         onCreateEmailAccount={(options) => goToDashboardAfter(auth.createEmailAccount(options))}
-        onContinueAsGuest={() => goToDashboardAfter(auth.continueAsGuest())}
         onRequestPasswordReset={auth.requestPasswordReset}
         onVerifyPasswordResetCode={auth.verifyPasswordResetCode}
         onCompletePasswordReset={auth.completePasswordReset}
@@ -151,9 +150,6 @@ export default function AppRoot() {
           await auth.signOut();
           setStage('auth');
         }}
-        onUpgradeGuestWithGoogle={auth.upgradeGuestWithGoogle}
-        onUpgradeGuestWithEmail={auth.upgradeGuestWithEmail}
-        isGoogleSignInAvailable={auth.isGoogleSignInAvailable}
         onRequestPasswordReset={auth.requestPasswordReset}
         onVerifyPasswordResetCode={auth.verifyPasswordResetCode}
         onCompletePasswordReset={auth.completePasswordReset}

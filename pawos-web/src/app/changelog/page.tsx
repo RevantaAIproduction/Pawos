@@ -13,8 +13,8 @@ const ENTRIES: Entry[] = [
   {
     date: "2026-07-23",
     tag: "Feature",
-    title: "20+ real deployment providers",
-    body: "The Infrastructure Runtime now covers Vercel, Netlify, Railway, Render, Fly.io, GitHub Pages, Hostinger (shared + VPS), Google Cloud Run, AWS Elastic Beanstalk, Azure App Service, Kubernetes, plus real cloud-VM provisioning for AWS EC2, Google Compute Engine, Azure VM, DigitalOcean, Linode, Vultr, Hetzner, Oracle Cloud, and Docker/VPS.",
+    title: "Infrastructure connector foundation",
+    body: "The Infrastructure Runtime now has the provider-aware connector foundation for deployment and production investigation. Broad SSH, Docker, CI/CD, and cloud execution adapters remain future work rather than launched purchasable capability.",
   },
   {
     date: "2026-07-23",

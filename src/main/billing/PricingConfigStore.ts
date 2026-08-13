@@ -44,8 +44,8 @@ function defaultConfig(): PricingConfig {
         features: [
           'Everything in Go',
           'Full AI models: Paw Flash, Swift, Core, Creative, Vision & Voice',
-          'Talk to Paw to run terminal commands, browse the web, and automate your desktop',
-          'Install software, manage files, and run dev workflows through conversation',
+          'Eligible to purchase/select production-ready runtime entitlements',
+          'Coding Runtime can be added explicitly for terminal, file, git, build, and validation execution',
           'Paw remembers context across your workspace and conversation history',
         ],
       },
@@ -58,6 +58,7 @@ function defaultConfig(): PricingConfig {
         features: [
           'Everything in Pro',
           '20x the usage headroom of Pro',
+          'Runtime purchases remain cumulative across Pro and Pro Max',
           'Priority access to new Paw models',
         ],
       },

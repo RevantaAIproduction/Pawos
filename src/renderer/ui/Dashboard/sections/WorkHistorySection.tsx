@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
 import { useExecutionHistory } from '../../../conversation/useExecutionHistory';
 import type { ExecutionRecord } from '../../../../shared/actions/ExecutionRecordTypes';
+import { WorkRecordDetail } from './WorkRecordDetail';
 
 function formatDate(ts: number): string {
   return new Date(ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
 function formatDuration(ms: number | undefined): string {
-  if (!ms || ms <= 0) return '—';
+  if (!ms || ms <= 0) return 'In progress';
   const mins = Math.round(ms / 60000);
   if (mins < 1) return '<1 min';
   if (mins < 60) return `${mins} min`;
@@ -16,20 +17,48 @@ function formatDuration(ms: number | undefined): string {
 }
 
 const STATUS_LABELS: Record<ExecutionRecord['status'], string> = {
-  in_progress: 'In progress',
+  in_progress: 'Running',
   completed: 'Completed',
   failed: 'Failed',
-  abandoned: 'Abandoned',
+  abandoned: 'Stopped',
 };
 
 /**
- * Read-only Timeline of completed work — every ExecutionRecord Paw's
- * internal Execution Supervisor built while carrying out a real request.
- * Nothing here edits a record; it only ever arrives already-finished.
+ * Best-effort workspace label — real evidence only (projectId, or the
+ * folder a real command/file evidence entry actually touched). Never
+ * fabricated; a record with no such evidence simply shows no workspace.
  */
-export function WorkHistorySection() {
+function workspaceLabel(record: ExecutionRecord): string | null {
+  if (record.projectId) return record.projectId;
+  const cwd = record.commandEvidence?.find((c) => c.cwd)?.cwd;
+  if (cwd) {
+    const parts = cwd.replace(/[\\/]+$/, '').split(/[\\/]/);
+    return parts[parts.length - 1] || cwd;
+  }
+  const firstPath = record.fileEvidence?.[0]?.relativePath ?? record.fileEvidence?.[0]?.path;
+  if (firstPath) {
+    const parts = firstPath.split(/[\\/]/);
+    return parts.length > 1 ? parts[0] ?? null : null;
+  }
+  return null;
+}
+
+function evidenceCounts(record: ExecutionRecord) {
+  const commands = record.commandEvidence?.length ?? record.commandsExecuted.length;
+  const files = record.fileEvidence?.length ?? record.filesCreated.length + record.filesModified.length;
+  const tests = (record.verificationEvidence ?? []).filter((v) => v.type === 'TEST').length;
+  const builds = (record.verificationEvidence ?? []).filter((v) => v.type === 'BUILD').length;
+  return { commands, files, tests, builds };
+}
+
+export function WorkHistorySection({ selectedWorkId }: { selectedWorkId?: string | null }) {
   const { records } = useExecutionHistory();
   const [activeId, setActiveId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (selectedWorkId) setActiveId(selectedWorkId);
+  }, [selectedWorkId]);
+
   const detail = records.find((r) => r.id === activeId) ?? null;
 
   if (records.length === 0) {
@@ -38,8 +67,7 @@ export function WorkHistorySection() {
         <div className={styles.emptyIcon} />
         <h3 className={styles.emptyTitle}>No completed work yet</h3>
         <p className={styles.emptyBody}>
-          Every real request Paw carries out — across applications, commands, and files — becomes an entry here once
-          it's done, with what was verified along the way.
+          Every real request Paw carries out becomes an inspectable Work Record here.
         </p>
       </div>
     );
@@ -48,82 +76,62 @@ export function WorkHistorySection() {
   return (
     <div className={styles.mailPreview}>
       <div className={styles.mailPreviewList}>
-        {records.map((r) => (
-          <button
-            key={r.id}
-            type="button"
-            className={`${styles.mailPreviewItem} ${activeId === r.id ? styles.mailPreviewItemActive : ''}`}
-            onClick={() => setActiveId(r.id)}
-          >
-            <div>{r.goal || '(untitled request)'}</div>
-            <div style={{ fontSize: 11, color: '#6c6c74', marginTop: 2 }}>
-              {formatDate(r.startedAt)} · {STATUS_LABELS[r.status]} · {formatDuration(r.durationMs)}
-            </div>
-          </button>
-        ))}
+        <div className={styles.workRecordCardList}>
+          {records.map((r) => {
+            const workspace = workspaceLabel(r);
+            const counts = evidenceCounts(r);
+            return (
+              <button
+                key={r.id}
+                type="button"
+                className={`${styles.workRecordCard} ${activeId === r.id ? styles.workRecordCardActive : ''}`}
+                onClick={() => setActiveId(r.id)}
+              >
+                <div className={styles.workRecordCardTop}>
+                  <div style={{ minWidth: 0 }}>
+                    <div className={styles.workRecordCardTitle}>{r.goal || '(untitled request)'}</div>
+                    {workspace && <div className={styles.workRecordCardWorkspace}>{workspace}</div>}
+                  </div>
+                  <span className={styles.statusBadge} data-status={r.status}>{STATUS_LABELS[r.status]}</span>
+                </div>
+                <div className={styles.workRecordCardMetaRow}>
+                  <span>{formatDate(r.startedAt)}</span>
+                  <span className={styles.workRecordCardMetaDot} />
+                  <span>{formatDuration(r.durationMs)}</span>
+                  {r.runtime && (
+                    <>
+                      <span className={styles.workRecordCardMetaDot} />
+                      <span>{r.runtime}</span>
+                    </>
+                  )}
+                  {typeof r.pawComputeUsed === 'number' && (
+                    <>
+                      <span className={styles.workRecordCardMetaDot} />
+                      <span>{r.pawComputeUsed} Paw Compute</span>
+                    </>
+                  )}
+                </div>
+                {(counts.commands > 0 || counts.files > 0 || counts.tests > 0 || counts.builds > 0) && (
+                  <div className={styles.workRecordCardMetaRow}>
+                    {counts.commands > 0 && <span className={styles.workRecordMetricChip}>{counts.commands} commands</span>}
+                    {counts.files > 0 && <span className={styles.workRecordMetricChip}>{counts.files} files</span>}
+                    {counts.builds > 0 && <span className={styles.workRecordMetricChip}>{counts.builds} builds</span>}
+                    {counts.tests > 0 && <span className={styles.workRecordMetricChip}>{counts.tests} tests</span>}
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className={styles.mailPreviewFrame} style={{ padding: detail ? 20 : 0, overflowY: 'auto' }}>
         {!detail && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-            <p className={styles.cardBody}>Select an entry to see what it involved.</p>
+            <p className={styles.cardBody}>Select an entry to inspect its Work Record.</p>
           </div>
         )}
-        {detail && (
-          <>
-            <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700 }}>{detail.goal || '(untitled request)'}</h2>
-            <p className={styles.cardBody} style={{ marginBottom: 14 }}>
-              {formatDate(detail.startedAt)} · {STATUS_LABELS[detail.status]} · {formatDuration(detail.durationMs)}
-            </p>
-
-            {detail.summary && <p className={styles.cardBody} style={{ marginBottom: 18 }}>{detail.summary}</p>}
-
-            {detail.applicationsUsed.length > 0 && (
-              <p className={styles.cardBody} style={{ marginBottom: 8 }}>
-                <strong>Applications:</strong> {detail.applicationsUsed.join(', ')}
-              </p>
-            )}
-            {detail.aiWorkersUsed.length > 0 && (
-              <p className={styles.cardBody} style={{ marginBottom: 8 }}>
-                <strong>AI workers:</strong> {detail.aiWorkersUsed.join(', ')}
-              </p>
-            )}
-            {detail.commandsExecuted.length > 0 && (
-              <p className={styles.cardBody} style={{ marginBottom: 8 }}>
-                <strong>Commands:</strong> {detail.commandsExecuted.join(', ')}
-              </p>
-            )}
-            {detail.filesCreated.length > 0 && (
-              <p className={styles.cardBody} style={{ marginBottom: 8 }}>
-                <strong>Files created:</strong> {detail.filesCreated.join(', ')}
-              </p>
-            )}
-            {detail.filesModified.length > 0 && (
-              <p className={styles.cardBody} style={{ marginBottom: 8 }}>
-                <strong>Files modified:</strong> {detail.filesModified.join(', ')}
-              </p>
-            )}
-            {detail.verificationResults.length > 0 && (
-              <div style={{ marginTop: 14 }}>
-                <p className={styles.cardBody} style={{ marginBottom: 6 }}>
-                  <strong>Verification:</strong>
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {detail.verificationResults.map((v, i) => (
-                    <div key={i} style={{ fontSize: 12, color: v.ok ? '#7ee787' : '#ff8a8a' }}>
-                      {v.ok ? '✓' : '✗'} {v.description}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {detail.recoveryAttempts > 0 && (
-              <p className={styles.cardBody} style={{ marginTop: 14 }}>
-                Recovery attempts: {detail.recoveryAttempts}
-              </p>
-            )}
-          </>
-        )}
+        {detail && <WorkRecordDetail record={detail} />}
       </div>
     </div>
   );

@@ -85,8 +85,6 @@ export default function CompanionExperience() {
   const notifyOnTaskCompleteRef = useRef(true);
 
   const FIRST_LAUNCH_KEY = 'pawos:firstLaunchCompleted';
-  const welcomeMessage =
-    "Hi, I'm PawOS.\n\nI'm your personal AI companion.\n\nI'm here to keep you company and help you get things done.\n\nWhenever you're ready, tell me what you're working on today.";
 
   const controllerRef = useRef(controller.controller);
   controllerRef.current = controller.controller;
@@ -145,18 +143,15 @@ export default function CompanionExperience() {
     });
     ipc.petsList().then((list) => controller.setPetList(list));
 
-    // First launch welcome experience:
-    // - Open conversation panel
-    // - Speak welcome message (speech-only)
-    // - Do NOT start speech recognition
-    // - Persist flag so it happens only once (after speak)
+    // First launch welcome experience opens the panel only. Voice input does
+    // not imply automatic voice output; users can press Speak or enable
+    // Voice Output when they want audio.
     void (async () => {
       try {
         const alreadyCompleted = window.localStorage.getItem(FIRST_LAUNCH_KEY) === 'true';
         if (alreadyCompleted) return;
 
-        conversation.open();
-        void conversation.speak(welcomeMessage);
+        conversation.openPanel();
         window.localStorage.setItem(FIRST_LAUNCH_KEY, 'true');
       } catch {
         // ignore first-launch UX if storage or speech isn't available
@@ -264,19 +259,23 @@ export default function CompanionExperience() {
           <button
             type="button"
             className={styles.launcher}
-            onClick={() => conversation.open()}
+            onClick={() => conversation.openPanel()}
           >
             Talk
           </button>
         )}
       </div>
       {conversationSnapshot.panelOpen && (
-        <div data-interactive="true">
+        <div className={styles.conversationPanelSlot} data-interactive="true">
           <ConversationPanel
             snapshot={conversationSnapshot}
             onClose={() => conversation.close()}
-            onStartListening={() => conversation.open()}
+            onStartListening={() => conversation.startListening()}
+            onStopListening={() => conversation.stopListening()}
             onSendTranscript={(text, context) => conversation.submitTranscript(text, context)}
+            onSetVoiceOutputEnabled={(enabled) => conversation.setVoiceOutputEnabled(enabled)}
+            onStopSpeechPlayback={() => conversation.stopSpeechPlayback()}
+            onSpeakMessage={(text) => conversation.speak(text)}
             onRetryAction={(taskId, actionId) => conversation.retryAction(taskId, actionId)}
             onOpenPath={(path, kind) => conversation.openPath(path, kind)}
             onConnectCapability={(taskId, actionId, connectorId, fields, opts) => conversation.connectCapability(taskId, actionId, connectorId, fields, opts)}

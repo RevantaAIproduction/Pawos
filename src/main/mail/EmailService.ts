@@ -55,7 +55,15 @@ export class EmailService {
       host: config.host,
       port: config.port,
       secure: config.secure,
-      auth: { user: config.user, pass: config.pass },
+      // Gmail App Passwords are always displayed as four space-separated
+      // groups (e.g. "abcd efgh ijkl mnop") for human readability, but the
+      // actual stored credential has no spaces — pasted verbatim into
+      // SMTP_PASS, the literal spaces become part of the AUTH payload and
+      // Gmail rejects every login with 535 Invalid login, silently and
+      // permanently blocking every outbound email (OTPs included). Stripping
+      // whitespace here makes the common copy-paste case work without
+      // requiring every user to know to remove it themselves first.
+      auth: { user: config.user, pass: config.pass.replace(/\s+/g, '') },
     });
     this.from = config.from;
   }

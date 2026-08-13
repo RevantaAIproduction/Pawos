@@ -27,6 +27,7 @@ import { creditStore } from '../billing/CreditStore';
 import { createBillingProvider } from '../billing/BillingProviderRegistry';
 import { createCreditsCheckoutUrl } from '../billing/providers/RazorpayBillingProvider';
 import { entitlementService } from '../billing/EntitlementService';
+import { createRendererOrganizationUsageRecorder } from '../billing/RendererOrganizationUsageBridge';
 import { startCheckoutCallbackServer } from '../billing/CheckoutSyncServer';
 import type { SubscriptionTierId, FeatureId, CheckoutOptions } from '../../shared/billing/BillingTypes';
 import type { AiUsageCategory } from '../../shared/billing/AiUsageCategories';
@@ -117,7 +118,9 @@ export function registerIpc(opts: {
   // without duplicating any plugin's own logic.
   ipcMain.handle('action:checkRequirements', (_evt, request: ActionRequest) => desktopExecutionEngine.requirements(request));
   ipcMain.handle('action:describe', (_evt, request: ActionRequest) => desktopExecutionEngine.describeInProgress(request));
-  ipcMain.handle('action:execute', (_evt, request: ActionRequest) => desktopExecutionEngine.execute(request));
+  ipcMain.handle('action:execute', (evt, request: ActionRequest) =>
+    desktopExecutionEngine.execute(request, { pooledUsageRecorder: createRendererOrganizationUsageRecorder(evt.sender) })
+  );
   ipcMain.handle('action:reportResult', (_evt, request: ActionRequest, result: ActionResult) =>
     desktopExecutionEngine.describeDone(request, result)
   );
@@ -344,9 +347,10 @@ export function registerIpc(opts: {
   // TicketPricingConfigStore.ts), never a code constant a UI hardcodes, so
   // new preset amounts can be added later without a redeploy.
   ipcMain.handle('billing:getTicketPricingConfig', () => ticketPricingConfigStore.get());
-  ipcMain.handle('billing:getSubscription', () => subscriptionStore.get());
+  ipcMain.handle('billing:getSubscription', () => subscriptionStore.getEffective());
   ipcMain.handle('billing:setSubscriptionTier', (_evt, tier: SubscriptionTierId) => subscriptionStore.setTier(tier));
   ipcMain.handle('billing:syncFromOrganization', (_evt, orgTier: SubscriptionTierId) => subscriptionStore.syncFromOrganization(orgTier));
+  ipcMain.handle('billing:reconcileForAccount', (_evt, accountId: string) => subscriptionStore.reconcileForAccount(accountId));
   // Called on sign-out so a stale, org-elevated tier from a previous account on this device never
   // carries over to the next account that signs in — see SubscriptionStore.reset()'s own comment.
   ipcMain.handle('billing:resetSubscription', () => subscriptionStore.reset());

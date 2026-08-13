@@ -1,6 +1,6 @@
 import type { ConnectorCategory } from '../connectivity/ConnectivityTypes';
 import type { ActionResult } from '../actions/ActionTypes';
-import type { FeatureId } from '../billing/BillingTypes';
+import type { FeatureId, RuntimeEntitlementId } from '../billing/BillingTypes';
 
 /**
  * The runtime's general requirement-resolution vocabulary — not connectivity-specific. 'capability'
@@ -21,7 +21,8 @@ export type RequirementKind = 'capability' | 'entitlement';
  */
 export interface EntitlementRequirement {
   kind: 'entitlement';
-  feature: FeatureId;
+  feature?: FeatureId;
+  runtimeId?: RuntimeEntitlementId;
   /** Contextual reason shown to the user, e.g. 'Creating an execution plan requires Paw Pro.' */
   reasonHint?: string;
 }

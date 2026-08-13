@@ -47,24 +47,6 @@ export function useAuth() {
     return signedInUser;
   }, []);
 
-  const continueAsGuest = useCallback(async () => {
-    const signedInUser = await authService.continueAsGuest();
-    setUser(signedInUser);
-    return signedInUser;
-  }, []);
-
-  const upgradeGuestWithGoogle = useCallback(async () => {
-    const signedInUser = await authService.upgradeGuestWithGoogle();
-    setUser(signedInUser);
-    return signedInUser;
-  }, []);
-
-  const upgradeGuestWithEmail = useCallback(async (options: EmailCreateAccountOptions) => {
-    const signedInUser = await authService.upgradeGuestWithEmail(options);
-    setUser(signedInUser);
-    return signedInUser;
-  }, []);
-
   const requestPasswordReset = useCallback(async (email: string) => authService.requestPasswordReset(email), []);
 
   const verifyPasswordResetCode = useCallback(
@@ -100,9 +82,6 @@ export function useAuth() {
     signInWithGithub,
     signInWithEmail,
     createEmailAccount,
-    continueAsGuest,
-    upgradeGuestWithGoogle,
-    upgradeGuestWithEmail,
     requestPasswordReset,
     verifyPasswordResetCode,
     completePasswordReset,

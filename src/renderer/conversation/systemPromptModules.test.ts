@@ -2,13 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { assemblePromptModules, INTELLIGENCE_PROMPT_MODULES, type SystemPromptModule } from './systemPromptModules';
 
 describe('INTELLIGENCE_PROMPT_MODULES', () => {
-  it('has exactly one always-on module and one execute-only module', () => {
+  it('keeps required always-on and execute-only modules registered', () => {
     const always = INTELLIGENCE_PROMPT_MODULES.filter((m) => m.tier === 'always');
     const executeOnly = INTELLIGENCE_PROMPT_MODULES.filter((m) => m.tier === 'executeOnly');
-    expect(always).toHaveLength(1);
-    expect(executeOnly).toHaveLength(1);
-    expect(always[0]?.id).toBe('intelligenceRuntime');
-    expect(executeOnly[0]?.id).toBe('executionPlanner');
+    expect(always.map((m) => m.id)).toEqual(expect.arrayContaining(['projectPlanningUx', 'intelligenceRuntime']));
+    expect(executeOnly.map((m) => m.id)).toEqual(expect.arrayContaining(['executionPlanner']));
   });
 
   it('every module has non-empty content', () => {

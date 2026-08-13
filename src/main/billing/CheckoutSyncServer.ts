@@ -1,10 +1,21 @@
 import * as http from 'http';
+import { randomBytes } from 'crypto';
 import { BrowserWindow } from 'electron';
 import { subscriptionStore } from './SubscriptionStore';
-import type { SubscriptionTierId } from '../../shared/billing/BillingTypes';
+import type { RuntimeEntitlementId, SubscriptionTierId } from '../../shared/billing/BillingTypes';
+import { ALL_RUNTIME_ENTITLEMENT_IDS } from '../../shared/billing/RuntimeCatalog';
 
 const CALLBACK_PATH = '/checkout-callback';
 const TIMEOUT_MS = 10 * 60 * 1000; // checkout sessions don't stay open forever — matches a generous real checkout window.
+
+function parseRuntimeIds(value: string | null): RuntimeEntitlementId[] {
+  if (!value) return [];
+  const valid = new Set<string>(ALL_RUNTIME_ENTITLEMENT_IDS);
+  return value
+    .split(',')
+    .map((runtimeId) => runtimeId.trim())
+    .filter((runtimeId, index, list) => valid.has(runtimeId) && list.indexOf(runtimeId) === index) as RuntimeEntitlementId[];
+}
 
 /**
  * "Electron should automatically refresh the user's subscription after
@@ -21,11 +32,17 @@ const TIMEOUT_MS = 10 * 60 * 1000; // checkout sessions don't stay open forever 
  */
 export function startCheckoutCallbackServer(): Promise<string> {
   return new Promise((resolve, reject) => {
+    const syncToken = randomBytes(16).toString('hex');
     const server = http.createServer((req, res) => {
       const url = new URL(req.url ?? '/', 'http://127.0.0.1');
       if (url.pathname !== CALLBACK_PATH) {
         res.writeHead(404);
         res.end();
+        return;
+      }
+      if (url.searchParams.get('token') !== syncToken) {
+        res.writeHead(403, { 'Content-Type': 'text/plain' });
+        res.end('forbidden');
         return;
       }
       res.writeHead(200, { 'Content-Type': 'text/plain', 'Access-Control-Allow-Origin': '*' });
@@ -47,7 +64,13 @@ export function startCheckoutCallbackServer(): Promise<string> {
       } else {
         const plan = url.searchParams.get('plan') as SubscriptionTierId | null;
         if (plan) {
-          subscriptionStore.confirmPurchase(plan);
+          const runtimeIds = parseRuntimeIds(url.searchParams.get('runtimeIds'));
+          const orderId =
+            url.searchParams.get('orderId') ??
+            url.searchParams.get('razorpay_subscription_id') ??
+            url.searchParams.get('razorpay_payment_id') ??
+            undefined;
+          subscriptionStore.confirmPurchase(plan, { runtimeIds, orderId });
           for (const win of BrowserWindow.getAllWindows()) win.webContents.send('billing:subscriptionUpdated');
         }
       }
@@ -61,7 +84,7 @@ export function startCheckoutCallbackServer(): Promise<string> {
     server.listen(0, '127.0.0.1', () => {
       const address = server.address();
       const port = typeof address === 'object' && address ? address.port : 0;
-      resolve(`http://127.0.0.1:${port}${CALLBACK_PATH}`);
+      resolve(`http://127.0.0.1:${port}${CALLBACK_PATH}?token=${syncToken}`);
     });
   });
 }

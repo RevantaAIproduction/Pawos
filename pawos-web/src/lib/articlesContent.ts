@@ -15,7 +15,7 @@ export const ARTICLES: Article[] = [
     body: [
       "Most AI products today live in a browser tab. You describe a problem, get a suggestion, and then do the actual work of applying it yourself — copying code into your editor, running the command it suggested, clicking through the settings it described.",
       "PawOS starts from a different premise: an AI companion should be able to act, not just advise. It runs as a native desktop application, aware of what you're working on, able to open applications, edit files, run commands, control a browser, and deploy real infrastructure — with your confirmation at every risky step.",
-      "This isn't a rebrand of a chatbot with a system-tray icon. Six independently real runtimes back it: Universal Execution for files/apps/terminals, a Browser Runtime for real browser control, an Infrastructure Runtime for deployment across 20+ providers, a Communication Runtime for meetings and calls, a Companion Runtime for the animated 3D presence you actually see, and a Governance Runtime for the confirmation gates and audit trail that make trusting it with real work reasonable.",
+      "This isn't a rebrand of a chatbot with a system-tray icon. PawOS is built from focused runtime surfaces: Coding for local project execution, Browser for controlled local browser work, Infrastructure for the currently implemented connector surface, Communication for meetings and calls, Companion for the animated 3D presence you actually see, and Governance for the confirmation gates and audit trail that make trusting it with real work reasonable.",
       "We're publishing this documentation site alongside the product because we think the honest version of an AI companion's capabilities — including what it can't yet do — is more useful than a highlight reel. You'll find that tone throughout: every feature page lists real limitations next to real capabilities.",
     ],
   },
@@ -195,7 +195,7 @@ export const ARTICLES: Article[] = [
     category: "Roadmap",
     excerpt: "The Infrastructure Runtime now spans a genuinely provider-agnostic set of real integrations.",
     body: [
-      "The Infrastructure Runtime's HostingConnector interface now backs real integrations across Vercel, Netlify, Railway, Render, Fly.io, GitHub Pages, Hostinger (shared hosting and VPS), Google Cloud Run, AWS Elastic Beanstalk, Azure App Service, Kubernetes, and real cloud-VM provisioning for AWS EC2, Google Compute Engine, Azure VM, DigitalOcean, Linode, Vultr, Hetzner, Oracle Cloud, and generic Docker/VPS hosts.",
+      "The Infrastructure Runtime's connector interface now backs provider-aware deployment and production investigation paths. Broad SSH, Docker, CI/CD, and cloud execution adapters remain future work, not launched purchasable capability.",
       "Every one of these shells to that provider's own official, already-authenticated CLI or API — none of them are simulated or partially implemented. Where a provider genuinely has no staging/rollback concept, the connector reports that honestly instead of fabricating one.",
       "See the full Roadmap page for what's coming next.",
     ],

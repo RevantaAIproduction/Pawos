@@ -24,9 +24,8 @@ export const DEFINITIONS_SECTION = {
   heading: "Definitions",
   paragraphs: [
     '"PawOS" means the PawOS desktop application, the pawos.revantaai.com website, and the backend services (authentication, billing, Organization Workspace storage, AI reasoning routing) that support them.',
-    '"You" or "User" means the individual or organization using PawOS, including under Guest Mode.',
+    '"You" or "User" means the individual or organization using PawOS.',
     `"We," "us," or "our" refers to ${ENTITY_NAME}.`,
-    '"Guest Mode" means using PawOS without creating an account. Guest Mode data stays local to your device; no subscription tier, credit balance, or Organization membership is available in Guest Mode.',
     '"Account" means a PawOS account created via email/password or Google sign-in, authenticated through our authentication provider (Supabase Auth).',
     '"Self-Service Subscription" means a recurring Paw Go (free), Pro, Pro Max, Team, or Enterprise subscription that you or your organization activate, upgrade, downgrade, or cancel directly inside PawOS without needing to contact sales.',
     '"Seat" means one licensed member of a Team or Enterprise Organization Workspace. Team seats are billed as either a Standard or Premium Seat Type at the rate shown on our Pricing page; Enterprise seats are billed at a uniform base rate plus usage.',
@@ -115,7 +114,6 @@ export const DATA_HANDLING_SECTION = {
   paragraphs: [
     "Most PawOS data — companion memory, conversation history, local Workspace Intelligence, and project analysis — is stored locally on your device and is never transmitted to us, except where it must pass through a third-party AI provider to generate a response, or where you explicitly share it into an Organization Workspace.",
     "Organization Workspace data is hosted with our infrastructure provider, Supabase, with row-level security scoping every record to the requesting organization so that one organization's data is never visible to another, or to us, outside of what is necessary to operate the service and respond to a valid legal or support request.",
-    "Guest Mode creates no account and stores no data with us at all — everything stays on your device.",
   ],
 };
 

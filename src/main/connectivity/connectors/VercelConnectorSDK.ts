@@ -4,7 +4,6 @@ import { VercelConnector } from '../../infrastructure/connectors/hosting/VercelC
 import { infrastructureConnectorRegistry } from '../../infrastructure/InfrastructureConnectorRegistry';
 import { oauthManager } from '../OAuthManager';
 import { credentialVaultBridge } from '../CredentialVaultBridge';
-import { guestConnectorCredentialStore } from '../../infrastructure/GuestConnectorCredentialStore';
 
 interface VercelCredential {
   accessToken: string;
@@ -73,7 +72,6 @@ export class VercelConnectorSDK implements ConnectorSDK {
         expiresAt: token.expiresAt,
         grantedScopes: token.grantedScopes,
       });
-      if (scope.userId === 'guest') guestConnectorCredentialStore.save(this.definition.id, { bundle: JSON.stringify(this.credential) });
       this.registerLiveConnector();
       this.currentStatus = { state: 'connected', capabilities: this.capabilities(), connectedAt: new Date().toISOString(), detail: identity.username };
     } catch (error) {
@@ -94,7 +92,6 @@ export class VercelConnectorSDK implements ConnectorSDK {
   async disconnect(scope: ConnectivityScope): Promise<void> {
     this.credential = undefined;
     await credentialVaultBridge.revoke(this.definition.id, scope);
-    guestConnectorCredentialStore.remove(this.definition.id);
     infrastructureConnectorRegistry.register('hosting', new VercelConnector(undefined));
     this.currentStatus = { state: 'disconnected', capabilities: [] };
   }

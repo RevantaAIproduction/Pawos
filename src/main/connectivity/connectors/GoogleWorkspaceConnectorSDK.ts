@@ -3,7 +3,6 @@ import type { ConnectivityScope, ConnectorConnection, ConnectorStatus, Normalize
 import type { CalendarEventDraft } from '../../../shared/office/OfficeTypes';
 import { oauthManager } from '../OAuthManager';
 import { credentialVaultBridge } from '../CredentialVaultBridge';
-import { guestConnectorCredentialStore } from '../../infrastructure/GuestConnectorCredentialStore';
 import { officeConnectorRegistry } from '../../office/OfficeConnectorRegistry';
 import { GoogleDriveConnector } from '../../office/google/GoogleDriveConnector';
 import { GmailConnector } from '../../office/google/GmailConnector';
@@ -226,13 +225,6 @@ export class GoogleWorkspaceConnectorSDK implements ConnectorSDK {
       expiresAt: this.credential.expiresAt,
       grantedScopes: mergedScopes,
     });
-    if (scope.userId === 'guest') {
-      // No Supabase session to persist through the Vault — same local, safeStorage-encrypted
-      // fallback Jira's Guest-mode path already uses, generic over connectorId. The credential
-      // bundle is JSON-packed into one field since GuestConnectorCredentialStore is a flat
-      // string map (never a schema change to that store).
-      guestConnectorCredentialStore.save(this.definition.id, { bundle: JSON.stringify(this.credential) });
-    }
     this.activate();
     this.currentStatus = { state: 'connected', capabilities: this.capabilities(), connectedAt: new Date().toISOString() };
     return this.toConnection(scope);
@@ -244,7 +236,6 @@ export class GoogleWorkspaceConnectorSDK implements ConnectorSDK {
     }
     this.credential = undefined;
     await credentialVaultBridge.revoke(this.definition.id, scope);
-    guestConnectorCredentialStore.remove(this.definition.id);
     // No unregister() on OfficeConnectorRegistry (deliberately not widened this pass, the exact
     // same constraint JiraConnectorSDK already works around on InfrastructureConnectorRegistry)
     // — blanking the access token on the same registered instances makes isConfigured() honestly

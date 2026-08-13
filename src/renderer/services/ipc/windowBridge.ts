@@ -26,6 +26,12 @@ import type {
   EntitlementSnapshot,
 } from '../../../shared/billing/BillingTypes';
 import type { AiUsageCategory } from '../../../shared/billing/AiUsageCategories';
+import {
+  ORGANIZATION_USAGE_RECORD_REQUEST_CHANNEL,
+  ORGANIZATION_USAGE_RECORD_RESPONSE_CHANNEL_PREFIX,
+  type OrganizationUsageRecordRequest,
+  type OrganizationUsageRecordResponse,
+} from '../../../shared/billing/OrganizationUsageBridgeTypes';
 import type { PawModelId } from '../../../shared/ai/PawModelTypes';
 import type { OnboardingState } from '../../../shared/onboarding/OnboardingTypes';
 import type {
@@ -66,6 +72,13 @@ export function contextBridge() {
 
   return {
     actionExecute: async (request: ActionRequest): Promise<ActionResult> => ipcApi.invoke('action:execute', request),
+    onOrganizationUsageRecordRequest: (cb: (request: OrganizationUsageRecordRequest) => void) => {
+      const handler = (_: any, request: OrganizationUsageRecordRequest) => cb(request);
+      ipcApi?.on(ORGANIZATION_USAGE_RECORD_REQUEST_CHANNEL, handler);
+      return () => ipcApi?.removeListener?.(ORGANIZATION_USAGE_RECORD_REQUEST_CHANNEL, handler);
+    },
+    organizationUsageRecordRespond: async (requestId: string, response: OrganizationUsageRecordResponse): Promise<void> =>
+      ipcApi.invoke(`${ORGANIZATION_USAGE_RECORD_RESPONSE_CHANNEL_PREFIX}:${requestId}`, response),
     processWriteStdin: async (processId: string, data: string): Promise<{ ok: true } | { ok: false; message: string }> =>
       ipcApi.invoke('process:writeStdin', processId, data),
     systemGetHomeDir: async (): Promise<string> => ipcApi.invoke('system:getHomeDir'),
@@ -160,6 +173,8 @@ export function contextBridge() {
       ipcApi.invoke('billing:setSubscriptionTier', tier),
     billingSyncTierFromOrganization: async (orgTier: SubscriptionTierId): Promise<SubscriptionState> =>
       ipcApi.invoke('billing:syncFromOrganization', orgTier),
+    billingReconcileForAccount: async (accountId: string): Promise<SubscriptionState> =>
+      ipcApi.invoke('billing:reconcileForAccount', accountId),
     billingResetSubscription: async (): Promise<SubscriptionState> => ipcApi.invoke('billing:resetSubscription'),
     billingGetCreditBalance: async (): Promise<CreditBalance> => ipcApi.invoke('billing:getCreditBalance'),
     billingConsumeCredit: async (amount: number, reason: string, category?: AiUsageCategory): Promise<CreditBalance> =>

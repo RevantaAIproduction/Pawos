@@ -8,7 +8,7 @@
 export type WorkspaceTaskStatus = 'todo' | 'in_progress' | 'blocked' | 'done' | 'cancelled';
 
 /** Phase 3 addition — lets a task represent a code-review or deployment work assignment (roadmap Section 8/11), not just a general task. Additive: existing rows default to 'general'. */
-export type WorkspaceTaskType = 'general' | 'code_review' | 'deployment';
+export type WorkspaceTaskType = 'general' | 'code_review' | 'deployment' | 'implementation' | 'qa' | 'bug' | 'retest' | 'production_verification';
 
 export type WorkspaceTask = {
   id: string;
@@ -27,6 +27,15 @@ export type WorkspaceTask = {
   taskType: WorkspaceTaskType;
   repositoryId: string | null;
   prNumber: number | null;
+  /** Team/Enterprise Work OS foundation fields. Optional/null on legacy rows
+   * until the additive migration is applied. */
+  teamId?: string | null;
+  dependencyTaskIds?: string[];
+  requiredRuntime?: string | null;
+  allocationMode?: 'manual' | 'pawos_assisted';
+  assignmentReason?: string | null;
+  assignedBy?: string | null;
+  verificationRequirements?: { id: string; description: string; required: boolean }[];
 };
 
 export type WorkspaceProjectMember = {

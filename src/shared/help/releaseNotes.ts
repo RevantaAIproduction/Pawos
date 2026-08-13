@@ -23,7 +23,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
     title: 'Real subscription tiers and dashboard redesign',
     highlights: [
       'Added Paw Pro Max and seat-based Team/Enterprise pricing',
-      'Strict, honest Guest mode with no fabricated tier or usage numbers',
+      'Account-required sign-in with Paw Go as the free authenticated plan',
       'Rebuilt the sidebar into Home/Projects/Apps/Analytics with an account menu',
       'Rebuilt Settings into a categorized sidebar layout',
     ],

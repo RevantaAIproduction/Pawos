@@ -20,6 +20,50 @@ export type QueuedActionState =
 
 export type VerificationResultEntry = { description: string; ok: boolean };
 
+export type ExecutionCommandEvidence = {
+  command: string;
+  safeCommand: string;
+  cwd?: string;
+  startedAt: number;
+  completedAt: number;
+  durationMs: number;
+  exitCode?: number | null;
+  status: 'completed' | 'failed' | 'blocked';
+  output?: string;
+  stdoutSummary?: string;
+  stderrSummary?: string;
+};
+
+export type ExecutionFileEvidence = {
+  operation: 'CREATE' | 'MODIFY' | 'DELETE' | 'RENAME';
+  path: string;
+  relativePath?: string;
+  timestamp: number;
+  result: 'completed' | 'failed' | 'blocked';
+  sizeBytes?: number;
+};
+
+export type ExecutionDiffEvidence = {
+  timestamp: number;
+  filesChanged: { path: string; added: number; deleted: number }[];
+  totalAdded: number;
+  totalDeleted: number;
+  summary: string;
+  fullDiff?: string;
+};
+
+export type ExecutionVerificationEvidence = {
+  type: 'TYPECHECK' | 'BUILD' | 'TEST' | 'LINT' | 'PREVIEW' | 'HEALTH_CHECK' | 'VISUAL_QA' | 'COMMAND' | 'VALIDATION';
+  action: string;
+  status: 'passed' | 'failed' | 'skipped' | 'not_performed';
+  timestamp: number;
+  durationMs?: number;
+  summary: string;
+  failureReason?: string;
+  screenshotRef?: string;
+  target?: string;
+};
+
 /** One step of the record's own Timeline — mirrors the renderer's Task Card actions so History stores the same trace, not a lossy summary of it. */
 export type ExecutionTimelineEntry = {
   type: string;
@@ -42,7 +86,20 @@ export type ExecutionRecord = {
   filesCreated: string[];
   filesModified: string[];
   verificationResults: VerificationResultEntry[];
+  commandEvidence?: ExecutionCommandEvidence[];
+  fileEvidence?: ExecutionFileEvidence[];
+  diffEvidence?: ExecutionDiffEvidence[];
+  verificationEvidence?: ExecutionVerificationEvidence[];
   recoveryAttempts: number;
   timeline: ExecutionTimelineEntry[];
   summary: string;
+  stoppedReason?: string;
+  nextAction?: string;
+  pawComputeUsed?: number;
+  pawComputeRemaining?: number | null;
+  projectId?: string;
+  taskId?: string;
+  userId?: string;
+  runtime?: string;
+  organizationId?: string;
 };

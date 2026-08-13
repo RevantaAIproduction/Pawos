@@ -55,7 +55,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
           "Diagnostic reports you choose to submit through the in-app bug/feature reporting tool.",
           "Billing records for completed transactions, processed by our payment processor, Razorpay.",
           "Basic technical data from the pawos.revantaai.com website (IP address, browser type, pages visited) for security and analytics purposes, described further in our Cookie Policy.",
-          "We do not collect your local files, companion memory, conversation history, or Workspace Intelligence unless you explicitly share them into an Organization Workspace or submit them as part of a diagnostic report. Guest Mode use creates no account and sends us nothing.",
+          "We do not collect your local files, companion memory, conversation history, or Workspace Intelligence unless you explicitly share them into an Organization Workspace or submit them as part of a diagnostic report.",
         ],
       },
       DATA_HANDLING_SECTION,
@@ -120,7 +120,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         heading: "Acceptance of these terms",
         paragraphs: [
-          `By creating an account, using Guest Mode, or otherwise installing or using PawOS, you agree to these Terms of Service and to ${ENTITY_NAME}'s other policies referenced here, including our Privacy Policy and Acceptable Use Policy.`,
+          `By creating an account or otherwise installing or using PawOS, you agree to these Terms of Service and to ${ENTITY_NAME}'s other policies referenced here, including our Privacy Policy and Acceptable Use Policy.`,
         ],
       },
       {
@@ -132,7 +132,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         heading: "Accounts and authentication",
         paragraphs: [
-          "You can use PawOS in Guest Mode without an account, or create an Account via email/password or Google sign-in. You are responsible for keeping your credentials confidential and for all activity under your Account. Notify us immediately at security@revantaai.com if you suspect unauthorized access.",
+          "PawOS requires an Account via email/password, Google sign-in, or GitHub sign-in. You are responsible for keeping your credentials confidential and for all activity under your Account. Notify us immediately at security@revantaai.com if you suspect unauthorized access.",
         ],
       },
       {

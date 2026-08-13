@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import styles from './taskCard.module.css';
 import type { ConversationTaskAction, ConversationTaskRecord } from './ConversationTypes';
 import type { ExecutionTrail, WorkflowMetadata, BuildStatus, VisualEvidence, TodoProgress, TestRunSummary, CodeDiffStat, PlannedStep } from '../../shared/actions/ExecutionLifecycle';
@@ -8,7 +8,10 @@ import type { CapabilityConfirmation } from '../../shared/runtime/RequirementTyp
 import type { Finding, FindingSeverity, FindingConfidence } from '../../shared/intelligence/IntelligenceReportTypes';
 import { groupFindingsByProvenance } from '../../shared/intelligence/IntelligenceReportTypes';
 import type { EvidenceProvenance } from '../../shared/intelligence/EvidenceProvenance';
+import type { SubscriptionTierId } from '../../shared/billing/BillingTypes';
+import { ipc } from '../services/ipc/ipcBridgeImplementation';
 import { getIntelligenceReport, getExecutionPlan } from './intelligenceReportShape';
+import { describeLaunchFailure, describeTaskLevelLaunchFailure, type FailurePresentation } from './LaunchReadinessUX';
 
 /**
  * The universal execution UI for Paw — one Task Card per user request
@@ -446,6 +449,7 @@ function buildLogText(task: ConversationTaskRecord): string {
 
 function statusMeta(status: ConversationTaskRecord['status']): { icon: string; label: string; className: string } {
   if (status === 'running') return { icon: '⚙️', label: 'Running', className: styles.statusRunning ?? '' };
+  if (status === 'stopped') return { icon: '■', label: 'Stopped', className: styles.statusStopped ?? styles.statusInterrupted ?? '' };
   if (status === 'failed') return { icon: '✗', label: 'Failed', className: styles.statusFailed ?? '' };
   if (status === 'interrupted') return { icon: '⏸', label: 'Interrupted', className: styles.statusInterrupted ?? '' };
   return { icon: '✓', label: 'Completed', className: styles.statusCompleted ?? '' };
@@ -529,6 +533,35 @@ function StageGroup({
   );
 }
 
+function LaunchFailureDetails({
+  action,
+  tier,
+}: {
+  action: ConversationTaskAction;
+  tier: SubscriptionTierId | null;
+}) {
+  const launchFailure = action.result ? describeLaunchFailure(action.result, action.request, tier) : null;
+  if (!launchFailure) return <div>{action.doneText ?? (action.result && !action.result.ok ? action.result.message : '')}</div>;
+  return (
+    <>
+      <strong>{launchFailure.title}</strong>
+      <div>{launchFailure.message}</div>
+      <FailureActions failure={launchFailure} />
+    </>
+  );
+}
+
+function FailureActions({ failure }: { failure: FailurePresentation }) {
+  return (
+    <div className={styles.errorActions}>
+      {failure.actions.includes('upgrade') && <span className={styles.actionPill}>Upgrade</span>}
+      {failure.actions.includes('buyCompute') && <span className={styles.actionPill}>Buy Paw Compute</span>}
+      {failure.actions.includes('upgradeProMax') && <span className={styles.actionPill}>Upgrade to Pro Max</span>}
+      {failure.actions.includes('contactAdmin') && <span className={styles.actionPill}>Contact Admin</span>}
+    </div>
+  );
+}
+
 export function TaskCard({
   task,
   onRetryAction,
@@ -555,6 +588,11 @@ export function TaskCard({
   const [connectFieldValues, setConnectFieldValues] = useState<Record<string, Record<string, string>>>({});
   const [connectErrors, setConnectErrors] = useState<Record<string, string>>({});
   const [connecting, setConnecting] = useState<Set<string>>(new Set());
+  const [subscriptionTier, setSubscriptionTier] = useState<SubscriptionTierId | null>(null);
+
+  useEffect(() => {
+    ipc.billingGetSubscription().then((state) => setSubscriptionTier(state.tier)).catch(() => {});
+  }, []);
 
   const toggleStage = (stage: Stage) => {
     setCollapsedStages((prev) => {
@@ -608,6 +646,11 @@ export function TaskCard({
       intelligenceReports, executionPlans,
     };
   }, [task.actions]);
+  const visibleFailure = useMemo(() => {
+    const action = sections.errors.find((candidate) => candidate.result && !candidate.result.ok);
+    if (action?.result) return describeLaunchFailure(action.result, action.request, subscriptionTier);
+    return task.status === 'failed' || task.status === 'stopped' ? describeTaskLevelLaunchFailure(task.finalReport) : null;
+  }, [sections.errors, subscriptionTier, task.finalReport, task.status]);
 
   const handleCopy = () => {
     void navigator.clipboard.writeText(buildLogText(task)).then(() => {
@@ -644,6 +687,14 @@ export function TaskCard({
         </span>
         <span className={styles.chevron}>{expanded ? '▾' : '▸'}</span>
       </button>
+
+      {visibleFailure && (
+        <div className={styles.stopBanner} role="status" aria-live="polite">
+          <strong>{visibleFailure.title}</strong>
+          <span>{visibleFailure.message}</span>
+          <FailureActions failure={visibleFailure} />
+        </div>
+      )}
 
       {expanded && (
         <div className={styles.details}>
@@ -1115,7 +1166,7 @@ export function TaskCard({
               <h4 className={styles.sectionTitle}>Errors</h4>
               {sections.errors.map((a) => (
                 <div key={a.id} className={styles.errorRow}>
-                  <div>{a.doneText ?? (a.result && !a.result.ok ? a.result.message : '')}</div>
+                  <LaunchFailureDetails action={a} tier={subscriptionTier} />
                   {onRetryAction && (
                     <button type="button" className={styles.retryBtn} onClick={() => onRetryAction(task.id, a.id)}>
                       ↻ Retry

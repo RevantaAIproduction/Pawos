@@ -25,13 +25,44 @@ export type SeatTier = 'standard' | 'premium';
 
 export type SubscriptionStatus = 'active' | 'trialing' | 'none';
 
+export type RuntimeEntitlementId =
+  | 'coding'
+  | 'office'
+  | 'browser'
+  | 'communication'
+  | 'infrastructure'
+  | 'companion'
+  | 'governance'
+  | 'sales'
+  | 'hr';
+
+export type RuntimeEntitlementGrantSource = 'plan' | 'purchase' | 'organization';
+
+export type RuntimeEntitlementGrant = {
+  runtimeId: RuntimeEntitlementId;
+  source: RuntimeEntitlementGrantSource;
+  grantedAt: number;
+  orderId?: string;
+};
+
 export type SubscriptionState = {
   tier: SubscriptionTierId;
   status: SubscriptionStatus;
+  /** Authenticated PawOS account this local subscription cache belongs to. Missing on legacy device-local files. */
+  accountId?: string;
   /** Set only once a real payment provider is configured and a checkout actually completes. */
   renewsAt?: number;
   /** Only meaningful when tier === 'team' — which seat rate this account was invited/assigned at. */
   seatTier?: SeatTier;
+  runtimeEntitlements?: RuntimeEntitlementGrant[];
+  /**
+   * Runtime entitlement productization marker. Missing means this local
+   * subscription file predates explicit runtime purchasing and needs the
+   * one-time grandfather migration in SubscriptionStore.
+   */
+  runtimeEntitlementPolicyVersion?: number;
+  /** Present only when a legacy paid account was converted into explicit source:'plan' grants. */
+  runtimeEntitlementsGrandfatheredAt?: number;
 };
 
 /** One of Team's two seat rates — a Team org can mix Standard and Premium seats across members. */
@@ -120,6 +151,7 @@ export type BillingCheckoutResult = { ok: true; checkoutUrl: string } | { ok: fa
 export type CheckoutOptions = {
   seatTier?: SeatTier;
   seatCount?: number;
+  runtimeIds?: RuntimeEntitlementId[];
 };
 
 /**
@@ -179,6 +211,7 @@ export type EntitlementSnapshot = {
   tier: SubscriptionTierId;
   models: PawModelId[];
   features: FeatureId[];
+  runtimeEntitlements: RuntimeEntitlementId[];
   creditLimit: number | null;
   creditsUsedThisPeriod: number;
   /** Extra Paw Compute headroom redeemed from Referral Credits ("Paw Credits") for the current period — see EntitlementService.grantComputeBonus(). Always 0 unless the user has redeemed credits this period. */

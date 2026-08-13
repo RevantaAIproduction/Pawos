@@ -133,7 +133,7 @@ export const SUBSCRIPTION_ARTICLES: HelpArticle[] = [
       { title: 'Setting up a new Team organization', steps: ['Upgrade to Paw Team', 'Open Settings → Organization', 'Create your organization (name it)', 'Invite a billing administrator', 'Invite remaining members with appropriate roles', 'Review your org’s usage in Analytics'] },
     ],
     troubleshooting: ['If the Organization tab is missing, confirm your account is actually on Team or Enterprise, not Pro/Pro Max', 'If an invite email never arrives, the invite record is still created — check the Members list directly'],
-    requirements: ['A real (non-Guest) account on the Team tier'],
+    requirements: ['A PawOS account on the Team tier'],
     permissions: ['Only owner/billing-administrator/workspace-administrator roles can manage members and billing, depending on the action'],
     administration:
       'Team roles are customer organization roles, separate from PawOS’s own internal platform administrators: ' +
@@ -184,7 +184,7 @@ export const SUBSCRIPTION_ARTICLES: HelpArticle[] = [
       { title: 'Setting up an Enterprise organization', steps: ['Upgrade to Paw Enterprise', 'Open Settings → Organization', 'Create your organization', 'Invite an organization administrator and a billing administrator', 'Invite remaining members with appropriate roles'] },
     ],
     troubleshooting: ['If department-based management is missing, that is expected — it is a roadmap item, not a current feature'],
-    requirements: ['A real (non-Guest) account on the Enterprise tier'],
+    requirements: ['A PawOS account on the Enterprise tier'],
     permissions: ['Role-gated management, same mechanism as Team but with a broader role set'],
     administration:
       'Enterprise roles are customer organization roles (separate from PawOS platform administrators): ' +

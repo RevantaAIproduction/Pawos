@@ -47,7 +47,7 @@ export const CLOUD_ARTICLES: HelpArticle[] = [
     bestPractices: ['Do not expect your settings, history, or companion data to appear on a second device yet — only the account session and org membership sync'],
     examples: [],
     troubleshooting: [],
-    requirements: ['An internet connection for cloud-synced data', 'A real account (not Guest) for any cloud sync'],
+    requirements: ['An internet connection for cloud-synced data', 'A PawOS account for any cloud sync'],
     permissions: [],
     relatedArticleIds: ['cloud-google', 'offline-mode', 'privacy'],
     relatedSettings: ['Account', 'Privacy'],

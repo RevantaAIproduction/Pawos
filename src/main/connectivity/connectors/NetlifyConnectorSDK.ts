@@ -4,7 +4,6 @@ import { NetlifyConnector } from '../../infrastructure/connectors/hosting/Netlif
 import { infrastructureConnectorRegistry } from '../../infrastructure/InfrastructureConnectorRegistry';
 import { oauthManager } from '../OAuthManager';
 import { credentialVaultBridge } from '../CredentialVaultBridge';
-import { guestConnectorCredentialStore } from '../../infrastructure/GuestConnectorCredentialStore';
 
 interface NetlifyCredential {
   accessToken: string;
@@ -74,7 +73,6 @@ export class NetlifyConnectorSDK implements ConnectorSDK {
         expiresAt: token.expiresAt,
         grantedScopes: token.grantedScopes,
       });
-      if (scope.userId === 'guest') guestConnectorCredentialStore.save(this.definition.id, { bundle: JSON.stringify(this.credential) });
       this.registerLiveConnector();
       this.currentStatus = { state: 'connected', capabilities: this.capabilities(), connectedAt: new Date().toISOString(), detail: identity.fullName };
     } catch (error) {
@@ -95,7 +93,6 @@ export class NetlifyConnectorSDK implements ConnectorSDK {
   async disconnect(scope: ConnectivityScope): Promise<void> {
     this.credential = undefined;
     await credentialVaultBridge.revoke(this.definition.id, scope);
-    guestConnectorCredentialStore.remove(this.definition.id);
     infrastructureConnectorRegistry.register('hosting', new NetlifyConnector(undefined, undefined));
     this.currentStatus = { state: 'disconnected', capabilities: [] };
   }

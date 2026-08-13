@@ -32,6 +32,8 @@ export function useConversationController(args?: {
     errorMessage: null,
     supportsSpeechRecognition: false,
     supportsSpeechSynthesis: false,
+    voiceOutputEnabled: false,
+    speechPlaybackState: 'off',
     pendingConfirmation: false,
   });
 
@@ -255,6 +257,9 @@ export function useConversationController(args?: {
   }, [ipc]);
 
   const open = useCallback(() => runtimeRef.current?.open(), []);
+  const openPanel = useCallback(() => runtimeRef.current?.openPanel(), []);
+  const startListening = useCallback(() => runtimeRef.current?.startListening(), []);
+  const stopListening = useCallback(() => runtimeRef.current?.stopListening(), []);
   const close = useCallback(() => runtimeRef.current?.close(), []);
   const toggle = useCallback(() => runtimeRef.current?.toggle(), []);
   const cancel = useCallback(() => runtimeRef.current?.cancel(), []);
@@ -322,6 +327,8 @@ export function useConversationController(args?: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snapshot.state, ipc, refreshEntitlement]);
   const speak = useCallback((text: string) => runtimeRef.current?.speak(text), []);
+  const setVoiceOutputEnabled = useCallback((enabled: boolean) => runtimeRef.current?.setVoiceOutputEnabled(enabled), []);
+  const stopSpeechPlayback = useCallback(() => runtimeRef.current?.stopSpeechPlayback(), []);
 
   const setReasoningProvider = useCallback((provider: ReasoningProvider) => {
     runtimeRef.current?.setReasoningProvider(provider);
@@ -362,11 +369,16 @@ export function useConversationController(args?: {
   return {
     snapshot,
     open,
+    openPanel,
+    startListening,
+    stopListening,
     close,
     toggle,
     cancel,
     submitTranscript,
     speak,
+    setVoiceOutputEnabled,
+    stopSpeechPlayback,
     setReasoningProvider,
     setPersonalityAddendum,
     setSpeechSynthesisProvider,

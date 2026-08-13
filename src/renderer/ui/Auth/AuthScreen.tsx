@@ -46,7 +46,6 @@ export function AuthScreen({
   onSignInWithGithub,
   onSignInWithEmail,
   onCreateEmailAccount,
-  onContinueAsGuest,
   onRequestPasswordReset,
   onVerifyPasswordResetCode,
   onCompletePasswordReset,
@@ -59,7 +58,6 @@ export function AuthScreen({
   onSignInWithGithub: () => Promise<unknown>;
   onSignInWithEmail: (options: EmailSignInOptions) => Promise<unknown>;
   onCreateEmailAccount: (options: EmailCreateAccountOptions) => Promise<unknown>;
-  onContinueAsGuest: () => Promise<unknown>;
   onRequestPasswordReset: (email: string) => Promise<{ expiresInMinutes: number }>;
   onVerifyPasswordResetCode: (email: string, code: string) => Promise<{ valid: boolean; reason?: string; resetToken?: string }>;
   onCompletePasswordReset: (resetToken: string, newPassword: string) => Promise<{ ok: boolean; reason?: string }>;
@@ -79,7 +77,7 @@ export function AuthScreen({
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState<'google' | 'github' | 'email' | 'guest' | null>(null);
+  const [pending, setPending] = useState<'google' | 'github' | 'email' | null>(null);
   const [googleAvailable, setGoogleAvailable] = useState(true);
   const [githubAvailable, setGithubAvailable] = useState(true);
 
@@ -121,7 +119,6 @@ export function AuthScreen({
 
   const handleGoogle = () => runGuarded('google', onSignInWithGoogle);
   const handleGithub = () => runGuarded('github', onSignInWithGithub);
-  const handleGuest = () => runGuarded('guest', onContinueAsGuest);
 
   /** Sends (or resends) the verification code and moves to the code-entry step. Doesn't create the account yet — that only happens once the code is proven. */
   const requestVerificationCode = async () => {
@@ -617,18 +614,7 @@ export function AuthScreen({
 
               {error && <p className={styles.errorText}>{error}</p>}
 
-              {mode === 'signin' ? (
-                <>
-                  <div className={styles.divider}>
-                    <span />
-                    Or continue as guest
-                    <span />
-                  </div>
-                  <button type="button" className={styles.guestButton} onClick={handleGuest} disabled={busy}>
-                    {pending === 'guest' ? 'Setting up…' : 'Continue as Guest'}
-                  </button>
-                </>
-              ) : (
+              {mode === 'create' && (
                 <>
                   <div className={styles.divider}>
                     <span />

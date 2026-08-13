@@ -48,6 +48,7 @@ import type {
   EntitlementSnapshot,
 } from '../../../shared/billing/BillingTypes';
 import type { AiUsageCategory } from '../../../shared/billing/AiUsageCategories';
+import type { OrganizationUsageRecordRequest, OrganizationUsageRecordResponse } from '../../../shared/billing/OrganizationUsageBridgeTypes';
 import type { PawModelId } from '../../../shared/ai/PawModelTypes';
 import type { OnboardingState } from '../../../shared/onboarding/OnboardingTypes';
 
@@ -67,6 +68,12 @@ function getBridge() {
 export const ipc = {
   async actionExecute(request: ActionRequest): Promise<ActionResult> {
     return getBridge().actionExecute(request);
+  },
+  onOrganizationUsageRecordRequest(cb: (request: OrganizationUsageRecordRequest) => void): () => void {
+    return getBridge().onOrganizationUsageRecordRequest(cb);
+  },
+  async organizationUsageRecordRespond(requestId: string, response: OrganizationUsageRecordResponse): Promise<void> {
+    return getBridge().organizationUsageRecordRespond(requestId, response);
   },
   async processWriteStdin(processId: string, data: string): Promise<{ ok: true } | { ok: false; message: string }> {
     return getBridge().processWriteStdin(processId, data);
@@ -250,6 +257,9 @@ export const ipc = {
   },
   async billingSyncTierFromOrganization(orgTier: SubscriptionTierId): Promise<SubscriptionState> {
     return getBridge().billingSyncTierFromOrganization(orgTier);
+  },
+  async billingReconcileForAccount(accountId: string): Promise<SubscriptionState> {
+    return getBridge().billingReconcileForAccount(accountId);
   },
   async billingResetSubscription(): Promise<SubscriptionState> {
     return getBridge().billingResetSubscription();

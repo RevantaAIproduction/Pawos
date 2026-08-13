@@ -18,6 +18,13 @@ type TaskRow = {
   task_type: WorkspaceTask['taskType'];
   repository_id: string | null;
   pr_number: number | null;
+  team_id?: string | null;
+  dependency_task_ids?: string[] | null;
+  required_runtime?: string | null;
+  allocation_mode?: 'manual' | 'pawos_assisted' | null;
+  assignment_reason?: string | null;
+  assigned_by?: string | null;
+  verification_requirements?: { id: string; description: string; required: boolean }[] | null;
 };
 
 type ProjectMemberRow = {
@@ -48,6 +55,13 @@ function toTask(row: TaskRow): WorkspaceTask {
     taskType: row.task_type,
     repositoryId: row.repository_id,
     prNumber: row.pr_number,
+    teamId: row.team_id ?? null,
+    dependencyTaskIds: row.dependency_task_ids ?? [],
+    requiredRuntime: row.required_runtime ?? null,
+    allocationMode: row.allocation_mode ?? 'manual',
+    assignmentReason: row.assignment_reason ?? null,
+    assignedBy: row.assigned_by ?? null,
+    verificationRequirements: row.verification_requirements ?? [],
   };
 }
 
@@ -107,6 +121,12 @@ export const workspaceTaskService = {
       taskType?: WorkspaceTask['taskType'];
       repositoryId?: string;
       prNumber?: number;
+      teamId?: string;
+      dependencyTaskIds?: string[];
+      requiredRuntime?: string;
+      allocationMode?: WorkspaceTask['allocationMode'];
+      assignmentReason?: string;
+      verificationRequirements?: NonNullable<WorkspaceTask['verificationRequirements']>;
     } = {}
   ): Promise<WorkspaceTask> {
     const supabase = await getSupabaseClient();
@@ -125,6 +145,12 @@ export const workspaceTaskService = {
         task_type: options.taskType ?? 'general',
         repository_id: options.repositoryId ?? null,
         pr_number: options.prNumber ?? null,
+        team_id: options.teamId ?? null,
+        dependency_task_ids: options.dependencyTaskIds ?? [],
+        required_runtime: options.requiredRuntime ?? null,
+        allocation_mode: options.allocationMode ?? 'manual',
+        assignment_reason: options.assignmentReason ?? null,
+        verification_requirements: options.verificationRequirements ?? [],
       })
       .select('*')
       .single<TaskRow>();
@@ -155,6 +181,21 @@ export const workspaceTaskService = {
     const { error } = await supabase
       .from('workspace_tasks')
       .update({ assigned_to: assignedTo, updated_at: new Date().toISOString() })
+      .eq('id', taskId);
+    if (error) throw error;
+  },
+
+  async assignTaskWithContext(taskId: string, assignedTo: string | null, assignedBy: string | null, allocationMode: WorkspaceTask['allocationMode'], assignmentReason?: string | null): Promise<void> {
+    const supabase = await getSupabaseClient();
+    const { error } = await supabase
+      .from('workspace_tasks')
+      .update({
+        assigned_to: assignedTo,
+        assigned_by: assignedBy,
+        allocation_mode: allocationMode ?? 'manual',
+        assignment_reason: assignmentReason ?? null,
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', taskId);
     if (error) throw error;
   },

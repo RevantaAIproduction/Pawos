@@ -5,6 +5,9 @@ import { codingModeStore } from './CodingModeStore';
 import { infraModeStore } from '../infrastructure/InfraModeStore';
 import { entitlementService } from '../billing/EntitlementService';
 import { codingExecutionBlocked, infraExecutionBlocked } from './ThinkExecuteGate';
+import { codingRuntimeSecurityRequirements, enforceCodingRuntimeSecurity } from './CodingRuntimeSecurity';
+import { enforceCodingRuntimeUsage, type PooledCodingRuntimeUsageRecorder } from './CodingRuntimeUsageBoundary';
+import { authorizeRuntimeAction } from './RuntimeActionAuthorization';
 import { pendingApprovalStore, deriveApprovalKey } from '../infrastructure/PendingApprovalStore';
 import { requirementGate } from '../runtime/RequirementGate';
 import type { ExecutionTrail, ObservationEvent } from '../../shared/actions/ExecutionLifecycle';
@@ -172,7 +175,6 @@ import { getDeploymentStatusPlugin } from './plugins/infrastructure/GetDeploymen
 import { listConfiguredInfraConnectorsPlugin } from './plugins/infrastructure/ListConfiguredInfraConnectorsPlugin';
 import { applyOrganizationCredentialPlugin } from './plugins/infrastructure/ApplyOrganizationCredentialPlugin';
 import { connectJiraCredentialPlugin } from './plugins/infrastructure/ConnectJiraCredentialPlugin';
-import { saveGuestConnectorCredentialPlugin } from './plugins/infrastructure/SaveGuestConnectorCredentialPlugin';
 import { connectivityConnectPlugin } from './plugins/infrastructure/ConnectivityConnectPlugin';
 import { investigateTicketPlugin } from './plugins/infrastructure/InvestigateTicketPlugin';
 import { investigateProductionIssuePlugin } from './plugins/infrastructure/InvestigateProductionIssuePlugin';
@@ -377,7 +379,6 @@ export class DesktopExecutionEngine extends EventEmitter {
     listConfiguredInfraConnectorsPlugin,
     applyOrganizationCredentialPlugin,
     connectJiraCredentialPlugin,
-    saveGuestConnectorCredentialPlugin,
     connectivityConnectPlugin,
     getApprovalQueuePlugin,
     listEngineeringMemoryPlugin,
@@ -423,6 +424,8 @@ export class DesktopExecutionEngine extends EventEmitter {
 
   /** "Collect Missing Information" — what the user needs to be asked before this can run, if anything. */
   requirements(request: ActionRequest): ActionRequirement[] {
+    const securityRequirements = codingRuntimeSecurityRequirements(request);
+    if (securityRequirements.length > 0) return securityRequirements;
     return this.findPlugin(request)?.requirements(request) ?? [];
   }
 
@@ -442,12 +445,19 @@ export class DesktopExecutionEngine extends EventEmitter {
    * (Observe → Diagnose → Repair → Retry → Verify) before honestly reporting
    * failure — never a silent stop, never an unbounded loop.
    */
-  async execute(request: ActionRequest): Promise<ActionResult> {
+  async execute(request: ActionRequest, opts: { pooledUsageRecorder?: PooledCodingRuntimeUsageRecorder | null } = {}): Promise<ActionResult> {
+    const securityResult = enforceCodingRuntimeSecurity(request);
+    if (!securityResult.ok) return securityResult.result;
+
     // Real, billing-backed Think-vs-Execute wall. CodingModeStore/InfraModeStore below are local,
     // billing-independent safety toggles (a Pro+ user can still default themselves to read-only) —
     // they are never allowed to grant execute behavior a tier doesn't actually entitle, so a Go
     // user's local preference file can't be edited around this gate.
-    const canExecute = entitlementService.isFeatureAvailable('advancedRuntimes');
+    const hasAdvancedRuntimes = entitlementService.isFeatureAvailable('advancedRuntimes');
+    const hasCodingRuntime = entitlementService.isRuntimeEntitled('coding');
+    const hasInfrastructureRuntime = entitlementService.isRuntimeEntitled('infrastructure');
+    const canExecute = hasAdvancedRuntimes && hasCodingRuntime;
+    const canExecuteInfrastructure = hasAdvancedRuntimes && hasInfrastructureRuntime;
 
     if (codingExecutionBlocked(request.type, canExecute, codingModeStore.getMode())) {
       return canExecute
@@ -464,8 +474,8 @@ export class DesktopExecutionEngine extends EventEmitter {
           };
     }
 
-    if (infraExecutionBlocked(request.type, canExecute, infraModeStore.getMode())) {
-      return canExecute
+    if (infraExecutionBlocked(request.type, canExecuteInfrastructure, infraModeStore.getMode())) {
+      return canExecuteInfrastructure
         ? {
             ok: false,
             reason: 'infra-mode-restricted',
@@ -478,6 +488,12 @@ export class DesktopExecutionEngine extends EventEmitter {
             message: 'This action requires Paw Pro. Your current plan supports investigation, analysis, and planning — upgrade to deploy, roll back, or promote deployments.',
           };
     }
+
+    const runtimeBlocked = authorizeRuntimeAction(request.type, {
+      hasAdvancedRuntimes,
+      isRuntimeEntitled: (runtimeId) => entitlementService.isRuntimeEntitled(runtimeId),
+    });
+    if (runtimeBlocked) return runtimeBlocked;
 
     if (DESTRUCTIVE_ACTION_TYPES.includes(request.type) && !('confirmed' in request && request.confirmed)) {
       const approval = deriveApprovalKey(request);
@@ -501,6 +517,9 @@ export class DesktopExecutionEngine extends EventEmitter {
         return { ok: false, reason: 'failed', message: firstMissing.message };
       }
     }
+
+    const usageBlocked = await enforceCodingRuntimeUsage(request, { pooledRecorder: opts.pooledUsageRecorder });
+    if (usageBlocked) return usageBlocked;
 
     const observations: ObservationEvent[] = [];
     let result: ActionResult = prepared.reuse ?? (await plugin.execute(request));

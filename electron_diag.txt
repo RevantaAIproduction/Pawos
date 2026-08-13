@@ -1,0 +1,18 @@
+
+[DIAG] module scope reached, crash guard installed
+[DIAG] about to call app.whenReady()
+[DIAG] whenReady resolved, entering startup callback
+[DIAG] about to call createMainWindow()
+[DIAG] loading main window URL: file://C:\Users\APPLE\Downloads\PawOS\dist\renderer\index.html?window=main
+[DIAG] createMainWindow() returned, mainWindow is set
+[DIAG] createAppTray() returned, whole startup sequence complete
+[15656:0813/112513.662:WARNING:content\browser\btm\btm_database.cc:125] Failed to initialize the DIPS SQLite database.
+[DIAG] mainWindow.loadURL REJECTED: Error: ERR_FAILED (-2) loading 'file://C:\Users\APPLE\Downloads\PawOS\dist\renderer\index.html?window=main'
+    at rejectAndCleanup (node:electron/js2c/browser_init:2:79953)
+    at finishListener (node:electron/js2c/browser_init:2:80115)
+    at WebContents.stopLoadingListener (node:electron/js2c/browser_init:2:80502)
+    at WebContents.emit (node:events:531:35) {
+  errno: -2,
+  code: 'ERR_FAILED',
+  url: 'file://C:\\Users\\APPLE\\Downloads\\PawOS\\dist\\renderer\\index.html?window=main'
+}

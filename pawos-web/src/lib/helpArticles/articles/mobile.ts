@@ -8,8 +8,8 @@ export const MOBILE_ARTICLES: HelpArticle[] = [
     summary: 'Pair your phone with your PawOS account for live presence, push notifications, a conversation preview, and remote approvals — no app install required.',
     overview:
       'PawOS on mobile works through your phone\'s browser, not a native app: pair once from Settings → Devices, ' +
-      'and your phone stays connected to your desktop in real time. This is a Paw Pro (or higher) feature — ' +
-      'Paw Go and Guest sessions can\'t pair a device yet.',
+      'and your phone stays connected to your desktop in real time. This is a Paw Pro (or higher) feature; ' +
+      'Paw Go accounts can\'t pair a device yet.',
     features: [
       'QR-code pairing, no app install — opens a page in your phone\'s browser',
       'Live "online now" presence once a device is paired',
@@ -30,7 +30,7 @@ export const MOBILE_ARTICLES: HelpArticle[] = [
     faq: [
       { question: 'Is there a PawOS mobile app to download?', answer: 'No — mobile works through your phone\'s browser at pawos.app. You can add it to your home screen for an app-like experience, but there is nothing to install from an app store.' },
       { question: 'Can I reply to Paw from my phone?', answer: 'Not yet — your phone shows a live preview of the desktop conversation, but replying from the phone is arriving in an upcoming update.' },
-      { question: 'Can a Paw Go or Guest account pair a phone?', answer: 'No — mobile pairing requires Paw Pro or higher.' },
+      { question: 'Can a Paw Go account pair a phone?', answer: 'No — mobile pairing requires Paw Pro or higher.' },
     ],
     relatedArticleIds: ['devices'],
     relatedSettings: ['Devices'],

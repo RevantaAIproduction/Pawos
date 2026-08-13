@@ -3,6 +3,8 @@ import { getRazorpayCredentials, getRazorpayPlanId, razorpayAuthHeader, type Sea
 
 const VALID_TIERS: SubscriptionTierId[] = ["go", "pro", "proMax", "team", "enterprise"];
 const VALID_SEAT_TIERS: SeatTier[] = ["standard", "premium"];
+const PURCHASABLE_RUNTIME_IDS = ["coding"] as const;
+type PurchasableRuntimeId = (typeof PURCHASABLE_RUNTIME_IDS)[number];
 
 /**
  * Creates a Razorpay subscription for the requested tier and returns the
@@ -23,6 +25,7 @@ export async function POST(request: Request) {
   const plan = body?.plan as SubscriptionTierId | undefined;
   const seatTier = body?.seatTier as SeatTier | undefined;
   const seatCount = typeof body?.seatCount === "number" && Number.isInteger(body.seatCount) ? body.seatCount : undefined;
+  const runtimeIds = Array.isArray(body?.runtimeIds) ? body.runtimeIds : [];
 
   if (!plan || !VALID_TIERS.includes(plan)) {
     return NextResponse.json({ ok: false, reason: "Unknown plan requested." }, { status: 400 });
@@ -37,6 +40,13 @@ export async function POST(request: Request) {
   }
   if ((plan === "team" || plan === "enterprise") && seatCount !== undefined && seatCount < 1) {
     return NextResponse.json({ ok: false, reason: "Seat count must be at least 1." }, { status: 400 });
+  }
+  if (
+    runtimeIds.some((runtimeId: unknown): runtimeId is string => typeof runtimeId !== "string") ||
+    runtimeIds.some((runtimeId: string) => !PURCHASABLE_RUNTIME_IDS.includes(runtimeId as PurchasableRuntimeId)) ||
+    (runtimeIds.length > 0 && plan !== "pro" && plan !== "proMax")
+  ) {
+    return NextResponse.json({ ok: false, reason: "Requested runtime is not available for purchase." }, { status: 400 });
   }
 
   const credentials = getRazorpayCredentials();

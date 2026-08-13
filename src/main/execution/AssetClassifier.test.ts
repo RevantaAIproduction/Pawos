@@ -33,6 +33,13 @@ describe('classifyAsset', () => {
     expect(asset.imageMetadata).toBeUndefined();
   });
 
+  it('does not invoke metadata parsing for denied image formats with known parser DoS advisories', () => {
+    const root = makeTempProject({ 'assets/icon.icns': Buffer.from('not parsed') });
+    const asset = classifyAsset(root, 'assets/icon.icns');
+    expect(asset.kind).toBe('other');
+    expect(asset.imageMetadata).toBeUndefined();
+  });
+
   it('classifies stylesheet files', () => {
     const root = makeTempProject({ 'src/App.module.scss': '.a { color: red; }' });
     expect(classifyAsset(root, 'src/App.module.scss').kind).toBe('stylesheet');

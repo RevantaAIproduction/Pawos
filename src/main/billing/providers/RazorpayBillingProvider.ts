@@ -44,6 +44,7 @@ export class RazorpayBillingProvider implements BillingProvider {
     if (callbackUrl) url.searchParams.set('callback', callbackUrl);
     if (options?.seatTier) url.searchParams.set('seatTier', options.seatTier);
     if (options?.seatCount) url.searchParams.set('seatCount', String(options.seatCount));
+    if (options?.runtimeIds?.length) url.searchParams.set('runtimeIds', options.runtimeIds.join(','));
     return { ok: true, checkoutUrl: url.toString() };
   }
 }

@@ -3,7 +3,6 @@ import type { ConnectivityScope, ConnectorConnection, ConnectorStatus, Normalize
 import { SlackConnector } from '../../infrastructure/connectors/communication/SlackConnector';
 import { oauthManager } from '../OAuthManager';
 import { credentialVaultBridge } from '../CredentialVaultBridge';
-import { guestConnectorCredentialStore } from '../../infrastructure/GuestConnectorCredentialStore';
 
 interface SlackCredential {
   accessToken: string;
@@ -69,7 +68,6 @@ export class SlackConnectorSDK implements ConnectorSDK {
       if (!who.ok) throw new Error(who.reason);
       this.credential = { accessToken: token.accessToken, teamName: who.identity.teamName, teamId: who.identity.teamId };
       await credentialVaultBridge.store(this.definition.id, scope, token.accessToken, 'oauth2', { grantedScopes: token.grantedScopes });
-      if (scope.userId === 'guest') guestConnectorCredentialStore.save(this.definition.id, { bundle: JSON.stringify(this.credential) });
       this.currentStatus = { state: 'connected', capabilities: this.capabilities(), connectedAt: new Date().toISOString(), detail: who.identity.teamName };
     } catch (error) {
       this.currentStatus = { state: 'error', capabilities: [], lastError: error instanceof Error ? error.message : String(error) };
@@ -89,7 +87,6 @@ export class SlackConnectorSDK implements ConnectorSDK {
   async disconnect(scope: ConnectivityScope): Promise<void> {
     this.credential = undefined;
     await credentialVaultBridge.revoke(this.definition.id, scope);
-    guestConnectorCredentialStore.remove(this.definition.id);
     this.currentStatus = { state: 'disconnected', capabilities: [] };
   }
 

@@ -105,6 +105,38 @@ function defaultConfig(): UsageQuotaConfig {
 }
 
 /** Team Standard and Team Premium share one SubscriptionTierId ('team') distinguished by SeatTier — see UsageQuotaTierKey's doc comment in UsageEngineTypes.ts. */
+function mergeMissingQuotaDefaults(config: UsageQuotaConfig): UsageQuotaConfig {
+  const defaults = defaultConfig();
+  const tiers = { ...config.tiers };
+
+  for (const key of Object.keys(defaults.tiers) as UsageQuotaTierKey[]) {
+    const current = tiers[key];
+    const fallback = defaults.tiers[key];
+    if (!current) {
+      tiers[key] = fallback;
+      continue;
+    }
+
+    const perUserQuotas = {
+      ...fallback.perUserQuotas,
+      ...(current.perUserQuotas ?? {}),
+    };
+    for (const capability of Object.keys(fallback.perUserQuotas) as UsageCapability[]) {
+      if (perUserQuotas[capability] === undefined) perUserQuotas[capability] = fallback.perUserQuotas[capability];
+    }
+
+    tiers[key] = {
+      ...fallback,
+      ...current,
+      perUserQuotas,
+      pooled: current.pooled ?? fallback.pooled,
+      derivedFrom: current.derivedFrom ?? fallback.derivedFrom,
+    };
+  }
+
+  return { tiers };
+}
+
 export function resolveQuotaTierKey(tier: SubscriptionTierId, seatTier: SeatTier | undefined): UsageQuotaTierKey {
   if (tier === 'team' && seatTier === 'premium') return 'teamPremium';
   return tier;
@@ -118,7 +150,8 @@ class UsageQuotaConfigStore {
     this.file = path.join(app.getPath('userData'), 'billing', FILE_NAME);
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     try {
-      this.config = JSON.parse(fs.readFileSync(this.file, 'utf-8'));
+      this.config = mergeMissingQuotaDefaults(JSON.parse(fs.readFileSync(this.file, 'utf-8')) as UsageQuotaConfig);
+      this.save();
     } catch {
       this.config = defaultConfig();
       this.save();
@@ -135,7 +168,7 @@ class UsageQuotaConfigStore {
 
   /** Called once the renderer has fetched the real usage_quota_config table from Supabase — replaces the placeholder cache with the live, admin-editable numbers. */
   applySyncedConfig(config: UsageQuotaConfig): void {
-    this.config = config;
+    this.config = mergeMissingQuotaDefaults(config);
     this.save();
   }
 

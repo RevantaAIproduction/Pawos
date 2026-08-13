@@ -264,6 +264,136 @@ select optgroup {
   transition: background 0.12s ease, color 0.12s ease;
 }
 
+.workRecordShell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  gap: 14px;
+}
+
+.workRecordHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(var(--pawos-overlay-rgb), 0.08);
+}
+
+.workRecordTitle {
+  margin: 8px 0 4px;
+  font-size: 20px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.workRecordTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-bottom: 2px;
+}
+
+.workRecordTab,
+.workRecordTabActive {
+  flex: 0 0 auto;
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.1);
+  border-radius: 8px;
+  padding: 7px 10px;
+  background: transparent;
+  color: var(--pawos-text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.workRecordTabActive {
+  color: var(--pawos-fg);
+  background: rgba(var(--pawos-accent-rgb), 0.16);
+  border-color: rgba(var(--pawos-accent-rgb), 0.35);
+}
+
+.workRecordPanel {
+  min-height: 280px;
+  min-width: 0;
+}
+
+.workRecordGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.workRecordList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--pawos-text-secondary);
+  font-size: 13px;
+}
+
+div.workRecordList {
+  padding-left: 0;
+}
+
+.workRecordList code {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(var(--pawos-overlay-rgb), 0.05);
+  color: var(--pawos-fg);
+}
+
+.workRecordTimeline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.workRecordTimelineRow {
+  display: grid;
+  grid-template-columns: 120px minmax(160px, 1fr) 120px;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 0;
+  border-bottom: 1px solid rgba(var(--pawos-overlay-rgb), 0.06);
+  font-size: 12px;
+  color: var(--pawos-text-secondary);
+}
+
+.workRecordTimelineRow strong {
+  color: var(--pawos-fg);
+  font-weight: 600;
+}
+
+.workRecordToolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.architectureViewport {
+  overflow: auto;
+  min-height: 220px;
+  max-height: 420px;
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.08);
+  border-radius: 8px;
+  padding: 16px;
+  background: rgba(var(--pawos-overlay-rgb), 0.025);
+}
+
+.architectureDiagram {
+  transform-origin: top left;
+  margin: 0;
+  min-width: 260px;
+  white-space: pre;
+  color: var(--pawos-fg);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .profileMenuItem:hover {
   background: rgba(var(--pawos-overlay-rgb), 0.06);
   color: var(--pawos-fg);
@@ -363,10 +493,13 @@ select optgroup {
 .main {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
+  min-width: 0;
 }
 
 .content {
   padding: 24px 32px 48px;
+  min-width: 0;
 }
 
 .subheading {
@@ -1245,8 +1378,17 @@ select optgroup {
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
+  border: none;
   padding: 12px 16px;
   background: rgba(var(--pawos-overlay-rgb), 0.015);
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.activityRow:hover {
+  background: rgba(var(--pawos-overlay-rgb), 0.04);
 }
 
 .activityGoal {
@@ -1288,6 +1430,30 @@ select optgroup {
 .statusBadge[data-status='abandoned'] {
   background: rgba(248, 113, 113, 0.15);
   color: #f87171;
+}
+
+.blockedPanel {
+  margin-top: 20px;
+  padding: 18px 20px;
+  border-radius: 14px;
+  border: 1px solid rgba(248, 113, 113, 0.25);
+  border-left: 3px solid #f87171;
+  background: rgba(248, 113, 113, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.blockedPanelHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.blockedPanelSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .compactEmptyState {
@@ -1927,21 +2093,25 @@ select optgroup {
   display: flex;
   gap: 20px;
   height: calc(100vh - 160px);
+  min-width: 0;
 }
 
 .mailPreviewList {
   width: 260px;
   flex-shrink: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   border-radius: 14px;
   border: 1px solid rgba(var(--pawos-overlay-rgb), 0.08);
   background: rgba(var(--pawos-overlay-rgb), 0.02);
   padding: 6px;
+  min-width: 0;
 }
 
 .mailPreviewItem {
   display: block;
   width: 100%;
+  max-width: 100%;
   padding: 10px 12px;
   border: none;
   border-radius: 8px;
@@ -1951,6 +2121,8 @@ select optgroup {
   text-align: left;
   cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .mailPreviewItem:hover {
@@ -1965,14 +2137,244 @@ select optgroup {
 
 .mailPreviewFrame {
   flex: 1;
+  min-width: 0;
   border-radius: 14px;
   border: 1px solid rgba(var(--pawos-overlay-rgb), 0.08);
   background: var(--pawos-bg-well);
   overflow: hidden;
 }
 
+@media (max-width: 900px) {
+  .mailPreview {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .mailPreviewList {
+    width: 100%;
+    max-height: 220px;
+  }
+
+  .mailPreviewFrame {
+    min-height: 420px;
+  }
+
+  .workRecordTimelineRow {
+    grid-template-columns: 1fr;
+  }
+}
+
 .mailPreviewFrame iframe {
   width: 100%;
   height: 100%;
   border: none;
+}
+
+/* ==========================================================================
+   Working History — card-based list + evidence-state vocabulary. Reused by
+   WorkHistorySection.tsx (list cards) and WorkRecordDetail.tsx (per-tab
+   evidence rows + summary badge).
+   ========================================================================== */
+
+.workRecordCardList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.workRecordCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.08);
+  background: rgba(var(--pawos-overlay-rgb), 0.025);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+}
+
+.workRecordCard:hover {
+  border-color: rgba(var(--pawos-overlay-rgb), 0.16);
+  background-color: rgba(var(--pawos-overlay-rgb), 0.045);
+  transform: translateY(-1px);
+}
+
+.workRecordCardActive {
+  border-color: rgba(var(--pawos-accent-rgb), 0.45);
+  background: rgba(var(--pawos-accent-rgb), 0.08);
+}
+
+.workRecordCardTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.workRecordCardTitle {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--pawos-fg);
+  overflow-wrap: anywhere;
+}
+
+.workRecordCardWorkspace {
+  font-size: 11px;
+  color: var(--pawos-text-tertiary);
+  margin-top: 2px;
+}
+
+.workRecordCardMetaRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--pawos-text-secondary);
+}
+
+.workRecordCardMetaRow > span {
+  display: inline-flex;
+  align-items: center;
+}
+
+.workRecordCardMetaDot {
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--pawos-text-quaternary);
+}
+
+.workRecordMetricChip {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(var(--pawos-overlay-rgb), 0.06);
+  color: var(--pawos-text-secondary);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Evidence-state badge — CAPTURED / NOT CAPTURED / NOT EXECUTED / FAILED / BLOCKED. */
+.evidenceStateBadge {
+  flex-shrink: 0;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.evidenceStateBadge[data-state='CAPTURED'] {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+}
+
+.evidenceStateBadge[data-state='NOT_CAPTURED'],
+.evidenceStateBadge[data-state='NOT_EXECUTED'] {
+  background: rgba(var(--pawos-overlay-rgb), 0.07);
+  color: var(--pawos-text-tertiary);
+}
+
+.evidenceStateBadge[data-state='FAILED'] {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+
+.evidenceStateBadge[data-state='BLOCKED'] {
+  background: rgba(245, 185, 66, 0.16);
+  color: #f5b942;
+}
+
+.workRecordSummaryRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.workRecordSummaryRow .cardTitle {
+  margin: 0;
+}
+
+/* Per-item evidence row (a command, a file change, a diff, a check) — a
+   small elevated card, never a bare paragraph of text. */
+.evidenceRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.07);
+  background: rgba(var(--pawos-overlay-rgb), 0.02);
+}
+
+.evidenceRowTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.evidenceRowMeta {
+  font-size: 11px;
+  color: var(--pawos-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.evidenceRowCode {
+  display: block;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(var(--pawos-overlay-rgb), 0.05);
+  color: var(--pawos-fg);
+  font-size: 12px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.evidenceCardList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ==========================================================================
+   Persistent Help launcher — bottom-right floating button, always mounted.
+   ========================================================================== */
+
+.helpLauncher {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.1);
+  background: var(--pawos-bg-elevated-2);
+  color: var(--pawos-accent);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.helpLauncher:hover {
+  transform: translateY(-2px);
+  border-color: rgba(var(--pawos-accent-rgb), 0.4);
+}
+
+.helpLauncher svg {
+  width: 20px;
+  height: 20px;
 }

@@ -2,6 +2,7 @@ import type { ExecutionTrail } from './ExecutionLifecycle';
 import type { ConnectivityScope } from '../connectivity/ConnectivityTypes';
 import type { CapabilityConfirmation, Requirement } from '../runtime/RequirementTypes';
 import type { IntelligenceReport } from '../intelligence/IntelligenceReportTypes';
+import type { CodingRuntimeSession } from './CodingRuntimeSessionTypes';
 
 /** Kept as a plain string union here (not imported from src/main/execution/browser/) so this shared file never depends on main-process-only code — the real BrowserAdapter/BrowserId types there are the source of truth for values, this is just the wire shape. */
 export type BrowserId = 'chrome' | 'edge' | 'brave' | 'firefox' | 'electron';
@@ -41,7 +42,7 @@ export type CodeEditHunk = {
 /** `scope` is optional and additive — populated by the renderer from the signed-in session (same
  *  convention already used by every `connectivity:*` IPC call) only when a plugin actually needs
  *  it (via RequirementGate); every existing call site that never sets it is unaffected. */
-export type ActionRequest = { scope?: ConnectivityScope } & (
+export type ActionRequest = { scope?: ConnectivityScope; codingRuntimeSession?: CodingRuntimeSession } & (
   | { type: 'openUrl'; url: string }
   | { type: 'openApp'; appId: KnownAppId; path?: string }
   | { type: 'openFolder'; path: string }
@@ -697,12 +698,9 @@ export type ActionRequest = { scope?: ConnectivityScope } & (
   | { type: 'listCompanionRoutines'; companionId: string }
   | { type: 'getCompanionMemorySummary'; companionId: string }
   | { type: 'resetCompanionMemory'; companionId: string; confirmed?: boolean }
-  // Capability-connect actions — activates a connector in-memory for the current process
-  // (connectJiraCredential) and, for Guest-mode sessions with no Supabase Vault to persist
-  // through, saves the credential locally (saveGuestConnectorCredential). An authenticated
-  // session's persistence goes straight to the Vault from the renderer instead of an action.
+  // Capability-connect actions — activates a connector in-memory for the current process.
+  // Authenticated persistence goes straight to the Supabase Vault from the renderer.
   | { type: 'connectJiraCredential'; baseUrl: string; email: string; apiToken: string }
-  | { type: 'saveGuestConnectorCredential'; connectorId: string; fields: Record<string, string> }
   // Generic counterpart to connectJiraCredential for any non-apiToken (OAuth2/PKCE) ConnectorSDK
   // — dispatches straight to ConnectionManager.connect(), which itself drives the interactive
   // browser consent flow. `incrementalCapabilities`, when set, requests only those capabilities'
@@ -731,7 +729,15 @@ export type ActionResult =
   // not just a message string.
   | {
       ok: false;
-      reason: 'not-implemented' | 'requires-confirmation' | 'coding-mode-restricted' | 'infra-mode-restricted' | 'entitlement-restricted' | 'failed';
+      reason:
+        | 'not-implemented'
+        | 'requires-confirmation'
+        | 'coding-mode-restricted'
+        | 'infra-mode-restricted'
+        | 'entitlement-restricted'
+        | 'usage-restricted'
+        | 'security-restricted'
+        | 'failed';
       message?: string;
       data?: unknown;
       trail?: ExecutionTrail;

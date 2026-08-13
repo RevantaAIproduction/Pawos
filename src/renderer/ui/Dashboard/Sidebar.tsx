@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import styles from './dashboard.module.css';
 import type { SectionId } from './sections';
-import { HomeIcon, CompanionIcon, HistoryIcon, WorkIcon } from './NavIcons';
+import { HomeIcon, CompanionIcon, WorkIcon } from './NavIcons';
 import { ProfileMenu, type ProfileMenuAction } from './ProfileMenu';
 
 const COLLAPSE_STORAGE_KEY = 'pawos.sidebarCollapsed';
@@ -27,8 +27,7 @@ const PRIMARY_NAV: NavItem[] = [
 ];
 
 const SECONDARY_NAV: NavItem[] = [
-  { id: 'workHistory', label: 'Work History', icon: <WorkIcon /> },
-  { id: 'history', label: 'Conversation History', icon: <HistoryIcon /> },
+  { id: 'workHistory', label: 'Working History', icon: <WorkIcon /> },
 ];
 
 function AppsGridIcon() {

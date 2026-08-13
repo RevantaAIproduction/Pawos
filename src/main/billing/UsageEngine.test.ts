@@ -52,6 +52,34 @@ describe('UsageQuotaConfigStore — config-driven quotas, no hardcoded Pro Max n
     }
   });
 
+  it('fills missing aiReasoning entries from defaults so an old quota cache never becomes unlimited', () => {
+    const current = usageQuotaConfigStore.get();
+    const withoutAiReasoning = {
+      ...current,
+      tiers: {
+        ...current.tiers,
+        go: {
+          ...current.tiers.go,
+          perUserQuotas: { ...current.tiers.go.perUserQuotas, aiReasoning: undefined },
+        },
+        pro: {
+          ...current.tiers.pro,
+          perUserQuotas: { ...current.tiers.pro.perUserQuotas, aiReasoning: undefined },
+        },
+        team: {
+          ...current.tiers.team,
+          perUserQuotas: { ...current.tiers.team.perUserQuotas, aiReasoning: undefined },
+        },
+      },
+    };
+
+    usageQuotaConfigStore.applySyncedConfig(withoutAiReasoning as unknown as typeof current);
+
+    expect(usageQuotaConfigStore.getEffectiveQuota('go', undefined, 'aiReasoning')).toBe(20);
+    expect(usageQuotaConfigStore.getEffectiveQuota('pro', undefined, 'aiReasoning')).not.toBeNull();
+    expect(usageQuotaConfigStore.getEffectiveQuota('team', 'standard', 'aiReasoning')).not.toBeNull();
+  });
+
   it('flags enterprise as pooled and every other real tier as not pooled', () => {
     expect(usageQuotaConfigStore.isPooled('enterprise')).toBe(true);
     expect(usageQuotaConfigStore.isPooled('go')).toBe(false);

@@ -31,6 +31,7 @@
 .statusCompleted{background:rgba(96,215,140,0.2);color:#a8f0c2;}
 .statusFailed{background:rgba(255,110,110,0.22);color:#ffc4c4;}
 .statusInterrupted{background:rgba(255,190,110,0.22);color:#ffdba8;}
+.statusStopped{background:rgba(255,190,110,0.22);color:#ffdba8;}
 .goal{
   flex:1;
   font-size:13px;
@@ -50,6 +51,25 @@
 .warnBadge{color:#ffd98a;}
 .errBadge{color:#ff9c9c;}
 .chevron{flex-shrink:0;font-size:11px;color:rgba(255,255,255,0.5);}
+
+.stopBanner{
+  margin:0 10px 10px;
+  padding:9px 10px;
+  border-radius:10px;
+  background:rgba(255,86,86,0.13);
+  border:1px solid rgba(255,86,86,0.28);
+  color:#ffd7d7;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  font-size:12px;
+  line-height:1.35;
+}
+.stopBanner strong{
+  color:#fff0f0;
+  font-size:11px;
+  letter-spacing:0.08em;
+}
 
 .details{
   border-top:1px solid rgba(255,255,255,0.1);
@@ -187,6 +207,22 @@
 
 /* Waiting-to-connect state — deliberately amber/neutral, not the red errorRow treatment, since a
    paused capability requirement isn't a failure, just a pause. */
+.errorActions{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  margin-top:2px;
+}
+.actionPill{
+  border-radius:999px;
+  padding:3px 8px;
+  background:rgba(255,255,255,0.12);
+  border:1px solid rgba(255,255,255,0.16);
+  color:rgba(255,255,255,0.9);
+  font-size:10px;
+  font-weight:700;
+}
+
 .connectRow{
   padding:8px 10px;
   border-radius:8px;

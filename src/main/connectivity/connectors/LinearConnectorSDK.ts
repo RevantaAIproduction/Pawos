@@ -4,7 +4,6 @@ import { LinearConnector } from '../../infrastructure/connectors/projectManageme
 import { infrastructureConnectorRegistry } from '../../infrastructure/InfrastructureConnectorRegistry';
 import { oauthManager } from '../OAuthManager';
 import { credentialVaultBridge } from '../CredentialVaultBridge';
-import { guestConnectorCredentialStore } from '../../infrastructure/GuestConnectorCredentialStore';
 
 interface LinearCredential {
   accessToken: string;
@@ -68,7 +67,6 @@ export class LinearConnectorSDK implements ConnectorSDK {
       const identity = await fetchIdentity(token.accessToken);
       this.credential = { accessToken: token.accessToken, ...identity };
       await credentialVaultBridge.store(this.definition.id, scope, token.accessToken, 'oauth2', { grantedScopes: token.grantedScopes });
-      if (scope.userId === 'guest') guestConnectorCredentialStore.save(this.definition.id, { bundle: JSON.stringify(this.credential) });
       this.registerLiveConnector();
       this.currentStatus = { state: 'connected', capabilities: this.capabilities(), connectedAt: new Date().toISOString(), detail: identity.organizationName };
     } catch (error) {
@@ -89,7 +87,6 @@ export class LinearConnectorSDK implements ConnectorSDK {
   async disconnect(scope: ConnectivityScope): Promise<void> {
     this.credential = undefined;
     await credentialVaultBridge.revoke(this.definition.id, scope);
-    guestConnectorCredentialStore.remove(this.definition.id);
     infrastructureConnectorRegistry.register('projectManagement', new LinearConnector(undefined));
     this.currentStatus = { state: 'disconnected', capabilities: [] };
   }

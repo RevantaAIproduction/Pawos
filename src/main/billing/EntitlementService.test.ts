@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { entitlementService } from './EntitlementService';
 import { subscriptionStore } from './SubscriptionStore';
+import { creditStore } from './CreditStore';
+import type { RuntimeEntitlementGrant } from '../../shared/billing/BillingTypes';
 
 describe('EntitlementService — Go tier Think-not-Execute redesign', () => {
   afterEach(() => vi.restoreAllMocks());
@@ -25,6 +27,21 @@ describe('EntitlementService — Go tier Think-not-Execute redesign', () => {
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'go', status: 'none' });
 
     expect(entitlementService.isFeatureAvailable('advancedRuntimes')).toBe(false);
+    expect(entitlementService.isRuntimeEntitled('coding')).toBe(false);
+  });
+
+  it('Paw Credits can extend compute headroom but never unlock Go execution entitlements', () => {
+    vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'go', status: 'none' });
+    vi.spyOn(creditStore, 'getBalance').mockReturnValue({
+      limit: null,
+      usedThisPeriod: 20,
+      bonusThisPeriod: 5,
+      periodResetsAt: Date.now() + 1000,
+    });
+
+    expect(entitlementService.hasCreditsRemaining()).toBe(true);
+    expect(entitlementService.isFeatureAvailable('advancedRuntimes')).toBe(false);
+    expect(entitlementService.isRuntimeEntitled('coding')).toBe(false);
   });
 
   it('still reports hasCreditsRemaining() true when nothing has been consumed yet', () => {
@@ -97,5 +114,88 @@ describe('EntitlementService — Paw Compute usage-limit enforcement (paid tiers
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier, status: 'active' });
 
     expect(entitlementService.isFeatureAvailable('advancedRuntimes')).toBe(true);
+  });
+});
+
+describe('EntitlementService — runtime entitlement foundation', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it.each(['pro', 'proMax'] as const)('new %s accounts do not automatically receive every runtime entitlement', (tier) => {
+    vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier, status: 'active' });
+    vi.spyOn(subscriptionStore, 'getPurchasedRuntimeEntitlements').mockReturnValue([]);
+
+    expect(entitlementService.isRuntimeEntitled('coding')).toBe(false);
+    expect(entitlementService.getSnapshot().runtimeEntitlements).toEqual([]);
+  });
+
+  it.each(['team', 'enterprise'] as const)('%s keeps the existing organization runtime entitlement behavior for this phase', (tier) => {
+    vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier, status: 'active' });
+    vi.spyOn(subscriptionStore, 'getPurchasedRuntimeEntitlements').mockReturnValue([]);
+
+    expect(entitlementService.isRuntimeEntitled('coding')).toBe(true);
+    expect(entitlementService.getSnapshot().runtimeEntitlements).toContain('communication');
+  });
+
+  it('keeps UsageEngine and Paw Credits separate from runtime entitlement', () => {
+    vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'go', status: 'none' });
+    vi.spyOn(subscriptionStore, 'getPurchasedRuntimeEntitlements').mockReturnValue([]);
+    vi.spyOn(creditStore, 'getBalance').mockReturnValue({
+      limit: null,
+      usedThisPeriod: 20,
+      bonusThisPeriod: 100,
+      periodResetsAt: Date.now() + 1000,
+    });
+
+    expect(entitlementService.hasCreditsRemaining()).toBe(true);
+    expect(entitlementService.isRuntimeEntitled('coding')).toBe(false);
+  });
+
+  it('preserves an existing purchased runtime when another runtime is added to the account grant set', () => {
+    const grants: RuntimeEntitlementGrant[] = [
+      { runtimeId: 'coding', source: 'purchase', grantedAt: 1 },
+      { runtimeId: 'office', source: 'purchase', grantedAt: 2 },
+    ];
+    vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'go', status: 'none', runtimeEntitlements: grants });
+    vi.spyOn(subscriptionStore, 'getPurchasedRuntimeEntitlements').mockReturnValue(grants);
+
+    expect(entitlementService.getRuntimeEntitlements()).toEqual(['coding', 'office']);
+  });
+
+  it('grants Coding when it is explicitly purchased', () => {
+    const grants: RuntimeEntitlementGrant[] = [{ runtimeId: 'coding', source: 'purchase', grantedAt: 1, orderId: 'order-1' }];
+    vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'pro', status: 'active', runtimeEntitlements: grants });
+    vi.spyOn(subscriptionStore, 'getPurchasedRuntimeEntitlements').mockReturnValue(grants);
+
+    expect(entitlementService.isRuntimeEntitled('coding')).toBe(true);
+    expect(entitlementService.isRuntimeEntitled('office')).toBe(false);
+  });
+
+  it('preserves grandfathered paid-plan grants without treating Paw Credits as runtime access', () => {
+    const grants: RuntimeEntitlementGrant[] = [{ runtimeId: 'coding', source: 'plan', grantedAt: 1, orderId: 'legacy-plan-grandfather' }];
+    vi.spyOn(subscriptionStore, 'get').mockReturnValue({
+      tier: 'pro',
+      status: 'active',
+      runtimeEntitlements: grants,
+      runtimeEntitlementPolicyVersion: 1,
+      runtimeEntitlementsGrandfatheredAt: 1,
+    });
+    vi.spyOn(subscriptionStore, 'getPurchasedRuntimeEntitlements').mockReturnValue(grants);
+    vi.spyOn(creditStore, 'getBalance').mockReturnValue({
+      limit: null,
+      usedThisPeriod: 2000,
+      bonusThisPeriod: 100,
+      periodResetsAt: Date.now() + 1000,
+    });
+
+    expect(entitlementService.isRuntimeEntitled('coding')).toBe(true);
+    expect(entitlementService.isRuntimeEntitled('office')).toBe(false);
+  });
+
+  it('represents only newly requested runtimes as payable when some are already owned', () => {
+    const grants: RuntimeEntitlementGrant[] = [{ runtimeId: 'coding', source: 'purchase', grantedAt: 1 }];
+    vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'go', status: 'none', runtimeEntitlements: grants });
+    vi.spyOn(subscriptionStore, 'getPurchasedRuntimeEntitlements').mockReturnValue(grants);
+
+    expect(entitlementService.diffRuntimeEntitlements(['coding', 'office', 'browser', 'office'])).toEqual(['office', 'browser']);
   });
 });

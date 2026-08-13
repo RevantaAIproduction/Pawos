@@ -113,7 +113,7 @@ export const COMPANION_ARTICLES: HelpArticle[] = [
     permissions: ['Microphone access is requested the first time you use push-to-talk'],
     relatedArticleIds: ['meet-paw', 'companion-memory'],
     relatedSettings: ['Voice', 'Notifications'],
-    relatedApps: ['companionLab', 'history'],
+    relatedApps: ['companionLab', 'workHistory'],
     faq: [
       { question: 'Can I type instead of speaking?', answer: 'Talk with Paw is built around push-to-talk voice; text-based interaction happens through the Help Center’s Messages, not this feature.' },
       { question: 'Why does the reply start speaking before it finishes generating?', answer: 'Responses are streamed and spoken sentence-by-sentence to feel instant rather than waiting for the entire reply.' },

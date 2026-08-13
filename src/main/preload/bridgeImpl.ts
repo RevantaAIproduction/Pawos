@@ -49,6 +49,12 @@ import type {
   EntitlementSnapshot,
 } from "../../shared/billing/BillingTypes";
 import type { AiUsageCategory } from "../../shared/billing/AiUsageCategories";
+import {
+  ORGANIZATION_USAGE_RECORD_REQUEST_CHANNEL,
+  ORGANIZATION_USAGE_RECORD_RESPONSE_CHANNEL_PREFIX,
+  type OrganizationUsageRecordRequest,
+  type OrganizationUsageRecordResponse,
+} from "../../shared/billing/OrganizationUsageBridgeTypes";
 import type { PawModelId } from "../../shared/ai/PawModelTypes";
 import type { OnboardingState } from "../../shared/onboarding/OnboardingTypes";
 import type {
@@ -61,6 +67,13 @@ import type {
 export function contextBridge() {
   const api = {
     actionExecute: (request: ActionRequest) => ipcRenderer.invoke("action:execute", request) as Promise<ActionResult>,
+    onOrganizationUsageRecordRequest: (cb: (request: OrganizationUsageRecordRequest) => void) => {
+      const handler = (_: Electron.IpcRendererEvent, request: OrganizationUsageRecordRequest) => cb(request);
+      ipcRenderer.on(ORGANIZATION_USAGE_RECORD_REQUEST_CHANNEL, handler);
+      return () => ipcRenderer.removeListener(ORGANIZATION_USAGE_RECORD_REQUEST_CHANNEL, handler);
+    },
+    organizationUsageRecordRespond: (requestId: string, response: OrganizationUsageRecordResponse) =>
+      ipcRenderer.invoke(`${ORGANIZATION_USAGE_RECORD_RESPONSE_CHANNEL_PREFIX}:${requestId}`, response) as Promise<void>,
     processWriteStdin: (processId: string, data: string) =>
       ipcRenderer.invoke("process:writeStdin", processId, data) as Promise<{ ok: true } | { ok: false; message: string }>,
     systemGetHomeDir: () => ipcRenderer.invoke("system:getHomeDir") as Promise<string>,
@@ -167,6 +180,8 @@ export function contextBridge() {
       ipcRenderer.invoke("billing:setSubscriptionTier", tier) as Promise<SubscriptionState>,
     billingSyncTierFromOrganization: (orgTier: SubscriptionTierId) =>
       ipcRenderer.invoke("billing:syncFromOrganization", orgTier) as Promise<SubscriptionState>,
+    billingReconcileForAccount: (accountId: string) =>
+      ipcRenderer.invoke("billing:reconcileForAccount", accountId) as Promise<SubscriptionState>,
     billingResetSubscription: () => ipcRenderer.invoke("billing:resetSubscription") as Promise<SubscriptionState>,
     billingGetCreditBalance: () => ipcRenderer.invoke("billing:getCreditBalance") as Promise<CreditBalance>,
     billingConsumeCredit: (amount: number, reason: string, category?: AiUsageCategory) =>

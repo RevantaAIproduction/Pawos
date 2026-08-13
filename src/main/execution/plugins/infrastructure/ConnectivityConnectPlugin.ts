@@ -20,10 +20,13 @@ export class ConnectivityConnectPlugin extends BasePlugin {
 
   async execute(request: ActionRequest): Promise<ActionResult> {
     if (request.type !== 'connectivityConnect') return { ok: false, reason: 'failed', message: 'Wrong action type' };
+    if (!request.scope || request.scope.userId === 'guest') {
+      return { ok: false, reason: 'entitlement-restricted', message: 'Connecting accounts requires signing in to PawOS.' };
+    }
     try {
       const connection = await connectivityRuntime.connections.connect(
         request.connectorId,
-        request.scope ?? { userId: 'guest' },
+        request.scope,
         request.incrementalCapabilities ? { incrementalCapabilities: request.incrementalCapabilities } : undefined
       );
       return { ok: true, data: { connection } };

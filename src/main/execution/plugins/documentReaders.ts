@@ -16,6 +16,8 @@ import { XMLParser } from 'fast-xml-parser';
 import exifr from 'exifr';
 import { imageSize } from 'image-size';
 import AdmZip from 'adm-zip';
+import { deniedImageMetadataMessage, isImageMetadataFormatAllowed } from '../safeImageMetadata';
+import { assertSpreadsheetWithinReadLimit } from './office/spreadsheetSafety';
 
 export type ReadableFormat = 'text' | 'pdf' | 'docx' | 'xlsx' | 'csv' | 'json' | 'xml' | 'image-metadata' | 'pptx';
 
@@ -36,6 +38,9 @@ const EXTENSION_FORMAT: Record<string, ReadableFormat> = {
   '.webp': 'image-metadata',
   '.tiff': 'image-metadata',
   '.heic': 'image-metadata',
+  '.heif': 'image-metadata',
+  '.icns': 'image-metadata',
+  '.jxl': 'image-metadata',
   '.pptx': 'pptx',
 };
 
@@ -58,6 +63,7 @@ async function readDocx(filePath: string, maxChars: number): Promise<DocumentRea
 }
 
 async function readXlsx(filePath: string, maxChars: number): Promise<DocumentReadResult> {
+  assertSpreadsheetWithinReadLimit(filePath);
   const workbook = XLSX.readFile(filePath);
   const parts = workbook.SheetNames.map((name) => {
     const sheet = workbook.Sheets[name];
@@ -90,6 +96,10 @@ async function readXml(filePath: string, maxChars: number): Promise<DocumentRead
 }
 
 async function readImageMetadata(filePath: string): Promise<DocumentReadResult> {
+  if (!isImageMetadataFormatAllowed(filePath)) {
+    const content = deniedImageMetadataMessage(filePath);
+    return { content, truncated: false, metadata: { blocked: true, reason: content } };
+  }
   const buffer = await fs.promises.readFile(filePath);
   const dims = imageSize(buffer);
   let exif: Record<string, unknown> | undefined;

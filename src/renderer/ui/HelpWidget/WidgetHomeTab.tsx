@@ -21,6 +21,13 @@ export function WidgetHomeTab({ onOpenArticle, onGoToMessages }: { onOpenArticle
   const aiConfigured = aiRouter.isConfigured(aiRouter.getActiveProviderId());
   const searchResults = useMemo(() => (query.trim() ? searchHelpArticles(query, 6) : []), [query]);
 
+  // Real search over the real article corpus, keyed to the categories the
+  // product asked for — never a fabricated menu with nowhere to land.
+  const openTopic = (keyword: string) => {
+    const [hit] = searchHelpArticles(keyword, 1);
+    if (hit) onOpenArticle(hit.id);
+  };
+
   const suggested = useMemo(() => {
     const withCounts = ALL_ARTICLES.map((a) => ({ a, count: activity.viewCounts[a.id] ?? 0 }));
     withCounts.sort((x, y) => y.count - x.count);
@@ -57,6 +64,26 @@ export function WidgetHomeTab({ onOpenArticle, onGoToMessages }: { onOpenArticle
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
+
+      {!query.trim() && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+          {[
+            { label: 'Documentation', keyword: 'documentation' },
+            { label: 'Getting Started', keyword: 'getting started' },
+            { label: 'Paw Compute', keyword: 'paw compute' },
+            { label: 'Autonomous Work', keyword: 'autonomous ticket' },
+            { label: 'Connectors', keyword: 'connectors' },
+            { label: 'Troubleshooting', keyword: 'troubleshooting' },
+          ].map((topic) => (
+            <button key={topic.label} type="button" className={styles.quickReplyChip} style={{ width: 'auto', display: 'inline-block', padding: '6px 12px', fontSize: 11.5, marginBottom: 0 }} onClick={() => openTopic(topic.keyword)}>
+              {topic.label}
+            </button>
+          ))}
+          <button type="button" className={styles.quickReplyChip} style={{ width: 'auto', display: 'inline-block', padding: '6px 12px', fontSize: 11.5, marginBottom: 0 }} onClick={onGoToMessages}>
+            Contact Support
+          </button>
+        </div>
+      )}
 
       {searchResults.length > 0 ? (
         <div>

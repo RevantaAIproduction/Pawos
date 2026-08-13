@@ -28,6 +28,7 @@ import {
   sortDirectoryEntries,
   type CodingWorkspaceDirEntry,
 } from './codingWorkspaceModel';
+import { summarizeCodingRuntimeTask } from './CodingRuntimeCompletion';
 
 /**
  * Action types that mark a task as a coding task — shape-based detection
@@ -1327,6 +1328,7 @@ export function WorkspaceRuntime({
 
   if (codingTask) {
     const terminalOutput = getLatestTerminalOutput(task);
+    const completion = summarizeCodingRuntimeTask(task);
     const selectedLabel = selectedPath ? getPathBasename(selectedPath) : activeRoot ? getPathBasename(activeRoot) : 'No project selected';
     const selectedParent = selectedPath ? getPathDirname(selectedPath) : activeRoot;
     const contextRegions: WorkspaceRegionSlot['id'][] = [
@@ -1438,9 +1440,83 @@ export function WorkspaceRuntime({
               <span className={styles.selectedFileEyebrow}>Active File</span>
               <span className={styles.selectedFileName}>{selectedLabel}</span>
               {selectedParent && <span className={styles.selectedFilePath}>{selectedParent}</span>}
-              <span className={styles.codingSectionEmpty}>
-                File viewing and diffs are reserved for the next workspace phase. Phase A keeps navigation and project context live against real runtime APIs.
-              </span>
+              <div className={styles.completionGrid}>
+                <div className={styles.completionTile}>
+                  <span className={styles.completionLabel}>Files</span>
+                  <span className={styles.completionValue}>
+                    {completion.createdFiles.length} created / {completion.modifiedFiles.length} modified
+                  </span>
+                </div>
+                <div className={styles.completionTile}>
+                  <span className={styles.completionLabel}>Diff</span>
+                  <span className={styles.completionValue}>
+                    {completion.diff ? `+${completion.diff.totalAdded} / -${completion.diff.totalDeleted}` : 'No git diff stat yet'}
+                  </span>
+                </div>
+                <div className={styles.completionTile}>
+                  <span className={styles.completionLabel}>Commands</span>
+                  <span className={styles.completionValue}>{completion.commands.length}</span>
+                </div>
+                <div className={styles.completionTile}>
+                  <span className={styles.completionLabel}>Paw Compute</span>
+                  <span className={styles.completionValue}>
+                    {completion.usage.taskUsedUnits !== undefined ? `${completion.usage.taskUsedUnits} units` : 'Not emitted for this task'}
+                  </span>
+                </div>
+              </div>
+              <div className={`${styles.completionState} ${completion.readiness.status === 'completed' ? styles.completionStateOk : styles.completionStateIncomplete}`}>
+                <strong>{completion.readiness.status === 'completed' ? 'COMPLETED' : 'INCOMPLETE'}</strong>
+                <span>{completion.readiness.status === 'completed' ? completion.readiness.message : completion.readiness.reason}</span>
+              </div>
+              {completion.readiness.status === 'incomplete' && (
+                <ul className={styles.evidenceIssueList}>
+                  {completion.readiness.evidence.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              )}
+              {completion.commands.length > 0 && (
+                <div className={styles.commandSummaryList}>
+                  {completion.commands.map((command) => (
+                    <div key={command.id} className={styles.commandSummaryCard}>
+                      <div className={styles.commandSummaryHeader}>
+                        <span className={command.status === 'failed' ? styles.evidenceIssues : styles.evidenceOk}>
+                          {command.status === 'running' ? 'RUNNING' : command.status === 'failed' ? 'COMMAND FAILED' : 'COMMAND COMPLETED'}
+                        </span>
+                        {command.durationMs !== undefined && <span>{(command.durationMs / 1000).toFixed(1)}s</span>}
+                      </div>
+                      <code>{command.command}</code>
+                      {command.cwd && <span className={styles.selectedFilePath}>{command.cwd}</span>}
+                      {command.exitCode !== undefined && <span className={styles.codingSectionEmpty}>Exit code: {command.exitCode}</span>}
+                      {command.output && <pre className={styles.terminalPreview}>{command.output.slice(-900)}</pre>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {(completion.createdFiles.length > 0 || completion.modifiedFiles.length > 0) && (
+                <div className={styles.fileActivitySummary}>
+                  {completion.createdFiles.length > 0 && (
+                    <div>
+                      <span className={styles.codingSectionTitle}>Created</span>
+                      <ul className={styles.todoList}>
+                        {completion.createdFiles.map((path) => (
+                          <li key={path} className={styles.todoItem}>{path}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {completion.modifiedFiles.length > 0 && (
+                    <div>
+                      <span className={styles.codingSectionTitle}>Modified</span>
+                      <ul className={styles.todoList}>
+                        {completion.modifiedFiles.map((path) => (
+                          <li key={path} className={styles.todoItem}>{path}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </main>
 

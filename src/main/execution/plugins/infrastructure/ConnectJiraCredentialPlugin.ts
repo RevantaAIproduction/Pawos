@@ -8,7 +8,7 @@ import { jiraConnectorSDK } from '../../../connectivity/connectors/JiraConnector
  * mechanism InvestigateTicketPlugin's requirements() check looks for. Persisting the credential so
  * it survives a restart is a separate concern: an authenticated session's renderer writes it to
  * the Supabase Vault directly (ConnectivityCredentialService), independent of this action; a
- * Guest-mode session additionally dispatches saveGuestConnectorCredential.
+ * authenticated session persists credentials through the Supabase Vault path.
  */
 export class ConnectJiraCredentialPlugin extends BasePlugin {
   id = 'connectJiraCredential';
@@ -19,8 +19,11 @@ export class ConnectJiraCredentialPlugin extends BasePlugin {
 
   async execute(request: ActionRequest): Promise<ActionResult> {
     if (request.type !== 'connectJiraCredential') return { ok: false, reason: 'failed', message: 'Wrong action type' };
+    if (!request.scope || request.scope.userId === 'guest') {
+      return { ok: false, reason: 'entitlement-restricted', message: 'Connecting Jira requires signing in to PawOS.' };
+    }
     try {
-      await jiraConnectorSDK.authenticate(request.scope ?? { userId: 'guest' }, {
+      await jiraConnectorSDK.authenticate(request.scope, {
         baseUrl: request.baseUrl,
         email: request.email,
         apiToken: request.apiToken,

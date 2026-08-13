@@ -31,11 +31,28 @@ import type { CommunicationRuntimeEvent } from '../../shared/communication/Commu
 import type { ExecutionRecord } from '../../shared/actions/ExecutionRecordTypes';
 import { ExecutionSupervisor } from './ExecutionSupervisor';
 import { classifyFailure, NOT_AUTO_RECOVERABLE } from '../../shared/execution/RecoveryNarration';
+import { describeTaskLevelLaunchFailure } from './LaunchReadinessUX';
+import {
+  createSpeechPresentation,
+  isExplicitSpeechRequest,
+  isVoiceOutputOffRequest,
+  isVoiceOutputOnRequest,
+} from './SpeechPresentation';
 
 const MAX_LOG_ENTRIES = 200;
 const MAX_TURN_RECORDS = 50;
 /** How much of a background process's recent output stays visible in its live message — old lines silently drop off the top as new ones arrive. */
 const PROCESS_MESSAGE_TAIL_CHARS = 4000;
+
+function isTerminalExecutionBlock(result: ActionResult): boolean {
+  return (
+    !result.ok &&
+    (result.reason === 'entitlement-restricted' ||
+      result.reason === 'usage-restricted' ||
+      result.reason === 'security-restricted' ||
+      result.reason === 'coding-mode-restricted')
+  );
+}
 /** Coalesces bursty process output (a build tool emitting hundreds of lines/sec) into one UI update at most this often per process. */
 const PROCESS_OUTPUT_DEBOUNCE_MS = 200;
 /** Hard backstop against a runaway tool-call/continuation loop within one turn, regardless of whether failures look related. */
@@ -103,22 +120,8 @@ function isAffirmativeReply(text: string): boolean {
 }
 
 /** Sentence-ending punctuation followed by whitespace — a simple heuristic (not a full NLP tokenizer), good enough to pace speech naturally without waiting for a whole paragraph. */
-const SENTENCE_BOUNDARY = /[.!?]+\s+/;
 
 /** Pulls complete sentences off the front of a streaming text buffer, returning what's left to keep accumulating. */
-function popCompleteSentences(buffer: string): { sentences: string[]; rest: string } {
-  const sentences: string[] = [];
-  let rest = buffer;
-  while (true) {
-    const match = rest.match(SENTENCE_BOUNDARY);
-    if (!match || match.index === undefined) break;
-    const end = match.index + match[0].length;
-    const sentence = rest.slice(0, end).trim();
-    if (sentence) sentences.push(sentence);
-    rest = rest.slice(end);
-  }
-  return { sentences, rest };
-}
 
 /**
  * The user talks to Paw, never to Gemini/OpenAI/Anthropic/whichever
@@ -182,6 +185,7 @@ export class ConversationRuntime {
   /** Sentence-sized chunks waiting to be spoken — lets Paw start talking as soon as the first sentence is ready instead of waiting for the whole reply. */
   private speechQueue: string[] = [];
   private speechQueueRunning = false;
+  private voiceOutputEnabled = false;
   /** Resolves once the speech queue fully drains — handleTranscript awaits this instead of a single speak() call. */
   private speechQueuePromise: Promise<void> = Promise.resolve();
   /** True while a tool call has deliberately stopped speech mid-sentence to run an action — distinguishes that from a real playback error in the queue's catch. */
@@ -382,6 +386,8 @@ export class ConversationRuntime {
       errorMessage: null,
       supportsSpeechRecognition: args.speechRecognition.isSupported(),
       supportsSpeechSynthesis: args.speechSynthesis.isSupported(),
+      voiceOutputEnabled: this.voiceOutputEnabled,
+      speechPlaybackState: 'off',
       pendingConfirmation: false,
     };
 
@@ -439,6 +445,28 @@ export class ConversationRuntime {
     this.updateSnapshot({ supportsSpeechSynthesis: provider.isSupported() });
   }
 
+  setVoiceOutputEnabled(enabled: boolean) {
+    this.voiceOutputEnabled = enabled;
+    if (!enabled) {
+      this.speechQueue = [];
+      this.args.speechSynthesis.stop();
+    }
+    this.updateSnapshot({
+      voiceOutputEnabled: enabled,
+      speechPlaybackState: enabled ? 'on' : 'off',
+      state: !enabled && this.snapshot.state === 'speaking' ? 'idle' : this.snapshot.state,
+    });
+  }
+
+  stopSpeechPlayback() {
+    this.speechQueue = [];
+    this.args.speechSynthesis.stop();
+    this.updateSnapshot({
+      speechPlaybackState: 'paused',
+      state: this.snapshot.state === 'speaking' ? 'idle' : this.snapshot.state,
+    });
+  }
+
   setReasoningSystemPrompt(systemPrompt: string) {
     this.args.reasoningRuntime.setSystemPrompt(systemPrompt);
   }
@@ -463,6 +491,28 @@ export class ConversationRuntime {
     void this.beginListening();
   }
 
+  openPanel() {
+    this.closed = false;
+    this.updateSnapshot({
+      panelOpen: true,
+      errorMessage: null,
+    });
+  }
+
+  startListening() {
+    this.open();
+  }
+
+  stopListening() {
+    if (this.snapshot.state !== 'listening') return;
+    this.recognitionSession?.stop();
+    this.recognitionSession = null;
+    this.updateSnapshot({
+      state: 'idle',
+      errorMessage: null,
+    });
+  }
+
   /**
    * Speak text without starting speech recognition or modifying conversation history.
    * Intended for first-launch/UX announcements.
@@ -477,6 +527,7 @@ export class ConversationRuntime {
     this.updateSnapshot({
       // keep panel open state unchanged; only reflect speaking state
       state: 'speaking',
+      speechPlaybackState: 'speaking',
       errorMessage: null,
       draftTranscript: '',
     });
@@ -495,6 +546,7 @@ export class ConversationRuntime {
     this.reasoningTurn = null;
     this.updateSnapshot({
       state: 'idle',
+      speechPlaybackState: this.voiceOutputEnabled ? 'on' : 'off',
       draftTranscript: '',
       errorMessage: null,
     });
@@ -515,6 +567,7 @@ export class ConversationRuntime {
       state: 'idle',
       draftTranscript: '',
       errorMessage: null,
+      speechPlaybackState: this.voiceOutputEnabled ? 'on' : 'off',
       pendingConfirmation: false,
     });
   }
@@ -535,6 +588,31 @@ export class ConversationRuntime {
     }
 
     this.closed = false;
+
+    if (this.snapshot.state === 'listening') {
+      this.turnId += 1;
+      this.stopRecognition();
+      this.updateSnapshot({ state: 'idle', draftTranscript: '' });
+    }
+
+    if (!context && (isVoiceOutputOnRequest(trimmed) || isVoiceOutputOffRequest(trimmed))) {
+      const enabled = isVoiceOutputOnRequest(trimmed);
+      this.appendMessage('user', trimmed);
+      this.setVoiceOutputEnabled(enabled);
+      this.appendMessage('assistant', enabled ? 'Voice Output is ON.' : 'Voice Output is OFF.');
+      return;
+    }
+
+    if (!context && isExplicitSpeechRequest(trimmed)) {
+      this.appendMessage('user', trimmed);
+      const latestAssistant = [...this.snapshot.messages].reverse().find((message) => message.role === 'assistant' && message.content.trim());
+      if (!latestAssistant) {
+        this.appendMessage('assistant', 'There is not a response to speak yet.');
+        return;
+      }
+      void this.speak(latestAssistant.content);
+      return;
+    }
 
     // A "yes" to a pending confirmation must survive even if Paw is still
     // mid-speech finishing the confirmation question itself — checked before
@@ -593,6 +671,7 @@ export class ConversationRuntime {
       state: 'idle',
       draftTranscript: '',
       errorMessage: null,
+      speechPlaybackState: this.voiceOutputEnabled ? 'on' : 'off',
       pendingConfirmation: false,
     });
   }
@@ -608,7 +687,13 @@ export class ConversationRuntime {
     this.args.speechSynthesis.stop();
     this.finalizeCurrentTurn('interrupted', reason);
     this.log('interrupted', { reason });
-    this.updateSnapshot({ state: 'interrupted', panelOpen: true, errorMessage: null, pendingConfirmation: false });
+    this.updateSnapshot({
+      state: 'interrupted',
+      panelOpen: true,
+      errorMessage: null,
+      speechPlaybackState: this.voiceOutputEnabled ? 'on' : 'off',
+      pendingConfirmation: false,
+    });
     void this.beginListening();
   }
 
@@ -648,8 +733,7 @@ export class ConversationRuntime {
           if (!finalTranscript) {
             return;
           }
-          this.appendMessage('user', finalTranscript);
-          void this.handleTranscript(finalTranscript);
+          this.updateSnapshot({ draftTranscript: finalTranscript });
         },
         onPermissionDenied: () => {
           if (this.closed || currentTurn !== this.turnId) return;
@@ -663,7 +747,6 @@ export class ConversationRuntime {
           if (this.snapshot.state === 'listening') {
             this.updateSnapshot({
               state: 'idle',
-              draftTranscript: '',
             });
           }
         },
@@ -866,8 +949,10 @@ export class ConversationRuntime {
   /** Enqueues a sentence-sized chunk to be spoken, starting the speech queue if it isn't already running. */
   private enqueueSpeech(text: string, currentTurn: number): void {
     const trimmed = text.trim();
-    if (!trimmed || this.closed || currentTurn !== this.turnId) return;
-    this.speechQueue.push(trimmed);
+    if (!this.voiceOutputEnabled || !trimmed || this.closed || currentTurn !== this.turnId) return;
+    const speechText = createSpeechPresentation(trimmed);
+    if (!speechText) return;
+    this.speechQueue.push(speechText);
     if (!this.speechQueueRunning) {
       this.speechQueuePromise = this.runSpeechQueue(currentTurn);
     }
@@ -877,7 +962,7 @@ export class ConversationRuntime {
   private async runSpeechQueue(currentTurn: number): Promise<void> {
     this.speechQueueRunning = true;
     if (currentTurn === this.turnId && !this.closed && this.snapshot.state !== 'speaking') {
-      this.updateSnapshot({ state: 'speaking', draftTranscript: '' });
+      this.updateSnapshot({ state: 'speaking', speechPlaybackState: 'speaking', draftTranscript: '' });
     }
 
     while (this.speechQueue.length > 0) {
@@ -902,6 +987,9 @@ export class ConversationRuntime {
     }
 
     this.speechQueueRunning = false;
+    if (currentTurn === this.turnId && !this.closed && this.snapshot.state === 'speaking') {
+      this.updateSnapshot({ state: 'idle', speechPlaybackState: this.voiceOutputEnabled ? 'on' : 'off' });
+    }
   }
 
   /** Resumes speaking whatever was still queued after a tool call paused it, or returns to 'thinking' if nothing's left to say. */
@@ -916,7 +1004,9 @@ export class ConversationRuntime {
   }
 
   private async speakResponse(text: string): Promise<void> {
-    await this.args.speechSynthesis.speak(text, { onVisemeFrame: this.args.onVisemeFrame });
+    const speechText = createSpeechPresentation(text);
+    if (!speechText) return;
+    await this.args.speechSynthesis.speak(speechText, { onVisemeFrame: this.args.onVisemeFrame });
   }
 
   private failTurn(message: string) {
@@ -933,6 +1023,7 @@ export class ConversationRuntime {
     this.updateSnapshot({
       state: 'error',
       errorMessage: toUserFacingError(message),
+      speechPlaybackState: this.voiceOutputEnabled ? 'on' : 'off',
     });
   }
 
@@ -959,9 +1050,6 @@ export class ConversationRuntime {
         // each sentence as soon as it's complete instead of the entire
         // response at once.
         ctx.ttsBuffer += delta;
-        const { sentences, rest } = popCompleteSentences(ctx.ttsBuffer);
-        ctx.ttsBuffer = rest;
-        for (const sentence of sentences) this.enqueueSpeech(sentence, currentTurn);
       },
       onComplete: (result) => {
         if (this.closed || currentTurn !== this.turnId) return;
@@ -978,7 +1066,7 @@ export class ConversationRuntime {
         }
         // Whatever's left in the buffer never hit a sentence boundary
         // (e.g. a short reply with no trailing punctuation) — say it anyway.
-        const leftover = ctx.ttsBuffer.trim();
+        const leftover = (ctx.finalResponse || ctx.ttsBuffer).trim();
         ctx.ttsBuffer = '';
         if (leftover) this.enqueueSpeech(leftover, currentTurn);
       },
@@ -1006,6 +1094,7 @@ export class ConversationRuntime {
   private recordToolOutcomeAndCheckBudget(request: ActionRequest, result: ActionResult): boolean {
     this.toolIterationCount += 1;
     if (this.toolIterationCount >= MAX_TOOL_ITERATIONS_PER_TURN) return false;
+    if (isTerminalExecutionBlock(result)) return false;
     if (result.ok) return true;
 
     const signature = `${request.type}|${(result.message ?? result.reason ?? '').slice(0, 200)}`;
@@ -1150,9 +1239,9 @@ export class ConversationRuntime {
       const message = error instanceof Error ? error.message : 'Action failed unexpectedly.';
       if (this.currentTurnRecord) this.currentTurnRecord.errors.push(message);
       const failure: ActionResult = { ok: false, reason: 'failed', message };
-      this.finishTaskAction(actionId, failure, 'Something went wrong while I was doing that.');
+      this.finishTaskAction(actionId, failure, 'Action did not complete. Review the error details and retry after fixing the cause.');
       this.executionSupervisor.recordAction(request, failure, {
-        label: 'Something went wrong while I was doing that.',
+        label: 'Action did not complete. Review the error details and retry after fixing the cause.',
         startedAt: actionStartedAt,
         endedAt: Date.now(),
       });
@@ -1398,10 +1487,14 @@ export class ConversationRuntime {
     if (!task) return;
     task.endedAt = Date.now();
     task.status =
-      reason === 'interrupted'
+      task.actions.some((a) => a.result && isTerminalExecutionBlock(a.result))
+        ? 'stopped'
+        : reason === 'interrupted'
         ? 'interrupted'
         : reason === 'error'
           ? 'failed'
+          : describeTaskLevelLaunchFailure(finalReport)
+            ? 'failed'
           : task.actions.some((a) => a.result?.ok === false)
             ? 'failed'
             : 'completed';

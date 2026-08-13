@@ -7,7 +7,6 @@ import type {
 import { EmailAuthProvider } from './providers/EmailAuthProvider';
 import { GoogleAuthProvider } from './providers/GoogleAuthProvider';
 import { GitHubAuthProvider } from './providers/GitHubAuthProvider';
-import { GuestAuthProvider } from './providers/GuestAuthProvider';
 import { ipc } from '../services/ipc/ipcBridgeImplementation';
 
 const STORAGE_KEY = 'pawos:auth:user';
@@ -16,8 +15,8 @@ const REMEMBER_KEY = 'pawos:auth:rememberMe';
 /**
  * The one place the rest of PawOS touches for authentication (via useAuth)
  * — routes each call to whichever real IdentityProvider it needs. Nothing
- * outside this file should import GoogleAuthProvider/EmailAuthProvider/
- * GuestAuthProvider directly; that's the whole point of the interface.
+ * outside this file should import GoogleAuthProvider/EmailAuthProvider
+ * directly; that's the whole point of the interface.
  *
  * Email accounts are real Supabase-backed sessions (server-issued JWTs,
  * Supabase's own client persists/refreshes them) — getCurrentUser() checks
@@ -34,63 +33,41 @@ export class AuthenticationProvider implements AuthService {
   private emailProvider = new EmailAuthProvider();
   private googleProvider = new GoogleAuthProvider();
   private githubProvider = new GitHubAuthProvider();
-  private guestProvider = new GuestAuthProvider();
 
   private setSession(user: AuthUser, rememberMe = true): void {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
     window.localStorage.setItem(REMEMBER_KEY, JSON.stringify(rememberMe));
   }
 
+  private async reconcileSubscriptionFor(user: AuthUser): Promise<void> {
+    if (user.isGuest || (user as { provider?: string }).provider === 'guest') return;
+    await ipc.billingReconcileForAccount(user.id).catch(() => {});
+  }
+
   async signInWithGoogle(): Promise<AuthUser> {
     const user = await this.googleProvider.signIn();
+    await this.reconcileSubscriptionFor(user);
     this.setSession(user);
     return user;
   }
 
   async signInWithGithub(): Promise<AuthUser> {
     const user = await this.githubProvider.signIn();
+    await this.reconcileSubscriptionFor(user);
     this.setSession(user);
     return user;
   }
 
   async signInWithEmail(options: EmailSignInOptions): Promise<AuthUser> {
     const user = await this.emailProvider.signIn(options);
+    await this.reconcileSubscriptionFor(user);
     this.setSession(user, options.rememberMe ?? true);
     return user;
   }
 
   async createEmailAccount(options: EmailCreateAccountOptions): Promise<AuthUser> {
     const user = await this.emailProvider.createAccount(options);
-    this.setSession(user);
-    return user;
-  }
-
-  async continueAsGuest(): Promise<AuthUser> {
-    const user = await this.guestProvider.continueAsGuest();
-    this.setSession(user);
-    return user;
-  }
-
-  // No explicit data migration happens here: none of PawOS's local stores
-  // (companion, memories, settings, conversations, projects) are
-  // namespaced per-user yet — they were never tied to the guest's id in
-  // the first place, so replacing the session record *is* the entire
-  // "merge". If per-user namespacing is ever added, this is where a real
-  // migration step would need to go.
-  async upgradeGuestWithGoogle(): Promise<AuthUser> {
-    const user = await this.googleProvider.signIn();
-    this.setSession(user);
-    if (user.email) {
-      // A genuine "linking" event — a guest session becoming a real Google
-      // identity — unlike a plain signInWithGoogle, which can't be told
-      // apart from a returning sign-in without a backend user record.
-      ipc.mailSend('sendGoogleAccountLinked', user.email, { name: user.name, email: user.email }).catch(() => {});
-    }
-    return user;
-  }
-
-  async upgradeGuestWithEmail(options: EmailCreateAccountOptions): Promise<AuthUser> {
-    const user = await this.emailProvider.createAccount(options);
+    await this.reconcileSubscriptionFor(user);
     this.setSession(user);
     return user;
   }
@@ -150,13 +127,22 @@ export class AuthenticationProvider implements AuthService {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       const localUser = raw ? (JSON.parse(raw) as AuthUser) : null;
-      if (localUser && localUser.provider !== 'email') return localUser; // guest/Google — no external session to check
+      if (localUser?.isGuest || (localUser as { provider?: string } | null)?.provider === 'guest') {
+        window.localStorage.removeItem(STORAGE_KEY);
+        return null;
+      }
+      if (localUser && localUser.provider !== 'email') {
+        await this.reconcileSubscriptionFor(localUser);
+        return localUser; // Google/GitHub use the local mirror after Supabase sign-in.
+      }
     } catch {
       // fall through to the Supabase session check
     }
 
     // Email accounts: trust the real Supabase session, not the local copy.
-    return this.emailProvider.getSessionUser();
+    const user = await this.emailProvider.getSessionUser();
+    if (user) await this.reconcileSubscriptionFor(user);
+    return user;
   }
 
   async isGoogleSignInAvailable(): Promise<boolean> {
