@@ -1,6 +1,6 @@
 import type { ActionRequest, ActionResult } from '../../shared/actions/ActionTypes';
 import { CODING_EXECUTION_ACTION_TYPES, INFRA_EXECUTION_ACTION_TYPES } from '../../shared/actions/ActionTypes';
-import type { RuntimeEntitlementId } from '../../shared/billing/BillingTypes';
+import type { RuntimeEntitlementId, SubscriptionTierId } from '../../shared/billing/BillingTypes';
 
 const OFFICE_ACTION_TYPES: ActionRequest['type'][] = [
   'mergePdfs',
@@ -93,6 +93,9 @@ export function authorizeRuntimeAction(
   opts: {
     hasAdvancedRuntimes: boolean;
     isRuntimeEntitled: (runtimeId: RuntimeEntitlementId) => boolean;
+    /** The real tier that unlocks this action, resolved by the caller via
+     *  entitlementService.findMinimumTierForFeature('advancedRuntimes') — never guessed here. */
+    requiredTier?: SubscriptionTierId | null;
   }
 ): ActionResult | null {
   const runtimeId = getRequiredRuntimeForAction(actionType);
@@ -102,24 +105,26 @@ export function authorizeRuntimeAction(
   return {
     ok: false,
     reason: 'entitlement-restricted',
-    message: `${runtimeLabel(runtimeId)} is not enabled for this account.`,
-    data: { runtimeId, actionType },
+    // Plain-English capability description — never an internal runtime name (e.g. "Coding
+    // Runtime"), so a customer never sees PawOS's own internal architecture in a block message.
+    message: `${capabilityLabel(runtimeId)} requires a plan that supports it.`,
+    data: { requiredFeature: 'advancedRuntimes', requiredTier: opts.requiredTier ?? null, runtimeId, actionType },
   };
 }
 
-function runtimeLabel(runtimeId: RuntimeEntitlementId): string {
+function capabilityLabel(runtimeId: RuntimeEntitlementId): string {
   switch (runtimeId) {
     case 'coding':
-      return 'Coding Runtime';
+      return 'Running and editing code';
     case 'office':
-      return 'Office Runtime';
+      return 'Creating and editing documents, spreadsheets, and presentations';
     case 'browser':
-      return 'Browser Runtime';
+      return 'Browser automation and web research';
     case 'communication':
-      return 'Communication Runtime';
+      return 'Meeting and call recording';
     case 'infrastructure':
-      return 'Infrastructure Runtime';
+      return 'Infrastructure and deployment actions';
     default:
-      return 'This runtime';
+      return 'This action';
   }
 }

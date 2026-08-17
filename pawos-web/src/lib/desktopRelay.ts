@@ -29,20 +29,31 @@ export function relayGitHubToDesktop(code: string | null, error: string | null):
 
 /**
  * The Connectivity Runtime's own connector-OAuth relay (Jira, Slack, Linear, Vercel, Netlify,
- * Railway, and GitLab/GitHub-as-a-connector) — a thin forward of the raw authorization code and
- * `state` (OAuthManager's request-id correlation, see src/main/connectivity/OAuthManager.ts) to
- * `pawos://connectivity-oauth-callback`. Deliberately does NOT exchange the code for a token here:
- * unlike PawOS's own Google/GitHub sign-in (which need the finished profile immediately to bridge
- * into a Supabase session), a connector's OAuthManager.exchangeCodeForToken already routes through
- * `/api/connectivity/oauth/exchange` — the one place every connector's client_secret lives — so
- * there is no reason to duplicate that call here.
+ * Railway, and GitLab/GitHub-as-a-connector). Deliberately does NOT exchange the code for a token
+ * here: unlike PawOS's own Google/GitHub sign-in (which need the finished profile immediately to
+ * bridge into a Supabase session), a connector's OAuthManager.exchangeCodeForToken already routes
+ * through `/api/connectivity/oauth/exchange` — the one place every connector's client_secret
+ * lives — so there is no reason to duplicate that call here.
+ *
+ * This used to redirect the browser to `pawos://connectivity-oauth-callback` — confirmed broken
+ * in the same way `relayGitHubToDesktop` above already documented and fixed: Chromium-based
+ * browsers on Windows can silently block a script-driven navigation to a custom protocol with no
+ * error shown, leaving the desktop app's "Waiting for you to finish signing in..." stuck forever
+ * even though the consent screen itself completed successfully. Fixed the same way — a
+ * same-machine loopback HTTP redirect instead of a custom protocol — to the fixed local port
+ * OAuthManager.ts's `ensureConnectivityRelayListener()` listens on
+ * (`CONNECTIVITY_LOCAL_RELAY_PORT`, currently 51900). Unlike the sign-in flows' one-shot listener
+ * on port 51899, that port hosts a long-lived listener so more than one connector authorization
+ * can be in flight at once, matching OAuthManager's existing concurrent-authorization design.
  */
+const CONNECTIVITY_LOCAL_CALLBACK_URL = "http://127.0.0.1:51900/callback";
+
 export function relayConnectivityToDesktop(code: string | null, error: string | null, state: string | null): Response {
   const params = new URLSearchParams();
   if (code) params.set("code", code);
   if (error) params.set("error", error);
   if (state) params.set("state", state);
-  return buildRelayResponse(`pawos://connectivity-oauth-callback?${params.toString()}`, error);
+  return buildRelayResponse(`${CONNECTIVITY_LOCAL_CALLBACK_URL}?${params.toString()}`, error);
 }
 
 /**

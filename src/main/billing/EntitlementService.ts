@@ -9,11 +9,11 @@ import type {
   SubscriptionTierId,
   TierEntitlements,
 } from '../../shared/billing/BillingTypes';
+import { SUBSCRIPTION_TIER_ORDER } from '../../shared/billing/BillingTypes';
 import { ALL_RUNTIME_ENTITLEMENT_IDS } from '../../shared/billing/RuntimeCatalog';
 import type { PawModelId } from '../../shared/ai/PawModelTypes';
 
 const GO_FEATURES: FeatureId[] = [
-  'companionStudio',
   'desktopCompanion',
   'basicWorkspace',
   'basicFileManagement',
@@ -41,14 +41,59 @@ const AI_MODELS: PawModelId[] = [
  * Mobile Presence follows the same Go-vs-Pro boundary: Paw Go gets none of
  * mobilePairing/crossDeviceSync/mobileNotifications (no phone pairing, no
  * connected devices, no cross-device sync at all). Pro unlocks the full
- * personal Mobile Presence experience; Pro Max is identical (see
- * PRO_MAX_FEATURES below) and differs only in usage capacity, never in
- * feature availability.
+ * personal Mobile Presence experience; Pro Max is identical for Mobile
+ * Presence specifically (differs only in usage capacity, never in feature
+ * availability there) — but Pro Max does add real feature gaps beyond Pro
+ * for connectors/ticket billing, see PRO_MAX_FEATURES below.
+ *
+ * Connector gating (explicitly instructed): every connector is Pro-and-above only, never
+ * available on Go. GitHub/GitLab/Vercel/Netlify/Railway (source-control/hosting connectors) and
+ * Google Workspace/Slack (personal productivity connectors) all sit on the Pro baseline. Jira and
+ * Linear are deliberately held back to Pro Max (see PRO_MAX_FEATURES) since they're real
+ * ticket-writing connectors paired with the Autonomous Ticket Balance feature, not general-purpose
+ * connectors.
  */
-const PRO_FEATURES: FeatureId[] = [...GO_FEATURES, 'advancedRuntimes', 'mobilePairing', 'crossDeviceSync', 'mobileNotifications'];
+const PRO_FEATURES: FeatureId[] = [
+  ...GO_FEATURES,
+  'companionStudio',
+  'advancedRuntimes',
+  'mobilePairing',
+  'crossDeviceSync',
+  'mobileNotifications',
+  'connectGoogleWorkspace',
+  'connectSlack',
+  'connectGithub',
+  'connectGitlab',
+  'connectVercel',
+  'connectNetlify',
+  'connectRailway',
+];
 
-/** Deliberately identical to PRO_FEATURES — Pro Max must never introduce a feature difference from Pro, only a usage-capacity difference (enforced by UsageQuotaConfigStore, not here). */
-const PRO_MAX_FEATURES: FeatureId[] = [...PRO_FEATURES];
+/**
+ * No longer identical to PRO_FEATURES (explicitly instructed correction): Pro Max additionally
+ * unlocks connectJira/connectLinear and autonomousTaskBilling (Ticket Balance) — Jira/Linear are
+ * the connectors that actually write tickets back, so they're gated together with the Ticket
+ * Balance wallet that pays for autonomous work resolving those tickets, rather than split across
+ * two different tiers. Every other feature/model stays identical to Pro; only usage capacity
+ * (UsageQuotaConfigStore) differs beyond this.
+ *
+ * autonomousPlanBypass: the explicit, checked policy decision (per the audit finding that the live
+ * autonomous tool loop auto-confirmed applyCodeEdit/writeFile unconditionally, with no entitlement
+ * check anywhere in that path) that Pro Max/Team/Enterprise autonomous runs are allowed to execute
+ * code edits without pausing for interactive plan approval — see
+ * AutonomousOrchestrator.ts's HeadlessTurnRunner.run(), the only consumer. Absent this feature, a
+ * run falls back to 'manual' execution mode, which routes every applyCodeEdit/writeFile through the
+ * real waiting_for_permission/ALLOW-DENY flow instead of auto-confirming it. This is deliberately
+ * grouped with autonomousTaskBilling (the same tier that can bill for autonomous work is the same
+ * tier authorized to run it unattended) rather than a new, separate tier boundary.
+ */
+const PRO_MAX_FEATURES: FeatureId[] = [
+  ...PRO_FEATURES,
+  'connectLinear',
+  'connectJira',
+  'autonomousTaskBilling',
+  'autonomousPlanBypass',
+];
 
 /**
  * Every real organization-scoped runtime capability shipped so far
@@ -58,6 +103,9 @@ const PRO_MAX_FEATURES: FeatureId[] = [...PRO_FEATURES];
  * queue, audit log, SSO). GovernanceGate.ts and OrganizationSection.tsx
  * both apply these to ANY organization tier — Team or Enterprise — so they
  * belong on the Team baseline, not gated as Enterprise-exclusive.
+ * connectLinear/connectJira/autonomousTaskBilling are no longer listed here
+ * directly — they're inherited from PRO_MAX_FEATURES (see above), since
+ * Team is a superset of Pro Max.
  */
 const TEAM_FEATURES: FeatureId[] = [
   ...PRO_MAX_FEATURES,
@@ -76,29 +124,24 @@ const TEAM_FEATURES: FeatureId[] = [
   'governanceApprovalQueue',
   'governanceAuditLog',
   'ssoConfiguration',
-  'connectLinear',
-  'connectGoogleWorkspace',
-  'connectJira',
-  'connectSlack',
 ];
 
 /**
- * Enterprise's distinguishing features beyond Team: metered Autonomous
- * Engineering Task billing (seat base fee + usage) instead of a flat
- * per-seat rate, plus organizationCrossDeviceAlerts — Team members get
- * personal Mobile Presence (their own devices/notifications, per-user, not
- * pooled) via TEAM_FEATURES already inheriting PRO_MAX_FEATURES, but only
- * Enterprise additionally routes org-wide governance/security/deployment
- * alerts to trusted devices (Cross Device Runtime checks this feature
- * before publishing an organizationAlert/securityAlert/deploymentAlert
- * cross-device event, vs. a personal taskCompleted/approvalRequired event
- * which only needs crossDeviceSync). Enterprise orgs also get richer RBAC
- * roles (organizationOwner/itAdministrator/securityAdministrator/
- * departmentManager vs Team's flatter owner/admin/member — see
- * ENTERPRISE_ROLES in OrganizationSection.tsx), which is a role list, not a
- * FeatureId gate.
+ * Enterprise's distinguishing feature beyond Team: organizationCrossDeviceAlerts — Team members
+ * get personal Mobile Presence (their own devices/notifications, per-user, not pooled) via
+ * TEAM_FEATURES already inheriting PRO_MAX_FEATURES (which itself now includes
+ * autonomousTaskBilling), but only Enterprise additionally routes org-wide
+ * governance/security/deployment alerts to trusted devices (Cross Device Runtime checks this
+ * feature before publishing an organizationAlert/securityAlert/deploymentAlert cross-device event,
+ * vs. a personal taskCompleted/approvalRequired event which only needs crossDeviceSync).
+ * Enterprise orgs also get richer RBAC roles (organizationOwner/itAdministrator/
+ * securityAdministrator/departmentManager vs Team's flatter owner/admin/member — see
+ * ENTERPRISE_ROLES in OrganizationSection.tsx), which is a role list, not a FeatureId gate.
+ * Enterprise's real billing distinction (metered seat base fee + usage instead of a flat per-seat
+ * rate) is a PricingConfigStore concern, not a FeatureId — autonomousTaskBilling (the Ticket
+ * Balance wallet itself) is now shared with Pro Max/Team, not Enterprise-exclusive.
  */
-const ENTERPRISE_FEATURES: FeatureId[] = [...TEAM_FEATURES, 'autonomousTaskBilling', 'organizationCrossDeviceAlerts'];
+const ENTERPRISE_FEATURES: FeatureId[] = [...TEAM_FEATURES, 'organizationCrossDeviceAlerts'];
 
 export const LEGACY_PLAN_RUNTIME_ENTITLEMENTS: RuntimeEntitlementId[] = ALL_RUNTIME_ENTITLEMENT_IDS;
 
@@ -174,8 +217,57 @@ class EntitlementService {
     return this.getEntitlements().models.includes(modelId);
   }
 
+  /**
+   * For every known Paw model, the minimum tier whose TIER_ENTITLEMENTS.models list actually
+   * includes it — derived directly from the same table isModelAvailable()/getEntitlements() already
+   * read, never a second hardcoded gating rule. Static, account-independent config (doesn't depend
+   * on the current user), so it's exposed as its own read rather than folded into the personal
+   * EntitlementSnapshot. Used by the composer's model picker to render "requires <tier>" instead of
+   * a generic "locked" label — see entitlement:getModelTierRequirements.
+   */
+  getModelTierRequirements(): Partial<Record<PawModelId, SubscriptionTierId>> {
+    const result: Partial<Record<PawModelId, SubscriptionTierId>> = {};
+    for (const modelId of AI_MODELS) {
+      for (const tier of SUBSCRIPTION_TIER_ORDER) {
+        if (TIER_ENTITLEMENTS[tier].models.includes(modelId)) {
+          result[modelId] = tier;
+          break;
+        }
+      }
+    }
+    return result;
+  }
+
   isFeatureAvailable(featureId: FeatureId): boolean {
     return this.getEntitlements().features.includes(featureId);
+  }
+
+  /**
+   * For every FeatureId that appears in any tier's feature list, the minimum tier that actually
+   * unlocks it — derived directly from TIER_ENTITLEMENTS (the same table isFeatureAvailable()
+   * already reads), never a second hand-maintained tier-name map. This is the single source of
+   * truth for "which plan do I need for X" — any UI wanting to tell a user which tier a capability
+   * requires (an upgrade CTA, a locked connector card, a blocked-action message) must call this or
+   * findMinimumTierForFeature() rather than hardcoding a tier name, so the recommendation can never
+   * drift out of sync with the real entitlement table. Static, account-independent config, so it's
+   * exposed as its own read rather than folded into the personal EntitlementSnapshot — see
+   * entitlement:getFeatureTierRequirements.
+   */
+  getFeatureTierRequirements(): Partial<Record<FeatureId, SubscriptionTierId>> {
+    const result: Partial<Record<FeatureId, SubscriptionTierId>> = {};
+    for (const tier of SUBSCRIPTION_TIER_ORDER) {
+      for (const featureId of TIER_ENTITLEMENTS[tier].features) {
+        if (!(featureId in result)) result[featureId] = tier;
+      }
+    }
+    return result;
+  }
+
+  /** Convenience single-feature lookup over getFeatureTierRequirements() — the real, current tier
+   *  a specific capability requires, or null if no tier grants it (shouldn't happen for a real
+   *  FeatureId, but never assumed). */
+  findMinimumTierForFeature(featureId: FeatureId): SubscriptionTierId | null {
+    return this.getFeatureTierRequirements()[featureId] ?? null;
   }
 
   getRuntimeEntitlements(): RuntimeEntitlementId[] {

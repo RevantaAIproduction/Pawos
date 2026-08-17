@@ -11,14 +11,21 @@ import type { FeatureId } from '../billing/BillingTypes';
  * Which connectors require a paid-tier feature flag before the Connections UI enables their
  * Connect button — read via `ipc.entitlementIsFeatureAvailable`/`entitlementGetSnapshot`, never a
  * hardcoded tier name in the UI itself (see EntitlementService.ts's TIER_ENTITLEMENTS for which
- * tier actually grants each FeatureId). GitHub/GitLab/Vercel/Netlify/Railway are intentionally
- * absent — free on every tier, no gate.
+ * tier actually grants each FeatureId). Every connector is gated (none free on Go) — GitHub/
+ * GitLab/Vercel/Netlify/Railway/Google Workspace/Slack require Pro; Jira/Linear require Pro Max
+ * (paired with the Ticket Balance wallet, since they're the connectors that actually write
+ * tickets back for autonomous work).
  */
 export const CONNECTOR_REQUIRED_FEATURE: Partial<Record<string, FeatureId>> = {
   linear: 'connectLinear',
   googleWorkspace: 'connectGoogleWorkspace',
   jira: 'connectJira',
   slack: 'connectSlack',
+  github: 'connectGithub',
+  gitlab: 'connectGitlab',
+  vercel: 'connectVercel',
+  netlify: 'connectNetlify',
+  railway: 'connectRailway',
 };
 
 export type ConnectorCategory =

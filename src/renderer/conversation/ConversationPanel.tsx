@@ -5,8 +5,31 @@ import { conversationStateLabels } from './ConversationTypes';
 import { TaskCard } from './TaskCard';
 import { ProjectPlanCard } from './ProjectPlanCard';
 import { isProjectPlanMessage } from './ProjectPlanningUX';
-import { CreditsRequiredNotice } from '../ui/billing/CreditsRequiredNotice';
-import type { SeatTier, SubscriptionTierId } from '../../shared/billing/BillingTypes';
+import { CreditsRequiredNotice, getExhaustionPrimaryActions } from '../ui/billing/CreditsRequiredNotice';
+import type { EntitlementSnapshot, SeatTier, SubscriptionTierId } from '../../shared/billing/BillingTypes';
+import { DEFAULT_EXECUTION_MODE, EXECUTION_MODE_CATALOG, type ConversationExecutionMode } from '../../shared/actions/ExecutionModeTypes';
+import {
+  DEFAULT_PAW_MODEL_ID,
+  PAW_MODEL_CATALOG,
+  REASONING_PAW_MODEL_IDS,
+  getPawModel,
+  type PawModelDescriptor,
+  type PawModelId,
+} from '../../shared/ai/PawModelTypes';
+import { formatTierLabel } from '../billing/EntitlementDisplay';
+
+/** Reasoning models are genuinely selectable (they change which model actually answers); the rest
+ *  of the catalog are automatic, specialized routers Paw invokes per-need — shown for transparency
+ *  only, never clickable, mirroring AISettingsPage.tsx's own "Default reasoning model" vs. "All Paw
+ *  models" split. */
+type ModelUiState = 'available' | 'locked' | 'exhausted' | 'comingSoon';
+
+function getModelUiState(model: PawModelDescriptor, entitlement: EntitlementSnapshot | null | undefined): ModelUiState {
+  if (model.status === 'comingSoon') return 'comingSoon';
+  if (!entitlement || !entitlement.models.includes(model.id)) return 'locked';
+  if (!entitlement.hasCreditsRemaining) return 'exhausted';
+  return 'available';
+}
 
 /** Below this, a paste is probably just a short phrase someone copied — above it, it reads as reference material to skim/summarize rather than a spoken command. */
 const PASTE_LENGTH_THRESHOLD = 200;
@@ -58,6 +81,13 @@ export function ConversationPanel({
   onUseCredits,
   redeemingCredits,
   redeemCreditsError,
+  executionMode,
+  onSetExecutionMode,
+  bypassPermissionsEnabled,
+  entitlement,
+  activePawModel,
+  modelTierRequirements,
+  onSelectModel,
 }: {
   snapshot: ConversationSnapshot;
   onClose: () => void;
@@ -102,14 +132,52 @@ export function ConversationPanel({
   onUseCredits?: () => void;
   redeemingCredits?: boolean;
   redeemCreditsError?: string | null;
+  /** The composer's mode picker — see ExecutionModeTypes.ts. Defaults to Auto (today's behavior) when omitted. */
+  executionMode?: ConversationExecutionMode;
+  onSetExecutionMode?: (mode: ConversationExecutionMode) => void;
+  /** Whether the Settings-only "Bypass permissions" toggle is currently on — gates whether that mode is selectable at all. */
+  bypassPermissionsEnabled?: boolean;
+  /** The composer's model picker — see PawModelTypes.ts/AIRouter.ts. Authoritative for what's actually
+   *  selectable/locked/exhausted; the renderer never grants access on its own (see selectModel in
+   *  useConversationController.ts and the submitTranscript backstop it also adds). */
+  entitlement?: EntitlementSnapshot | null;
+  activePawModel?: PawModelId;
+  modelTierRequirements?: Partial<Record<PawModelId, SubscriptionTierId>>;
+  onSelectModel?: (id: PawModelId) => void;
 }) {
   const [draft, setDraft] = useState('');
   const [wasPasted, setWasPasted] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
+  const [modeMenuOpen, setModeMenuOpen] = useState(false);
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
+  const modeMenuRef = useRef<HTMLDivElement>(null);
+  const modelMenuRef = useRef<HTMLDivElement>(null);
   const lastSyncedVoiceDraftRef = useRef('');
+  const activeExecutionMode = executionMode ?? DEFAULT_EXECUTION_MODE;
+  const activeModeDescriptor =
+    EXECUTION_MODE_CATALOG.find((m) => m.id === activeExecutionMode) ?? EXECUTION_MODE_CATALOG.find((m) => m.id === DEFAULT_EXECUTION_MODE)!;
+  const activePawModelDescriptor = getPawModel(activePawModel ?? DEFAULT_PAW_MODEL_ID);
+
+  useEffect(() => {
+    if (!modeMenuOpen) return;
+    const onClick = (event: MouseEvent) => {
+      if (modeMenuRef.current && !modeMenuRef.current.contains(event.target as Node)) setModeMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [modeMenuOpen]);
+
+  useEffect(() => {
+    if (!modelMenuOpen) return;
+    const onClick = (event: MouseEvent) => {
+      if (modelMenuRef.current && !modelMenuRef.current.contains(event.target as Node)) setModelMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [modelMenuOpen]);
 
   const latestMessage = useMemo(() => snapshot.messages[snapshot.messages.length - 1], [snapshot.messages]);
 
@@ -375,6 +443,162 @@ export function ConversationPanel({
         >
           📎
         </button>
+        <div className={styles.modePickerWrap} ref={modeMenuRef}>
+          <button
+            type="button"
+            className={styles.modePickerBtn}
+            onClick={() => setModeMenuOpen((open) => !open)}
+            aria-haspopup="listbox"
+            aria-expanded={modeMenuOpen}
+            title="Execution mode — controls when Paw asks before acting"
+          >
+            <span>{activeModeDescriptor.label}</span>
+            <span className={styles.modePickerChevron}>{modeMenuOpen ? '▴' : '▾'}</span>
+          </button>
+          {modeMenuOpen && (
+            <div className={styles.modePickerMenu} role="listbox">
+              {EXECUTION_MODE_CATALOG.map((mode) => {
+                const disabled = mode.id === 'bypass' && !bypassPermissionsEnabled;
+                const selected = mode.id === activeExecutionMode;
+                return (
+                  <button
+                    key={mode.id}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    disabled={disabled}
+                    className={`${styles.modePickerOption} ${selected ? styles.modePickerOptionSelected : ''}`}
+                    onClick={() => {
+                      if (disabled) return;
+                      onSetExecutionMode?.(mode.id);
+                      setModeMenuOpen(false);
+                    }}
+                  >
+                    <span className={styles.modePickerOptionCheck}>{selected ? '✓' : ''}</span>
+                    <span className={styles.modePickerOptionText}>
+                      <span className={styles.modePickerOptionLabel}>{mode.label}</span>
+                      <span className={styles.modePickerOptionDesc}>
+                        {disabled ? 'Enable in Settings → Advanced' : mode.description}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        <div className={styles.modelPickerWrap} ref={modelMenuRef}>
+          <button
+            type="button"
+            className={styles.modelPickerBtn}
+            onClick={() => setModelMenuOpen((open) => !open)}
+            aria-haspopup="listbox"
+            aria-expanded={modelMenuOpen}
+            title="Model — which Paw model answers this conversation"
+          >
+            <span>{activePawModelDescriptor.label}</span>
+            <span className={styles.modelPickerChevron}>{modelMenuOpen ? '▴' : '▾'}</span>
+          </button>
+          {modelMenuOpen && (() => {
+            const exhaustionAction = entitlement
+              ? getExhaustionPrimaryActions(entitlement.tier, entitlement.seatTier, entitlement.pooled, enterpriseContactAvailable ?? false)[0]
+              : undefined;
+            const exhaustionActionHandlers: Record<string, (() => void) | undefined> = {
+              upgrade: onUpgrade,
+              buyCompute: onBuyCompute,
+              contactSales: onContactSales,
+              contactAdmin: onContactAdmin,
+              requestMoreCompute: onRequestMoreCompute,
+            };
+            const reasoningModels = PAW_MODEL_CATALOG.filter((m) => REASONING_PAW_MODEL_IDS.includes(m.id));
+            const otherModels = PAW_MODEL_CATALOG.filter((m) => !REASONING_PAW_MODEL_IDS.includes(m.id));
+            return (
+              <div className={styles.modelPickerMenu} role="listbox">
+                <div className={styles.modelPickerGroupLabel}>Reasoning models</div>
+                {reasoningModels.map((model) => {
+                  const state = getModelUiState(model, entitlement);
+                  const selected = model.id === activePawModel;
+                  const requiredTier = modelTierRequirements?.[model.id];
+                  return (
+                    <div key={model.id} className={styles.modelPickerOption}>
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={selected}
+                        disabled={state !== 'available'}
+                        className={`${styles.modelPickerOptionMain} ${selected ? styles.modelPickerOptionSelected : ''} ${
+                          state !== 'available' ? styles.modelPickerOptionLocked : ''
+                        }`}
+                        onClick={() => {
+                          if (state !== 'available') return;
+                          onSelectModel?.(model.id);
+                          setModelMenuOpen(false);
+                        }}
+                      >
+                        <span className={styles.modelPickerOptionCheck}>{selected ? '✓' : ''}</span>
+                        <span className={styles.modelPickerOptionText}>
+                          <span className={styles.modelPickerOptionLabel}>{model.label}</span>
+                          <span className={styles.modelPickerOptionDesc}>
+                            {state === 'locked' && `🔒 ${formatTierLabel(requiredTier ?? 'pro')} required`}
+                            {state === 'exhausted' && 'Usage limit reached'}
+                            {state === 'available' && model.description}
+                          </span>
+                        </span>
+                      </button>
+                      {state === 'locked' && (
+                        <button
+                          type="button"
+                          className={styles.modelPickerOptionAction}
+                          onClick={() => {
+                            onUpgrade?.();
+                            setModelMenuOpen(false);
+                          }}
+                        >
+                          Upgrade
+                        </button>
+                      )}
+                      {state === 'exhausted' && exhaustionAction && (
+                        <button
+                          type="button"
+                          className={styles.modelPickerOptionAction}
+                          onClick={() => {
+                            exhaustionActionHandlers[exhaustionAction.id]?.();
+                            setModelMenuOpen(false);
+                          }}
+                        >
+                          {exhaustionAction.label}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+                <div className={styles.modelPickerGroupLabel}>Other Paw models</div>
+                {otherModels.map((model) => {
+                  const state = getModelUiState(model, entitlement);
+                  const requiredTier = modelTierRequirements?.[model.id];
+                  return (
+                    <div key={model.id} className={`${styles.modelPickerOption} ${styles.modelPickerOptionStatic}`}>
+                      <span className={styles.modelPickerOptionText}>
+                        <span className={styles.modelPickerOptionLabel}>{model.label}</span>
+                        <span className={styles.modelPickerOptionDesc}>{model.description}</span>
+                      </span>
+                      <span
+                        className={`${styles.modelPickerBadge} ${
+                          state === 'available' ? styles.modelPickerBadgeAvailable : styles.modelPickerBadgeMuted
+                        }`}
+                      >
+                        {state === 'comingSoon' && 'Coming soon'}
+                        {state === 'locked' && `🔒 ${formatTierLabel(requiredTier ?? 'pro')} required`}
+                        {state === 'exhausted' && 'Usage limit reached'}
+                        {state === 'available' && 'Available'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </div>
         <textarea
           ref={textareaRef}
           className={styles.input}

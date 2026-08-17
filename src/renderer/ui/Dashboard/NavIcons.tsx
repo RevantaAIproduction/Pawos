@@ -323,3 +323,25 @@ export function PlugIcon() {
     </svg>
   );
 }
+
+export function MoreIcon() {
+  return (
+    <svg {...base} strokeWidth={2.4} strokeLinecap="round">
+      <path d="M12 5.2v.1" />
+      <path d="M12 11.95v.1" />
+      <path d="M12 18.7v.1" />
+    </svg>
+  );
+}
+
+export function TrashIcon() {
+  return (
+    <svg {...base}>
+      <path d="M5 7h14" />
+      <path d="M9.5 7V5a1.5 1.5 0 0 1 1.5-1.5h2A1.5 1.5 0 0 1 14.5 5v2" />
+      <path d="M7 7l1 12.5A1.5 1.5 0 0 0 9.5 21h5a1.5 1.5 0 0 0 1.5-1.5L17 7" />
+      <path d="M10.3 11v6" />
+      <path d="M13.7 11v6" />
+    </svg>
+  );
+}

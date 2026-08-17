@@ -16,7 +16,8 @@ import type { WorkspaceObservationEvent } from '../../../shared/actions/Executio
 import type { ExecutionRecord } from '../../../shared/actions/ExecutionRecordTypes';
 import type { BrowserCapabilityReport } from '../../../shared/actions/BrowserCapabilityTypes';
 import type { CommunicationRuntimeEvent } from '../../../shared/communication/CommunicationTypes';
-import type { CreditBalance, EntitlementSnapshot, SubscriptionState } from '../../../shared/billing/BillingTypes';
+import type { CreditBalance, EntitlementSnapshot, FeatureId, SubscriptionState, SubscriptionTierId } from '../../../shared/billing/BillingTypes';
+import type { PawModelId } from '../../../shared/ai/PawModelTypes';
 import type { AiUsageCategory } from '../../../shared/billing/AiUsageCategories';
 
 export function useIpcBridge() {
@@ -97,6 +98,10 @@ export function useIpcBridge() {
       onCommunicationEvent: (cb: (event: CommunicationRuntimeEvent) => void) => ipc.onCommunicationEvent(cb),
 
       entitlementGetSnapshot: async (): Promise<EntitlementSnapshot> => ipc.entitlementGetSnapshot(),
+      entitlementGetModelTierRequirements: async (): Promise<Partial<Record<PawModelId, SubscriptionTierId>>> =>
+        ipc.entitlementGetModelTierRequirements(),
+      entitlementGetFeatureTierRequirements: async (): Promise<Partial<Record<FeatureId, SubscriptionTierId>>> =>
+        ipc.entitlementGetFeatureTierRequirements(),
       billingGetSubscription: async (): Promise<SubscriptionState> => ipc.billingGetSubscription(),
       billingConsumeCredit: async (amount: number, reason: string, category?: AiUsageCategory): Promise<CreditBalance> =>
         ipc.billingConsumeCredit(amount, reason, category),

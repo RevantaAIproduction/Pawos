@@ -1,5 +1,8 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Container } from "../ui/Container";
 
 const GROUPS: { title: string; links: { href: string; label: string }[] }[] = [
@@ -46,6 +49,10 @@ const GROUPS: { title: string; links: { href: string; label: string }[] }[] = [
 ];
 
 export function Footer() {
+  const pathname = usePathname();
+  // Same reasoning as Nav.tsx — the documentation shell owns its own chrome entirely.
+  if (pathname?.startsWith("/docs")) return null;
+
   return (
     <footer className="border-t border-neutral-800 bg-neutral-950">
       <Container className="py-12">

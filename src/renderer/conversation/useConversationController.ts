@@ -12,7 +12,9 @@ import { withAutonomousTaskBilling } from '../organization/AutonomousTaskBilling
 import type { VisemeFrame } from './LipSyncTypes';
 import type { SubmittedInputContext } from './ConversationTypes';
 import { buildSystemPrompt, buildLanguageInstruction } from './systemPrompt';
+import { DEFAULT_EXECUTION_MODE, buildPlanModeInstruction, type ConversationExecutionMode } from '../../shared/actions/ExecutionModeTypes';
 import type { EntitlementSnapshot, SubscriptionTierId } from '../../shared/billing/BillingTypes';
+import { DEFAULT_PAW_MODEL_ID, type PawModelId } from '../../shared/ai/PawModelTypes';
 import { categorizeTurn } from '../../shared/billing/AiUsageCategories';
 import { getToolDefinitionsForEntitlement } from '../ai/IntentRegistry';
 import { organizationService } from '../organization/OrganizationService';
@@ -65,12 +67,60 @@ export function useConversationController(args?: {
   // transcribe, never what it replied in.
   const speechLanguageRef = useRef('en-US');
 
+  // The composer's execution mode (Manual/Accept edits/Plan/Auto/Bypass permissions — see
+  // ExecutionModeTypes.ts) — read fresh via a ref (never a stale closure) by ConversationRuntime on
+  // every requires-confirmation result, so switching modes mid-conversation takes effect
+  // immediately. React state exists alongside the ref purely so the composer UI can render the
+  // current selection.
+  const [executionMode, setExecutionModeState] = useState<ConversationExecutionMode>(DEFAULT_EXECUTION_MODE);
+  const executionModeRef = useRef(executionMode);
+  executionModeRef.current = executionMode;
+  // Settings-only "Bypass permissions" toggle (default off) — fetched once below alongside the
+  // existing speechLanguage settings read. Never re-derived from anything model-controllable.
+  const [bypassPermissionsEnabled, setBypassPermissionsEnabledState] = useState(false);
+  const bypassPermissionsEnabledRef = useRef(bypassPermissionsEnabled);
+  bypassPermissionsEnabledRef.current = bypassPermissionsEnabled;
+
+  // The composer's model picker — see PawModelTypes.ts/AIRouter.ts/AIProviderConfigStore.ts (the
+  // real, existing, global, localStorage-persisted model-selection state; not new state invented
+  // for this picker). Mirrored into React state purely so the composer re-renders when it changes
+  // (e.g. from AISettingsPage, or the picker itself); aiProviderConfigStore stays the source of
+  // truth and is what AIRouter.getReasoningProvider() actually reads on every turn.
+  const [activePawModel, setActivePawModelState] = useState<PawModelId>(aiProviderConfigStore.getActivePawModel());
+  // For every model, the minimum tier that unlocks it — derived server-side from
+  // EntitlementService's own TIER_ENTITLEMENTS (see entitlement:getModelTierRequirements), never a
+  // second hardcoded gating table in the renderer. Static, account-independent; fetched once.
+  const [modelTierRequirements, setModelTierRequirements] = useState<Partial<Record<PawModelId, SubscriptionTierId>>>({});
+
   const applySystemPrompt = useCallback((canExecute: boolean) => {
     const base = buildSystemPrompt(canExecute);
     const addendum = personalityAddendumRef.current;
     const languageInstruction = buildLanguageInstruction(speechLanguageRef.current);
-    const combined = [base, addendum, languageInstruction].filter(Boolean).join('\n\n');
+    const planModeInstruction = executionModeRef.current === 'plan' ? buildPlanModeInstruction() : '';
+    const combined = [base, addendum, languageInstruction, planModeInstruction].filter(Boolean).join('\n\n');
     runtimeRef.current?.setReasoningSystemPrompt(combined);
+  }, []);
+
+  /** Switches the composer's execution mode — see ExecutionModeTypes.ts. Re-applies the system
+   *  prompt so Plan mode's instruction composes/decomposes immediately, matching the same
+   *  ref+applySystemPrompt pattern setPersonalityAddendum already uses below. */
+  const setExecutionMode = useCallback((mode: ConversationExecutionMode) => {
+    executionModeRef.current = mode;
+    setExecutionModeState(mode);
+    const canExecute = entitlementRef.current?.features.includes('advancedRuntimes') ?? false;
+    applySystemPrompt(canExecute);
+  }, [applySystemPrompt]);
+
+  /** Switches the composer's active Paw model — see the model-picker state block above. Entitlement-
+   *  gated against the current account's real model list (never a second hardcoded table); silently
+   *  no-ops for a model the account isn't entitled to rather than ever appearing to "succeed" in the
+   *  UI. Delegates to aiRouter.setActivePawModel, which persists to aiProviderConfigStore and is what
+   *  the existing aiProviderConfigStore.subscribe() callback above picks up to live-repoint the
+   *  running runtime's reasoning provider — the same hot-swap path AISettingsPage already exercises. */
+  const selectModel = useCallback((id: PawModelId) => {
+    const current = entitlementRef.current;
+    if (current && !current.models.includes(id)) return;
+    aiRouter.setActivePawModel(id);
   }, []);
 
   const refreshEntitlement = useCallback(() => {
@@ -80,6 +130,11 @@ export function useConversationController(args?: {
   useEffect(() => {
     refreshEntitlement();
   }, [refreshEntitlement]);
+
+  // Static, account-independent config — fetched once, not re-fetched on every entitlement refresh.
+  useEffect(() => {
+    ipc.entitlementGetModelTierRequirements().then(setModelTierRequirements).catch(() => {});
+  }, [ipc]);
 
   // Resolved once per session, not re-fetched on every entitlement refresh — organization
   // membership doesn't change mid-session in practice, matching the same session-scoped resolution
@@ -171,6 +226,11 @@ export function useConversationController(args?: {
     // resolves rather than blocking construction) and re-applied instantly
     // whenever the user changes it, via the window event ProfileMenu fires.
     ipc.getSettings().then((s) => {
+      // Real, persisted, off-by-default setting — never re-derived from the model or from
+      // executionMode itself. Read once here (async, matching the speechLanguage precedent
+      // immediately below); the Settings page is the only place this can be changed.
+      bypassPermissionsEnabledRef.current = s.bypassPermissionsEnabled ?? false;
+      setBypassPermissionsEnabledState(s.bypassPermissionsEnabled ?? false);
       if (s.speechLanguage && s.speechLanguage !== 'en-US') {
         speechLanguageRef.current = s.speechLanguage;
         runtimeRef.current?.setSpeechRecognitionProvider(
@@ -199,9 +259,34 @@ export function useConversationController(args?: {
       speechRecognition: speechRecognitionProvider,
       speechSynthesis: speechSynthesisProvider,
       reasoningRuntime,
-      onStateChange: (state) => onStateChangeRef.current?.(state),
+      // A turn only reaches 'completed' after a real reasoning call succeeded (Go-tier/exhausted-
+      // credit turns are stopped in submitTranscript() and never reach the runtime), so this is the
+      // one honest point to record usage. This must happen here, synchronously off the runtime's own
+      // notification, not from a useEffect watching the React-rendered snapshot.state: the runtime
+      // transitions 'completed' -> 'idle' with no await between the two updateSnapshot() calls (see
+      // ConversationRuntime.ts's drainPendingActionsAndFinalize), so React 18 batches both setState
+      // calls into one render and 'completed' is never actually observed by rendered state — a real
+      // bug that silently dropped every turn's usage record. onStateChange fires unbatched for every
+      // transition, so it's the only reliable place to catch 'completed'. The category is derived
+      // from the just-completed turn's real Task Card actions (or its real input source when no
+      // action ran) — never a guessed/fabricated label. Pooled (Enterprise) accounts are skipped —
+      // their consumption already happened pre-flight in submitTranscript() via
+      // organizationUsageService, since the pooled RPC only supports atomic check+increment, not a
+      // separate post-hoc record step.
+      onStateChange: (state) => {
+        onStateChangeRef.current?.(state);
+        if (state === 'completed' && !entitlementRef.current?.pooled) {
+          const currentSnapshot = runtimeRef.current?.getSnapshot();
+          const lastTaskMessage = currentSnapshot ? [...currentSnapshot.messages].reverse().find((m) => m.task) : undefined;
+          const actionTypes = lastTaskMessage?.task?.actions.map((a) => a.type) ?? [];
+          const category = categorizeTurn(actionTypes, lastInputSourceRef.current);
+          ipc.billingConsumeCredit(1, 'conversation-turn', category).then(() => refreshEntitlement()).catch(() => {});
+        }
+      },
       executeAction: withAutonomousTaskBilling(withGovernanceGate((request) => ipc.executeAction(request))),
       checkActionRequirements: (request) => ipc.checkActionRequirements(request),
+      getExecutionMode: () => executionModeRef.current,
+      isBypassPermissionsEnabled: () => bypassPermissionsEnabledRef.current,
       describeAction: (request) => ipc.describeAction(request),
       reportActionResult: (request, result) => ipc.reportActionResult(request, result),
       onProcessOutput: (cb) => ipc.onProcessOutput(cb),
@@ -245,6 +330,7 @@ export function useConversationController(args?: {
       runtimeRef.current?.setSpeechRecognitionProvider(
         createSttProvider({ id: 'gemini', apiKey: aiProviderConfigStore.getApiKey('gemini') })
       );
+      setActivePawModelState(aiProviderConfigStore.getActivePawModel());
     });
 
     return () => {
@@ -273,6 +359,17 @@ export function useConversationController(args?: {
       if (current && (current.models.length === 0 || !current.hasCreditsRemaining)) {
         setCreditsNoticeTier(current.tier);
         return;
+      }
+
+      // Security backstop — the renderer's model picker (selectModel, below) already refuses to
+      // select a model the account isn't entitled to, but nothing upstream of this point re-checks
+      // that the *currently active* model (aiProviderConfigStore's persisted state) is still one
+      // this account's entitlement actually grants — e.g. after a downgrade, or a stale
+      // localStorage value from a different account on the same machine. Never let an unentitled
+      // model reach the reasoning provider: silently fall back to paw-flash (present in every
+      // tier's model list, including Go) rather than blocking the turn outright.
+      if (current && current.models.length > 0 && !current.models.includes(aiProviderConfigStore.getActivePawModel())) {
+        aiRouter.setActivePawModel('paw-flash');
       }
 
       // Pooled (Enterprise) Paw Compute has no local counter to check ahead of time — the pool is
@@ -308,24 +405,6 @@ export function useConversationController(args?: {
     []
   );
 
-  // A turn only reaches 'completed' after a real reasoning call succeeded
-  // (Go-tier/exhausted-credit turns are stopped above and never reach the
-  // runtime), so this is the one honest point to record usage. The category
-  // is derived from the just-completed turn's real Task Card actions (or its
-  // real input source when no action ran) — never a guessed/fabricated label.
-  // Pooled (Enterprise) accounts are skipped here — their consumption already
-  // happened pre-flight in submitTranscript() via organizationUsageService,
-  // since the pooled RPC only supports atomic check+increment, not a
-  // separate post-hoc record step (see submitTranscript's own comment).
-  useEffect(() => {
-    if (snapshot.state === 'completed' && !entitlementRef.current?.pooled) {
-      const lastTaskMessage = [...snapshot.messages].reverse().find((m) => m.task);
-      const actionTypes = lastTaskMessage?.task?.actions.map((a) => a.type) ?? [];
-      const category = categorizeTurn(actionTypes, lastInputSourceRef.current);
-      ipc.billingConsumeCredit(1, 'conversation-turn', category).then(() => refreshEntitlement()).catch(() => {});
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snapshot.state, ipc, refreshEntitlement]);
   const speak = useCallback((text: string) => runtimeRef.current?.speak(text), []);
   const setVoiceOutputEnabled = useCallback((enabled: boolean) => runtimeRef.current?.setVoiceOutputEnabled(enabled), []);
   const stopSpeechPlayback = useCallback(() => runtimeRef.current?.stopSpeechPlayback(), []);
@@ -393,5 +472,11 @@ export function useConversationController(args?: {
     useCreditsForCompute,
     redeemingCredits,
     redeemCreditsError,
+    executionMode,
+    setExecutionMode,
+    bypassPermissionsEnabled,
+    activePawModel,
+    modelTierRequirements,
+    selectModel,
   };
 }

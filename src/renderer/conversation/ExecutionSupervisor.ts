@@ -192,7 +192,7 @@ export class ExecutionSupervisor {
     if (this.current) this.persist({ ...this.current });
   }
 
-  begin(goal: string): void {
+  begin(goal: string, opts?: { externalRunId?: string }): void {
     this.current = {
       id: uuidv4(),
       goal,
@@ -211,6 +211,7 @@ export class ExecutionSupervisor {
       recoveryAttempts: 0,
       timeline: [],
       summary: '',
+      externalRunId: opts?.externalRunId,
     };
     this.completedResults.clear();
     this.persistCurrent();

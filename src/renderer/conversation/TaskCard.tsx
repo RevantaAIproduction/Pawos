@@ -403,7 +403,9 @@ const STEP_STATUS_PILL_CLASS: Record<PlannedStep['status'], string> = {
   proposed: 'stepProposed',
   approved: 'stepApproved',
   rejected: 'stepRejected',
-  executed: 'stepExecuted',
+  executing: 'stepExecuting',
+  completed: 'stepCompleted',
+  failed: 'stepFailed',
 };
 
 function formatDuration(ms: number): string {

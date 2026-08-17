@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { getCompanionReply } from "../../lib/site-companion/respond";
 import { trackEvent } from "../analytics/Analytics";
@@ -29,6 +30,7 @@ const OPENING_SUGGESTIONS = [
 ];
 
 export function SiteCompanion() {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -73,6 +75,8 @@ export function SiteCompanion() {
     setInput("");
     trackEvent("site_companion_message_sent");
   }
+
+  if (pathname?.startsWith("/docs")) return null;
 
   return (
     <div

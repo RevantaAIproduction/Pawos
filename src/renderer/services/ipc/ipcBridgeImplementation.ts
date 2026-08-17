@@ -46,6 +46,7 @@ import type {
   CheckoutOptions,
   FeatureId,
   EntitlementSnapshot,
+  SeatTier,
 } from '../../../shared/billing/BillingTypes';
 import type { AiUsageCategory } from '../../../shared/billing/AiUsageCategories';
 import type { OrganizationUsageRecordRequest, OrganizationUsageRecordResponse } from '../../../shared/billing/OrganizationUsageBridgeTypes';
@@ -255,8 +256,8 @@ export const ipc = {
   async billingSetSubscriptionTier(tier: SubscriptionTierId): Promise<SubscriptionState> {
     return getBridge().billingSetSubscriptionTier(tier);
   },
-  async billingSyncTierFromOrganization(orgTier: SubscriptionTierId): Promise<SubscriptionState> {
-    return getBridge().billingSyncTierFromOrganization(orgTier);
+  async billingSyncTierFromOrganization(accessToken: string, organizationId: string, seatTier?: SeatTier): Promise<SubscriptionState> {
+    return getBridge().billingSyncTierFromOrganization(accessToken, organizationId, seatTier);
   },
   async billingReconcileForAccount(accountId: string): Promise<SubscriptionState> {
     return getBridge().billingReconcileForAccount(accountId);
@@ -285,14 +286,20 @@ export const ipc = {
   async entitlementIsFeatureAvailable(featureId: FeatureId): Promise<boolean> {
     return getBridge().entitlementIsFeatureAvailable(featureId);
   },
+  async entitlementGetModelTierRequirements(): Promise<Partial<Record<PawModelId, SubscriptionTierId>>> {
+    return getBridge().entitlementGetModelTierRequirements();
+  },
+  async entitlementGetFeatureTierRequirements(): Promise<Partial<Record<FeatureId, SubscriptionTierId>>> {
+    return getBridge().entitlementGetFeatureTierRequirements();
+  },
   async billingCreateCheckoutSession(tier: SubscriptionTierId, callbackUrl?: string, options?: CheckoutOptions): Promise<BillingCheckoutResult> {
     return getBridge().billingCreateCheckoutSession(tier, callbackUrl, options);
   },
   async billingStartCheckoutSync(): Promise<string> {
     return getBridge().billingStartCheckoutSync();
   },
-  async billingCreateCreditsCheckoutSession(amountUsd: number, organizationId?: string, callbackUrl?: string): Promise<BillingCheckoutResult> {
-    return getBridge().billingCreateCreditsCheckoutSession(amountUsd, organizationId, callbackUrl);
+  async billingCreateCreditsCheckoutSession(amountUsd: number, organizationId?: string, callbackUrl?: string, accessToken?: string): Promise<BillingCheckoutResult> {
+    return getBridge().billingCreateCreditsCheckoutSession(amountUsd, organizationId, callbackUrl, accessToken);
   },
   onSubscriptionUpdated(cb: () => void) {
     return getBridge().onSubscriptionUpdated(cb);
@@ -459,6 +466,12 @@ export const ipc = {
   },
   async connectivityRefreshDiscovery(): Promise<ConnectivityIpcResult<void>> {
     return getBridge().connectivityRefreshDiscovery();
+  },
+  async connectivityVerifyPullRequestExists(prUrl: string): Promise<ConnectivityIpcResult<{ verified: boolean; reason: string }>> {
+    return getBridge().connectivityVerifyPullRequestExists(prUrl);
+  },
+  async connectivityPostAutonomousCompletionComment(prUrl: string, body: string): Promise<ConnectivityIpcResult<{ posted: boolean; reason: string; commentUrl?: string }>> {
+    return getBridge().connectivityPostAutonomousCompletionComment(prUrl, body);
   },
   async connectivityDeploymentProfilesCreate(
     scope: ConnectivityScope,

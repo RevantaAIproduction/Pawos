@@ -119,12 +119,18 @@ export type VisualEvidence = {
  * only, is never executed by the planner itself, and every step must trace
  * back to the specific approved Finding(s) it addresses via `findingRefs` —
  * same evidence-linking discipline as Finding.evidenceRefs. `status` starts
- * at 'proposed' for every step the planner builds; 'approved'/'rejected'/
- * 'executed' are set later, outside the planner, once a user has actually
- * reviewed the plan and a step's `actionRequest` has gone through the
- * normal, unmodified DesktopExecutionEngine.execute() path.
+ * at 'proposed' for every step the planner builds; every later transition
+ * (approved/rejected/executing/completed/failed) is validated by
+ * ExecutionPlanLifecycle.ts's transitionPlannedStep() — never set by direct
+ * field assignment — so an invalid jump (e.g. 'proposed' straight to
+ * 'completed', or any transition out of the terminal 'rejected'/'completed'/
+ * 'failed' states) is rejected outright rather than silently accepted. Only
+ * an 'approved' step may ever be executed — see
+ * ExecutionPlanLifecycle.executeApprovedPlanSteps(), the one function that
+ * turns a step's `actionRequest` into a real DesktopExecutionEngine.execute()
+ * call, which skips (never force-executes) any step not already 'approved'.
  */
-export type PlannedStepStatus = 'proposed' | 'approved' | 'rejected' | 'executed';
+export type PlannedStepStatus = 'proposed' | 'approved' | 'rejected' | 'executing' | 'completed' | 'failed';
 
 export type PlannedStep = {
   id: string;

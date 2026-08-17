@@ -47,6 +47,7 @@ import type {
   CheckoutOptions,
   FeatureId,
   EntitlementSnapshot,
+  SeatTier,
 } from "../../shared/billing/BillingTypes";
 import type { AiUsageCategory } from "../../shared/billing/AiUsageCategories";
 import {
@@ -55,6 +56,16 @@ import {
   type OrganizationUsageRecordRequest,
   type OrganizationUsageRecordResponse,
 } from "../../shared/billing/OrganizationUsageBridgeTypes";
+import {
+  CONNECTIVITY_CREDENTIAL_PERSIST_REQUEST_CHANNEL,
+  CONNECTIVITY_CREDENTIAL_PERSIST_RESPONSE_CHANNEL_PREFIX,
+  CONNECTIVITY_CREDENTIAL_REVOKE_REQUEST_CHANNEL,
+  CONNECTIVITY_CREDENTIAL_REVOKE_RESPONSE_CHANNEL_PREFIX,
+  type ConnectivityCredentialPersistRequest,
+  type ConnectivityCredentialPersistResponse,
+  type ConnectivityCredentialRevokeRequest,
+  type ConnectivityCredentialRevokeResponse,
+} from "../../shared/connectivity/ConnectivityCredentialBridgeTypes";
 import type { PawModelId } from "../../shared/ai/PawModelTypes";
 import type { OnboardingState } from "../../shared/onboarding/OnboardingTypes";
 import type {
@@ -74,6 +85,20 @@ export function contextBridge() {
     },
     organizationUsageRecordRespond: (requestId: string, response: OrganizationUsageRecordResponse) =>
       ipcRenderer.invoke(`${ORGANIZATION_USAGE_RECORD_RESPONSE_CHANNEL_PREFIX}:${requestId}`, response) as Promise<void>,
+    onConnectivityCredentialPersistRequest: (cb: (request: ConnectivityCredentialPersistRequest) => void) => {
+      const handler = (_: Electron.IpcRendererEvent, request: ConnectivityCredentialPersistRequest) => cb(request);
+      ipcRenderer.on(CONNECTIVITY_CREDENTIAL_PERSIST_REQUEST_CHANNEL, handler);
+      return () => ipcRenderer.removeListener(CONNECTIVITY_CREDENTIAL_PERSIST_REQUEST_CHANNEL, handler);
+    },
+    connectivityCredentialPersistRespond: (requestId: string, response: ConnectivityCredentialPersistResponse) =>
+      ipcRenderer.invoke(`${CONNECTIVITY_CREDENTIAL_PERSIST_RESPONSE_CHANNEL_PREFIX}:${requestId}`, response) as Promise<void>,
+    onConnectivityCredentialRevokeRequest: (cb: (request: ConnectivityCredentialRevokeRequest) => void) => {
+      const handler = (_: Electron.IpcRendererEvent, request: ConnectivityCredentialRevokeRequest) => cb(request);
+      ipcRenderer.on(CONNECTIVITY_CREDENTIAL_REVOKE_REQUEST_CHANNEL, handler);
+      return () => ipcRenderer.removeListener(CONNECTIVITY_CREDENTIAL_REVOKE_REQUEST_CHANNEL, handler);
+    },
+    connectivityCredentialRevokeRespond: (requestId: string, response: ConnectivityCredentialRevokeResponse) =>
+      ipcRenderer.invoke(`${CONNECTIVITY_CREDENTIAL_REVOKE_RESPONSE_CHANNEL_PREFIX}:${requestId}`, response) as Promise<void>,
     processWriteStdin: (processId: string, data: string) =>
       ipcRenderer.invoke("process:writeStdin", processId, data) as Promise<{ ok: true } | { ok: false; message: string }>,
     systemGetHomeDir: () => ipcRenderer.invoke("system:getHomeDir") as Promise<string>,
@@ -178,8 +203,8 @@ export function contextBridge() {
     billingGetSubscription: () => ipcRenderer.invoke("billing:getSubscription") as Promise<SubscriptionState>,
     billingSetSubscriptionTier: (tier: SubscriptionTierId) =>
       ipcRenderer.invoke("billing:setSubscriptionTier", tier) as Promise<SubscriptionState>,
-    billingSyncTierFromOrganization: (orgTier: SubscriptionTierId) =>
-      ipcRenderer.invoke("billing:syncFromOrganization", orgTier) as Promise<SubscriptionState>,
+    billingSyncTierFromOrganization: (accessToken: string, organizationId: string, seatTier?: SeatTier) =>
+      ipcRenderer.invoke("billing:syncFromOrganization", accessToken, organizationId, seatTier) as Promise<SubscriptionState>,
     billingReconcileForAccount: (accountId: string) =>
       ipcRenderer.invoke("billing:reconcileForAccount", accountId) as Promise<SubscriptionState>,
     billingResetSubscription: () => ipcRenderer.invoke("billing:resetSubscription") as Promise<SubscriptionState>,
@@ -194,12 +219,16 @@ export function contextBridge() {
       ipcRenderer.invoke("entitlement:isModelAvailable", modelId) as Promise<boolean>,
     entitlementIsFeatureAvailable: (featureId: FeatureId) =>
       ipcRenderer.invoke("entitlement:isFeatureAvailable", featureId) as Promise<boolean>,
+    entitlementGetModelTierRequirements: () =>
+      ipcRenderer.invoke("entitlement:getModelTierRequirements") as Promise<Partial<Record<PawModelId, SubscriptionTierId>>>,
+    entitlementGetFeatureTierRequirements: () =>
+      ipcRenderer.invoke("entitlement:getFeatureTierRequirements") as Promise<Partial<Record<FeatureId, SubscriptionTierId>>>,
 
     billingCreateCheckoutSession: (tier: SubscriptionTierId, callbackUrl?: string, options?: CheckoutOptions) =>
       ipcRenderer.invoke("billing:createCheckoutSession", tier, callbackUrl, options) as Promise<BillingCheckoutResult>,
     billingStartCheckoutSync: () => ipcRenderer.invoke("billing:startCheckoutSync") as Promise<string>,
-    billingCreateCreditsCheckoutSession: (amountUsd: number, organizationId?: string, callbackUrl?: string) =>
-      ipcRenderer.invoke("billing:createCreditsCheckoutSession", amountUsd, organizationId, callbackUrl) as Promise<BillingCheckoutResult>,
+    billingCreateCreditsCheckoutSession: (amountUsd: number, organizationId?: string, callbackUrl?: string, accessToken?: string) =>
+      ipcRenderer.invoke("billing:createCreditsCheckoutSession", amountUsd, organizationId, callbackUrl, accessToken) as Promise<BillingCheckoutResult>,
     onSubscriptionUpdated: (cb: () => void) => {
       ipcRenderer.on("billing:subscriptionUpdated", () => cb());
     },
@@ -314,6 +343,10 @@ export function contextBridge() {
       ipcRenderer.invoke("connectivity:checkHealth", connectionId) as Promise<ConnectivityIpcResult<ConnectorConnection>>,
     connectivityRefreshDiscovery: () =>
       ipcRenderer.invoke("connectivity:refreshDiscovery") as Promise<ConnectivityIpcResult<void>>,
+    connectivityVerifyPullRequestExists: (prUrl: string) =>
+      ipcRenderer.invoke("connectivity:verifyPullRequestExists", prUrl) as Promise<ConnectivityIpcResult<{ verified: boolean; reason: string }>>,
+    connectivityPostAutonomousCompletionComment: (prUrl: string, body: string) =>
+      ipcRenderer.invoke("connectivity:postAutonomousCompletionComment", prUrl, body) as Promise<ConnectivityIpcResult<{ posted: boolean; reason: string; commentUrl?: string }>>,
     connectivityDeploymentProfilesCreate: (scope: ConnectivityScope, name: string, config: DeploymentProfileConfig) =>
       ipcRenderer.invoke("connectivity:deploymentProfiles:create", scope, name, config) as Promise<ConnectivityIpcResult<DeploymentProfile>>,
     connectivityDeploymentProfilesGet: (profileId: string) =>

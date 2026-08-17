@@ -247,7 +247,7 @@ export function enforceCodingRuntimeSecurity(request: ActionRequest): CodingRunt
       checkedFields: [],
     };
   }
-  if (!selectedRootPath) return failure('Select a workspace root before running Coding Runtime operations.');
+  if (!selectedRootPath) return failure('Select a workspace root before running file or code actions.');
   if (!fs.existsSync(selectedRootPath)) return failure(`The selected workspace root does not exist: ${selectedRootPath}`);
   if (!fs.statSync(selectedRootPath).isDirectory()) return failure(`The selected workspace root is not a directory: ${selectedRootPath}`);
 

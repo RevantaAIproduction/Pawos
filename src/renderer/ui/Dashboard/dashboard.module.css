@@ -394,6 +394,81 @@ div.workRecordList {
   line-height: 1.6;
 }
 
+/* Minimal Markdown rendering (Work Record Plan / Architecture / Final
+   Result text) — headings, paragraphs, lists, inline/block code. */
+.markdownView {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--pawos-text-secondary);
+}
+
+.markdownView > *:first-child {
+  margin-top: 0;
+}
+
+.markdownHeading {
+  margin: 6px 0 0;
+  color: var(--pawos-fg);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.markdownHeading:is(h3) {
+  font-size: 15px;
+}
+
+.markdownHeading:is(h4) {
+  font-size: 14px;
+}
+
+.markdownHeading:is(h5, h6) {
+  font-size: 13px;
+  color: var(--pawos-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.markdownParagraph {
+  margin: 0;
+}
+
+.markdownList {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.markdownList li {
+  padding-left: 2px;
+}
+
+.markdownCodeBlock {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(var(--pawos-overlay-rgb), 0.05);
+  color: var(--pawos-fg);
+  font-size: 12px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+
+.inlineCode {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(var(--pawos-overlay-rgb), 0.08);
+  color: var(--pawos-fg);
+  font-size: 12px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
 .profileMenuItem:hover {
   background: rgba(var(--pawos-overlay-rgb), 0.06);
   color: var(--pawos-fg);

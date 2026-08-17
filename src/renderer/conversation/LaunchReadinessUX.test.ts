@@ -6,13 +6,65 @@ const request: ActionRequest = { type: 'runCommand', command: 'npm test', cwd: '
 const usageFailure: ActionResult = { ok: false, reason: 'usage-restricted', message: 'quota exhausted' };
 
 describe('LaunchReadinessUX', () => {
-  it('shows the required Go Coding Runtime entitlement message instead of a generic failure', () => {
-    const result: ActionResult = { ok: false, reason: 'entitlement-restricted', message: 'Coding Runtime is not enabled.' };
+  it('never overrides the real backend message, and never names an internal runtime', () => {
+    const result: ActionResult = {
+      ok: false,
+      reason: 'entitlement-restricted',
+      message: 'This action requires Paw Pro. Your current plan supports investigation, analysis, and planning — upgrade to generate, modify, build, test, and debug code.',
+      data: { requiredFeature: 'advancedRuntimes', requiredTier: 'pro' },
+    };
 
     expect(describeLaunchFailure(result, request, 'go')).toEqual({
       title: 'BUILD BLOCKED',
-      message: 'Paw Go is planning and analysis only. Coding Runtime execution requires Paw Pro or higher.',
+      message: 'This action requires Paw Pro. Your current plan supports investigation, analysis, and planning — upgrade to generate, modify, build, test, and debug code.',
       actions: ['upgrade'],
+    });
+  });
+
+  it('recommends Pro Max, not Pro, when the real entitlement data says Pro Max is required', () => {
+    const result: ActionResult = {
+      ok: false,
+      reason: 'entitlement-restricted',
+      message: 'Autonomous Work requires Paw Pro Max or higher. Upgrade from Settings → Billing to start an autonomous engineering task.',
+      data: { requiredFeature: 'autonomousTaskBilling', requiredTier: 'proMax' },
+    };
+
+    expect(describeLaunchFailure(result, request, 'go')).toEqual({
+      title: 'BUILD BLOCKED',
+      message: 'Autonomous Work requires Paw Pro Max or higher. Upgrade from Settings → Billing to start an autonomous engineering task.',
+      actions: ['upgradeProMax'],
+    });
+  });
+
+  it('appends an org-plan note as supporting context only, for a non-personal email domain, never as the primary driver', () => {
+    const result: ActionResult = {
+      ok: false,
+      reason: 'entitlement-restricted',
+      message: 'This action requires Paw Pro.',
+      data: { requiredFeature: 'advancedRuntimes', requiredTier: 'pro' },
+    };
+
+    expect(describeLaunchFailure(result, request, 'go', 'founder@revantaai.com')?.message).toBe(
+      "This action requires Paw Pro. If you're part of a team, Paw Team and Paw Enterprise plans include this too and centralize billing for your organization."
+    );
+    // A personal email domain gets no org note appended.
+    expect(describeLaunchFailure(result, request, 'go', 'someone@gmail.com')?.message).toBe('This action requires Paw Pro.');
+    // No email available at all gets no org note appended.
+    expect(describeLaunchFailure(result, request, 'go', null)?.message).toBe('This action requires Paw Pro.');
+  });
+
+  it('falls back to contactAdmin for a team/enterprise-required capability, with no org note (the message already says so)', () => {
+    const result: ActionResult = {
+      ok: false,
+      reason: 'entitlement-restricted',
+      message: 'This action requires a Team or Enterprise plan.',
+      data: { requiredFeature: 'sharedWorkspaces', requiredTier: 'team' },
+    };
+
+    expect(describeLaunchFailure(result, request, 'go', 'founder@revantaai.com')).toEqual({
+      title: 'BUILD BLOCKED',
+      message: 'This action requires a Team or Enterprise plan.',
+      actions: ['contactAdmin'],
     });
   });
 
@@ -43,9 +95,9 @@ describe('LaunchReadinessUX', () => {
   });
 
   it('shows missing workspace root as a blocked build even when execution never reaches a plugin failure', () => {
-    expect(describeTaskLevelLaunchFailure('Select a workspace root before running Coding Runtime operations.')).toEqual({
+    expect(describeTaskLevelLaunchFailure('Select a workspace root before running file or code actions.')).toEqual({
       title: 'BUILD BLOCKED',
-      message: 'Select a workspace root before running Coding Runtime operations.',
+      message: 'Select a workspace root before running file or code actions.',
       actions: ['none'],
     });
   });

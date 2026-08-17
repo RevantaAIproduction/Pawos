@@ -17,7 +17,13 @@ const FILE_NAME = 'pricing.json';
  */
 function defaultConfig(): PricingConfig {
   return {
-    billingProvider: 'none',
+    // RazorpayBillingProvider's own checkout route has been live since 2026-08-02 (see its own
+    // header comment) — defaulting to 'none' here left every checkout attempt hitting
+    // NoOpBillingProvider's "No payment provider is configured yet" message even though the real
+    // provider was fully wired and ready. 'none' is preserved purely as a legitimate manual
+    // kill-switch (an admin explicitly persisting billingProvider:'none' via update()), not as the
+    // default a fresh install should ever start from.
+    billingProvider: 'razorpay',
     plans: [
       {
         id: 'go',
@@ -144,7 +150,13 @@ class PricingConfigStore {
     const fresh = defaultConfig();
     try {
       const persisted = JSON.parse(fs.readFileSync(this.file, 'utf-8')) as Partial<PricingConfig>;
-      this.config = { ...fresh, billingProvider: persisted.billingProvider ?? fresh.billingProvider };
+      // 'none' has never been a real, deliberate choice — update() (the only way to persist a
+      // legitimate override) isn't wired to any UI yet, so the only way 'none' could be on disk is
+      // as the old, buggy default written automatically on first launch before real checkout was
+      // configured. Honoring it would leave every already-launched install permanently stuck on
+      // NoOpBillingProvider even after the real provider went live — treat it the same as absent.
+      const persistedProvider = persisted.billingProvider !== 'none' ? persisted.billingProvider : undefined;
+      this.config = { ...fresh, billingProvider: persistedProvider ?? fresh.billingProvider };
     } catch {
       this.config = fresh;
     }

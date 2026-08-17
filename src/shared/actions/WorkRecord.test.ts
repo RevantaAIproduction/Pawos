@@ -163,6 +163,33 @@ describe('WorkRecord projection', () => {
     expect(commandsArea).toEqual({ label: 'Run commands', status: 'blocked' });
   });
 
+  it('extracts a real Plan section from the model\'s own summary text, never inferring one', () => {
+    const work = buildWorkRecord(record({
+      summary: [
+        '## Plan',
+        '- Set up the project scaffold',
+        '- Build the login page',
+        '',
+        '## Architecture',
+        'A React frontend talking to an Express API backed by Postgres.',
+      ].join('\n'),
+    }));
+
+    expect(work.plan.status).toBe('available');
+    expect(work.plan.items).toEqual(['Set up the project scaffold', 'Build the login page']);
+    expect(work.architecture.status).toBe('available');
+    expect(work.architecture.items[0]?.diagram).toBe('A React frontend talking to an Express API backed by Postgres.');
+  });
+
+  it('stays honestly empty when the summary has no matching Plan/Architecture heading', () => {
+    const work = buildWorkRecord(record({ summary: 'Finished the requested change and verified it builds.' }));
+
+    expect(work.plan.status).toBe('empty');
+    expect(work.plan.note).toBe('Plan not captured for this work.');
+    expect(work.architecture.status).toBe('empty');
+    expect(work.architecture.note).toBe('Architecture not captured for this work.');
+  });
+
   it('never claims a category is incomplete once real attempted evidence exists for it', () => {
     const work = buildWorkRecord(record({
       status: 'failed',

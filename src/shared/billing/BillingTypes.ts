@@ -186,12 +186,18 @@ export type FeatureId =
   | 'connectGoogleWorkspace'
   | 'connectJira'
   | 'connectSlack'
+  | 'connectGithub'
+  | 'connectGitlab'
+  | 'connectVercel'
+  | 'connectNetlify'
+  | 'connectRailway'
   | 'ssoConfiguration'
   | 'autonomousTaskBilling'
   | 'mobilePairing'
   | 'crossDeviceSync'
   | 'mobileNotifications'
-  | 'organizationCrossDeviceAlerts';
+  | 'organizationCrossDeviceAlerts'
+  | 'autonomousPlanBypass';
 
 export type TierEntitlements = {
   tier: SubscriptionTierId;

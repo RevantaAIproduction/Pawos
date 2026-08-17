@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import styles from '../dashboard.module.css';
 import type { ExecutionRecord } from '../../../../shared/actions/ExecutionRecordTypes';
 import { buildWorkRecord, evidenceState } from '../../../../shared/actions/WorkRecord';
+import { MarkdownView, renderInlineMarkdown } from './MarkdownView';
 import type {
   WorkRecordBlockedSummary,
   WorkRecordCommandEvidence,
@@ -210,7 +211,6 @@ function VerificationTab({
 export function WorkRecordDetail({ record }: { record: ExecutionRecord }) {
   const work = useMemo(() => buildWorkRecord(record), [record]);
   const [tab, setTab] = useState<Tab>('Overview');
-  const [diagramScale, setDiagramScale] = useState(1);
 
   const previewItems = useMemo(() => work.verification.items.filter((i) => i.type === 'PREVIEW'), [work.verification.items]);
   const visualItems = useMemo(() => work.verification.items.filter((i) => i.type === 'VISUAL_QA'), [work.verification.items]);
@@ -291,7 +291,11 @@ export function WorkRecordDetail({ record }: { record: ExecutionRecord }) {
           <>
             <TabSummary state={planState} />
             {work.plan.items.length > 0 ? (
-              <ol className={styles.workRecordList}>{work.plan.items.map((item) => <li key={item}>{item}</li>)}</ol>
+              <ol className={styles.workRecordList}>
+                {work.plan.items.map((item, index) => (
+                  <li key={`${index}-${item.slice(0, 24)}`}>{renderInlineMarkdown(item, `plan-${index}-`)}</li>
+                ))}
+              </ol>
             ) : <EmptyEvidence text={work.plan.note ?? 'Plan not captured for this work.'} />}
           </>
         )}
@@ -300,18 +304,7 @@ export function WorkRecordDetail({ record }: { record: ExecutionRecord }) {
           <>
             <TabSummary state={architectureState} />
             {work.architecture.items.length > 0 ? (
-              <div>
-                <div className={styles.workRecordToolbar}>
-                  <button type="button" className={styles.chip} onClick={() => setDiagramScale((v) => Math.max(0.7, v - 0.1))}>Zoom out</button>
-                  <button type="button" className={styles.chip} onClick={() => setDiagramScale(1)}>Fit</button>
-                  <button type="button" className={styles.chip} onClick={() => setDiagramScale((v) => Math.min(1.6, v + 0.1))}>Zoom in</button>
-                </div>
-                <div className={styles.architectureViewport}>
-                  <pre className={styles.architectureDiagram} style={{ transform: `scale(${diagramScale})` }}>
-                    {work.architecture.items[0]?.diagram ?? ''}
-                  </pre>
-                </div>
-              </div>
+              <MarkdownView text={work.architecture.items[0]?.diagram ?? ''} />
             ) : <EmptyEvidence text={work.architecture.note ?? 'Architecture not captured for this work.'} />}
           </>
         )}
@@ -369,7 +362,11 @@ export function WorkRecordDetail({ record }: { record: ExecutionRecord }) {
         {tab === 'Final Result' && (
           <div className={styles.card}>
             <h3 className={styles.cardTitle}>{work.completion.status}</h3>
-            <p className={styles.cardBody}>{record.summary || work.completion.reason || 'No final summary recorded yet.'}</p>
+            {record.summary || work.completion.reason ? (
+              <MarkdownView text={record.summary || work.completion.reason || ''} />
+            ) : (
+              <p className={styles.cardBody}>No final summary recorded yet.</p>
+            )}
           </div>
         )}
       </div>

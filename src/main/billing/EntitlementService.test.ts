@@ -199,3 +199,92 @@ describe('EntitlementService — runtime entitlement foundation', () => {
     expect(entitlementService.diffRuntimeEntitlements(['coding', 'office', 'browser', 'office'])).toEqual(['office', 'browser']);
   });
 });
+
+describe('EntitlementService — getModelTierRequirements (model picker)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('maps every model to the lowest tier whose TIER_ENTITLEMENTS.models actually includes it', () => {
+    const requirements = entitlementService.getModelTierRequirements();
+    // Go's own real model list (see 'gives Go real model access' above) means paw-flash requires
+    // only Go — never a paid tier — while every other model requires at least Pro, per
+    // PRO_FEATURES/AI_MODELS in EntitlementService.ts.
+    expect(requirements['paw-flash']).toBe('go');
+    expect(requirements['paw-swift']).toBe('pro');
+    expect(requirements['paw-core']).toBe('pro');
+    expect(requirements['paw-creative']).toBe('pro');
+    expect(requirements['paw-vision']).toBe('pro');
+    expect(requirements['paw-voice']).toBe('pro');
+    expect(requirements['paw-motion']).toBe('pro');
+    expect(requirements['paw-memory']).toBe('pro');
+  });
+
+  it('is static/account-independent — unaffected by the current subscription tier', () => {
+    vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'enterprise', status: 'active' });
+    const asEnterprise = entitlementService.getModelTierRequirements();
+    vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'go', status: 'none' });
+    const asGo = entitlementService.getModelTierRequirements();
+    expect(asEnterprise).toEqual(asGo);
+  });
+});
+
+describe('EntitlementService — final entitlement matrix (connectors, Autonomous Work, Ticket Balance)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('Go: Jira/Linear/GitHub/Autonomous Work/Ticket Balance all blocked', () => {
+    vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'go', status: 'none' });
+    expect(entitlementService.isFeatureAvailable('connectJira')).toBe(false);
+    expect(entitlementService.isFeatureAvailable('connectLinear')).toBe(false);
+    expect(entitlementService.isFeatureAvailable('connectGithub')).toBe(false);
+    // Autonomous Work and Ticket Balance are both gated by the single 'autonomousTaskBilling'
+    // feature (see AutonomousTaskBillingGate.ts's startAutonomousEngineeringTask check and
+    // ipc.ts's billing:createCreditsCheckoutSession handler) — there is no second, separate flag.
+    expect(entitlementService.isFeatureAvailable('autonomousTaskBilling')).toBe(false);
+    expect(entitlementService.isFeatureAvailable('autonomousPlanBypass')).toBe(false);
+  });
+
+  it('Pro: GitHub/GitLab/Vercel/Netlify/Railway/Slack/Google Workspace allowed; Jira/Linear/Autonomous Work/Ticket Balance blocked', () => {
+    vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'pro', status: 'active' });
+    expect(entitlementService.isFeatureAvailable('connectGithub')).toBe(true);
+    expect(entitlementService.isFeatureAvailable('connectGitlab')).toBe(true);
+    expect(entitlementService.isFeatureAvailable('connectVercel')).toBe(true);
+    expect(entitlementService.isFeatureAvailable('connectNetlify')).toBe(true);
+    expect(entitlementService.isFeatureAvailable('connectRailway')).toBe(true);
+    expect(entitlementService.isFeatureAvailable('connectSlack')).toBe(true);
+    expect(entitlementService.isFeatureAvailable('connectGoogleWorkspace')).toBe(true);
+    expect(entitlementService.isFeatureAvailable('connectJira')).toBe(false);
+    expect(entitlementService.isFeatureAvailable('connectLinear')).toBe(false);
+    expect(entitlementService.isFeatureAvailable('autonomousTaskBilling')).toBe(false);
+    // Pro cannot start Autonomous Work at all (autonomousTaskBilling is false), so
+    // autonomousPlanBypass must be blocked too — a plan-approval bypass with no autonomous
+    // billing capability behind it would be a meaningless, dangling entitlement.
+    expect(entitlementService.isFeatureAvailable('autonomousPlanBypass')).toBe(false);
+    // The Think-vs-Execute wall (normal coding/infra execution — "NORMAL PAW COMPUTE") is a
+    // genuinely different entitlement from Autonomous Work and must stay available to Pro;
+    // conflating the two would incorrectly block Pro's existing coding runtime.
+    expect(entitlementService.isFeatureAvailable('advancedRuntimes')).toBe(true);
+  });
+
+  it('Pro Max: Jira/Linear/Autonomous Work/Ticket Balance/Plan Bypass all allowed', () => {
+    vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'proMax', status: 'active' });
+    expect(entitlementService.isFeatureAvailable('connectJira')).toBe(true);
+    expect(entitlementService.isFeatureAvailable('connectLinear')).toBe(true);
+    expect(entitlementService.isFeatureAvailable('autonomousTaskBilling')).toBe(true);
+    expect(entitlementService.isFeatureAvailable('autonomousPlanBypass')).toBe(true);
+  });
+
+  it('Team: Jira/Linear/Autonomous Work/Ticket Balance/Plan Bypass all allowed', () => {
+    vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'team', status: 'active', seatTier: 'standard' });
+    expect(entitlementService.isFeatureAvailable('connectJira')).toBe(true);
+    expect(entitlementService.isFeatureAvailable('connectLinear')).toBe(true);
+    expect(entitlementService.isFeatureAvailable('autonomousTaskBilling')).toBe(true);
+    expect(entitlementService.isFeatureAvailable('autonomousPlanBypass')).toBe(true);
+  });
+
+  it('Enterprise: Jira/Linear/Autonomous Work/Ticket Balance/Plan Bypass all allowed', () => {
+    vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'enterprise', status: 'active' });
+    expect(entitlementService.isFeatureAvailable('connectJira')).toBe(true);
+    expect(entitlementService.isFeatureAvailable('connectLinear')).toBe(true);
+    expect(entitlementService.isFeatureAvailable('autonomousTaskBilling')).toBe(true);
+    expect(entitlementService.isFeatureAvailable('autonomousPlanBypass')).toBe(true);
+  });
+});

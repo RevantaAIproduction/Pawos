@@ -1,6 +1,9 @@
+import type { WebContents } from 'electron';
 import { connectorRegistry } from './ConnectorRegistry';
 import type { ConnectorConnection, ConnectorStatus, ConnectivityScope } from '../../shared/connectivity/ConnectivityTypes';
 import { connectorLifecycleToConnectionStatus } from '../../shared/connectivity/ConnectivityTypes';
+import { credentialVaultBridge } from './CredentialVaultBridge';
+import { persistCredentialViaRenderer, revokeCredentialViaRenderer } from './RendererConnectivityCredentialBridge';
 
 function scopeKey(scope: ConnectivityScope): string {
   return `${scope.userId}:${scope.organizationId ?? ''}`;
@@ -32,22 +35,58 @@ class ConnectionManager {
     return `${connectorId}::${scopeKey(scope)}`;
   }
 
-  async connect(connectorId: string, scope: ConnectivityScope, opts?: { incrementalCapabilities?: string[] }): Promise<ConnectorConnection> {
+  /**
+   * P0-4 security fix. `sdk.connect()` already stores the fresh credential into
+   * `credentialVaultBridge` (in-memory, this process's lifetime only — see that file's own doc
+   * comment). Previously nothing after that point ever reached Supabase Vault, so every one of the
+   * 9 registered OAuth connectors lost its connection on every app restart. When `sender` is
+   * supplied (the real IPC caller, threaded through from connectivityIpc.ts), this now also asks
+   * that renderer window to durably persist the credential via `connectivityCredentialService.store()`
+   * — best-effort with respect to the connection itself (a persistence failure doesn't undo a
+   * successful `sdk.connect()`, since the connector is genuinely usable for this session either way),
+   * but never silently swallowed: failures are logged so a real persistence outage is visible.
+   */
+  async connect(
+    connectorId: string,
+    scope: ConnectivityScope,
+    opts?: { incrementalCapabilities?: string[] },
+    sender?: WebContents
+  ): Promise<ConnectorConnection> {
     const sdk = connectorRegistry.get(connectorId);
     if (!sdk) {
       throw new Error(`Cannot connect — no connector registered with id '${connectorId}'.`);
     }
     const connection = await sdk.connect(scope, opts);
     this.connections.set(this.connectionId(connectorId, scope), connection);
+
+    if (sender && !sender.isDestroyed()) {
+      const stored = await credentialVaultBridge.read(connectorId, scope);
+      if (stored) {
+        const result = await persistCredentialViaRenderer(sender, scope, connectorId, stored.authMethod, stored.secret, {
+          refreshToken: stored.refreshToken,
+          expiresAt: stored.expiresAt,
+        });
+        if (!result.ok) {
+          console.error(`[ConnectionManager] Failed to durably persist credential for '${connectorId}': ${result.message}`);
+        }
+      }
+    }
+
     return connection;
   }
 
-  async disconnect(connectionId: string): Promise<void> {
+  async disconnect(connectionId: string, sender?: WebContents): Promise<void> {
     const connection = this.findById(connectionId);
     if (!connection) return;
     const sdk = connectorRegistry.get(connection.connectorId);
     if (sdk) await sdk.disconnect(connection.scope);
     this.connections.delete(this.connectionId(connection.connectorId, connection.scope));
+    if (sender && !sender.isDestroyed()) {
+      const result = await revokeCredentialViaRenderer(sender, connection.scope, connection.connectorId);
+      if (!result.ok) {
+        console.error(`[ConnectionManager] Failed to revoke persisted credential for '${connection.connectorId}': ${result.message}`);
+      }
+    }
   }
 
   async getStatus(connectionId: string): Promise<ConnectorConnection | undefined> {

@@ -29,6 +29,18 @@ import type { ConnectivityScope } from '../../shared/connectivity/ConnectivityTy
 
 export const CONNECTIVITY_OAUTH_REDIRECT_URI = 'pawos://connectivity-oauth-callback';
 
+/**
+ * Fixed local port a hosted-relay connector's final hop lands on — see
+ * `ensureConnectivityRelayListener()` below for why this replaces the `pawos://` custom-protocol
+ * delivery for these connectors specifically. Deliberately a different port than the 51899 used
+ * by PawOS's own Google/GitHub sign-in (GoogleOAuthFlow.ts/GitHubOAuthFlow.ts) — kept independent
+ * since, unlike sign-in, more than one connector authorization can legitimately be in flight at
+ * once (see beginAuthorization's own doc comment), so this listener is long-lived rather than
+ * one-shot-per-attempt. pawos-web's desktopRelay.ts (relayConnectivityToDesktop) must redirect to
+ * the exact same port.
+ */
+export const CONNECTIVITY_LOCAL_RELAY_PORT = 51900;
+
 /** pawos-web's hosted origin — the only place a connector OAuth client_secret ever lives. Matches
  *  the domain already used for checkout (see RazorpayBillingProvider.ts's WEB_CHECKOUT_BASE_URL). */
 const CONNECTIVITY_OAUTH_BACKEND_BASE_URL = 'https://pawos.revantaai.com';
@@ -145,6 +157,46 @@ class OAuthManager {
    *  authorization in flight at once without colliding. */
   private pending = new Map<string, PendingAuthorization>();
 
+  /** Started lazily, once, the first time a hosted-relay connector authorization needs it — see
+   *  `ensureConnectivityRelayListener()`. */
+  private connectivityRelayServer: http.Server | undefined;
+
+  /**
+   * A persistent local HTTP listener that receives the final hop of a hosted-relay connector
+   * OAuth flow (pawos-web's desktopRelay.ts `relayConnectivityToDesktop`) — replacing the
+   * `pawos://connectivity-oauth-callback` custom-protocol handoff those connectors (Jira, Slack,
+   * GitLab, GitHub-as-connector, Vercel, Netlify, Railway) previously relied on exclusively.
+   * Chromium-based browsers on Windows can silently block a script-driven navigation to a custom
+   * protocol scheme with no error shown when it doesn't read as a fresh, direct user gesture — a
+   * full OAuth redirect chain never does, even though the flow started from a real click. This is
+   * the exact issue already found and fixed for PawOS's own Google/GitHub sign-in (see
+   * GoogleOAuthFlow.ts/GitHubOAuthFlow.ts's own doc comments) via a same-machine loopback HTTP
+   * redirect instead — this applies that identical, proven fix here. A plain `http://127.0.0.1`
+   * navigation is not subject to the custom-protocol gate at all, so the relay page's automatic
+   * redirect now reliably completes without requiring the user to notice and click a fallback
+   * button. Unlike the sign-in flows' one-shot-per-attempt listener, this one is started once and
+   * left running for the app's lifetime, dispatching each delivery by its `state` query param
+   * through the same `handleProtocolCallback` correlation logic the `pawos://` path already
+   * uses — so more than one connector authorization can still be in flight at once without the
+   * fixed port becoming a bottleneck.
+   */
+  private ensureConnectivityRelayListener(): void {
+    if (this.connectivityRelayServer) return;
+    const server = http.createServer((req, res) => {
+      const url = new URL(req.url ?? '/', `http://127.0.0.1:${CONNECTIVITY_LOCAL_RELAY_PORT}`);
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end('<html><body>You can close this window and return to PawOS.</body></html>');
+      this.handleProtocolCallback(url);
+    });
+    server.on('error', (err) => {
+      console.warn(
+        `[connectivity] connectivity relay listener error on port ${CONNECTIVITY_LOCAL_RELAY_PORT}: ${err instanceof Error ? err.message : err}`
+      );
+    });
+    server.listen(CONNECTIVITY_LOCAL_RELAY_PORT, '127.0.0.1');
+    this.connectivityRelayServer = server;
+  }
+
   /** Pure URL construction from `ConnectorDefinition.oauth` — no side
    *  effects beyond generating a fresh PKCE pair when the connector requires one, so it's
    *  independently verifiable and reusable by a future Connections UI that wants to preview the
@@ -224,6 +276,12 @@ class OAuthManager {
     }
 
     const loopback = useLoopback ? await startLoopbackListener() : undefined;
+    if (!useLoopback && staticRedirectUri) {
+      // A hosted-relay connector (its provider requires one pre-registered, static callback
+      // URL — Atlassian doesn't accept a dynamic loopback port for Jira's OAuth app config) — the
+      // fixed-port listener is what receives the relay's final hop, see its own doc comment.
+      this.ensureConnectivityRelayListener();
+    }
     const { url: baseUrl, codeVerifier } = this.buildAuthorizationUrl(connectorId, {
       scopesOverride: opts?.scopesOverride,
       redirectUri: loopback?.redirectUri ?? staticRedirectUri,

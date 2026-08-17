@@ -1899,7 +1899,7 @@ export const ACTION_TOOL_DEFINITIONS: ReasoningToolDefinition[] = [
   {
     name: 'start_autonomous_engineering_task',
     description:
-      "Marks the beginning of an autonomous engineering workflow billed through the Autonomous Ticket System (Pro, Pro Max, Team, and Enterprise — never call this for ordinary chat-assisted coding help). This is billed against a real prepaid Ticket Balance (a dollar wallet, completely separate from the subscription) at a volume-tiered per-ticket rate: if the balance can't cover the next ticket, this call fails and you should tell the user to add funds before continuing. Call this once, right after the user asks you to autonomously investigate-and-fix a ticket or production issue — before you start investigating. Returns a runId you must pass to complete_autonomous_engineering_task or end_autonomous_engineering_task later. Never gated — this only creates a tracking record, it has no effect on the local machine.",
+      "Marks the beginning of an autonomous engineering workflow billed through the Autonomous Ticket System (Pro, Pro Max, Team, and Enterprise — never call this for ordinary chat-assisted coding help). This is billed against a real prepaid Ticket Balance (a dollar wallet, completely separate from the subscription) at a volume-tiered per-ticket rate: if the balance can't cover the next ticket, this call fails and you should tell the user to add funds before continuing. Call this once, right after the user asks you to autonomously investigate-and-fix a ticket or production issue — before you start investigating. Returns a runId you must pass to complete_autonomous_engineering_task or end_autonomous_engineering_task later. CRITICAL: always supply `cwd` when you know the local repository checkout path — it is what actually drives the autonomous investigate/plan/edit/validate pipeline against that repository. Omitting `cwd` leaves this call as a billing/tracking record only, with no real work performed on your behalf.",
     parameters: {
       type: 'object',
       properties: {
@@ -1908,6 +1908,9 @@ export const ACTION_TOOL_DEFINITIONS: ReasoningToolDefinition[] = [
         ticketSource: { type: 'string', enum: ['jira', 'github', 'linear', 'azureDevOps'], description: 'Which tracker the ticket came from, if any. Omit entirely if there is no ticket — this workflow never requires one.' },
         ticketId: { type: 'string', description: 'The ticket identifier, if this task started from a real ticket.' },
         repository: { type: 'string', description: 'The repository this task is expected to touch, if known.' },
+        cwd: { type: 'string', description: 'Absolute path of the local repository checkout this ticket concerns. REQUIRED for real autonomous execution to happen — without it, no investigation, code change, or validation will actually run. Supply this whenever you know (or can determine) the relevant local project path.' },
+        ticketTitle: { type: 'string', description: 'The real ticket title, if known from a connector read — never invent one.' },
+        ticketDescription: { type: 'string', description: 'The real ticket description/body, if known from a connector read — never invent one.' },
       },
       required: [],
     },
@@ -3358,6 +3361,9 @@ export function toolCallToActionRequest(toolCall: ReasoningToolCall): ActionRequ
         ticketSource: typeof args.ticketSource === 'string' ? (args.ticketSource as 'jira' | 'github' | 'linear' | 'azureDevOps') : undefined,
         ticketId: typeof args.ticketId === 'string' ? args.ticketId : undefined,
         repository: typeof args.repository === 'string' ? args.repository : undefined,
+        cwd: typeof args.cwd === 'string' ? args.cwd : undefined,
+        ticketTitle: typeof args.ticketTitle === 'string' ? args.ticketTitle : undefined,
+        ticketDescription: typeof args.ticketDescription === 'string' ? args.ticketDescription : undefined,
       };
 
     case 'complete_autonomous_engineering_task':

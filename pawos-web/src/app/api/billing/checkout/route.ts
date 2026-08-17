@@ -82,6 +82,10 @@ export async function POST(request: Request) {
       customer_notify: 1,
       total_count: 100, // Razorpay requires a finite cycle count; 100 monthly cycles (~8 years) is the standard way integrations express "renews indefinitely" rather than silently lapsing after a year.
       ...((plan === "team" || plan === "enterprise") && seatCount ? { quantity: seatCount } : {}),
+      // P0-3 security fix: runtimeIds round-trips through Razorpay's own notes field so
+      // /api/billing/verify-subscription can read it back as real, Razorpay-attested data instead of
+      // trusting whatever a forged local callback claims.
+      ...(runtimeIds.length > 0 ? { notes: { runtimeIds: runtimeIds.join(",") } } : {}),
     }),
   });
 

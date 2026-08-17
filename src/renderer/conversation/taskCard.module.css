@@ -349,11 +349,13 @@
 .confidenceHigh{background:rgba(255,255,255,0.16);color:rgba(255,255,255,0.9);}
 
 /* Execution Plan step status — distinct from severity's red->green ramp since a step's status is
-   a workflow state (proposed/approved/rejected/executed), not a good/bad judgment. */
+   a workflow state (proposed/approved/rejected/executing/completed/failed), not a good/bad judgment. */
 .stepProposed{background:rgba(116,167,255,0.2);color:#bcd6ff;}
 .stepApproved{background:rgba(96,215,140,0.2);color:#a8f0c2;}
 .stepRejected{background:rgba(255,110,110,0.2);color:#ffc4c4;}
-.stepExecuted{background:rgba(200,150,255,0.2);color:#dcc4ff;}
+.stepExecuting{background:rgba(200,150,255,0.2);color:#dcc4ff;}
+.stepCompleted{background:rgba(96,215,140,0.2);color:#a8f0c2;}
+.stepFailed{background:rgba(255,110,110,0.2);color:#ffc4c4;}
 
 .terminalOutputBlock{display:flex;flex-direction:column;gap:4px;}
 .codeBlockExpanded{max-height:none;}

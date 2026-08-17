@@ -1,12 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import styles from './onboardingWizard.module.css';
 import { ipc } from '../../services/ipc/ipcBridgeImplementation';
-import { aiProviderConfigStore } from '../../ai/AIProviderConfigStore';
 import { pairingService } from '../../mobilePresence/PairingService';
 import type { AuthUser } from '../../auth/AuthTypes';
 import type { SubscriptionTierId } from '../../../shared/billing/BillingTypes';
 import type { PairingSessionStart } from '../../../shared/mobilePresence/MobilePresenceTypes';
-import { PAW_MODEL_CATALOG, getPawModel, type PawModelId } from '../../../shared/ai/PawModelTypes';
 
 function getErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -25,20 +23,22 @@ function getErrorMessage(e: unknown): string {
  * AppRoot's stage machine); this wizard only ever runs for an already
  * signed-in user, so that step is a brief confirmation instead of a
  * duplicate auth form.
+ *
+ * Deliberately short: plan selection, model choice, and the per-permission
+ * (mic/file system/notifications) screens were removed from setup. Those
+ * permissions are requested contextually — the OS/Electron permission
+ * prompt fires naturally the first time the app actually calls
+ * getUserMedia()/Notification.requestPermission() at the point of use
+ * (e.g. starting a voice conversation) — not upfront before the user has
+ * any reason to grant them. The plan/model pickers remain fully available
+ * in Settings.
  */
-const STEP_COUNT = 15;
-
-const MODEL_OPTIONS = PAW_MODEL_CATALOG.filter((m) => m.category === 'reasoning');
+const STEP_COUNT = 5;
 
 export function OnboardingWizard({ user, onFinish }: { user: AuthUser; onFinish: () => void }) {
   const [step, setStep] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [tier, setTier] = useState<SubscriptionTierId>('go');
-  const [model, setModel] = useState<PawModelId>(getPawModel(aiProviderConfigStore.getActivePawModel()).id);
-  const [modelSwitchNote, setModelSwitchNote] = useState<string | null>(null);
-  const [micStatus, setMicStatus] = useState<'unrequested' | 'granted' | 'denied'>('unrequested');
-  const [notifStatus, setNotifStatus] = useState<'unrequested' | 'granted' | 'denied'>('unrequested');
-  const [workspacePath, setWorkspacePath] = useState<string | null>(null);
   const [pairingSession, setPairingSession] = useState<PairingSessionStart | null>(null);
   const [paired, setPaired] = useState(false);
   const [pairingError, setPairingError] = useState<string | null>(null);
@@ -47,11 +47,9 @@ export function OnboardingWizard({ user, onFinish }: { user: AuthUser; onFinish:
   useEffect(() => {
     ipc.onboardingGet().then((state) => {
       setStep(state.step);
-      setWorkspacePath(state.defaultWorkspacePath);
       setLoaded(true);
     });
     ipc.billingGetSubscription().then((s) => setTier(s.tier)).catch(() => {});
-    setModel(aiProviderConfigStore.getActivePawModel());
   }, []);
 
   const goTo = async (next: number) => {
@@ -65,51 +63,6 @@ export function OnboardingWizard({ user, onFinish }: { user: AuthUser; onFinish:
   const finish = async () => {
     await ipc.onboardingComplete();
     onFinish();
-  };
-
-  const chooseTier = async (t: SubscriptionTierId) => {
-    setBusy(true);
-    try {
-      const result = await ipc.billingSetSubscriptionTier(t);
-      setTier(result.tier);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const chooseModel = (id: PawModelId) => {
-    setModel(id);
-    aiProviderConfigStore.setActivePawModel(id);
-    setModelSwitchNote(getPawModel(id).switchMessage);
-  };
-
-  const requestMic = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach((t) => t.stop());
-      setMicStatus('granted');
-    } catch {
-      setMicStatus('denied');
-    }
-  };
-
-  const requestNotifications = async () => {
-    try {
-      const result = await Notification.requestPermission();
-      setNotifStatus(result === 'granted' ? 'granted' : 'denied');
-    } catch {
-      setNotifStatus('denied');
-    }
-  };
-
-  const pickWorkspace = async () => {
-    setBusy(true);
-    try {
-      const state = await ipc.onboardingSelectWorkspaceFolder();
-      setWorkspacePath(state.defaultWorkspacePath);
-    } finally {
-      setBusy(false);
-    }
   };
 
   const canPairMobile = !user.isGuest && tier !== 'go';
@@ -153,7 +106,7 @@ export function OnboardingWizard({ user, onFinish }: { user: AuthUser; onFinish:
           <section>
             <h1 className={styles.title}>Welcome to PawOS</h1>
             <p className={styles.body}>
-              Let's get your desktop companion set up. This takes about two minutes, and you can
+              Let's get your desktop companion set up. This takes about a minute, and you can
               come back to any of it later in Settings.
             </p>
           </section>
@@ -171,154 +124,18 @@ export function OnboardingWizard({ user, onFinish }: { user: AuthUser; onFinish:
 
         {step === 2 && (
           <section>
-            <h1 className={styles.title}>Choose your plan</h1>
-            <p className={styles.body}>
-              Go includes Companion Studio, your desktop companion, local workspace features, and
-              real AI (Paw Flash) for planning and analysis — with a capped credit allowance. Pro
-              unlocks the full model roster (Flash, Swift, Core, Creative, Vision, Voice) and
-              execution: generating/modifying code, running commands, and deploying. You can preview
-              either now for free; real billing is set up from Settings whenever you're ready.
-            </p>
-            <div className={styles.optionRow}>
-              <button
-                type="button"
-                className={tier === 'go' ? styles.optionActive : styles.option}
-                onClick={() => chooseTier('go')}
-                disabled={busy}
-              >
-                Go
-              </button>
-              <button
-                type="button"
-                className={tier === 'pro' ? styles.optionActive : styles.option}
-                onClick={() => chooseTier('pro')}
-                disabled={busy}
-              >
-                Pro
-              </button>
-            </div>
-          </section>
-        )}
-
-        {step === 3 && (
-          <section>
-            <h1 className={styles.title}>Choose your model</h1>
-            <p className={styles.body}>
-              Paw Core is the default — highest reasoning quality. You can switch anytime in Settings;
-              Paw never switches models for you.
-            </p>
-            <div className={styles.stack}>
-              {MODEL_OPTIONS.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  className={model === m.id ? styles.optionActive : styles.option}
-                  onClick={() => chooseModel(m.id)}
-                >
-                  <strong>{m.label}</strong>
-                  <span className={styles.optionDesc}>{m.description}</span>
-                </button>
-              ))}
-            </div>
-            {modelSwitchNote && <p className={styles.hint}>{modelSwitchNote}</p>}
-          </section>
-        )}
-
-        {step === 4 && (
-          <section>
-            <h1 className={styles.title}>Privacy &amp; permissions</h1>
-            <p className={styles.body}>
-              Paw runs entirely on this device. The next few steps ask for the access it needs to
-              actually help you — you can always revoke any of it later in Settings.
-            </p>
-          </section>
-        )}
-
-        {step === 5 && (
-          <section>
-            <h1 className={styles.title}>Workspace access</h1>
-            <p className={styles.body}>
-              Paw reads and writes files only inside projects you point it at — never your whole
-              filesystem — and always narrates what it's about to change before doing it.
-            </p>
-          </section>
-        )}
-
-        {step === 6 && (
-          <section>
-            <h1 className={styles.title}>Browser automation</h1>
-            <p className={styles.body}>
-              Paw can open, read, and act in a real browser on your behalf for research, forms, and
-              testing your own projects — always confirming before anything irreversible.
-            </p>
-          </section>
-        )}
-
-        {step === 7 && (
-          <section>
-            <h1 className={styles.title}>Microphone access</h1>
-            <p className={styles.body}>
-              Needed for voice conversations and meeting capture. You can skip this and type instead.
-            </p>
-            <button type="button" className={styles.primaryButton} onClick={requestMic} disabled={micStatus === 'granted'}>
-              {micStatus === 'granted' ? 'Microphone access granted' : micStatus === 'denied' ? 'Try again' : 'Allow microphone'}
-            </button>
-            {micStatus === 'denied' && <p className={styles.hint}>Access was denied — you can enable it later in your OS settings.</p>}
-          </section>
-        )}
-
-        {step === 8 && (
-          <section>
-            <h1 className={styles.title}>File system access</h1>
-            <p className={styles.body}>
-              Paw can read, create, and edit files in projects you choose, and asks for confirmation
-              before overwriting or deleting anything.
-            </p>
-          </section>
-        )}
-
-        {step === 9 && (
-          <section>
-            <h1 className={styles.title}>Notifications</h1>
-            <p className={styles.body}>Get notified when a long-running task finishes while you're doing something else.</p>
-            <button type="button" className={styles.primaryButton} onClick={requestNotifications} disabled={notifStatus === 'granted'}>
-              {notifStatus === 'granted' ? 'Notifications enabled' : notifStatus === 'denied' ? 'Try again' : 'Enable notifications'}
-            </button>
-            {notifStatus === 'denied' && <p className={styles.hint}>Notifications were denied — you can enable them later in your OS settings.</p>}
-          </section>
-        )}
-
-        {step === 10 && (
-          <section>
-            <h1 className={styles.title}>Default project</h1>
-            <p className={styles.body}>Pick a folder Paw should treat as your default workspace for coding tasks (optional).</p>
-            <button type="button" className={styles.primaryButton} onClick={pickWorkspace} disabled={busy}>
-              {workspacePath ? 'Change folder' : 'Choose a folder'}
-            </button>
-            {workspacePath && <p className={styles.hint}>{workspacePath}</p>}
-          </section>
-        )}
-
-        {step === 11 && (
-          <section>
             <h1 className={styles.title}>Meet your companion</h1>
             <p className={styles.body}>
-              Paw lives as a small animated companion on your desktop — always visible, never in the
-              way. Double-click it anytime to start talking. You can customize its look later in
-              Companion Studio.
+              Paw lives as a small animated companion on your desktop — always visible, never in
+              the way. Double-click it anytime to start talking. Customize its look in Companion
+              Studio, or bring your own companion model entirely.
             </p>
-          </section>
-        )}
-
-        {step === 12 && (
-          <section>
-            <h1 className={styles.title}>Pair a mobile device (optional)</h1>
             {canPairMobile ? (
               <>
                 <p className={styles.body}>
-                  Scan this with your phone's camera to open the PawOS web app and link it as a
-                  trusted device — notifications, approvals, and a live preview of your
-                  conversation follow from there.
+                  Want it on your phone too? Scan this with your phone's camera to open the PawOS
+                  web app and link it as a trusted device — notifications, approvals, and a live
+                  preview of your conversation follow from there.
                 </p>
                 {paired && !pairingSession && (
                   <p className={styles.hint} style={{ color: '#7fd9a0' }}>Device paired successfully.</p>
@@ -330,21 +147,20 @@ export function OnboardingWizard({ user, onFinish }: { user: AuthUser; onFinish:
                   </div>
                 ) : (
                   <button type="button" className={styles.primaryButton} onClick={generatePairingCode} disabled={busy}>
-                    {busy ? 'Generating…' : 'Generate pairing code'}
+                    {busy ? 'Generating…' : 'Pair a mobile device (optional)'}
                   </button>
                 )}
                 {pairingError && <p className={styles.hint} style={{ color: '#e57373' }}>{pairingError}</p>}
               </>
             ) : (
-              <p className={styles.body}>
-                Mobile pairing is a Pro feature. You can revisit this later from Settings once
-                you upgrade — Go and guest sessions can't pair a phone to this account yet.
+              <p className={styles.hint}>
+                Mobile pairing is available on paid plans — you can upgrade anytime from Settings.
               </p>
             )}
           </section>
         )}
 
-        {step === 13 && (
+        {step === 3 && (
           <section>
             <h1 className={styles.title}>A quick tour</h1>
             <ul className={styles.tourList}>
@@ -355,7 +171,7 @@ export function OnboardingWizard({ user, onFinish }: { user: AuthUser; onFinish:
           </section>
         )}
 
-        {step === 14 && (
+        {step === 4 && (
           <section>
             <h1 className={styles.title}>You're ready</h1>
             <p className={styles.body}>That's everything — Paw is set up and ready to work with you.</p>

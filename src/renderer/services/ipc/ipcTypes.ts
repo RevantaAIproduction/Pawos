@@ -12,6 +12,8 @@ export type SettingsState = {
   themeMode: ThemeMode;
   /** BCP-47 code (e.g. 'en-US', 'fr-FR') for push-to-talk speech recognition — see SpeechProviders.ts. Set from the profile menu's Language picker. */
   speechLanguage: string;
+  /** Gates the composer's "Bypass permissions" execution mode — see ExecutionModeTypes.ts and SettingsManager.ts. Off by default. */
+  bypassPermissionsEnabled: boolean;
 };
 
 export type PetInfo = { id: string; name: string };

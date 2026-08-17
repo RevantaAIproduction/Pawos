@@ -1,9 +1,10 @@
-import { spawn, execFile, type ChildProcess } from 'child_process';
+import { execFile, type ChildProcess } from 'child_process';
+import spawn from 'cross-spawn';
 import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
 import type { ManagedProcessInfo, ProcessOutputEvent, ProcessExitEvent } from '../../shared/actions/ProcessTypes';
 import type { CommandShell } from '../../shared/actions/ActionTypes';
-import { withShell } from './plugins/shellCommand';
+import { resolveSafeInvocation } from './plugins/commandSafety';
 
 export type { ManagedProcessStatus, ManagedProcessInfo, ProcessOutputEvent, ProcessExitEvent } from '../../shared/actions/ProcessTypes';
 
@@ -52,12 +53,22 @@ class ProcessManager extends EventEmitter {
 
   start(command: string, cwd: string, label?: string, shell?: CommandShell): Promise<{ ok: true; info: ManagedProcessInfo } | { ok: false; message: string }> {
     return new Promise((resolve) => {
+      // SECURITY (P0-1): resolveSafeInvocation() rejects any command containing shell chaining/
+      // piping/redirection/substitution syntax, and (for the default case) turns the rest into a
+      // real argv array — see commandSafety.ts for the full rationale. No caller-supplied string is
+      // ever handed to a shell here.
+      const resolved = resolveSafeInvocation(command, shell);
+      if (!resolved.ok) {
+        resolve({ ok: false, message: resolved.message });
+        return;
+      }
+
       let settled = false;
       const id = uuidv4();
 
       let child: ChildProcess;
       try {
-        child = spawn(withShell(command, shell), { cwd, shell: true, windowsHide: true });
+        child = spawn(resolved.invocation.bin, resolved.invocation.args, { cwd, windowsHide: true });
       } catch (error) {
         resolve({ ok: false, message: error instanceof Error ? error.message : 'Failed to start process.' });
         return;

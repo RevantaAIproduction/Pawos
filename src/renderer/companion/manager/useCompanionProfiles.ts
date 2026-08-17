@@ -27,6 +27,11 @@ export function useCompanionProfiles() {
     []
   );
   const markUploadRigged = useCallback((id: string, rigged: boolean) => companionProfileStore.markUploadRigged(id, rigged), []);
+  const recordUploadLoadResult = useCallback(
+    (id: string, result: { ok: true; rigged: boolean } | { ok: false; error: string }) =>
+      companionProfileStore.recordUploadLoadResult(id, result),
+    []
+  );
   const duplicate = useCallback((id: string) => companionProfileStore.duplicate(id), []);
   const exportProfile = useCallback((id: string) => companionProfileStore.export(id), []);
   const importProfile = useCallback((json: string) => companionProfileStore.import(json), []);
@@ -56,6 +61,7 @@ export function useCompanionProfiles() {
     create,
     createFromUpload,
     markUploadRigged,
+    recordUploadLoadResult,
     duplicate,
     exportProfile,
     importProfile,

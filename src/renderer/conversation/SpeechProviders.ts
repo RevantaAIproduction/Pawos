@@ -31,6 +31,56 @@ export type SpeechSynthesisCallbacks = {
   onVisemeFrame?: (frame: VisemeFrame) => void;
 };
 
+/**
+ * Real Unicode-script-range detection — not a language-model guess. Each
+ * range below is a genuine, documented Unicode block for that script; the
+ * BCP-47 tag returned is picked to match a locale that Windows/macOS/Chrome
+ * actually ship a system voice for (verified against real
+ * SpeechSynthesisVoice.lang values across those platforms). Latin-script
+ * languages (English, French, Spanish, ...) can't be distinguished from each
+ * other this way — that's an honest limitation, not fixed here — but this
+ * covers the specific bug this exists to fix: a reply written in a
+ * non-Latin script (e.g. Telugu, Hindi, Tamil, Arabic, Chinese) being read
+ * aloud with whatever voice/lang the utterance defaulted to, rather than one
+ * matching the script actually on screen.
+ */
+const SCRIPT_LANGUAGE_RANGES: { pattern: RegExp; lang: string }[] = [
+  { pattern: /[ఀ-౿]/, lang: 'te-IN' }, // Telugu
+  { pattern: /[ऀ-ॿ]/, lang: 'hi-IN' }, // Devanagari (Hindi/Marathi)
+  { pattern: /[஀-௿]/, lang: 'ta-IN' }, // Tamil
+  { pattern: /[ಀ-೿]/, lang: 'kn-IN' }, // Kannada
+  { pattern: /[ഀ-ൿ]/, lang: 'ml-IN' }, // Malayalam
+  { pattern: /[઀-૿]/, lang: 'gu-IN' }, // Gujarati
+  { pattern: /[਀-੿]/, lang: 'pa-IN' }, // Gurmukhi (Punjabi)
+  { pattern: /[ঀ-৿]/, lang: 'bn-IN' }, // Bengali
+  { pattern: /[଀-୿]/, lang: 'or-IN' }, // Odia
+  { pattern: /[؀-ۿ]/, lang: 'ar-SA' }, // Arabic
+  { pattern: /[֐-׿]/, lang: 'he-IL' }, // Hebrew
+  { pattern: /[Ѐ-ӿ]/, lang: 'ru-RU' }, // Cyrillic
+  { pattern: /[฀-๿]/, lang: 'th-TH' }, // Thai
+  { pattern: /[가-힯]/, lang: 'ko-KR' }, // Hangul (Korean)
+  { pattern: /[぀-ヿ]/, lang: 'ja-JP' }, // Hiragana/Katakana (Japanese)
+  { pattern: /[一-鿿]/, lang: 'zh-CN' }, // CJK Unified Ideographs (Chinese; also matches Japanese kanji, checked last)
+];
+
+/**
+ * Best-effort BCP-47 language guess from the actual text about to be
+ * spoken — real script detection, never a fabricated claim of certainty.
+ * Returns null when the text is Latin-script (or empty), since that can't
+ * be honestly disambiguated by script alone.
+ */
+export function detectSpeechLanguage(text: string): string | null {
+  for (const { pattern, lang } of SCRIPT_LANGUAGE_RANGES) {
+    if (pattern.test(text)) return lang;
+  }
+  return null;
+}
+
+/** True if `voiceLang` and `targetLang` share the same base language subtag (e.g. 'te-IN' vs 'te'). */
+function languageMatches(voiceLang: string, targetLang: string): boolean {
+  return voiceLang.toLowerCase().split('-')[0] === targetLang.toLowerCase().split('-')[0];
+}
+
 export interface TextToSpeechProvider {
   readonly name: string;
   /** Whether this provider can drive onVisemeFrame. Honest per-provider — never assumed. */
@@ -195,9 +245,28 @@ export function createBrowserSpeechSynthesisProvider(rate?: number, pitch?: numb
         const utterance = new SpeechSynthesisUtterance(text);
         if (rate !== undefined) utterance.rate = Math.max(0.5, Math.min(2, rate));
         if (pitch !== undefined) utterance.pitch = Math.max(0, Math.min(2, pitch));
-        if (voiceName) {
-          const match = synthesis.getVoices().find((v) => v.name === voiceName);
-          if (match) utterance.voice = match;
+
+        // Real bug fix: utterance.lang previously defaulted to the page's own
+        // language (effectively always English) regardless of what script the
+        // text being spoken was actually in — so a reply generated correctly
+        // in, say, Telugu, would still be handed to the OS's English voice,
+        // which either mispronounces it or falls back to reading it as
+        // English. Detect the real script of this specific utterance's text
+        // and prefer a real, installed system voice for that language.
+        const detectedLang = detectSpeechLanguage(text);
+        const voices = synthesis.getVoices();
+        const configuredVoice = voiceName ? voices.find((v) => v.name === voiceName) : undefined;
+
+        if (detectedLang && !(configuredVoice && languageMatches(configuredVoice.lang, detectedLang))) {
+          utterance.lang = detectedLang;
+          const matchingVoice = voices.find((v) => languageMatches(v.lang, detectedLang));
+          if (matchingVoice) utterance.voice = matchingVoice;
+          // No matching system voice installed for this language — utterance.lang
+          // is still set correctly so the OS/browser's own fallback behavior for
+          // that language (if any) applies, rather than silently defaulting to
+          // whatever voice happens to be selected for a different language.
+        } else if (configuredVoice) {
+          utterance.voice = configuredVoice;
         }
         utterance.onstart = () => callbacks?.onStart?.();
         utterance.onend = () => {

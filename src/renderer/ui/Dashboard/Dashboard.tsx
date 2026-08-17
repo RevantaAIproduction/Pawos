@@ -94,16 +94,19 @@ export function Dashboard({
     });
   }, [ipc, clearWakeTimeout]);
 
-  // Guaranteed to fire regardless of which Settings/Organization tab is
-  // open — this is the one place that actually calls the security-definer
-  // add_ticket_balance() RPC after a real Razorpay purchase completes (see
-  // CheckoutSyncServer.ts). Billing UI components separately listen to the
-  // same event purely to refresh their own displayed balance.
+  // P0-2 security fix: this used to be the one place that called the security-definer
+  // add_ticket_balance() RPC directly with a client-supplied amount after an UNVERIFIED loopback
+  // ping — see CheckoutSyncServer.ts and TaskCreditsSection.tsx/AutonomousTaskBillingCard.tsx's own
+  // updated comments. The RPC that call used is now service-role-only (see the
+  // 20260814000000_p0_payment_verification_hardening.sql migration); crediting now happens
+  // exclusively in pawos-web's /api/billing/credit-ticket-balance route, only after it has
+  // independently verified the Razorpay payment signature and re-fetched the real captured amount
+  // from Razorpay's own API. This handler no longer credits anything — it exists only so this
+  // effect remains the documented, guaranteed-to-fire listener; billing UI components separately
+  // listen to the same event purely to refresh their own already-correct balance display.
   useEffect(() => {
     if (user.isGuest) return;
-    ipc.onTaskCreditsPurchased(({ amountUsd, organizationId }) => {
-      autonomousTaskBillingService.topUpBalance(organizationId ?? null, amountUsd).catch(() => {});
-    });
+    ipc.onTaskCreditsPurchased(() => {});
   }, [ipc, user.isGuest]);
 
   // Reports this account's own subscription conversion to the referral

@@ -9,9 +9,12 @@ import { createOpenAiWhisperSttProvider } from './providers/OpenAiWhisperSttProv
 import { createGeminiSttProvider } from './providers/GeminiSttProvider';
 import { createOpenAiTtsProvider } from './providers/OpenAiTtsProvider';
 import { createElevenLabsTtsProvider } from './providers/ElevenLabsTtsProvider';
+import { createGeminiTtsProvider, GEMINI_VOICE_PRESETS, GEMINI_GENDER_PRESETS } from './providers/GeminiTtsProvider';
+
+export { GEMINI_VOICE_PRESETS, GEMINI_GENDER_PRESETS };
 
 export type SttProviderId = 'browser' | 'gemini' | 'whisper' | 'azure' | 'deepgram';
-export type TtsProviderId = 'browser' | 'openai' | 'elevenlabs' | 'azure' | 'kokoro' | 'piper';
+export type TtsProviderId = 'browser' | 'openai' | 'gemini' | 'elevenlabs' | 'azure' | 'kokoro' | 'piper';
 
 export type SttProviderConfig = { id: SttProviderId; apiKey?: string; model?: string; baseUrl?: string; /** Real hint used by 'gemini' to improve transcription accuracy — see GeminiSttProvider.ts. Honestly ignored by other providers. */ language?: string };
 export type TtsProviderConfig = {
@@ -63,6 +66,10 @@ export function createTtsProvider(config: TtsProviderConfig): TextToSpeechProvid
   switch (config.id) {
     case 'openai':
       return createOpenAiTtsProvider({ apiKey: config.apiKey ?? '', voice: config.voiceId, model: config.model, baseUrl: config.baseUrl, speed: config.speed });
+    case 'gemini':
+      // Gemini's TTS endpoint has no request-level speed field — `speed` is
+      // honestly not applied here, same as elevenlabs not applying it above.
+      return createGeminiTtsProvider({ apiKey: config.apiKey ?? '', voice: config.voiceId, model: config.model, baseUrl: config.baseUrl });
     case 'elevenlabs':
       // ElevenLabs' voice_settings has no real speed/rate field — `speed` is
       // honestly not applied here, same as azure/kokoro/piper below not
@@ -98,6 +105,7 @@ export const STT_PROVIDER_CATALOG: { id: SttProviderId; label: string; status: '
 export const TTS_PROVIDER_CATALOG: { id: TtsProviderId; label: string; status: 'available' | 'planned' }[] = [
   { id: 'browser', label: 'Browser speech synthesis', status: 'available' },
   { id: 'openai', label: 'OpenAI TTS', status: 'available' },
+  { id: 'gemini', label: 'Gemini TTS', status: 'available' },
   { id: 'elevenlabs', label: 'ElevenLabs', status: 'available' },
   { id: 'azure', label: 'Azure TTS', status: 'planned' },
   { id: 'kokoro', label: 'Kokoro', status: 'planned' },

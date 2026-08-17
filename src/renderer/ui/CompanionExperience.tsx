@@ -46,7 +46,7 @@ export default function CompanionExperience() {
   // layered onto the base system prompt whenever the active companion's
   // personality changes — the one real behavioral effect of a preset choice,
   // not just a label shown in a list.
-  const { active: activeProfile, markUploadRigged } = useCompanionProfiles();
+  const { active: activeProfile, recordUploadLoadResult } = useCompanionProfiles();
   useEffect(() => {
     if (!activeProfile) return;
     const parts = [buildPersonalityAddendum(activeProfile.personality)];
@@ -64,7 +64,12 @@ export default function CompanionExperience() {
   useEffect(() => {
     if (!activeProfile) return;
     const { ttsProvider, voiceId, speed, pitch, style } = activeProfile.voice;
-    const apiKey = ttsProvider === 'openai' ? aiProviderConfigStore.getApiKey('openai') : undefined;
+    const apiKey =
+      ttsProvider === 'openai'
+        ? aiProviderConfigStore.getApiKey('openai')
+        : ttsProvider === 'gemini'
+          ? aiProviderConfigStore.getApiKey('gemini')
+          : undefined;
     conversation.setSpeechSynthesisProvider({ id: ttsProvider, voiceId, speed, pitch, style, apiKey });
   }, [activeProfile, conversation.setSpeechSynthesisProvider]);
 
@@ -252,7 +257,7 @@ export default function CompanionExperience() {
           celebrateUntilRef={celebrateUntilRef}
           behavior={activeProfile?.behavior}
           uploadedFilePath={activeProfile?.avatarSource?.mode === 'upload' ? activeProfile.avatarSource.uploadedFilePath : undefined}
-          onUploadRigged={(rigged) => activeProfile && markUploadRigged(activeProfile.id, rigged)}
+          onUploadLoadResult={(result) => activeProfile && recordUploadLoadResult(activeProfile.id, result)}
           onReady={() => ipc.notifyCompanionReady()}
         />
         {!conversationSnapshot.panelOpen && (
@@ -293,6 +298,13 @@ export default function CompanionExperience() {
             onUseCredits={() => conversation.useCreditsForCompute()}
             redeemingCredits={conversation.redeemingCredits}
             redeemCreditsError={conversation.redeemCreditsError}
+            executionMode={conversation.executionMode}
+            onSetExecutionMode={(mode) => conversation.setExecutionMode(mode)}
+            bypassPermissionsEnabled={conversation.bypassPermissionsEnabled}
+            entitlement={conversation.entitlement}
+            activePawModel={conversation.activePawModel}
+            modelTierRequirements={conversation.modelTierRequirements}
+            onSelectModel={(id) => conversation.selectModel(id)}
           />
         </div>
       )}

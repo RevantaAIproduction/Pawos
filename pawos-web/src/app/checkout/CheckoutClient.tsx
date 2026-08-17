@@ -82,18 +82,18 @@ export function CheckoutClient() {
         subscription_id: result.subscriptionId,
         name: "PawOS",
         description: `${TIER_LABELS[plan] ?? plan} subscription`,
-        handler: (payment: { razorpay_subscription_id?: string; razorpay_payment_id?: string }) => {
+        handler: (payment: { razorpay_subscription_id?: string; razorpay_payment_id?: string; razorpay_signature?: string }) => {
           // Pings the Electron app's local loopback server (see
-          // CheckoutSyncServer.ts) so it can mark the subscription active
-          // immediately, without waiting on the user to refocus the app.
-          // Best-effort only — the real webhook is authoritative once a
-          // shared account backend exists.
-          if (callback) {
+          // CheckoutSyncServer.ts) with the real Razorpay payment/subscription/signature triple —
+          // P0-3 security fix: Electron no longer trusts a bare `plan` query param here. It
+          // independently re-verifies this triple against /api/billing/verify-subscription before
+          // ever activating a tier, so this ping alone (even if forged) can never grant a plan a
+          // real payment wasn't made for.
+          if (callback && payment.razorpay_payment_id && payment.razorpay_subscription_id && payment.razorpay_signature) {
             const syncUrl = new URL(callback);
-            syncUrl.searchParams.set("plan", plan);
-            if (runtimeIds) syncUrl.searchParams.set("runtimeIds", runtimeIds);
-            const orderId = payment.razorpay_subscription_id ?? payment.razorpay_payment_id;
-            if (orderId) syncUrl.searchParams.set("orderId", orderId);
+            syncUrl.searchParams.set("paymentId", payment.razorpay_payment_id);
+            syncUrl.searchParams.set("subscriptionId", payment.razorpay_subscription_id);
+            syncUrl.searchParams.set("signature", payment.razorpay_signature);
             fetch(syncUrl.toString()).catch(() => {});
           }
           setStatus("idle");

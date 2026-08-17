@@ -71,6 +71,7 @@ import { gitCommitPlugin } from './plugins/GitCommitPlugin';
 import { gitCreateBranchPlugin } from './plugins/GitCreateBranchPlugin';
 import { gitCheckoutPlugin } from './plugins/GitCheckoutPlugin';
 import { gitRevertCommitPlugin } from './plugins/GitRevertCommitPlugin';
+import { gitCreateWorktreePlugin } from './plugins/GitCreateWorktreePlugin';
 import { applyCodeEditPlugin } from './plugins/ApplyCodeEditPlugin';
 import { proposeCodeEditPlanPlugin } from './plugins/ProposeCodeEditPlanPlugin';
 import { runValidationPipelinePlugin } from './plugins/RunValidationPipelinePlugin';
@@ -271,6 +272,7 @@ export class DesktopExecutionEngine extends EventEmitter {
     gitCreateBranchPlugin,
     gitCheckoutPlugin,
     gitRevertCommitPlugin,
+    gitCreateWorktreePlugin,
     applyCodeEditPlugin,
     proposeCodeEditPlanPlugin,
     runValidationPipelinePlugin,
@@ -459,18 +461,21 @@ export class DesktopExecutionEngine extends EventEmitter {
     const canExecute = hasAdvancedRuntimes && hasCodingRuntime;
     const canExecuteInfrastructure = hasAdvancedRuntimes && hasInfrastructureRuntime;
 
+    const advancedRuntimesTier = entitlementService.findMinimumTierForFeature('advancedRuntimes');
+
     if (codingExecutionBlocked(request.type, canExecute, codingModeStore.getMode())) {
       return canExecute
         ? {
             ok: false,
             reason: 'coding-mode-restricted',
             message:
-              'Paw Go is designed for planning and analysis. Upgrade to Paw Pro to generate, modify, build, test, debug, and continuously improve your project using the full Coding Runtime.',
+              'Paw Go is designed for planning and analysis. Upgrade to Paw Pro to generate, modify, build, test, debug, and continuously improve your project.',
           }
         : {
             ok: false,
             reason: 'entitlement-restricted',
             message: 'This action requires Paw Pro. Your current plan supports investigation, analysis, and planning — upgrade to generate, modify, build, test, and debug code.',
+            data: { requiredFeature: 'advancedRuntimes', requiredTier: advancedRuntimesTier },
           };
     }
 
@@ -486,12 +491,14 @@ export class DesktopExecutionEngine extends EventEmitter {
             ok: false,
             reason: 'entitlement-restricted',
             message: 'This action requires Paw Pro. Your current plan supports investigation, analysis, and planning — upgrade to deploy, roll back, or promote deployments.',
+            data: { requiredFeature: 'advancedRuntimes', requiredTier: advancedRuntimesTier },
           };
     }
 
     const runtimeBlocked = authorizeRuntimeAction(request.type, {
       hasAdvancedRuntimes,
       isRuntimeEntitled: (runtimeId) => entitlementService.isRuntimeEntitled(runtimeId),
+      requiredTier: advancedRuntimesTier,
     });
     if (runtimeBlocked) return runtimeBlocked;
 

@@ -26,10 +26,11 @@ import { subscriptionStore } from '../billing/SubscriptionStore';
 import { creditStore } from '../billing/CreditStore';
 import { createBillingProvider } from '../billing/BillingProviderRegistry';
 import { createCreditsCheckoutUrl } from '../billing/providers/RazorpayBillingProvider';
+import { verifyRealOrganizationTier } from '../billing/OrganizationTierVerification';
 import { entitlementService } from '../billing/EntitlementService';
 import { createRendererOrganizationUsageRecorder } from '../billing/RendererOrganizationUsageBridge';
 import { startCheckoutCallbackServer } from '../billing/CheckoutSyncServer';
-import type { SubscriptionTierId, FeatureId, CheckoutOptions } from '../../shared/billing/BillingTypes';
+import type { SubscriptionTierId, FeatureId, CheckoutOptions, SeatTier } from '../../shared/billing/BillingTypes';
 import type { AiUsageCategory } from '../../shared/billing/AiUsageCategories';
 import type { PawModelId } from '../../shared/ai/PawModelTypes';
 import { onboardingStore } from '../onboarding/OnboardingStore';
@@ -348,8 +349,25 @@ export function registerIpc(opts: {
   // new preset amounts can be added later without a redeploy.
   ipcMain.handle('billing:getTicketPricingConfig', () => ticketPricingConfigStore.get());
   ipcMain.handle('billing:getSubscription', () => subscriptionStore.getEffective());
-  ipcMain.handle('billing:setSubscriptionTier', (_evt, tier: SubscriptionTierId) => subscriptionStore.setTier(tier));
-  ipcMain.handle('billing:syncFromOrganization', (_evt, orgTier: SubscriptionTierId) => subscriptionStore.syncFromOrganization(orgTier));
+  // P0-3: reject any string that isn't a real tier id — defense in depth (this path was already
+  // non-exploitable on its own since status stays 'none' here, but "arbitrary tier strings rejected"
+  // is an explicit audit requirement).
+  const VALID_SUBSCRIPTION_TIERS: SubscriptionTierId[] = ['go', 'pro', 'proMax', 'team', 'enterprise'];
+  ipcMain.handle('billing:setSubscriptionTier', (_evt, tier: SubscriptionTierId) => {
+    if (!VALID_SUBSCRIPTION_TIERS.includes(tier)) throw new Error(`Unknown subscription tier: ${String(tier)}`);
+    return subscriptionStore.setTier(tier);
+  });
+  // P0-3 security fix: previously trusted `orgTier` directly from the renderer with zero
+  // verification — any code running in the renderer could call this with orgTier:'enterprise' and
+  // instantly self-elevate (syncFromOrganization sets status:'active'). Now requires the caller's
+  // own Supabase access token + a real organizationId, and independently re-derives the tier from
+  // Supabase itself (real active membership + the organization's own tier column) before ever
+  // calling the store — see OrganizationTierVerification.ts.
+  ipcMain.handle('billing:syncFromOrganization', async (_evt, accessToken: string, organizationId: string, seatTier?: SeatTier) => {
+    const verified = await verifyRealOrganizationTier(accessToken, organizationId);
+    if (!verified.ok) throw new Error(verified.reason);
+    return subscriptionStore.syncFromOrganization(verified.tier, seatTier);
+  });
   ipcMain.handle('billing:reconcileForAccount', (_evt, accountId: string) => subscriptionStore.reconcileForAccount(accountId));
   // Called on sign-out so a stale, org-elevated tier from a previous account on this device never
   // carries over to the next account that signs in — see SubscriptionStore.reset()'s own comment.
@@ -374,8 +392,17 @@ export function registerIpc(opts: {
   // dollar amount, not a subscription-tier checkout, so it's a standalone
   // function rather than part of the BillingProvider interface (see
   // RazorpayBillingProvider.ts).
-  ipcMain.handle('billing:createCreditsCheckoutSession', (_evt, amountUsd: number, organizationId?: string, callbackUrl?: string) =>
-    createCreditsCheckoutUrl(amountUsd, organizationId, callbackUrl)
+  // Trusted server-side gate (Go/Pro must never be able to create a real Ticket Balance top-up
+  // order, even by invoking this IPC channel directly) — checked here, before RazorpayBillingProvider
+  // is ever called, since Ticket Balance ('autonomousTaskBilling') is Pro Max/Team/Enterprise-only.
+  ipcMain.handle(
+    'billing:createCreditsCheckoutSession',
+    (_evt, amountUsd: number, organizationId?: string, callbackUrl?: string, accessToken?: string) => {
+      if (!entitlementService.isFeatureAvailable('autonomousTaskBilling')) {
+        return { ok: false, reason: 'Ticket Balance requires Paw Pro Max or higher.' };
+      }
+      return createCreditsCheckoutUrl(amountUsd, organizationId, callbackUrl, accessToken);
+    }
   );
   // Grants bonus Paw Compute for the current period after the renderer has already redeemed the
   // matching dollar amount from the caller's Referral Credits balance via Supabase's
@@ -391,6 +418,8 @@ export function registerIpc(opts: {
   ipcMain.handle('entitlement:getSnapshot', () => entitlementService.getSnapshot());
   ipcMain.handle('entitlement:isModelAvailable', (_evt, modelId: PawModelId) => entitlementService.isModelAvailable(modelId));
   ipcMain.handle('entitlement:isFeatureAvailable', (_evt, featureId: FeatureId) => entitlementService.isFeatureAvailable(featureId));
+  ipcMain.handle('entitlement:getModelTierRequirements', () => entitlementService.getModelTierRequirements());
+  ipcMain.handle('entitlement:getFeatureTierRequirements', () => entitlementService.getFeatureTierRequirements());
 
   // First-run onboarding — resumable step tracking + a real folder picker
   // for the default workspace step. See src/main/onboarding/OnboardingStore.ts.
@@ -420,8 +449,15 @@ export function registerIpc(opts: {
   });
 
   // Upload Existing Companion (Companion Studio) — a real native file picker
-  // scoped to the 3D formats CompanionUploadPipeline.ts can load.
+  // scoped to the 3D formats CompanionUploadPipeline.ts can load. Gated on
+  // 'companionStudio' (Pro+) here, main-process side, per the product
+  // decision that custom Companion upload is a paid-tier feature. This is
+  // defense-in-depth for the native-picker entry point specifically; the
+  // primary, single choke point covering both this AND drag-and-drop upload
+  // is the entitlement check in CompanionLabSection.tsx's processUpload(),
+  // which queries this same EntitlementService via entitlement:isFeatureAvailable.
   ipcMain.handle('companion:pickUploadFile', async (evt) => {
+    if (!entitlementService.isFeatureAvailable('companionStudio')) return null;
     const win = BrowserWindow.fromWebContents(evt.sender) ?? undefined;
     const options: Electron.OpenDialogOptions = { properties: ['openFile'], filters: [{ name: '3D Model', extensions: ['glb', 'gltf', 'vrm', 'fbx', 'obj'] }] };
     const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);

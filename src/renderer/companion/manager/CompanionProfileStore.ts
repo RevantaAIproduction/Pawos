@@ -193,11 +193,29 @@ export class CompanionProfileStore {
     return profile;
   }
 
-  /** Records whether the upload turned out to already be rigged, once loadUploadedCompanion() actually runs — real telemetry, not a guess made at upload time. */
+/** Records whether the upload turned out to already be rigged, once loadUploadedCompanion() actually runs — real telemetry, not a guess made at upload time. */
   markUploadRigged(id: string, rigged: boolean) {
     const profile = this.state.profiles.find((p) => p.id === id);
     if (!profile?.avatarSource || profile.avatarSource.mode !== 'upload') return;
     this.update(id, () => ({ avatarSource: { ...profile.avatarSource!, rigged } as CompanionAvatarSource }));
+  }
+
+  /**
+   * Records the real outcome of the overlay's own load attempt for this
+   * companion's uploaded model — success (with rig status) or a genuine
+   * failure (with the real thrown error message). This is what lets the UI
+   * honestly show "Import failed" instead of silently showing the default
+   * companion with no explanation, and what a future load attempt clears on
+   * success (a previously-failed upload that starts loading again is no
+   * longer shown as failed once it actually succeeds).
+   */
+  recordUploadLoadResult(id: string, result: { ok: true; rigged: boolean } | { ok: false; error: string }) {
+    const profile = this.state.profiles.find((p) => p.id === id);
+    if (!profile?.avatarSource || profile.avatarSource.mode !== 'upload') return;
+    const patch: Partial<CompanionAvatarSource> = result.ok
+      ? { rigged: result.rigged, loadStatus: 'ready', loadError: undefined }
+      : { loadStatus: 'failed', loadError: result.error };
+    this.update(id, () => ({ avatarSource: { ...profile.avatarSource!, ...patch } as CompanionAvatarSource }));
   }
 
   /** Companion Package (.paw) export — maps this profile's real fields onto the package's real slots. avatarFilePath is only present when the companion has an uploaded model. */

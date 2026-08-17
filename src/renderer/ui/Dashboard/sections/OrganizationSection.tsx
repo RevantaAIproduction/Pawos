@@ -7,6 +7,7 @@ import { isPersonalEmailDomain } from '../../../../shared/organization/PersonalE
 import type { OrganizationRecord, OrganizationMember, OrgRole, OrgTier } from '../../../../shared/organization/OrganizationTypes';
 import type { SeatTier } from '../../../../shared/billing/BillingTypes';
 import type { AuthUser } from '../../../auth/AuthTypes';
+import { getSupabaseClient } from '../../../auth/supabaseClient';
 import { RolesCapabilityCard } from './RolesCapabilityCard';
 import { OrganizationWorkspaceCard } from './OrganizationWorkspaceCard';
 import { AuditLogCard } from './AuditLogCard';
@@ -133,8 +134,16 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
           const orgs = await organizationService.getMyOrganizations();
           const mine = orgs[0] ?? null;
           if (mine) {
-            const synced = await ipc.billingSyncTierFromOrganization(mine.tier);
-            if (!cancelled) setTier(synced.tier);
+            // P0-3 security fix: the main process independently re-verifies real, active membership
+            // and the organization's real tier against Supabase using this token — mine.tier is never
+            // trusted directly. See OrganizationTierVerification.ts.
+            const supabase = await getSupabaseClient();
+            const { data: sessionData } = await supabase.auth.getSession();
+            const accessToken = sessionData.session?.access_token;
+            if (accessToken) {
+              const synced = await ipc.billingSyncTierFromOrganization(accessToken, mine.id);
+              if (!cancelled) setTier(synced.tier);
+            }
             return;
           }
         } catch {
@@ -242,8 +251,13 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
         setPendingInvites(invites);
         if (mine) {
           setMembers(await organizationService.getMembers(mine.id));
-          const synced = await ipc.billingSyncTierFromOrganization(mine.tier);
-          if (!cancelled) setTier(synced.tier);
+          const supabase = await getSupabaseClient();
+          const { data: sessionData } = await supabase.auth.getSession();
+          const accessToken = sessionData.session?.access_token;
+          if (accessToken) {
+            const synced = await ipc.billingSyncTierFromOrganization(accessToken, mine.id);
+            if (!cancelled) setTier(synced.tier);
+          }
         }
       } catch (e) {
         if (!cancelled) setError(getErrorMessage(e));

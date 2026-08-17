@@ -101,3 +101,117 @@ describe('ExecutionSupervisor evidence pipeline', () => {
     expect(latest.fileEvidence?.[0]).toMatchObject({ result: 'blocked' });
   });
 });
+
+/**
+ * Section 6 — Execution Evidence: "model said it worked" must never become "verified successfully."
+ * end()'s status derivation is a pure function of what actually happened in the timeline (real
+ * ok/failed action results) — never trusts the endedReason the reasoning loop supplies alone.
+ * These tests exercise that derivation directly against ExecutionSupervisor.end(), the single
+ * chokepoint every conversation turn's completion status passes through.
+ */
+describe('ExecutionSupervisor — evidence-based completion cannot be faked', () => {
+  function capture(): { supervisor: ExecutionSupervisor; records: ExecutionRecord[] } {
+    const records: ExecutionRecord[] = [];
+    return { supervisor: new ExecutionSupervisor((record) => records.push(record)), records };
+  }
+
+  it('a real failed action forces status "failed" even when the model reports the turn as completed', () => {
+    const { supervisor, records } = capture();
+    supervisor.begin('Fix the build');
+
+    supervisor.recordAction(
+      { type: 'runCommand', command: 'npm run build', cwd: 'C:/project' },
+      { ok: false, reason: 'failed', message: 'Build failed: type error.' },
+      { label: 'Build failed.', startedAt: 100, endedAt: 300 }
+    );
+    // The model's own final turn narration claims success — this must not be trusted.
+    supervisor.end('completed', 'Build succeeded.');
+
+    const latest = records.at(-1)!;
+    expect(latest.status).toBe('failed');
+    expect(latest.status).not.toBe('completed');
+  });
+
+  it('a genuinely all-successful run with endedReason completed is honestly reported completed', () => {
+    const { supervisor, records } = capture();
+    supervisor.begin('Build project');
+
+    supervisor.recordAction(
+      { type: 'runCommand', command: 'npm run build', cwd: 'C:/project' },
+      { ok: true, data: { output: 'built ok', exitCode: 0 } },
+      { label: 'Build succeeded.', startedAt: 100, endedAt: 300 }
+    );
+    supervisor.end('completed', 'Build succeeded.');
+
+    expect(records.at(-1)?.status).toBe('completed');
+  });
+
+  it('a blocked action cannot be overwritten back to completed by a later successful action', () => {
+    const { supervisor, records } = capture();
+    supervisor.begin('Deploy the app');
+
+    supervisor.recordAction(
+      { type: 'runCommand', command: 'echo ok', cwd: 'C:/project' },
+      { ok: false, reason: 'entitlement-restricted', message: 'Requires Paw Pro.' },
+      { label: 'Requires Paw Pro.', startedAt: 100, endedAt: 105 }
+    );
+    // A later, unrelated action in the same turn succeeds — must never flip the outcome.
+    supervisor.recordAction(
+      { type: 'readFile', path: 'C:/project/README.md' },
+      { ok: true, data: { content: 'readme' } },
+      { label: 'Read the readme.', startedAt: 200, endedAt: 210 }
+    );
+    supervisor.end('completed', 'Done.');
+
+    expect(records.at(-1)?.status).toBe('abandoned');
+  });
+
+  it('an interrupted turn is never reported completed, even with zero recorded failures', () => {
+    const { supervisor, records } = capture();
+    supervisor.begin('Do something');
+
+    supervisor.recordAction(
+      { type: 'readFile', path: 'C:/project/README.md' },
+      { ok: true, data: { content: 'readme' } },
+      { label: 'Read the readme.', startedAt: 100, endedAt: 110 }
+    );
+    // Session ended (app quit / navigated away) mid-turn — no action ever failed, but the turn
+    // never reached a real "done" narration either.
+    supervisor.end('interrupted', 'Session ended.');
+
+    const latest = records.at(-1)!;
+    expect(latest.status).toBe('abandoned');
+    expect(latest.status).not.toBe('completed');
+  });
+
+  it('calling end() a second time is a safe no-op — a completed turn cannot be double-charged by a duplicate completion signal', () => {
+    const { supervisor, records } = capture();
+    supervisor.begin('Build project');
+    supervisor.recordAction(
+      { type: 'runCommand', command: 'npm run build', cwd: 'C:/project' },
+      { ok: true, data: { output: 'built ok', exitCode: 0 } },
+      { label: 'Build succeeded.', startedAt: 100, endedAt: 300 }
+    );
+    supervisor.end('completed', 'Build succeeded.');
+    const countAfterFirstEnd = records.length;
+
+    // A stray/duplicate call (e.g. a retried finalize) after the record was already closed.
+    supervisor.end('completed', 'Build succeeded.');
+
+    expect(records.length).toBe(countAfterFirstEnd);
+  });
+
+  it('an error-ended turn with no explicit blocked/failed action is honestly reported failed, never completed', () => {
+    const { supervisor, records } = capture();
+    supervisor.begin('Do something risky');
+    supervisor.recordAction(
+      { type: 'readFile', path: 'C:/project/README.md' },
+      { ok: true, data: { content: 'readme' } },
+      { label: 'Read the readme.', startedAt: 100, endedAt: 110 }
+    );
+    // A thrown exception in the reasoning loop itself, not tied to any one action's own result.
+    supervisor.end('error', 'Unexpected error.');
+
+    expect(records.at(-1)?.status).toBe('failed');
+  });
+});

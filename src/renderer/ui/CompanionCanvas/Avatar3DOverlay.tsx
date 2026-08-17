@@ -35,7 +35,7 @@ export function Avatar3DOverlay({
   celebrateUntilRef,
   behavior,
   uploadedFilePath,
-  onUploadRigged,
+  onUploadLoadResult,
   onReady,
 }: {
   controller: CompanionController | null;
@@ -53,8 +53,8 @@ export function Avatar3DOverlay({
   behavior?: CompanionBehavior;
   /** Upload Existing Companion pipeline's real input — the active companion's own original file (never modified), loaded and auto-rigged (or imported as-is if already rigged) onto this overlay's shared skeleton once assets are ready. */
   uploadedFilePath?: string;
-  /** Reports whether the upload turned out to already be rigged, once loading actually finishes — real telemetry, not set until the pipeline runs. */
-  onUploadRigged?: (rigged: boolean) => void;
+  /** Reports the real outcome of loading this companion's uploaded model — success (with rig status) or a genuine failure (with the real thrown error), once loading actually finishes. Never fabricated; the default companion stays visibly on screen until this fires 'ok: true'. */
+  onUploadLoadResult?: (result: { ok: true; rigged: boolean } | { ok: false; error: string }) => void;
   /** Fires once the 3D asset has actually finished loading and the companion is visible — the real "ready" moment, well after the enable IPC call already resolved. */
   onReady?: () => void;
 }) {
@@ -105,9 +105,13 @@ export function Avatar3DOverlay({
       if (uploadedFilePath) {
         try {
           const { rigged } = await animController.loadUploadedCompanion(uploadedFilePath);
-          if (!disposed) onUploadRigged?.(rigged);
+          if (!disposed) onUploadLoadResult?.({ ok: true, rigged });
         } catch (error) {
-          if (!disposed) console.error('Failed to load uploaded companion:', error);
+          // The base/default companion mesh is only removed AFTER a successful load (see
+          // loadUploadedCompanion), so a failure here leaves the default visibly on screen with
+          // no explanation unless this is reported honestly — never swallow it silently.
+          console.error('Failed to load uploaded companion:', error);
+          if (!disposed) onUploadLoadResult?.({ ok: false, error: error instanceof Error ? error.message : String(error) });
         }
       }
 

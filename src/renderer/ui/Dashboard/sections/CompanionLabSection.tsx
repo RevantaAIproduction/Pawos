@@ -33,6 +33,14 @@ export function CompanionLabSection({
 
   const processUpload = async (filePath: string) => {
     setUploadError(null);
+    // Single choke point for both entry paths (native picker + drag-and-drop) —
+    // queries the real, main-process EntitlementService rather than hardcoding
+    // a tier check here. Custom Companion upload is Pro+ only.
+    const allowed = await ipc.entitlementIsFeatureAvailable('companionStudio');
+    if (!allowed) {
+      setUploadError('Uploading a custom Companion requires Paw Pro or higher.');
+      return;
+    }
     const validation = validateUploadedFile(filePath);
     if (!validation.ok) {
       setUploadError(validation.message);
@@ -60,6 +68,15 @@ export function CompanionLabSection({
 
   const handleUpload = async () => {
     setUploadError(null);
+    // Checked here too (not just inside processUpload) so a Go-tier user gets a
+    // clear message immediately instead of the file picker silently doing nothing
+    // (companion:pickUploadFile's own main-process gate also returns null for
+    // this case, as defense-in-depth — this call makes that failure legible).
+    const allowed = await ipc.entitlementIsFeatureAvailable('companionStudio');
+    if (!allowed) {
+      setUploadError('Uploading a custom Companion requires Paw Pro or higher.');
+      return;
+    }
     const filePath = await ipc.companionPickUploadFile();
     if (!filePath) return;
     await processUpload(filePath);
@@ -152,7 +169,7 @@ export function CompanionLabSection({
 
       {tab === 'my-companions' && (
         <div key="my-companions" className={styles.fadeInUp}>
-          <CompanionManagerPanel onOpenLab={() => setTab('upload')} />
+          <CompanionManagerPanel onOpenLab={() => setTab('upload')} runtimeConnected={enabled && !waking} />
         </div>
       )}
 

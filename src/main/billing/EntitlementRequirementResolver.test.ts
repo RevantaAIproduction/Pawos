@@ -66,7 +66,7 @@ describe('entitlementRequirementResolver', () => {
 
     expect(result.satisfied).toBe(false);
     expect(result.blockingResult && !result.blockingResult.ok ? result.blockingResult.message : undefined).toBe(
-      'This action requires access to this PawOS runtime.'
+      'This action requires a plan that supports it.'
     );
   });
 });

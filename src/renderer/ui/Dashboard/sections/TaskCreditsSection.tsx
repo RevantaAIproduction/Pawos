@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import { autonomousTaskBillingService } from '../../../organization/AutonomousTaskBillingService';
+import { getSupabaseClient } from '../../../auth/supabaseClient';
 import { MIN_TICKET_BALANCE_TOPUP_USD, TICKET_BALANCE_TOPUP_PRESETS_USD, TICKET_PRICING_TIERS, getTicketUnitPriceUsd } from '../../../../shared/organization/AutonomousTaskBillingTypes';
 import type { OrganizationBillingEvent, TicketBalance, TicketBalanceTopup } from '../../../../shared/organization/AutonomousTaskBillingTypes';
 import type { AuthUser } from '../../../auth/AuthTypes';
@@ -93,7 +94,12 @@ export function TaskCreditsSection({ user }: { user: AuthUser }) {
     setMessage(null);
     try {
       const callbackUrl = await ipc.billingStartCheckoutSync().catch(() => undefined);
-      const result = await ipc.billingCreateCreditsCheckoutSession(parsed, undefined, callbackUrl);
+      // P0-2: the pawos-web checkout page needs this to verify who is actually paying before it
+      // will credit anything — see /api/billing/credit-ticket-balance.
+      const supabase = await getSupabaseClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      const result = await ipc.billingCreateCreditsCheckoutSession(parsed, undefined, callbackUrl, accessToken);
       if (result.ok) {
         await ipc.actionExecute({ type: 'openUrl', url: result.checkoutUrl });
         setMessage('Opened checkout in your browser. Your balance updates automatically once payment completes.');

@@ -30,6 +30,25 @@ export function detectRig(root: THREE.Object3D): { rigged: boolean; skinnedMesh:
 }
 
 /**
+ * Correct file:// URL construction for an absolute filesystem path, from
+ * pure renderer JS (no Node `url` module access here — nodeIntegration is
+ * off). Naively prepending `file://` to a backslash path produces
+ * `file://C:/Users/...` on Windows: only two slashes, so Chromium's URL
+ * parser reads `C:` as a hostname, not a drive letter, and the fetch behind
+ * GLTFLoader/OBJLoader/FBXLoader fails outright — this was the actual root
+ * cause of uploaded companions silently failing to load (see
+ * `main.ts`'s `pathToFileURL()` comment for the identical bug class on the
+ * main-process side). A real `file:///C:/...` URL needs a leading slash
+ * before the drive letter; `encodeURI` handles spaces/special characters in
+ * the path without breaking `:`/`/`.
+ */
+function toFileUrl(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, '/');
+  const withLeadingSlash = normalized.startsWith('/') ? normalized : `/${normalized}`;
+  return `file://${encodeURI(withLeadingSlash)}`;
+}
+
+/**
  * Loads a user-uploaded 3D file from disk into a real three.js scene graph.
  * VRM files are loaded via GLTFLoader (VRM is a glTF extension — humanoid
  * bone-mapping metadata in the VRM extension itself is not read here, only
@@ -41,7 +60,7 @@ export async function loadUploadedCompanionFile(filePath: string): Promise<THREE
   const validation = validateUploadedFile(filePath);
   if (!validation.ok) throw new Error(validation.message);
 
-  const url = `file://${filePath.replace(/\\/g, '/')}`;
+  const url = toFileUrl(filePath);
 
   switch (validation.format) {
     case 'glb':

@@ -109,3 +109,79 @@ export function verifyRazorpayWebhookSignature(rawBody: string, signature: strin
     return false; // length mismatch or invalid encoding — never a valid signature.
   }
 }
+
+/**
+ * P0-2 security fix. Verifies the client-side Checkout.js "payment succeeded" signature for a
+ * one-time Order (razorpay_order_id + razorpay_payment_id + razorpay_signature) — the standard
+ * Razorpay Orders-API integration check, documented at
+ * https://razorpay.com/docs/payments/server-integration/nodejs/payment-gateway/build-integration/#step-5-verify-payment-signature
+ * Only Razorpay's own backend can produce a signature that verifies against key_secret, so a valid
+ * result here is real cryptographic proof this exact (order_id, payment_id) pair was genuinely
+ * processed by Razorpay — it cannot be forged by a client that doesn't hold key_secret.
+ */
+export function verifyRazorpayOrderPaymentSignature(orderId: string, paymentId: string, signature: string, keySecret: string): boolean {
+  const expected = crypto.createHmac("sha256", keySecret).update(`${orderId}|${paymentId}`).digest("hex");
+  try {
+    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+  } catch {
+    return false;
+  }
+}
+
+/** Fetches a payment from Razorpay's own API — used to re-derive the REAL captured amount/status/order linkage server-side rather than ever trusting a client-supplied amount. */
+export async function fetchRazorpayPayment(
+  paymentId: string,
+  credentials: { keyId: string; keySecret: string }
+): Promise<{ id: string; order_id: string | null; status: string; amount: number; currency: string } | null> {
+  const response = await fetch(`https://api.razorpay.com/v1/payments/${encodeURIComponent(paymentId)}`, {
+    headers: { Authorization: razorpayAuthHeader(credentials.keyId, credentials.keySecret) },
+  });
+  if (!response.ok) return null;
+  return response.json();
+}
+
+/**
+ * P0-3 security fix. Verifies the Checkout.js "subscription payment succeeded" signature —
+ * Razorpay's documented subscription integration check: HMAC-SHA256 of
+ * `${razorpay_payment_id}|${razorpay_subscription_id}` using key_secret. Only Razorpay's own
+ * backend can produce a signature that verifies against key_secret, so this is real cryptographic
+ * proof this exact (payment_id, subscription_id) pair was genuinely processed by Razorpay — never
+ * forgeable by a caller that doesn't hold key_secret (which the Electron app never does).
+ */
+export function verifyRazorpaySubscriptionPaymentSignature(
+  paymentId: string,
+  subscriptionId: string,
+  signature: string,
+  keySecret: string
+): boolean {
+  const expected = crypto.createHmac("sha256", keySecret).update(`${paymentId}|${subscriptionId}`).digest("hex");
+  try {
+    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+  } catch {
+    return false;
+  }
+}
+
+/** Fetches a subscription from Razorpay's own API — used to re-derive the REAL plan/status/seat-count server-side rather than ever trusting a client-supplied tier. */
+export async function fetchRazorpaySubscription(
+  subscriptionId: string,
+  credentials: { keyId: string; keySecret: string }
+): Promise<{ id: string; plan_id: string; status: string; quantity?: number; notes?: Record<string, string> } | null> {
+  const response = await fetch(`https://api.razorpay.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, {
+    headers: { Authorization: razorpayAuthHeader(credentials.keyId, credentials.keySecret) },
+  });
+  if (!response.ok) return null;
+  return response.json();
+}
+
+/** Reverses getRazorpayPlanId() — given a real plan_id read back from Razorpay, finds which (tier, seatTier) it actually corresponds to. Returns null for a plan_id that matches no configured plan (never guesses). */
+export function resolveTierFromRazorpayPlanId(planId: string): { tier: SubscriptionTierId; seatTier?: SeatTier } | null {
+  for (const tier of ["pro", "proMax"] as const) {
+    if (process.env[FLAT_PLAN_ENV_VAR[tier]] === planId) return { tier };
+  }
+  for (const seatTier of ["standard", "premium"] as const) {
+    if (process.env[TEAM_SEAT_PLAN_ENV_VAR[seatTier]] === planId) return { tier: "team", seatTier };
+  }
+  if (process.env[ENTERPRISE_BASE_PLAN_ENV_VAR] === planId) return { tier: "enterprise" };
+  return null;
+}

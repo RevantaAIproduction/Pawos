@@ -30,6 +30,10 @@ export function CreditsCheckoutClient() {
   const searchParams = useSearchParams();
   const organizationId = searchParams.get("organizationId") ?? undefined;
   const callback = searchParams.get("callback");
+  // P0-2: the Electron app's own signed-in Supabase session token, passed through so this page can
+  // prove who is actually paying — never trusted from the callback ping alone. See
+  // /api/billing/credit-ticket-balance for why this is required.
+  const accessToken = searchParams.get("accessToken") ?? undefined;
   const [amountUsd, setAmountUsd] = useState(TICKET_BALANCE_TOPUP_PRESETS_USD[0]);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
@@ -78,21 +82,49 @@ export function CreditsCheckoutClient() {
         currency: "USD",
         name: "PawOS",
         description: `Add $${amountUsd} to Ticket Balance`,
-        handler: () => {
-          // Pings the Electron app's local loopback server (see
-          // CheckoutSyncServer.ts) so it can add the funds immediately via
-          // the security-definer add_ticket_balance() RPC, using the
-          // purchaser's own Supabase session — same same-machine trust
-          // model already accepted for subscription activation.
-          if (callback) {
-            const url = new URL(callback);
-            url.searchParams.set("type", "credits");
-            url.searchParams.set("amountUsd", String(amountUsd));
-            if (organizationId) url.searchParams.set("organizationId", organizationId);
-            fetch(url.toString()).catch(() => {});
+        handler: async (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
+          // P0-2: this "success" callback fires client-side and could in principle be invoked by a
+          // modified client with no real payment behind it — it is never trusted on its own.
+          // Real crediting only happens after the server independently verifies the payment
+          // signature and re-fetches the payment from Razorpay's own API (see
+          // /api/billing/credit-ticket-balance). The Electron loopback ping below is now purely a
+          // "please refresh your balance" notification — it carries no amount and cannot credit
+          // anything by itself (the underlying RPC is service-role-only).
+          if (!accessToken) {
+            setStatus("error");
+            setMessage("Missing your PawOS session — please reopen this checkout from the desktop app.");
+            return;
           }
-          setStatus("idle");
-          setMessage("Payment complete — your PawOS desktop app will add the funds automatically.");
+          try {
+            const verifyResponse = await fetch("/api/billing/credit-ticket-balance", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                accessToken,
+                orderId: response.razorpay_order_id,
+                paymentId: response.razorpay_payment_id,
+                signature: response.razorpay_signature,
+                organizationId,
+              }),
+            });
+            const verifyResult = await verifyResponse.json();
+            if (!verifyResult.ok) {
+              setStatus("error");
+              setMessage(verifyResult.reason ?? "Payment could not be verified.");
+              return;
+            }
+            if (callback) {
+              const url = new URL(callback);
+              url.searchParams.set("type", "credits");
+              url.searchParams.set("verified", "true");
+              fetch(url.toString()).catch(() => {});
+            }
+            setStatus("idle");
+            setMessage(`Payment verified — $${verifyResult.amountUsd} added to your Ticket Balance.`);
+          } catch {
+            setStatus("error");
+            setMessage("Payment succeeded but verification failed. Contact support with your payment id if your balance doesn't update.");
+          }
         },
         modal: {
           ondismiss: () => setStatus("idle"),

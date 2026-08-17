@@ -20,12 +20,14 @@ export const entitlementRequirementResolver: RequirementResolver<'entitlement'> 
       return { satisfied: true };
     }
 
+    const requiredTier = requirement.feature ? entitlementService.findMinimumTierForFeature(requirement.feature) : null;
     return {
       satisfied: false,
       blockingResult: {
         ok: false,
         reason: 'entitlement-restricted',
-        message: requirement.reasonHint ?? (requirement.runtimeId ? 'This action requires access to this PawOS runtime.' : 'This action requires a higher Paw plan.'),
+        message: requirement.reasonHint ?? (requirement.runtimeId ? 'This action requires a plan that supports it.' : 'This action requires a higher Paw plan.'),
+        data: { requiredFeature: requirement.feature, requiredTier },
       },
     };
   },

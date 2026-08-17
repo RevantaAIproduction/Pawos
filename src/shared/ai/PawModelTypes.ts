@@ -30,7 +30,16 @@ export type PawModelDescriptor = {
   status: PawModelStatus;
 };
 
-export const DEFAULT_PAW_MODEL_ID: PawModelId = 'paw-core';
+/**
+ * Paw Swift, not Paw Core — deliberately not the highest/most expensive reasoning model.
+ * Defaulting to Paw Core (which maps to each provider's top-line model — see
+ * PawModelRegistry.ts's REASONING_SIZE_MODELS, e.g. claude-opus-4-8/gpt-4.1/gemini-pro-latest)
+ * would burn a new user's Paw Compute allowance fastest for turns that rarely need it. Paw Swift
+ * is the balanced mid-tier model (see its description below) — the same role Sonnet, not Opus,
+ * plays as Claude Code's own default. Selecting Paw Core remains one click away and is never
+ * blocked for any entitled tier; it is simply never chosen automatically.
+ */
+export const DEFAULT_PAW_MODEL_ID: PawModelId = 'paw-swift';
 
 export const REASONING_PAW_MODEL_IDS: PawModelId[] = ['paw-flash', 'paw-swift', 'paw-core'];
 
@@ -47,7 +56,7 @@ export const PAW_MODEL_CATALOG: PawModelDescriptor[] = [
     id: 'paw-swift',
     label: 'Paw Swift',
     category: 'reasoning',
-    description: 'Balanced speed and reasoning quality for everyday tasks.',
+    description: 'Balanced speed and reasoning quality for everyday tasks — the default model.',
     switchMessage: 'Paw Swift balances speed and reasoning quality.',
     status: 'available',
   },
@@ -55,8 +64,8 @@ export const PAW_MODEL_CATALOG: PawModelDescriptor[] = [
     id: 'paw-core',
     label: 'Paw Core',
     category: 'reasoning',
-    description: 'Highest reasoning quality and largest context — the default model.',
-    switchMessage: 'Paw Core provides the highest reasoning quality.',
+    description: 'Highest reasoning quality and largest context — uses more Paw Compute per turn.',
+    switchMessage: 'Paw Core provides the highest reasoning quality, but uses more Paw Compute per turn.',
     status: 'available',
   },
   {

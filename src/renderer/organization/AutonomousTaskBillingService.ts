@@ -1,6 +1,7 @@
 import { getSupabaseClient } from '../auth/supabaseClient';
 import type {
   AutonomousTaskRun,
+  AutonomousTaskRunTransition,
   AutonomousTaskStatus,
   CompletionSource,
   OrganizationBillingEvent,
@@ -8,6 +9,12 @@ import type {
   TicketBalanceTopup,
   TicketSource,
 } from '../../shared/organization/AutonomousTaskBillingTypes';
+
+type TransitionRow = { id: string; run_id: string; from_status: string; to_status: string; reason: string | null; occurred_at: string };
+
+function toTransition(row: TransitionRow): AutonomousTaskRunTransition {
+  return { id: row.id, runId: row.run_id, fromStatus: row.from_status, toStatus: row.to_status as AutonomousTaskStatus | 'created', reason: row.reason, occurredAt: row.occurred_at };
+}
 
 type RunRow = {
   id: string; organization_id: string | null; workspace_id: string | null; user_id: string;
@@ -72,26 +79,28 @@ function toTopup(row: TopupRow): TicketBalanceTopup {
  * organization.
  */
 export const autonomousTaskBillingService = {
-  async startRun(organizationId: string | null, opts: { workspaceId?: string; ticketSource?: TicketSource; ticketId?: string; repository?: string; runtimeVersion: string }): Promise<AutonomousTaskRun> {
+  /**
+   * Duplicate-safe start: calls start_or_get_active_autonomous_task_run() (see
+   * 20260815000000_autonomous_task_hardening.sql) instead of a plain insert. If a 'running' run
+   * already exists for this exact (owner, ticket_id), the RPC returns that existing row rather than
+   * creating a second one — `alreadyActive: true` tells the caller this is not a fresh run, so
+   * AutonomousTaskBillingGate.ts can report "already in progress" instead of silently starting a
+   * duplicate, double-billable investigation of the same ticket.
+   */
+  async startRun(organizationId: string | null, opts: { workspaceId?: string; ticketSource?: TicketSource; ticketId?: string; repository?: string; runtimeVersion: string }): Promise<{ run: AutonomousTaskRun; alreadyActive: boolean }> {
     const supabase = await getSupabaseClient();
-    const { data: userData } = await supabase.auth.getUser();
-    const userId = userData.user?.id;
-    if (!userId) throw new Error('Not signed in');
     const { data, error } = await supabase
-      .from('autonomous_task_runs')
-      .insert({
-        organization_id: organizationId,
-        workspace_id: opts.workspaceId ?? null,
-        user_id: userId,
-        ticket_source: opts.ticketSource ?? null,
-        ticket_id: opts.ticketId ?? null,
-        repository: opts.repository ?? null,
-        runtime_version: opts.runtimeVersion,
+      .rpc('start_or_get_active_autonomous_task_run', {
+        p_organization_id: organizationId,
+        p_workspace_id: opts.workspaceId ?? null,
+        p_ticket_source: opts.ticketSource ?? null,
+        p_ticket_id: opts.ticketId ?? null,
+        p_repository: opts.repository ?? null,
+        p_runtime_version: opts.runtimeVersion,
       })
-      .select('*')
-      .single<RunRow>();
+      .single<{ run_row: RunRow; already_active: boolean }>();
     if (error) throw error;
-    return toRun(data);
+    return { run: toRun(data.run_row), alreadyActive: data.already_active };
   },
 
   /** Fires only when the execution engine's own internal state reaches
@@ -127,6 +136,41 @@ export const autonomousTaskBillingService = {
     const supabase = await getSupabaseClient();
     const { error } = await supabase.rpc('mark_autonomous_task_terminal', { p_run_id: runId, p_status: status });
     if (error) throw error;
+  },
+
+  /**
+   * The single, explicit entry point for every non-completion state change (queued->running,
+   * running->waiting_for_permission/blocked/failed/cancelled, waiting_for_permission->running/
+   * cancelled/blocked, blocked->failed/cancelled) — see transition_autonomous_task_run() in
+   * 20260816000000_autonomous_orchestration_state_machine.sql. The RPC itself structurally refuses
+   * to ever accept `toStatus: 'completed'` and rejects any pair not in its own explicit allowed-
+   * transition table, so this method can never be used to smuggle a run into COMPLETED without going
+   * through completeRun()'s success-gated billing path, and can never perform an illegal transition
+   * (e.g. a terminal state resuming) — both are enforced server-side, not just by this method's own
+   * type signature.
+   */
+  async transitionRun(runId: string, toStatus: 'running' | 'waiting_for_permission' | 'blocked' | 'failed' | 'cancelled', reason?: string): Promise<AutonomousTaskRun> {
+    const supabase = await getSupabaseClient();
+    const { data, error } = await supabase
+      .rpc('transition_autonomous_task_run', { p_run_id: runId, p_to_status: toStatus, p_reason: reason ?? null })
+      .single<RunRow>();
+    if (error) throw error;
+    return toRun(data);
+  },
+
+  /** The full, persisted state-change history for one run — independent of the run's own
+   *  (latest-only) `status` column. Read-only; every row is written exclusively by the security
+   *  definer transition functions, never directly by this service. */
+  async listTransitions(runId: string): Promise<AutonomousTaskRunTransition[]> {
+    const supabase = await getSupabaseClient();
+    const { data, error } = await supabase
+      .from('autonomous_task_run_transitions')
+      .select('*')
+      .eq('run_id', runId)
+      .order('occurred_at', { ascending: true })
+      .returns<TransitionRow[]>();
+    if (error) throw error;
+    return (data ?? []).map(toTransition);
   },
 
   /**

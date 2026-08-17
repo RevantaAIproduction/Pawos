@@ -144,15 +144,83 @@ function timeline(record: ExecutionRecord): WorkRecordTimelineItem[] {
 }
 
 // ExecutionRecord (frozen, ExecutionRecordTypes.ts) has no structured plan/architecture field of
-// its own — only derived evidence (commands/files/verification). These sections must never infer
-// a plan or architecture from that evidence; doing so is fabrication, not honest reporting. Until
-// a real structured plan/architecture is actually captured by the pipeline, both stay empty.
-function architecture(_record: ExecutionRecord): WorkRecordSection<WorkRecordArchitecture> {
-  return { status: 'empty', items: [], note: 'Architecture not captured for this work.' };
+// its own — only derived evidence (commands/files/verification) plus the model's own free-text
+// `summary`. These sections must never infer a plan or architecture from unrelated evidence (that
+// would be fabrication) — but when the model's own recorded text contains a real Markdown heading
+// like "## Plan" or "## Architecture", that heading and the text under it IS real, direct evidence
+// (the model's own words), not an inference. Extracting it honestly reflects what was actually
+// written; extraction failing (no matching heading) still yields the honest empty state below.
+const HEADING_LINE_RE = /^(#{1,6})\s+(.*)$/;
+
+function extractMarkdownSection(text: string | undefined, headingPattern: RegExp): string | null {
+  if (!text) return null;
+  const lines = text.replace(/\r\n/g, '\n').split('\n');
+  const at = (idx: number): string => lines[idx] ?? '';
+  let startIndex = -1;
+  let startLevel = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const match = HEADING_LINE_RE.exec(at(i));
+    if (!match) continue;
+    if (headingPattern.test((match[2] ?? '').trim())) {
+      startIndex = i;
+      startLevel = (match[1] ?? '#').length;
+      break;
+    }
+  }
+  if (startIndex === -1) return null;
+
+  let endIndex = lines.length;
+  for (let i = startIndex + 1; i < lines.length; i++) {
+    const match = HEADING_LINE_RE.exec(at(i));
+    if (match && (match[1] ?? '#').length <= startLevel) {
+      endIndex = i;
+      break;
+    }
+  }
+  const body = lines.slice(startIndex + 1, endIndex).join('\n').trim();
+  return body.length > 0 ? body : null;
 }
 
-function plan(_record: ExecutionRecord): WorkRecordSection<string> {
-  return { status: 'empty', items: [], note: 'Plan not captured for this work.' };
+function splitPlanItems(text: string): string[] {
+  const lines = text.split('\n');
+  const items: string[] = [];
+  let current = '';
+  const flush = () => {
+    if (current.trim()) items.push(current.trim());
+    current = '';
+  };
+  for (const line of lines) {
+    const bulletMatch = /^\s*(?:[-*]|\d+[.)])\s+(.*)$/.exec(line);
+    if (bulletMatch) {
+      flush();
+      current = bulletMatch[1] ?? '';
+    } else if (line.trim() === '') {
+      flush();
+    } else {
+      current += (current ? '\n' : '') + line;
+    }
+  }
+  flush();
+  return items.length > 0 ? items : [text.trim()];
+}
+
+const ARCHITECTURE_HEADING_RE = /^(architecture|technical architecture|system architecture|tech stack|technology stack)\b/i;
+const PLAN_HEADING_RE = /^(plan|implementation plan|project plan|steps|approach)\b/i;
+
+function architecture(record: ExecutionRecord): WorkRecordSection<WorkRecordArchitecture> {
+  const extracted = extractMarkdownSection(record.summary, ARCHITECTURE_HEADING_RE);
+  if (!extracted) {
+    return { status: 'empty', items: [], note: 'Architecture not captured for this work.' };
+  }
+  return { status: 'available', items: [{ nodes: [], edges: [], diagram: extracted }] };
+}
+
+function plan(record: ExecutionRecord): WorkRecordSection<string> {
+  const extracted = extractMarkdownSection(record.summary, PLAN_HEADING_RE);
+  if (!extracted) {
+    return { status: 'empty', items: [], note: 'Plan not captured for this work.' };
+  }
+  return { status: 'available', items: splitPlanItems(extracted) };
 }
 
 /**

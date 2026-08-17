@@ -3,11 +3,17 @@ import styles from '../dashboard.module.css';
 import { useCompanionProfiles } from '../../../companion/manager/useCompanionProfiles';
 import { PERSONALITY_PRESETS } from '../../../companion/manager/CompanionProfileTypes';
 import type { CompanionProfile, GreetingStyle, IdleBehaviorPreset, PersonalityPreset } from '../../../companion/manager/CompanionProfileTypes';
-import { TTS_PROVIDER_CATALOG, OPENAI_VOICE_PRESETS, type TtsProviderId } from '../../../conversation/SpeechProviderRegistry';
+import {
+  TTS_PROVIDER_CATALOG,
+  OPENAI_VOICE_PRESETS,
+  GEMINI_GENDER_PRESETS,
+  type TtsProviderId,
+} from '../../../conversation/SpeechProviderRegistry';
 import { listBrowserVoices } from '../../../conversation/SpeechProviders';
 import { voiceCloningProviderRegistry } from '../../../companion/voiceCloning/VoiceCloningProviderRegistry';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import { Toggle } from '../Toggle';
+import { getCompanionModelStatus, COMPANION_STATUS_COLORS } from '../../../companion/manager/companionStatus';
 
 type EditorTab = 'appearance' | 'voice' | 'behavior' | 'personality' | 'memory';
 
@@ -20,6 +26,7 @@ type EditorTab = 'appearance' | 'voice' | 'behavior' | 'personality' | 'memory';
 const PAW_VOICE_LABELS: Record<TtsProviderId, string> = {
   browser: 'Paw Voice — Standard',
   openai: 'Paw Voice — Natural',
+  gemini: 'Paw Voice — Rich',
   elevenlabs: 'Paw Voice — Expressive',
   azure: 'Paw Voice — Clear',
   kokoro: 'Paw Voice — Warm',
@@ -42,7 +49,16 @@ function capitalize(s: string): string {
  * and the skin system's own docs), so that tab says so directly instead of
  * offering controls that would do nothing.
  */
-export function CompanionEditorPanel({ profileId, onClose }: { profileId: string; onClose: () => void }) {
+export function CompanionEditorPanel({
+  profileId,
+  onClose,
+  runtimeConnected,
+}: {
+  profileId: string;
+  onClose: () => void;
+  /** Whether this specific companion is the active one AND its desktop overlay is actually running right now. Real, derived state — never a fabricated network status. */
+  runtimeConnected?: boolean;
+}) {
   const { profiles, updatePersonality, updateVoice, updateBehavior, setMemoryEnabled, resetLocalMemory } = useCompanionProfiles();
   const profile = profiles.find((p) => p.id === profileId);
   const [tab, setTab] = useState<EditorTab>('personality');
@@ -53,9 +69,29 @@ export function CompanionEditorPanel({ profileId, onClose }: { profileId: string
     <div className={`${styles.card} ${styles.fadeInUp}`} style={{ marginTop: 18 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <h3 className={styles.cardTitle}>Edit {profile.name}</h3>
-        <button type="button" className={styles.chip} onClick={onClose}>
-          Close
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: 0.4,
+              padding: '3px 8px',
+              borderRadius: 6,
+              color: runtimeConnected ? '#4ade80' : 'var(--text-secondary, #9a97b5)',
+              border: `1px solid ${runtimeConnected ? '#4ade80' : 'var(--text-secondary, #9a97b5)'}`,
+            }}
+            title={
+              runtimeConnected
+                ? 'This companion is the active one and its desktop overlay is running.'
+                : 'This companion is not currently the active, running companion.'
+            }
+          >
+            {runtimeConnected ? 'CONNECTED TO PAWOS' : 'NOT CONNECTED'}
+          </span>
+          <button type="button" className={styles.chip} onClick={onClose}>
+            Close
+          </button>
+        </div>
       </div>
 
       <div className={styles.tabRow} style={{ marginTop: 12 }}>
@@ -183,6 +219,30 @@ function VoiceTab({
       {provider === 'openai' && (
         <>
           <label className={styles.cardBody} style={{ display: 'block', marginTop: 12 }}>
+            Voice gender
+          </label>
+          <div className={styles.quickActions}>
+            {(['Male', 'Female'] as const).map((gender) => {
+              const currentLabel = OPENAI_VOICE_PRESETS.find((v) => v.id === (profile.voice.voiceId ?? 'alloy'))?.label ?? '';
+              const active = currentLabel.includes(gender);
+              return (
+                <button
+                  key={gender}
+                  type="button"
+                  className={styles.chip}
+                  style={{ borderColor: active ? 'var(--accent, #8b7bff)' : undefined }}
+                  onClick={() => {
+                    const first = OPENAI_VOICE_PRESETS.find((v) => v.label.includes(gender));
+                    if (first) onUpdate({ voiceId: first.id });
+                  }}
+                >
+                  {gender}
+                </button>
+              );
+            })}
+          </div>
+
+          <label className={styles.cardBody} style={{ display: 'block', marginTop: 12 }}>
             Voice
           </label>
           <select value={profile.voice.voiceId ?? 'alloy'} onChange={(e) => onUpdate({ voiceId: e.target.value })} style={{ marginTop: 4 }}>
@@ -192,6 +252,30 @@ function VoiceTab({
               </option>
             ))}
           </select>
+        </>
+      )}
+
+      {provider === 'gemini' && (
+        <>
+          <label className={styles.cardBody} style={{ display: 'block', marginTop: 12 }}>
+            Voice gender
+          </label>
+          <div className={styles.quickActions}>
+            {GEMINI_GENDER_PRESETS.map(({ gender, voiceId }) => {
+              const active = (profile.voice.voiceId ?? 'Kore') === voiceId;
+              return (
+                <button
+                  key={gender}
+                  type="button"
+                  className={styles.chip}
+                  style={{ borderColor: active ? 'var(--accent, #8b7bff)' : undefined }}
+                  onClick={() => onUpdate({ voiceId })}
+                >
+                  {gender}
+                </button>
+              );
+            })}
+          </div>
         </>
       )}
 
@@ -403,6 +487,22 @@ function BehaviorTab({
         rows={2}
         style={{ width: '100%', marginTop: 4, fontFamily: 'inherit' }}
       />
+
+      <label className={styles.cardBody} style={{ display: 'block', marginTop: 16 }}>
+        Wake word
+      </label>
+      <input
+        type="text"
+        defaultValue={profile.behavior.wakeWord ?? ''}
+        onBlur={(e) => onUpdate({ wakeWord: e.target.value.trim() || undefined })}
+        placeholder={`e.g. "Hey ${profile.name}"`}
+        style={{ marginTop: 4, width: '100%' }}
+      />
+      <p className={styles.cardBody} style={{ marginTop: 4, fontSize: 12 }}>
+        Saved, but honest limitation: PawOS has no always-on/background voice-listening engine yet, so
+        this wake word is not currently detected automatically — it's saved for when that capability
+        exists. Today, talking to {profile.name} still requires opening the conversation panel.
+      </p>
     </div>
   );
 }
@@ -534,12 +634,38 @@ function MemoryTab({
 }
 
 function AppearanceTab({ profile }: { profile: CompanionProfile }) {
+  const status = getCompanionModelStatus(profile);
   return (
     <div>
       {profile.avatarImage && (
         <img src={profile.avatarImage} alt={profile.name} style={{ width: 96, height: 96, borderRadius: 12, objectFit: 'cover' }} />
       )}
-      <p className={styles.cardBody} style={{ marginTop: 12 }}>
+
+      <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: 0.4,
+            padding: '3px 8px',
+            borderRadius: 6,
+            color: COMPANION_STATUS_COLORS[status.tone],
+            border: `1px solid ${COMPANION_STATUS_COLORS[status.tone]}`,
+          }}
+        >
+          {status.label}
+        </span>
+        {profile.avatarSource?.uploadedFilePath && (
+          <span className={styles.cardBody} style={{ fontSize: 12, opacity: 0.7 }}>
+            {profile.avatarSource.uploadedFilePath.split(/[\\/]/).pop()}
+          </span>
+        )}
+      </div>
+      <p className={styles.cardBody} style={{ marginTop: 6, fontSize: 12 }}>
+        {status.detail}
+      </p>
+
+      <p className={styles.cardBody} style={{ marginTop: 16 }}>
         Per-slot hair, face, eyes, clothing, and accessory customization for the 3D companion isn't built yet — the 3D character has no
         textured skin or clothing-slot system today.
       </p>

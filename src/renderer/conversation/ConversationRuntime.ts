@@ -24,6 +24,7 @@ import { aiProviderConfigStore } from '../ai/AIProviderConfigStore';
 // [DEBUG-TEMP] remove this import and the one voiceDebugBus.emit() call in log() once real-mic verification is done.
 import { voiceDebugBus } from './VoiceDebugBus';
 import type { ActionRequest, ActionRequirement, ActionResult } from '../../shared/actions/ActionTypes';
+import { DEFAULT_EXECUTION_MODE, shouldAutoConfirmAction, type ConversationExecutionMode } from '../../shared/actions/ExecutionModeTypes';
 import type { SessionContinuationHint } from '../../shared/conversation/ConversationSessionTypes';
 import type { ProcessOutputEvent, ProcessExitEvent } from '../../shared/actions/ProcessTypes';
 import type { WorkspaceObservationEvent } from '../../shared/actions/ExecutionLifecycle';
@@ -376,6 +377,22 @@ export class ConversationRuntime {
        * (the user can still say "start recording" directly).
        */
       onCommunicationEvent?: (cb: (event: CommunicationRuntimeEvent) => void) => void;
+      /**
+       * The composer's current mode (Manual/Accept edits/Plan/Auto/Bypass permissions — see
+       * ExecutionModeTypes.ts). Read fresh on every requires-confirmation result, never cached, so
+       * a mode change the user makes mid-conversation takes effect on the very next action.
+       * Omitted defaults to 'auto' (today's existing behavior — always wait for a real "yes").
+       */
+      getExecutionMode?: () => ConversationExecutionMode;
+      /** The Settings-only "Bypass permissions" toggle (default off) — see SettingsManager.ts. Omitted defaults to false. */
+      isBypassPermissionsEnabled?: () => boolean;
+      /**
+       * Set only by the Autonomous Orchestration Layer's own headless ConversationRuntime instance
+       * (see AutonomousOrchestrator.ts) — threaded into every ExecutionSupervisor.begin() call so the
+       * resulting ExecutionRecord carries a real, queryable link back to the autonomous_task_runs row
+       * that triggered this turn. Never set for the normal, human-driven runtime instance.
+       */
+      autonomousRunId?: string;
     }
   ) {
     this.snapshot = {
@@ -1261,7 +1278,22 @@ export class ConversationRuntime {
     // Remember this exact request so a plain "yes" on the next turn can
     // complete it directly — see the interception at the top of
     // handleTranscript. Not trusted to the model re-invoking the tool itself.
+    //
+    // Composer execution mode (Manual/Accept edits/Plan/Auto/Bypass permissions — see
+    // ExecutionModeTypes.ts) decides WHO supplies that "yes": for 'acceptEdits' (writeFile/
+    // applyCodeEdit only) or 'bypass' (only when the user has separately enabled it in Settings),
+    // it's supplied automatically here, through the EXACT SAME executeConfirmedAction() path a real
+    // human "yes" reply already uses — never a second confirmation mechanism, never a change to the
+    // real backend gate (DesktopExecutionEngine.execute()'s DESTRUCTIVE_ACTION_TYPES check / the
+    // plugin's own self-gate ran identically either way, and already refused this exact request
+    // once). Every other mode falls through to the existing wait-for-a-real-human-"yes" behavior.
     if (!result.ok && result.reason === 'requires-confirmation') {
+      const mode = this.args.getExecutionMode?.() ?? DEFAULT_EXECUTION_MODE;
+      const bypassPermissionsEnabled = this.args.isBypassPermissionsEnabled?.() ?? false;
+      if (shouldAutoConfirmAction(mode, request.type, bypassPermissionsEnabled)) {
+        await this.executeConfirmedAction(request, toolCall, currentTurn);
+        return;
+      }
       this.pendingConfirmation = { request, toolCall };
       this.updateSnapshot({ pendingConfirmation: true });
     }
@@ -1656,7 +1688,7 @@ export class ConversationRuntime {
     // Recovery Policy caps apply per user turn, not per continuation.
     this.toolIterationCount = 0;
     this.failureSignatureCounts = new Map();
-    this.executionSupervisor.begin(transcript);
+    this.executionSupervisor.begin(transcript, { externalRunId: this.args.autonomousRunId });
     this.currentTurnRecord = {
       id: uuidv4(),
       startedAt: Date.now(),

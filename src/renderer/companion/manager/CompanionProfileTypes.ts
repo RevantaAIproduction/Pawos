@@ -98,6 +98,15 @@ export type CompanionBehavior = {
   greetingStyle: GreetingStyle;
   idleBehavior: IdleBehaviorPreset;
   interactionStyle: string;
+  /**
+   * A per-companion wake word the user has configured. Persisted and real,
+   * but — honestly — there is no always-on/background wake-word listening
+   * engine anywhere in PawOS today (see VoiceController.ts's own doc
+   * comment: "No wake-word / always-on command listening exists yet").
+   * Saving this does not make wake-word detection happen; the UI that
+   * displays it must say so plainly rather than implying it's live.
+   */
+  wakeWord?: string;
 };
 
 export function createDefaultBehavior(): CompanionBehavior {
@@ -130,8 +139,21 @@ export type CompanionPreferences = {
  * always points at the user's original file, which is never modified;
  * `rigged` records whether the upload already had its own skeleton (true)
  * or was auto-rigged onto ours (false), set once loading actually runs.
+ *
+ * `loadStatus`/`loadError` are the honest record of whether the overlay
+ * actually managed to load this model at all — undefined means "not
+ * attempted yet this session," 'failed' means the real load threw (a bad
+ * file, a parse error) and the overlay is showing this companion's
+ * placeholder/default fallback, never silently pretending it's showing the
+ * real uploaded model. Set only from a real load attempt, never guessed.
  */
-export type CompanionAvatarSource = { mode: 'upload'; uploadedFilePath: string; rigged?: boolean };
+export type CompanionAvatarSource = {
+  mode: 'upload';
+  uploadedFilePath: string;
+  rigged?: boolean;
+  loadStatus?: 'ready' | 'failed';
+  loadError?: string;
+};
 
 /**
  * Where a profile came from — purely descriptive, used to sort profiles into

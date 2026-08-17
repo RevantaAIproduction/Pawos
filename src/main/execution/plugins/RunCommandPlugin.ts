@@ -4,7 +4,7 @@ import type { ActionRequest, ActionResult, CommandShell } from '../../../shared/
 import { BasePlugin } from '../BasePlugin';
 import { describeFailure } from '../describeFailure';
 import { execShellCommand } from '../shellExec';
-import { firstToken, isAllowedPrefix, allowedPrefixesList } from './commandSafety';
+import { firstToken, isAllowedPrefix, allowedPrefixesList, findDangerousShellSyntax } from './commandSafety';
 import { looksLikeTestCommand, parseTestOutput } from '../TestResultParser';
 
 const TIMEOUT_MS = 45_000;
@@ -36,6 +36,15 @@ export class RunCommandPlugin extends BasePlugin {
         {
           id: 'command-not-allowed',
           message: `I can only run ${allowedPrefixesList()} commands right now — "${firstToken(request.command)}" isn't one of those.`,
+        },
+      ];
+    }
+    const dangerous = findDangerousShellSyntax(request.command);
+    if (dangerous) {
+      return [
+        {
+          id: 'command-not-allowed',
+          message: `I can't run that — it contains "${dangerous}", which could chain, pipe, redirect, or substitute a second command. I can only run one plain command at a time.`,
         },
       ];
     }

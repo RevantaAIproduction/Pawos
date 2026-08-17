@@ -1,6 +1,7 @@
 import type { ActionRequest, ActionResult } from '../../shared/actions/ActionTypes';
-import type { SubscriptionTierId } from '../../shared/billing/BillingTypes';
+import type { FeatureId, SubscriptionTierId } from '../../shared/billing/BillingTypes';
 import { isExecutionClassification, type CodingRequestClassification } from '../../shared/actions/RequestClassification';
+import { isPersonalEmailDomain } from '../../shared/organization/PersonalEmailDomains';
 
 export type FailureAction = 'upgrade' | 'buyCompute' | 'upgradeProMax' | 'contactAdmin' | 'retry' | 'none';
 
@@ -18,19 +19,61 @@ function isOrganizationRequest(request: ActionRequest): boolean {
   return Boolean(request.scope?.organizationId);
 }
 
+/** The real, entitlement-driven data an 'entitlement-restricted' ActionResult carries — attached
+ *  at the point of failure by the runtime that actually knows which FeatureId/tier gates the
+ *  attempted capability (EntitlementService.findMinimumTierForFeature), never guessed here. */
+type EntitlementBlockData = { requiredFeature?: FeatureId; requiredTier?: SubscriptionTierId | null };
+
+function readEntitlementBlockData(data: unknown): EntitlementBlockData {
+  if (!data || typeof data !== 'object') return {};
+  const d = data as Record<string, unknown>;
+  return {
+    requiredFeature: typeof d.requiredFeature === 'string' ? (d.requiredFeature as FeatureId) : undefined,
+    requiredTier: typeof d.requiredTier === 'string' ? (d.requiredTier as SubscriptionTierId) : undefined,
+  };
+}
+
+/** Which real upgrade action to offer for a genuinely-blocked capability — derived from the real
+ *  minimum required tier (never a fixed per-branch guess), reusing the same FailureAction pills the
+ *  UI already renders for Paw Compute exhaustion. Org-scoped accounts always go through their admin
+ *  regardless of which tier the capability requires. */
+function actionsForRequiredTier(requiredTier: SubscriptionTierId | null | undefined, isOrgContext: boolean): FailureAction[] {
+  if (isOrgContext) return ['contactAdmin'];
+  if (requiredTier === 'team' || requiredTier === 'enterprise') return ['contactAdmin'];
+  if (requiredTier === 'proMax') return ['upgradeProMax'];
+  return ['upgrade'];
+}
+
+/** Supporting context only, per product rule — never the primary driver of which tier gets
+ *  recommended (that's always the real requiredTier above). Only surfaced for an account whose
+ *  email domain looks like an organization's (reusing the same personal-domain check already used
+ *  to gate Team/Enterprise org creation), and only when the capability itself doesn't already
+ *  require Team/Enterprise (in which case the base message already says so). */
+function organizationPlanNote(accountEmail: string | null | undefined, requiredTier: SubscriptionTierId | null | undefined): string | null {
+  if (!accountEmail || requiredTier === 'team' || requiredTier === 'enterprise') return null;
+  const domain = accountEmail.split('@')[1];
+  if (!domain || isPersonalEmailDomain(domain)) return null;
+  return "If you're part of a team, Paw Team and Paw Enterprise plans include this too and centralize billing for your organization.";
+}
+
 export function describeTaskLevelLaunchFailure(finalReport?: string): FailurePresentation | null {
   if (!finalReport) return null;
-  if (/select a workspace root before running coding runtime operations/i.test(finalReport)) {
+  if (/select a workspace root before running (file or code actions|coding runtime operations)/i.test(finalReport)) {
     return {
       title: 'BUILD BLOCKED',
-      message: 'Select a workspace root before running Coding Runtime operations.',
+      message: 'Select a workspace root before running file or code actions.',
       actions: ['none'],
     };
   }
   return null;
 }
 
-export function describeLaunchFailure(result: ActionResult, request: ActionRequest, tier: SubscriptionTierId | null): FailurePresentation | null {
+export function describeLaunchFailure(
+  result: ActionResult,
+  request: ActionRequest,
+  tier: SubscriptionTierId | null,
+  accountEmail?: string | null
+): FailurePresentation | null {
   if (result.ok) return null;
 
   if (result.reason === 'usage-restricted') {
@@ -55,17 +98,17 @@ export function describeLaunchFailure(result: ActionResult, request: ActionReque
   }
 
   if (result.reason === 'entitlement-restricted') {
-    if (tier === 'go') {
-      return {
-        title: 'BUILD BLOCKED',
-        message: 'Paw Go is planning and analysis only. Coding Runtime execution requires Paw Pro or higher.',
-        actions: ['upgrade'],
-      };
-    }
+    const blockData = readEntitlementBlockData((result as { data?: unknown }).data);
+    const isOrgContext = isOrganizationRequest(request) || tier === 'team' || tier === 'enterprise';
+    // Always prefer the real message the blocking runtime already produced — it already describes
+    // the actual capability in plain language. Never a hardcoded per-tier string here that could
+    // silently disagree with (or overwrite) what the runtime that actually resolved the block knows.
+    const baseMessage = result.message ?? 'This action requires a plan that supports it.';
+    const orgNote = isOrgContext ? null : organizationPlanNote(accountEmail, blockData.requiredTier);
     return {
       title: 'BUILD BLOCKED',
-      message: result.message ?? 'This action requires a runtime entitlement that is not enabled for this account.',
-      actions: tier === 'team' || tier === 'enterprise' || isOrganizationRequest(request) ? ['contactAdmin'] : ['upgrade'],
+      message: orgNote ? `${baseMessage} ${orgNote}` : baseMessage,
+      actions: actionsForRequiredTier(blockData.requiredTier, isOrgContext),
     };
   }
 

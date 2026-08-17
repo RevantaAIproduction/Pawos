@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import { autonomousTaskBillingService } from '../../../organization/AutonomousTaskBillingService';
+import { resumeAutonomousRun } from '../../../organization/AutonomousOrchestrator';
+import { getSupabaseClient } from '../../../auth/supabaseClient';
 import { MIN_TICKET_BALANCE_TOPUP_USD, TICKET_BALANCE_TOPUP_PRESETS_USD, getTicketUnitPriceUsd } from '../../../../shared/organization/AutonomousTaskBillingTypes';
-import type { OrganizationBillingEvent, TicketBalance, TicketBalanceTopup } from '../../../../shared/organization/AutonomousTaskBillingTypes';
+import type { AutonomousTaskRun, OrganizationBillingEvent, TicketBalance, TicketBalanceTopup } from '../../../../shared/organization/AutonomousTaskBillingTypes';
 import type { TicketPricingConfig } from '../../../../shared/billing/BillingTypes';
 
 function getErrorMessage(e: unknown): string {
@@ -60,6 +62,8 @@ export function AutonomousTaskBillingCard({ organizationId }: { organizationId: 
   const [topups, setTopups] = useState<TicketBalanceTopup[]>([]);
   const [events, setEvents] = useState<OrganizationBillingEvent[]>([]);
   const [totalCompleted, setTotalCompleted] = useState(0);
+  const [pendingPermissionRuns, setPendingPermissionRuns] = useState<AutonomousTaskRun[]>([]);
+  const [decidingRunId, setDecidingRunId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -86,6 +90,7 @@ export function AutonomousTaskBillingCard({ organizationId }: { organizationId: 
         setTopups(ticketTopups);
         setEvents(billingHistory);
         setTotalCompleted(recentRuns.filter((r) => r.status === 'completed').length);
+        setPendingPermissionRuns(recentRuns.filter((r) => r.status === 'waiting_for_permission'));
       })
       .catch((e) => setError(getErrorMessage(e)))
       .finally(() => setLoading(false));
@@ -98,6 +103,38 @@ export function AutonomousTaskBillingCard({ organizationId }: { organizationId: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId]);
 
+  // Real Permission/Resume flow — the missing UI connection the audit found: `waiting_for_permission`
+  // was a real, reachable orchestrator state with no way for a human to ever grant or deny it.
+  // ALLOW resumes the real live headless session (resumeAutonomousRun(..., true)); DENY transitions
+  // the run to 'cancelled' and guarantees no charge, per the same real state machine every other
+  // terminal path already goes through — see AutonomousOrchestrator.ts's resumeAutonomousRun().
+  async function decidePermission(run: AutonomousTaskRun, granted: boolean) {
+    setDecidingRunId(run.id);
+    setError(null);
+    try {
+      await resumeAutonomousRun(
+        {
+          runId: run.id,
+          organizationId: run.organizationId,
+          ticketSource: run.ticketSource,
+          ticketId: run.ticketId,
+          // Not needed on the resume path — AutonomousOrchestrator.ts's finishAutonomousRun() never
+          // reads `cwd`; the isolated worktree from the run's original start is still live in the
+          // in-memory HeadlessTurnRunner session this resumes, keyed by runId alone.
+          cwd: '',
+          prUrl: run.prUrl ?? undefined,
+        },
+        granted
+      );
+      setMessage(granted ? `Resumed run ${run.ticketId ?? run.id}.` : `Denied permission for run ${run.ticketId ?? run.id} — no charge.`);
+      reload();
+    } catch (e) {
+      setError(getErrorMessage(e));
+    } finally {
+      setDecidingRunId(null);
+    }
+  }
+
   async function addFunds() {
     const parsed = Number.parseFloat(amountInput);
     if (!Number.isFinite(parsed) || parsed < pricingConfig.minTopupUsd) {
@@ -109,7 +146,12 @@ export function AutonomousTaskBillingCard({ organizationId }: { organizationId: 
     setMessage(null);
     try {
       const callbackUrl = await ipc.billingStartCheckoutSync().catch(() => undefined);
-      const result = await ipc.billingCreateCreditsCheckoutSession(parsed, organizationId, callbackUrl);
+      // P0-2: the pawos-web checkout page needs this to verify who is actually paying before it
+      // will credit anything — see /api/billing/credit-ticket-balance.
+      const supabase = await getSupabaseClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      const result = await ipc.billingCreateCreditsCheckoutSession(parsed, organizationId, callbackUrl, accessToken);
       if (result.ok) {
         await ipc.actionExecute({ type: 'openUrl', url: result.checkoutUrl });
         setMessage('Opened checkout in your browser. Your balance updates automatically once payment completes.');
@@ -147,6 +189,39 @@ export function AutonomousTaskBillingCard({ organizationId }: { organizationId: 
         organization (currently ${nextTicketPrice.toFixed(2)}/ticket); a ticket that fails, is
         cancelled, hits its retry limit, or is denied approval never consumes balance.
       </p>
+
+      {pendingPermissionRuns.length > 0 && (
+        <div style={{ marginBottom: 14, padding: 12, borderRadius: 10, background: 'rgba(224,194,140,0.08)', border: '1px solid rgba(224,194,140,0.3)' }}>
+          <p style={{ fontSize: 12.5, fontWeight: 600, color: '#e0c28c', marginBottom: 8 }}>
+            Waiting for your permission
+          </p>
+          {pendingPermissionRuns.map((run) => (
+            <div key={run.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '6px 0' }}>
+              <span style={{ fontSize: 13 }}>
+                {run.ticketId ?? '(no ticket)'} needs confirmation before a destructive action can continue.
+              </span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  disabled={decidingRunId === run.id}
+                  onClick={() => decidePermission(run, true)}
+                  style={{ padding: '6px 14px', borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', background: 'rgba(140,224,168,0.15)', border: '1px solid #8ce0a8', color: '#8ce0a8' }}
+                >
+                  {decidingRunId === run.id ? 'Working…' : 'Allow'}
+                </button>
+                <button
+                  type="button"
+                  disabled={decidingRunId === run.id}
+                  onClick={() => decidePermission(run, false)}
+                  style={{ padding: '6px 14px', borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', background: 'rgba(224,140,140,0.1)', border: '1px solid #e08c8c', color: '#e08c8c' }}
+                >
+                  Deny
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 14 }}>
         <div>

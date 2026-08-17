@@ -59,7 +59,12 @@ export const razorpayBillingProvider = new RazorpayBillingProvider();
  * subscription-tier checkout — no NoOp/registry indirection needed for a
  * single real provider.
  */
-export function createCreditsCheckoutUrl(amountUsd: number, organizationId?: string, callbackUrl?: string): BillingCheckoutResult {
+export function createCreditsCheckoutUrl(
+  amountUsd: number,
+  organizationId?: string,
+  callbackUrl?: string,
+  accessToken?: string
+): BillingCheckoutResult {
   if (!CHECKOUT_ROUTE_LIVE) {
     return { ok: false, reason: 'Website checkout is not live yet. Business Configuration Required.' };
   }
@@ -67,5 +72,10 @@ export function createCreditsCheckoutUrl(amountUsd: number, organizationId?: str
   url.searchParams.set('amountUsd', String(amountUsd));
   if (organizationId) url.searchParams.set('organizationId', organizationId);
   if (callbackUrl) url.searchParams.set('callback', callbackUrl);
+  // P0-2: threads the purchaser's own Supabase session token through so pawos-web's
+  // /api/billing/credit-ticket-balance route can verify who is actually paying — see that route's
+  // own doc comment. Never logged, never persisted, only ever placed in a URL opened directly in
+  // the system browser for this one checkout session.
+  if (accessToken) url.searchParams.set('accessToken', accessToken);
   return { ok: true, checkoutUrl: url.toString() };
 }

@@ -13,8 +13,10 @@ export function AdvancedSection() {
   const [codingMode, setCodingModeState] = useState<'go' | 'pro'>('go');
   const [infraMode, setInfraModeState] = useState<'investigate' | 'full'>('investigate');
   const [connectors, setConnectors] = useState<ConnectorStatus[]>([]);
+  const [bypassPermissionsEnabled, setBypassPermissionsEnabledState] = useState(false);
 
   useEffect(() => {
+    ipc.settingsGet().then((s) => setBypassPermissionsEnabledState(s.bypassPermissionsEnabled ?? false));
     ipc.actionExecute({ type: 'getCodingMode' }).then((result) => {
       if (result.ok) {
         const preferences = (result.data as { preferences?: { mode: 'go' | 'pro' } } | undefined)?.preferences;
@@ -43,6 +45,13 @@ export function AdvancedSection() {
   const changeInfraMode = async (mode: 'investigate' | 'full') => {
     const result = await ipc.actionExecute({ type: 'setInfraMode', mode });
     if (result.ok) setInfraModeState(mode);
+  };
+
+  /** Plain, non-AI-invokable settings channel — deliberately never routed through actionExecute,
+   *  since that pipeline is reachable by the model itself (see setCodingMode/setInfraMode above). */
+  const toggleBypassPermissions = async (enabled: boolean) => {
+    await ipc.settingsSet({ bypassPermissionsEnabled: enabled });
+    setBypassPermissionsEnabledState(enabled);
   };
 
   return (
@@ -119,6 +128,32 @@ export function AdvancedSection() {
             ))}
           </div>
         )}
+      </div>
+
+      <div className={styles.card} style={{ marginTop: 14 }}>
+        <h3 className={styles.cardTitle}>Bypass permissions</h3>
+        <p className={styles.cardBody}>
+          Lets the composer's "Bypass permissions" mode skip confirmation for every action, instead
+          of asking before commands, deployments, and other destructive actions. Off by default.
+          This only changes who supplies the confirmation — every entitlement, security, connector,
+          and billing check still runs exactly as it does today.
+        </p>
+        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+          <button
+            type="button"
+            className={!bypassPermissionsEnabled ? styles.chipActive : styles.chip}
+            onClick={() => toggleBypassPermissions(false)}
+          >
+            Off — always ask
+          </button>
+          <button
+            type="button"
+            className={bypassPermissionsEnabled ? styles.chipActive : styles.chip}
+            onClick={() => toggleBypassPermissions(true)}
+          >
+            On — allow Bypass mode
+          </button>
+        </div>
       </div>
     </div>
   );

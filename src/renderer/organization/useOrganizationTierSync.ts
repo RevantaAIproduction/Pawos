@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { ipc } from '../services/ipc/ipcBridgeImplementation';
 import { organizationService } from './OrganizationService';
+import { getSupabaseClient } from '../auth/supabaseClient';
 
 let syncedForUserId: string | null = null;
 
@@ -32,7 +33,15 @@ export function useOrganizationTierSync(userId: string | undefined, isGuest: boo
           const orgs = await organizationService.getMyOrganizations();
           const mine = orgs[0] ?? null;
           if (mine) {
-            await ipc.billingSyncTierFromOrganization(mine.tier);
+            // P0-3 security fix: the main process independently re-verifies real, active membership
+            // and the organization's real tier against Supabase using this token — mine.tier is never
+            // trusted directly. See OrganizationTierVerification.ts.
+            const supabase = await getSupabaseClient();
+            const { data: sessionData } = await supabase.auth.getSession();
+            const accessToken = sessionData.session?.access_token;
+            if (accessToken) {
+              await ipc.billingSyncTierFromOrganization(accessToken, mine.id);
+            }
             return;
           }
         } catch {

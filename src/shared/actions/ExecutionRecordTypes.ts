@@ -102,4 +102,9 @@ export type ExecutionRecord = {
   userId?: string;
   runtime?: string;
   organizationId?: string;
+  /** Set only when this ExecutionRecord was produced by a headless turn the Autonomous Orchestration
+   *  Layer drove on behalf of an autonomous_task_runs row (Supabase) — carries that row's own id, the
+   *  one real cross-system link between local Work History and the autonomous run it belongs to. Never
+   *  set for a normal, human-driven conversation turn. See AutonomousOrchestrator.ts. */
+  externalRunId?: string;
 };

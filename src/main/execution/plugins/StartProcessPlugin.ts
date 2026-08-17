@@ -7,7 +7,7 @@ import { describeFailure } from '../describeFailure';
 import { processManager } from '../ProcessManager';
 import { resourceManager } from '../ResourceManager';
 import { observeProcess } from '../verification/ProcessVerification';
-import { firstToken, isAllowedPrefix, allowedPrefixesList } from './commandSafety';
+import { firstToken, isAllowedPrefix, allowedPrefixesList, findDangerousShellSyntax } from './commandSafety';
 
 /**
  * For anything meant to keep running (dev servers, watch builds) rather than
@@ -31,6 +31,15 @@ export class StartProcessPlugin extends BasePlugin {
         {
           id: 'command-not-allowed',
           message: `I can only start background processes for ${allowedPrefixesList()} commands right now — "${firstToken(request.command)}" isn't one of those.`,
+        },
+      ];
+    }
+    const dangerous = findDangerousShellSyntax(request.command);
+    if (dangerous) {
+      return [
+        {
+          id: 'command-not-allowed',
+          message: `I can't start that — it contains "${dangerous}", which could chain, pipe, redirect, or substitute a second command. I can only start one plain command at a time.`,
         },
       ];
     }

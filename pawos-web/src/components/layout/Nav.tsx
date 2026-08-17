@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Button } from "../ui/Button";
 
@@ -16,6 +17,12 @@ const LINKS = [
 
 export function Nav({ userEmail }: { userEmail: string | null }) {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+
+  // The documentation shell (app/docs/layout.tsx) owns its own top bar — the marketing nav must
+  // never be imposed on top of it, per the documentation redesign's "separate product experience"
+  // requirement.
+  if (pathname?.startsWith("/docs")) return null;
 
   return (
     <header className="sticky top-0 z-50 border-b border-neutral-800/80 bg-neutral-950/80 backdrop-blur">

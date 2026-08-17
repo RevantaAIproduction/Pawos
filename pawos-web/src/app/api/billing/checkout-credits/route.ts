@@ -22,6 +22,16 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
+  // P0-2: server-side max enforcement, not merely a UI hint — the real, authoritative enforcement
+  // happens again at crediting time (see /api/billing/credit-ticket-balance and the
+  // add_ticket_balance_service() RPC), but rejecting an over-limit order at creation time is the
+  // earliest, most honest place to say no.
+  if (amountUsd > 20000) {
+    return NextResponse.json(
+      { ok: false, reason: "Maximum top-up is $20,000." },
+      { status: 400 }
+    );
+  }
 
   const credentials = getRazorpayCredentials();
   if (!credentials) {

@@ -252,6 +252,15 @@ export type ActionRequest = { scope?: ConnectivityScope; codingRuntimeSession?: 
   // helper as every other git plugin. Always confirmed, same as gitCommit/gitCreateBranch/
   // gitCheckout.
   | { type: 'gitRevertCommit'; cwd: string; commitSha: string; confirmed?: boolean }
+  // Autonomous Orchestration Layer workspace isolation — creates a fresh `git worktree` at
+  // `worktreePath` off `baseRef` (defaulting to the repo's current HEAD) on a brand-new
+  // `branchName`, via the same execFile-based runGit() helper as every other git plugin. Never
+  // gated/confirmed: it only ever creates a NEW directory + NEW branch, never touches the
+  // existing checkout at `cwd` — the whole point is to give autonomous work its own isolated
+  // copy so it structurally cannot modify the user's live checkout. See
+  // AutonomousOrchestrator.ts, which calls this directly (not model-invoked) before starting
+  // any headless autonomous execution.
+  | { type: 'gitCreateWorktree'; cwd: string; worktreePath: string; branchName: string; baseRef?: string }
   // Software Installation Runtime — generic across winget/npm/pip/VS Code
   // extensions, no per-application data. Installing/updating/uninstalling/
   // repairing software is inherently system-changing, so all four are
@@ -625,7 +634,21 @@ export type ActionRequest = { scope?: ConnectivityScope; codingRuntimeSession?: 
   // organizationId is optional — omit it for an individual (Pro/Pro Max,
   // no organization) run against that account's own Ticket Balance; see
   // AutonomousTaskBillingGate.ts.
-  | { type: 'startAutonomousEngineeringTask'; organizationId?: string; workspaceId?: string; ticketSource?: 'jira' | 'github' | 'linear' | 'azureDevOps'; ticketId?: string; repository?: string }
+  | {
+      type: 'startAutonomousEngineeringTask';
+      organizationId?: string;
+      workspaceId?: string;
+      ticketSource?: 'jira' | 'github' | 'linear' | 'azureDevOps';
+      ticketId?: string;
+      repository?: string;
+      /** Local checkout path for the repository this ticket concerns — required for the Autonomous
+       *  Orchestration Layer to actually drive investigate/plan/edit/validate (see
+       *  AutonomousOrchestrator.ts). Omitted entirely falls back to the pre-orchestration behavior
+       *  (a billing/entitlement wrapper only, no automatic execution) — never fabricated or guessed. */
+      cwd?: string;
+      ticketTitle?: string;
+      ticketDescription?: string;
+    }
   | { type: 'completeAutonomousEngineeringTask'; runId: string; prUrl?: string; clientReplySent?: boolean; deployCompleted?: boolean }
   | { type: 'endAutonomousEngineeringTask'; runId: string; status: 'failed' | 'cancelled' | 'retry_limit_reached' }
   // Read-only Deployment Intelligence helpers — never gated.

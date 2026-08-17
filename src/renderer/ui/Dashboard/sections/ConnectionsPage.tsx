@@ -14,17 +14,19 @@ import type {
   DeploymentProfile,
 } from '../../../../shared/connectivity/ConnectivityTypes';
 import { CONNECTOR_REQUIRED_FEATURE } from '../../../../shared/connectivity/ConnectivityTypes';
-import type { EntitlementSnapshot } from '../../../../shared/billing/BillingTypes';
+import type { EntitlementSnapshot, FeatureId, SubscriptionTierId } from '../../../../shared/billing/BillingTypes';
+import { formatTierLabel } from '../../../billing/EntitlementDisplay';
 
-/** Team/Enterprise-gated connectors that lack the required feature render a locked card with an
- *  upgrade CTA instead of a disabled Connect button that explains nothing. Which tier unlocks
- *  which FeatureId lives only in EntitlementService.ts — this is just copy, not a gate. */
-const UPGRADE_TIER_LABEL: Record<string, string> = {
-  connectLinear: 'Team',
-  connectGoogleWorkspace: 'Team',
-  connectJira: 'Team',
-  connectSlack: 'Team',
-};
+/** Every connector is gated (none free on Go); a connector whose required feature the current tier
+ *  lacks renders a locked card with an upgrade CTA instead of a disabled Connect button that
+ *  explains nothing. Which tier unlocks which FeatureId is never hardcoded here — it's read live
+ *  from EntitlementService.getFeatureTierRequirements() (see the `tierRequirements` state below),
+ *  the single source of truth, so this page can never silently drift out of sync with a real tier
+ *  change (e.g. a connector's required tier being lowered) the way a hand-maintained map could. */
+function upgradeTierLabel(tierRequirements: Partial<Record<FeatureId, SubscriptionTierId>>, feature: FeatureId | undefined): string {
+  const tier = feature ? tierRequirements[feature] : undefined;
+  return tier ? formatTierLabel(tier).replace(/^Paw /, '') : 'a higher plan';
+}
 
 function getErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -127,11 +129,12 @@ function ConnectionCard({
  * Infrastructure / Runtime) instead of one flat list. Real data only: every Cloud Services
  * provider (GitHub, GitLab, Jira, Slack, Linear, Google Workspace, Vercel, Netlify, Railway) is a
  * real, registered OAuth2 `ConnectorSDK`, discovered generically via `connectivityListConnectors()`
- * — a new connector needs zero edits here. GitHub/GitLab/Vercel/Netlify/Railway are free on every
- * plan; Linear/Google Workspace require Team; Jira/Slack require Enterprise — gating comes from
- * `ipc.entitlementGetSnapshot()`'s real `features` list (see CONNECTOR_REQUIRED_FEATURE), never a
- * hardcoded plan-name check in this component. Docker/Kubernetes come from the existing
- * `listConfiguredInfraConnectors` action; Browser/Filesystem/Terminal are PawOS's own always-on
+ * — a new connector needs zero edits here. Every connector requires at least Pro (none free on Go):
+ * GitHub/GitLab/Vercel/Netlify/Railway/Google Workspace/Slack require Pro; Jira/Linear require Pro
+ * Max — gating comes from `ipc.entitlementGetSnapshot()`'s real `features` list (see
+ * CONNECTOR_REQUIRED_FEATURE), never a hardcoded plan-name check in this component.
+ * Docker/Kubernetes come from the existing `listConfiguredInfraConnectors` action;
+ * Browser/Filesystem/Terminal are PawOS's own always-on
  * capabilities; VS Code/Cursor come from the Discovery Service's real presence detection.
  * SSH Servers/Virtual Machines are honestly marked "Coming soon" — no connector exists for them
  * yet, matching this app's no-fake-data convention. Cloudflare and Supabase are not part of v1.
@@ -150,6 +153,7 @@ export function ConnectionsPage({ scope, onUpgrade }: { scope: ConnectivityScope
   const [profiles, setProfiles] = useState<DeploymentProfile[]>([]);
   const [infra, setInfra] = useState<{ connectors: InfraStatus[]; cliTools: InfraStatus[] } | null>(null);
   const [entitlement, setEntitlement] = useState<EntitlementSnapshot | null>(null);
+  const [tierRequirements, setTierRequirements] = useState<Partial<Record<FeatureId, SubscriptionTierId>>>({});
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
   const [refreshingDiscovery, setRefreshingDiscovery] = useState(false);
@@ -162,12 +166,13 @@ export function ConnectionsPage({ scope, onUpgrade }: { scope: ConnectivityScope
 
   async function reload() {
     try {
-      const [connectorsResult, connectionsResult, profilesResult, infraResult, entitlementSnapshot] = await Promise.all([
+      const [connectorsResult, connectionsResult, profilesResult, infraResult, entitlementSnapshot, tierRequirementsResult] = await Promise.all([
         ipc.connectivityListConnectors(),
         ipc.connectivityListConnections(scope),
         ipc.connectivityDeploymentProfilesList(scope),
         ipc.actionExecute({ type: 'listConfiguredInfraConnectors' }),
         ipc.entitlementGetSnapshot().catch(() => null),
+        ipc.entitlementGetFeatureTierRequirements().catch(() => ({})),
       ]);
       if (!connectorsResult.ok) throw new Error(connectorsResult.error);
       if (!connectionsResult.ok) throw new Error(connectionsResult.error);
@@ -177,6 +182,7 @@ export function ConnectionsPage({ scope, onUpgrade }: { scope: ConnectivityScope
       setProfiles(profilesResult.data);
       if (infraResult.ok) setInfra(infraResult.data as { connectors: InfraStatus[]; cliTools: InfraStatus[] });
       setEntitlement(entitlementSnapshot);
+      setTierRequirements(tierRequirementsResult);
       setPageError(null);
     } catch (e) {
       setPageError(getErrorMessage(e));
@@ -372,10 +378,10 @@ export function ConnectionsPage({ scope, onUpgrade }: { scope: ConnectivityScope
                     description={c.description ?? c.category}
                     state={state}
                     stateLabel={connection ? connection.status : 'Not connected'}
-                    lockBadge={locked ? `Available on ${UPGRADE_TIER_LABEL[requiredFeature ?? ''] ?? 'a higher plan'}` : undefined}
+                    lockBadge={locked ? `Available on ${upgradeTierLabel(tierRequirements, requiredFeature)}` : undefined}
                     onClick={() =>
                       locked
-                        ? setSelected({ kind: 'locked', id: c.id, displayName: c.displayName, requiredTier: UPGRADE_TIER_LABEL[requiredFeature ?? ''] ?? 'a higher plan' })
+                        ? setSelected({ kind: 'locked', id: c.id, displayName: c.displayName, requiredTier: upgradeTierLabel(tierRequirements, requiredFeature) })
                         : setSelected({ kind: 'connectivity', id: c.id })
                     }
                   />
