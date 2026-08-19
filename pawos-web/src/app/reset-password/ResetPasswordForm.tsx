@@ -20,11 +20,18 @@ export function ResetPasswordForm() {
   // — a working one always resolves via one of the three paths well before that.
   const [sessionReady, setSessionReady] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
+  // Parameter NAMES only, never values — safe to show/screenshot, and tells us exactly which link
+  // format Supabase actually sent (query vs. hash, which keys) without exposing the one-time
+  // recovery token itself, whether or not it's still live.
+  const [diagnostic, setDiagnostic] = useState<string | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
     const code = searchParams.get("code");
-    const invalidLinkMessage = "This reset link is invalid or has expired — request a new one from the Forgot Password page.";
+    const searchKeys = Array.from(searchParams.keys());
+    const hashKeys = typeof window !== "undefined" && window.location.hash.length > 1
+      ? Array.from(new URLSearchParams(window.location.hash.slice(1)).keys())
+      : [];
     let settled = false;
 
     const markReady = () => {
@@ -32,14 +39,15 @@ export function ResetPasswordForm() {
       settled = true;
       setSessionReady(true);
     };
-    const markInvalid = () => {
+    const markInvalid = (reason: string) => {
       if (settled) return;
       settled = true;
-      setSessionError(invalidLinkMessage);
+      setDiagnostic(`query params: [${searchKeys.join(", ") || "none"}] · hash params: [${hashKeys.join(", ") || "none"}] · ${reason}`);
+      setSessionError("This reset link is invalid or has expired — request a new one from the Forgot Password page.");
     };
 
     if (code) {
-      supabase.auth.exchangeCodeForSession(code).then(({ error }) => (error ? markInvalid() : markReady()));
+      supabase.auth.exchangeCodeForSession(code).then(({ error }) => (error ? markInvalid(`exchange failed: ${error.message}`) : markReady()));
       return;
     }
 
@@ -51,7 +59,7 @@ export function ResetPasswordForm() {
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) markReady();
     });
-    const timeout = window.setTimeout(markInvalid, 4000);
+    const timeout = window.setTimeout(() => markInvalid("no code, no session, no recovery event within 4s"), 4000);
 
     return () => {
       subscription.unsubscribe();
@@ -89,6 +97,7 @@ export function ResetPasswordForm() {
       <div className="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-8 text-center">
         <h1 className="text-2xl font-bold">Link no longer valid</h1>
         <p className="mt-3 text-sm text-neutral-400">{sessionError}</p>
+        {diagnostic && <p className="mt-3 break-words font-mono text-[11px] text-neutral-600">{diagnostic}</p>}
         <a
           href="/forgot-password"
           className="mt-6 inline-block rounded-full bg-gradient-to-r from-indigo-500 to-blue-400 px-6 py-2.5 text-sm font-semibold text-black transition hover:opacity-90"
