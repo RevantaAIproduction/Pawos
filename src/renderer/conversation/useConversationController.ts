@@ -21,6 +21,7 @@ import { organizationService } from '../organization/OrganizationService';
 import { organizationUsageService } from '../billing/OrganizationUsageService';
 import { referralCreditService } from '../organization/ReferralCreditService';
 import { PAW_COMPUTE_UNITS_PER_CREDIT_USD } from '../../shared/billing/ReferralCreditTypes';
+import type { TurnUsageSubmission } from '../../shared/billing/UsageMeteringTypes';
 
 export function useConversationController(args?: {
   onStateChange?: (state: ConversationSnapshot['state']) => void;
@@ -40,6 +41,12 @@ export function useConversationController(args?: {
   });
 
   const runtimeRef = useRef<ConversationRuntime | null>(null);
+  // The just-completed turn's real, aggregate Gemini usage — set synchronously by
+  // ConversationRuntime's onTurnUsage callback, always right before it fires onStateChange('completed')
+  // for the same turn (see ConversationRuntime.ts's drainPendingActionsAndFinalize). Never read except
+  // inside that 'completed' branch below, so there is no risk of a stale value from a prior turn
+  // leaking into a later one's charge.
+  const lastTurnUsageRef = useRef<TurnUsageSubmission | null>(null);
   const onStateChangeRef = useRef(args?.onStateChange);
   onStateChangeRef.current = args?.onStateChange;
   const onVisemeFrameRef = useRef(args?.onVisemeFrame);
@@ -87,6 +94,11 @@ export function useConversationController(args?: {
   // (e.g. from AISettingsPage, or the picker itself); aiProviderConfigStore stays the source of
   // truth and is what AIRouter.getReasoningProvider() actually reads on every turn.
   const [activePawModel, setActivePawModelState] = useState<PawModelId>(aiProviderConfigStore.getActivePawModel());
+  // Read inside the long-lived runtime-construction effect below (onStateChange's closure), which
+  // only re-runs on [ipc] — without this ref it would always see the activePawModel value from the
+  // render that first mounted the effect, never a later model switch.
+  const activePawModelRef = useRef(activePawModel);
+  activePawModelRef.current = activePawModel;
   // For every model, the minimum tier that unlocks it — derived server-side from
   // EntitlementService's own TIER_ENTITLEMENTS (see entitlement:getModelTierRequirements), never a
   // second hardcoded gating table in the renderer. Static, account-independent; fetched once.
@@ -273,6 +285,12 @@ export function useConversationController(args?: {
       // their consumption already happened pre-flight in submitTranscript() via
       // organizationUsageService, since the pooled RPC only supports atomic check+increment, not a
       // separate post-hoc record step.
+      // Populated synchronously by the runtime, always before the matching onStateChange('completed')
+      // fires for the same turn (see ConversationRuntime.ts's drainPendingActionsAndFinalize) — the
+      // real, per-request Gemini usage this turn actually made, never a fabricated placeholder.
+      onTurnUsage: (submission) => {
+        lastTurnUsageRef.current = submission;
+      },
       onStateChange: (state) => {
         onStateChangeRef.current?.(state);
         if (state === 'completed' && !entitlementRef.current?.pooled) {
@@ -280,7 +298,18 @@ export function useConversationController(args?: {
           const lastTaskMessage = currentSnapshot ? [...currentSnapshot.messages].reverse().find((m) => m.task) : undefined;
           const actionTypes = lastTaskMessage?.task?.actions.map((a) => a.type) ?? [];
           const category = categorizeTurn(actionTypes, lastInputSourceRef.current);
-          ipc.billingConsumeCredit(1, 'conversation-turn', category).then(() => refreshEntitlement()).catch(() => {});
+          // Replaces the old flat "1 credit per turn" charge: the renderer only ever hands over raw,
+          // provider-reported usage (never a token count or a Paw Compute amount it computed itself)
+          // — the main process is the sole place that turns real usage into a charge (see ipc.ts's
+          // billing:recordTurnUsage handler / UsageMeteringEngine.recordTurnUsage). A turn that made
+          // zero real Gemini requests (submission missing, or an empty requests array) correctly
+          // charges zero, never a fabricated minimum.
+          const submission = lastTurnUsageRef.current ?? { sessionId: null, runId: null, requests: [] };
+          lastTurnUsageRef.current = null;
+          ipc
+            .billingRecordTurnUsage(submission, 'conversation-turn', category, activePawModelRef.current)
+            .then(() => refreshEntitlement())
+            .catch(() => {});
         }
       },
       executeAction: withAutonomousTaskBilling(withGovernanceGate((request) => ipc.executeAction(request))),
@@ -305,7 +334,11 @@ export function useConversationController(args?: {
             .map((s) => ({ id: s.id, title: s.title, lastMessage: s.lastMessage }));
           if (candidates.length === 0) return { type: 'auto' as const };
 
-          const decision = await aiRouter.classifySessionContinuation(transcript, candidates);
+          const { decision, usage } = await aiRouter.classifySessionContinuation(transcript, candidates);
+          // Real, provider-reported usage for this one classification request — reported to the
+          // main process (the only place that ever writes to the durable usage ledger) exactly like
+          // every other backgroundTask Gemini call site; never estimated, never billed twice.
+          if (usage) ipc.billingReportUsageEvent(usage, 'backgroundTask', { sessionId: null, runId: null }).catch(() => {});
           if (decision.action === 'continue' && decision.sessionId) {
             return { type: 'continue' as const, sessionId: decision.sessionId };
           }
@@ -356,7 +389,7 @@ export function useConversationController(args?: {
   const submitTranscript = useCallback(
     (text: string, context?: SubmittedInputContext) => {
       const current = entitlementRef.current;
-      if (current && (current.models.length === 0 || !current.hasCreditsRemaining)) {
+      if (current && current.models.length === 0) {
         setCreditsNoticeTier(current.tier);
         return;
       }
@@ -374,10 +407,8 @@ export function useConversationController(args?: {
 
       // Pooled (Enterprise) Paw Compute has no local counter to check ahead of time — the pool is
       // authoritative in Supabase, so the only real check is attempting the increment itself.
-      // hasCreditsRemaining() above is unconditionally true for a pooled tier at the local-snapshot
-      // layer (see EntitlementService.isComputePooled()'s doc comment), so this is the actual gate
-      // for Enterprise, matching organizationUsageService's own documented contract for every other
-      // pooled capability: call recordUsage() before dispatching, treat a throw as "blocked."
+      // Matching organizationUsageService's own documented contract for every other pooled capability:
+      // call recordUsage() before dispatching, treat a throw as "blocked."
       if (current?.pooled) {
         const organizationId = organizationIdRef.current;
         if (!organizationId) {
@@ -399,8 +430,26 @@ export function useConversationController(args?: {
         return;
       }
 
-      lastInputSourceRef.current = context?.source;
-      runtimeRef.current?.submitTranscript(text, context);
+      // Fresh authoritative gate from the main process — never relies on the stale renderer
+      // snapshot (entitlementRef.current) for the generation-allowed decision. The main process
+      // reads current rolling-window usage directly from UsageEventStore, computes tier limits from
+      // PawComputeCapacityStore, and reserves an in-flight slot atomically. This covers both Fable
+      // (gates on purchased-credit headroom) and normal turns (gates on rolling PC windows) in one
+      // call. Renderer-provided tier, usage, balance, and authorization result are never trusted.
+      ipc
+        .billingCanStartGeneration(activePawModelRef.current)
+        .then((gateResult) => {
+          if (!gateResult.allowed) {
+            setCreditsNoticeTier(entitlementRef.current?.tier ?? 'go');
+            return;
+          }
+          lastInputSourceRef.current = context?.source;
+          runtimeRef.current?.submitTranscript(text, context);
+        })
+        .catch(() => {
+          // IPC failure — fail closed: do not start generation through an unverified gate.
+          setCreditsNoticeTier(entitlementRef.current?.tier ?? 'go');
+        });
     },
     []
   );

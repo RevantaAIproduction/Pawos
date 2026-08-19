@@ -196,6 +196,21 @@ export const autonomousTaskBillingService = {
     return (data ?? []).map(toRun);
   },
 
+  /** The exact real billing event mark_autonomous_task_completed() inserted for one run — used to
+   *  show the real amount actually charged right after completion, rather than a client-computed
+   *  guess. Null if the run never billed (shouldn't happen right after a successful completeRun()
+   *  call, but a run genuinely has no event until that RPC succeeds). */
+  async getBillingEventForRun(runId: string): Promise<OrganizationBillingEvent | null> {
+    const supabase = await getSupabaseClient();
+    const { data, error } = await supabase
+      .from('organization_billing_events')
+      .select('*')
+      .eq('run_id', runId)
+      .maybeSingle<BillingEventRow>();
+    if (error) throw error;
+    return data ? toBillingEvent(data) : null;
+  },
+
   async listBillingHistory(organizationId: string | null, limit = 100): Promise<OrganizationBillingEvent[]> {
     const supabase = await getSupabaseClient();
     let query = supabase.from('organization_billing_events').select('*');
@@ -236,21 +251,6 @@ export const autonomousTaskBillingService = {
     const { data, error } = await query.order('topped_up_at', { ascending: false }).limit(limit).returns<TopupRow[]>();
     if (error) throw error;
     return (data ?? []).map(toTopup);
-  },
-
-  /** Called after a real, verified Razorpay top-up completes — see CheckoutSyncServer.ts. Adds
-   *  funds via the security-definer add_ticket_balance() RPC; never settable to an arbitrary
-   *  amount by this class alone (the RPC still runs under the purchaser's own auth session, same
-   *  trust model as SubscriptionStore.confirmPurchase). */
-  async topUpBalance(organizationId: string | null, amountUsd: number, paymentReference?: string): Promise<string> {
-    const supabase = await getSupabaseClient();
-    const { data, error } = await supabase.rpc('add_ticket_balance', {
-      p_organization_id: organizationId,
-      p_amount_usd: amountUsd,
-      p_payment_reference: paymentReference ?? null,
-    });
-    if (error) throw error;
-    return data as string;
   },
 
   /** Month-to-date total spend, computed client-side from the billing history

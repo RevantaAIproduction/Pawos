@@ -2,7 +2,20 @@ import type { ConnectorResult, InfraTicket, ProjectManagementConnector } from '.
 
 const LINEAR_API = 'https://api.linear.app/graphql';
 
-type LinearIssueNode = { identifier: string; title: string; description: string | null; url: string; state: { name: string }; labels: { nodes: { name: string }[] } };
+type LinearIssueNode = {
+  identifier: string;
+  title: string;
+  description: string | null;
+  url: string;
+  state: { name: string };
+  labels: { nodes: { name: string }[] };
+  priorityLabel?: string | null;
+  dueDate?: string | null;
+  assignee?: { name: string } | null;
+  creator?: { name: string } | null;
+};
+
+const ISSUE_FIELDS = 'identifier title description url state { name } labels { nodes { name } } priorityLabel dueDate assignee { name } creator { name }';
 
 function toTicket(node: LinearIssueNode): InfraTicket {
   return {
@@ -12,6 +25,12 @@ function toTicket(node: LinearIssueNode): InfraTicket {
     url: node.url,
     status: node.state?.name,
     labels: node.labels?.nodes?.map((l) => l.name) ?? [],
+    // Real Linear fields — priorityLabel is Linear's own human-readable priority string ("Urgent"/
+    // "High"/"Medium"/"Low"/"No priority", never inferred); creator is who filed the issue (reporter).
+    priority: node.priorityLabel && node.priorityLabel !== 'No priority' ? node.priorityLabel : undefined,
+    dueDate: node.dueDate ?? undefined,
+    assignee: node.assignee?.name,
+    reporter: node.creator?.name,
   };
 }
 
@@ -52,10 +71,7 @@ export class LinearConnector implements ProjectManagementConnector {
 
   async getTicket(ticketId: string): Promise<ConnectorResult<{ ticket: InfraTicket }>> {
     if (!this.isConfigured()) return this.notConfigured();
-    const result = await this.query(
-      `query($id: String!) { issue(id: $id) { identifier title description url state { name } labels { nodes { name } } } }`,
-      { id: ticketId }
-    );
+    const result = await this.query(`query($id: String!) { issue(id: $id) { ${ISSUE_FIELDS} } }`, { id: ticketId });
     if (!result.ok) return result;
     const data = result.data as { issue: LinearIssueNode | null };
     if (!data.issue) return { ok: false, reason: `Linear has no issue "${ticketId}".` };
@@ -64,12 +80,19 @@ export class LinearConnector implements ProjectManagementConnector {
 
   async searchTickets(query: string): Promise<ConnectorResult<{ tickets: InfraTicket[] }>> {
     if (!this.isConfigured()) return this.notConfigured();
-    const result = await this.query(
-      `query($term: String!) { issueSearch(query: $term, first: 20) { nodes { identifier title description url state { name } labels { nodes { name } } } } }`,
-      { term: query }
-    );
+    const result = await this.query(`query($term: String!) { issueSearch(query: $term, first: 20) { nodes { ${ISSUE_FIELDS} } } }`, { term: query });
     if (!result.ok) return result;
     const data = result.data as { issueSearch: { nodes: LinearIssueNode[] } };
     return { ok: true, tickets: data.issueSearch.nodes.map(toTicket) };
+  }
+
+  /** `viewer` is Linear's own "who does this API key belong to" field — the assignee filter is
+   *  resolved server-side against the connected account, never a locally-guessed user id. */
+  async listMyTickets(): Promise<ConnectorResult<{ tickets: InfraTicket[] }>> {
+    if (!this.isConfigured()) return this.notConfigured();
+    const result = await this.query(`query { viewer { assignedIssues(first: 50) { nodes { ${ISSUE_FIELDS} } } } }`, {});
+    if (!result.ok) return result;
+    const data = result.data as { viewer: { assignedIssues: { nodes: LinearIssueNode[] } } };
+    return { ok: true, tickets: data.viewer.assignedIssues.nodes.map(toTicket) };
   }
 }

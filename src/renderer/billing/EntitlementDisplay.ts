@@ -39,17 +39,25 @@ export function formatPlanAndRuntimeSummary(entitlement: EntitlementSnapshot | n
   return `${formatTierLabel(entitlement.tier)} · ${runtimes}`;
 }
 
+/** Rolling-window Paw Compute usage summary — shows real 5-hour and 7-day usage/limit from the
+ *  authoritative rolling-window counters (usage5hPc / limit5hPc / usage7dPc / limit7dPc on the
+ *  EntitlementSnapshot). Never reads the deprecated creditLimit / weeklyCreditLimit fields, which
+ *  are always null since Phase 2 replaced flat monthly limits with rolling windows. Pooled
+ *  (Enterprise) has no personal rolling-window limit locally; it retains a plain used-count label. */
 export function formatPawComputeSummary(entitlement: EntitlementSnapshot | null): string {
   if (!entitlement) return '...';
   if (entitlement.pooled) {
-    return `Pooled organization allowance · Used: ${formatNumber(entitlement.creditsUsedThisPeriod)}`;
-  }
-  if (entitlement.creditLimit === null) {
-    return `Used: ${formatNumber(entitlement.creditsUsedThisPeriod)} · Remaining: Unlimited`;
+    return `Pooled organization allowance · ${formatNumber(entitlement.creditsUsedThisPeriod)} used`;
   }
 
-  const allowance = entitlement.creditLimit + entitlement.bonusComputeThisPeriod;
-  const remaining = Math.max(allowance - entitlement.creditsUsedThisPeriod, 0);
-  const bonus = entitlement.bonusComputeThisPeriod > 0 ? ` · Paw Credits bonus: ${formatNumber(entitlement.bonusComputeThisPeriod)}` : '';
-  return `Used: ${formatNumber(entitlement.creditsUsedThisPeriod)} · Remaining: ${formatNumber(remaining)} · Limit: ${formatNumber(entitlement.creditLimit)}${bonus}`;
+  const { usage5hPc, limit5hPc, usage7dPc, limit7dPc } = entitlement;
+
+  const fmt5h = limit5hPc !== null
+    ? `5h: ${formatNumber(usage5hPc)} / ${formatNumber(limit5hPc)} PC`
+    : `5h: ${formatNumber(usage5hPc)} PC`;
+  const fmt7d = limit7dPc !== null
+    ? `Week: ${formatNumber(usage7dPc)} / ${formatNumber(limit7dPc)} PC`
+    : `Week: ${formatNumber(usage7dPc)} PC`;
+
+  return `${fmt5h} · ${fmt7d}`;
 }

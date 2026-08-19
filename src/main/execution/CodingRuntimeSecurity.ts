@@ -202,7 +202,27 @@ function collectPathFields(request: ActionRequest): PathBearingField[] {
 function selectRoot(request: ActionRequest, fields: PathBearingField[]): string | null {
   const sessionRoot = request.codingRuntimeSession?.executionEnvironment.selectedRootPath ?? request.codingRuntimeSession?.workspace.rootPath;
   if (sessionRoot) return sessionRoot;
-  return fields.find((field) => field.role === 'root')?.value ?? fields.find((field) => field.role === 'cwd')?.value ?? null;
+  const explicit = fields.find((field) => field.role === 'root')?.value ?? fields.find((field) => field.role === 'cwd')?.value ?? null;
+  if (explicit) return explicit;
+
+  // No session and no explicit root/cwd field was supplied. Most single-target file actions
+  // (open_folder, read_file, write_file, list_directory, create_folder, ...) have no cwd/rootPath
+  // parameter in their tool schema at all — codingRuntimeSession is never populated by
+  // ConversationRuntime in production either — so requiring an explicit root here would make
+  // these actions permanently unable to pass this gate for a path outside any prior root,
+  // no matter how the model retries. For the common, unambiguous case of exactly one path field,
+  // derive an implicit root from that path's own nearest existing ancestor directory instead of
+  // refusing outright — the single path already fully scopes the action. Requests touching more
+  // than one distinct path (movePath, compressPath with several inputs, etc.) still require an
+  // explicit root/cwd, since there's no single unambiguous scope to infer between them.
+  const pathFields = fields.filter((field) => field.role === 'path');
+  const onlyPathField = pathFields[0];
+  if (fields.length === 1 && pathFields.length === 1 && onlyPathField) {
+    const resolved = path.resolve(onlyPathField.value);
+    const parent = nearestExistingPath(path.dirname(resolved));
+    if (parent) return parent;
+  }
+  return null;
 }
 
 function commandLooksRootEscaping(command: string): boolean {

@@ -115,6 +115,15 @@ export function createGeminiReasoningProvider(config: GeminiReasoningConfig): Re
     },
     streamResponse(request: ReasoningProviderRequest, callbacks: ReasoningProviderCallbacks): ReasoningProviderSession {
       const controller = new AbortController();
+      // PawOS's own per-request identity for this one real outgoing streaming call — Gemini's
+      // response body carries no stable id of its own (see UsageMeteringTypes.ts's doc comment on
+      // ProviderUsageMetadata.requestId). Minted once here because exactly one streamResponse() call
+      // is exactly one real HTTP request: there is no retry inside this provider, and a genuine
+      // retry (a fresh streamResponse() call) correctly gets its own new id. Gemini reports
+      // cumulative usage on every streamed chunk, so this same id rides every intermediate onUsage
+      // callback — harmless, since ReasoningRuntime keeps only the last (authoritative) one, so the
+      // usage ledger still sees exactly one record per real request.
+      const requestId = uuidv4();
       let idleTimer: ReturnType<typeof setTimeout> | undefined;
       const resetIdleTimer = () => {
         if (idleTimer) clearTimeout(idleTimer);
@@ -174,6 +183,23 @@ export function createGeminiReasoningProvider(config: GeminiReasoningConfig): Re
                       thoughtSignature: typeof part.thoughtSignature === 'string' ? part.thoughtSignature : undefined,
                     });
                   }
+                }
+                // Real, authoritative usage — Gemini attaches this to every streamed chunk with
+                // cumulative counts, so the LAST chunk that carries it has the final totals. Reporting
+                // on every occurrence (rather than only the last) means the runtime always has the
+                // most recent real number even if the stream is cancelled mid-flight.
+                const usageMetadata = json.usageMetadata;
+                if (usageMetadata && typeof usageMetadata === 'object') {
+                  callbacks.onUsage?.({
+                    provider: 'gemini',
+                    model,
+                    inputTokens: typeof usageMetadata.promptTokenCount === 'number' ? usageMetadata.promptTokenCount : null,
+                    outputTokens: typeof usageMetadata.candidatesTokenCount === 'number' ? usageMetadata.candidatesTokenCount : null,
+                    cachedInputTokens: typeof usageMetadata.cachedContentTokenCount === 'number' ? usageMetadata.cachedContentTokenCount : null,
+                    totalTokens: typeof usageMetadata.totalTokenCount === 'number' ? usageMetadata.totalTokenCount : null,
+                    thoughtsTokens: typeof usageMetadata.thoughtsTokenCount === 'number' ? usageMetadata.thoughtsTokenCount : null,
+                    requestId,
+                  });
                 }
               } catch {
                 // ignore malformed chunk

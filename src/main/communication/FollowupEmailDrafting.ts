@@ -7,6 +7,9 @@
  * (openMailComposeWindow) and clicks Send themselves.
  */
 
+import { v4 as uuidv4 } from 'uuid';
+import { recordUsageEvent } from '../billing/UsageMeteringEngine';
+
 const DEFAULT_MODEL = 'gemini-flash-latest';
 const DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 
@@ -34,6 +37,7 @@ Real decisions: ${params.decisions.length ? params.decisions.map((d) => `- ${d.d
 
 Write a real subject line and a real plain-text email body thanking the recipient for the conversation, briefly recapping what was actually discussed, and listing the real action items/decisions above if any exist. Keep it concise and natural, not robotic. Sign off as "${params.senderName || 'the sender'}" only if a real name was given, otherwise leave the sign-off generic.`;
 
+  const requestId = uuidv4();
   const res = await fetch(`${params.baseUrl ?? DEFAULT_BASE_URL}/models/${params.model ?? DEFAULT_MODEL}:generateContent?key=${encodeURIComponent(params.apiKey)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -47,6 +51,23 @@ Write a real subject line and a real plain-text email body thanking the recipien
   });
   if (!res.ok) throw new Error(`Email draft request failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
   const json = (await res.json()) as any;
+  const usageMetadata = json.usageMetadata;
+  if (usageMetadata) {
+    recordUsageEvent(
+      {
+        provider: 'gemini',
+        model: params.model ?? DEFAULT_MODEL,
+        inputTokens: typeof usageMetadata.promptTokenCount === 'number' ? usageMetadata.promptTokenCount : null,
+        outputTokens: typeof usageMetadata.candidatesTokenCount === 'number' ? usageMetadata.candidatesTokenCount : null,
+        cachedInputTokens: typeof usageMetadata.cachedContentTokenCount === 'number' ? usageMetadata.cachedContentTokenCount : null,
+        totalTokens: typeof usageMetadata.totalTokenCount === 'number' ? usageMetadata.totalTokenCount : null,
+        thoughtsTokens: typeof usageMetadata.thoughtsTokenCount === 'number' ? usageMetadata.thoughtsTokenCount : null,
+        requestId,
+      },
+      'backgroundTask',
+      { sessionId: null, runId: null }
+    );
+  }
   const text: string = json.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}';
   const parsed = JSON.parse(text);
   return { subject: String(parsed.subject ?? `Follow-up: ${params.title}`), body: String(parsed.body ?? '') };

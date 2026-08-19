@@ -503,7 +503,7 @@ export function ConnectionsPage({ scope, onUpgrade }: { scope: ConnectivityScope
           <SlideOver title={c.displayName} subtitle={c.description ?? c.category} onClose={() => setSelected(null)}>
             <LiveStatusPill state={connectionLiveState(connection?.status ?? 'notConnected')} label={connection ? connection.status : 'Not connected'} />
             <div style={{ marginTop: 16 }}>
-              {connection ? (
+              {connection && connection.status === 'connected' ? (
                 <>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
                     {(() => {

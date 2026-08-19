@@ -16,9 +16,31 @@ export const OUTPUT_DIR_CANDIDATES = ['.next', 'dist', 'build', 'out'];
 
 type BuildState = { processId: string; cwd: string; buildCommand: string; timeoutMs: number };
 
-/** Which candidate output dir actually exists, if any — real evidence, not a guess. */
+/** Reads the project's package.json (if present) for an explicit custom output dir. */
+function readPackageJsonOutputDir(cwd: string): string | null {
+  try {
+    const pkgPath = path.join(cwd, 'package.json');
+    if (!fs.existsSync(pkgPath)) return null;
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8')) as Record<string, unknown>;
+    // Common framework conventions: Next.js, Vite, CRA, tsconfig
+    const candidates = [
+      (pkg as { build?: { outDir?: string } }).build?.outDir,
+      (pkg as { outputPath?: string }).outputPath,
+      (pkg as { outDir?: string }).outDir,
+    ];
+    for (const dir of candidates) {
+      if (typeof dir === 'string' && dir && fs.existsSync(path.join(cwd, dir))) return dir;
+    }
+  } catch {
+    // Non-fatal — fall through to candidate scan
+  }
+  return null;
+}
+
+/** Which candidate output dir actually exists, if any — real evidence, not a guess. Checks
+ * package.json for an explicit outDir before falling back to the known candidate list. */
 export function findBuildOutputDir(cwd: string): string | null {
-  return OUTPUT_DIR_CANDIDATES.find((name) => fs.existsSync(path.join(cwd, name))) ?? null;
+  return readPackageJsonOutputDir(cwd) ?? OUTPUT_DIR_CANDIDATES.find((name) => fs.existsSync(path.join(cwd, name))) ?? null;
 }
 
 /** Not destructive — running a build script doesn't deploy or overwrite anything sensitive, only the confirmed steps after it (writeEnvVar, runDeployScript) are. */

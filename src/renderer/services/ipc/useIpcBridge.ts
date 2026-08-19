@@ -19,6 +19,13 @@ import type { CommunicationRuntimeEvent } from '../../../shared/communication/Co
 import type { CreditBalance, EntitlementSnapshot, FeatureId, SubscriptionState, SubscriptionTierId } from '../../../shared/billing/BillingTypes';
 import type { PawModelId } from '../../../shared/ai/PawModelTypes';
 import type { AiUsageCategory } from '../../../shared/billing/AiUsageCategories';
+import type {
+  TurnUsageSubmission,
+  AggregatedTurnUsage,
+  NormalizedUsageRecord,
+  ProviderUsageMetadata,
+  UsageRequestType,
+} from '../../../shared/billing/UsageMeteringTypes';
 
 export function useIpcBridge() {
   const ipc = useMemo(() => getIpcBridge(), []);
@@ -53,7 +60,9 @@ export function useIpcBridge() {
 
       onSettingsUpdated: (cb: (s: SettingsState) => void) => ipc.onSettingsUpdated(cb),
       onUiOpenSettings: (cb: () => void) => ipc.onUiOpenSettings(cb),
-      onTaskCreditsPurchased: (cb: (payload: { amountUsd: number; organizationId?: string }) => void) =>
+      openUpgradeInDashboard: () => ipc.openUpgradeInDashboard(),
+      onUiNavigateUpgrade: (cb: () => void) => ipc.onUiNavigateUpgrade(cb),
+      onTaskCreditsPurchased: (cb: (payload: { amountUsd?: number; organizationId?: string }) => void) =>
         ipc.onTaskCreditsPurchased(cb),
 
       moveOverlayWindow: async (x: number, y: number): Promise<boolean> => ipc.overlayMoveWindow(x, y),
@@ -103,8 +112,23 @@ export function useIpcBridge() {
       entitlementGetFeatureTierRequirements: async (): Promise<Partial<Record<FeatureId, SubscriptionTierId>>> =>
         ipc.entitlementGetFeatureTierRequirements(),
       billingGetSubscription: async (): Promise<SubscriptionState> => ipc.billingGetSubscription(),
-      billingConsumeCredit: async (amount: number, reason: string, category?: AiUsageCategory): Promise<CreditBalance> =>
-        ipc.billingConsumeCredit(amount, reason, category),
+      billingCanStartGeneration: async (pawModelId?: PawModelId): Promise<{ allowed: boolean; reason?: string; pooled?: boolean }> =>
+        ipc.billingCanStartGeneration(pawModelId),
+      billingConsumeCredit: async (amount: number, reason: string, category?: AiUsageCategory, pawModelId?: PawModelId): Promise<CreditBalance> =>
+        ipc.billingConsumeCredit(amount, reason, category, pawModelId),
+      billingRecordTurnUsage: async (
+        submission: TurnUsageSubmission,
+        reason: string,
+        category?: AiUsageCategory,
+        pawModelId?: PawModelId
+      ): Promise<{ aggregated: AggregatedTurnUsage; balance: CreditBalance }> =>
+        ipc.billingRecordTurnUsage(submission, reason, category, pawModelId),
+      billingReportUsageEvent: async (
+        usage: ProviderUsageMetadata,
+        requestType: UsageRequestType,
+        context: { sessionId: string | null; runId: string | null }
+      ): Promise<NormalizedUsageRecord> => ipc.billingReportUsageEvent(usage, requestType, context),
+      billingGetUsageEvents: async (limit?: number): Promise<NormalizedUsageRecord[]> => ipc.billingGetUsageEvents(limit),
       billingGrantComputeBonus: async (units: number): Promise<EntitlementSnapshot> => ipc.billingGrantComputeBonus(units),
     }),
     [ipc]

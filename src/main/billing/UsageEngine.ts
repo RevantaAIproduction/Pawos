@@ -1,7 +1,7 @@
 import { entitlementService } from './EntitlementService';
-import { creditStore } from './CreditStore';
 import { usageStore } from './UsageStore';
 import { usageQuotaConfigStore } from './UsageQuotaConfigStore';
+import { rollingUsageGate } from './RollingUsageGate';
 import { TRACKED_USAGE_CAPABILITIES } from '../../shared/billing/UsageEngineTypes';
 import type { CapabilityUsageSummary, UsageCapability } from '../../shared/billing/UsageEngineTypes';
 
@@ -56,9 +56,14 @@ class UsageEngine {
     const pooled = usageQuotaConfigStore.isPooled(tier);
 
     const aiReasoningSummary: CapabilityUsageSummary = (() => {
-      const balance = creditStore.getBalance();
-      const limit = entitlementService.getCreditLimit();
-      return { capability: 'aiReasoning', limit, used: balance.usedThisPeriod, periodResetsAt: balance.periodResetsAt, pooled: false };
+      const rolling = rollingUsageGate.getRollingUsage(tier, seatTier);
+      return {
+        capability: 'aiReasoning',
+        limit: rolling.limit5h,
+        used: rolling.usage5h,
+        periodResetsAt: null,  // rolling window has no fixed reset boundary
+        pooled: entitlementService.isComputePooled(),
+      };
     })();
 
     const trackedSummaries: CapabilityUsageSummary[] = TRACKED_USAGE_CAPABILITIES.map((capability) => {

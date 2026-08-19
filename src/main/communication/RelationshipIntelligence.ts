@@ -9,6 +9,9 @@
  * claim traces back to a real communicationId.
  */
 
+import { v4 as uuidv4 } from 'uuid';
+import { recordUsageEvent } from '../billing/UsageMeteringEngine';
+
 const DEFAULT_MODEL = 'gemini-flash-latest';
 const DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 
@@ -29,6 +32,9 @@ export type RelationshipSynthesisResult = {
 
 async function callGemini(params: { apiKey: string; prompt: string; responseSchema: unknown; model?: string; baseUrl?: string }): Promise<any> {
   const { apiKey, prompt, responseSchema, model = DEFAULT_MODEL, baseUrl = DEFAULT_BASE_URL } = params;
+  // Minted once, right here, for this one real outgoing request — PawOS's own per-request identity
+  // (Gemini's response body carries no stable id of its own). Makes the usage-ledger write idempotent.
+  const requestId = uuidv4();
   const res = await fetch(`${baseUrl}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -39,6 +45,23 @@ async function callGemini(params: { apiKey: string; prompt: string; responseSche
   });
   if (!res.ok) throw new Error(`Relationship intelligence request failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
   const json = (await res.json()) as any;
+  const usageMetadata = json.usageMetadata;
+  if (usageMetadata) {
+    recordUsageEvent(
+      {
+        provider: 'gemini',
+        model,
+        inputTokens: typeof usageMetadata.promptTokenCount === 'number' ? usageMetadata.promptTokenCount : null,
+        outputTokens: typeof usageMetadata.candidatesTokenCount === 'number' ? usageMetadata.candidatesTokenCount : null,
+        cachedInputTokens: typeof usageMetadata.cachedContentTokenCount === 'number' ? usageMetadata.cachedContentTokenCount : null,
+        totalTokens: typeof usageMetadata.totalTokenCount === 'number' ? usageMetadata.totalTokenCount : null,
+        thoughtsTokens: typeof usageMetadata.thoughtsTokenCount === 'number' ? usageMetadata.thoughtsTokenCount : null,
+        requestId,
+      },
+      'backgroundTask',
+      { sessionId: null, runId: null }
+    );
+  }
   const text: string = json.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}';
   try {
     return JSON.parse(text);

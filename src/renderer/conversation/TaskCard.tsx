@@ -377,6 +377,88 @@ export function getLatestDevBrowserConsole(task: ConversationTaskRecord): DevBro
   return undefined;
 }
 
+/** Shape-based — GitDiffPlugin's `{ diff: string; truncated: boolean }` result — for the Coding Canvas real diff view. */
+export type GitDiffResult = { diff: string; truncated: boolean };
+export function getLatestGitDiff(task: ConversationTaskRecord): GitDiffResult | undefined {
+  for (const action of [...task.actions].reverse()) {
+    const data = action.result?.data as { diff?: unknown; truncated?: unknown } | undefined;
+    if (typeof data?.diff === 'string' && data.diff.trim()) {
+      return { diff: data.diff, truncated: data.truncated === true };
+    }
+  }
+  return undefined;
+}
+
+/** Shape-based — GitLogPlugin's `{ commits: GitLogEntry[] }` result — for the Coding Canvas git timeline. */
+export type GitCommitEntry = { hash: string; author: string; date: string; subject: string };
+export function getLatestGitLog(task: ConversationTaskRecord): GitCommitEntry[] | undefined {
+  for (const action of [...task.actions].reverse()) {
+    const data = action.result?.data as { commits?: unknown } | undefined;
+    if (!Array.isArray(data?.commits) || data.commits.length === 0) continue;
+    const commits = (data.commits as unknown[]).filter(
+      (c): c is GitCommitEntry =>
+        Boolean(c) && typeof (c as GitCommitEntry).hash === 'string' && typeof (c as GitCommitEntry).subject === 'string'
+    );
+    if (commits.length > 0) return commits;
+  }
+  return undefined;
+}
+
+/** Mirrors ValidationReportTypes.ts — kept local so renderer never imports from src/main/. */
+export type ValidationStepSummary = {
+  id: string;
+  status: string;
+  skippedReason?: string;
+  errorDetail?: string;
+  durationMs?: number;
+};
+export type ValidationReportSummary = {
+  confidence: string;
+  blockingIssues: string[];
+  warnings: string[];
+  steps: ValidationStepSummary[];
+};
+const PIPELINE_STEP_IDS = ['syntax', 'imports', 'typeCheck', 'lint', 'build', 'tests'] as const;
+
+/** Shape-based — RunValidationPipelinePlugin's ValidationReport result — for the Coding Canvas validation panel. */
+export function getLatestValidationReport(task: ConversationTaskRecord): ValidationReportSummary | undefined {
+  for (const action of [...task.actions].reverse()) {
+    const data = action.result?.data as Record<string, unknown> | undefined;
+    if (!data || typeof data.confidence !== 'string' || !Array.isArray(data.blockingIssues)) continue;
+    return {
+      confidence: data.confidence,
+      blockingIssues: (data.blockingIssues as unknown[]).filter((b): b is string => typeof b === 'string'),
+      warnings: Array.isArray(data.warnings)
+        ? (data.warnings as unknown[]).filter((w): w is string => typeof w === 'string')
+        : [],
+      steps: PIPELINE_STEP_IDS.map((id) => {
+        const step = data[id] as { status?: string; skippedReason?: string; errorDetail?: string; durationMs?: number } | undefined;
+        return {
+          id,
+          status: typeof step?.status === 'string' ? step.status : 'skipped',
+          skippedReason: step?.skippedReason,
+          errorDetail: step?.errorDetail,
+          durationMs: step?.durationMs,
+        };
+      }),
+    };
+  }
+  return undefined;
+}
+
+/** Shape-based — DiscoverAffectedFilesPlugin's `{ matches: [{path}] }` result — for wiring discovered file paths to the explorer search panel. */
+export function getLatestAffectedFiles(task: ConversationTaskRecord): string[] | undefined {
+  for (const action of [...task.actions].reverse()) {
+    const data = action.result?.data as { matches?: unknown } | undefined;
+    if (!Array.isArray(data?.matches) || data.matches.length === 0) continue;
+    const paths = (data.matches as unknown[])
+      .filter((m): m is { path: string } => Boolean(m) && typeof (m as { path: string }).path === 'string')
+      .map((m) => m.path);
+    if (paths.length > 0) return paths;
+  }
+  return undefined;
+}
+
 const SEVERITY_PILL_CLASS: Record<FindingSeverity, string> = {
   info: 'severityInfo',
   minor: 'severityMinor',
@@ -538,9 +620,11 @@ function StageGroup({
 function LaunchFailureDetails({
   action,
   tier,
+  onOpenTicketBalance,
 }: {
   action: ConversationTaskAction;
   tier: SubscriptionTierId | null;
+  onOpenTicketBalance?: () => void;
 }) {
   const launchFailure = action.result ? describeLaunchFailure(action.result, action.request, tier) : null;
   if (!launchFailure) return <div>{action.doneText ?? (action.result && !action.result.ok ? action.result.message : '')}</div>;
@@ -548,17 +632,25 @@ function LaunchFailureDetails({
     <>
       <strong>{launchFailure.title}</strong>
       <div>{launchFailure.message}</div>
-      <FailureActions failure={launchFailure} />
+      <FailureActions failure={launchFailure} onOpenTicketBalance={onOpenTicketBalance} />
     </>
   );
 }
 
-function FailureActions({ failure }: { failure: FailurePresentation }) {
+function FailureActions({ failure, onOpenTicketBalance }: { failure: FailurePresentation; onOpenTicketBalance?: () => void }) {
   return (
     <div className={styles.errorActions}>
       {failure.actions.includes('upgrade') && <span className={styles.actionPill}>Upgrade</span>}
       {failure.actions.includes('buyCompute') && <span className={styles.actionPill}>Buy Paw Compute</span>}
       {failure.actions.includes('upgradeProMax') && <span className={styles.actionPill}>Upgrade to Pro Max</span>}
+      {failure.actions.includes('buyTicketBalance') &&
+        (onOpenTicketBalance ? (
+          <button type="button" className={styles.actionPillBtn} onClick={onOpenTicketBalance}>
+            Add Funds
+          </button>
+        ) : (
+          <span className={styles.actionPill}>Add Funds</span>
+        ))}
       {failure.actions.includes('contactAdmin') && <span className={styles.actionPill}>Contact Admin</span>}
     </div>
   );
@@ -570,6 +662,7 @@ export function TaskCard({
   onOpenPath,
   onConnectCapability,
   onNavigateToSettingsConnector,
+  onOpenTicketBalance,
 }: {
   task: ConversationTaskRecord;
   onRetryAction?: (taskId: string, actionId: string) => void;
@@ -582,9 +675,14 @@ export function TaskCard({
     opts?: { incrementalCapability?: string }
   ) => Promise<{ ok: boolean; message?: string }> | void;
   onNavigateToSettingsConnector?: (connectorId: string) => void;
+  /** Opens the Autonomous Ticket Balance wallet (Settings → Billing) — passed down so a
+   *  balance-restricted failure's "Add Funds" pill actually goes somewhere, instead of being
+   *  informational text with nothing behind it. */
+  onOpenTicketBalance?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [previewCollapsed, setPreviewCollapsed] = useState(false);
   const [collapsedStages, setCollapsedStages] = useState<Set<Stage>>(new Set());
   const [expandedOutputs, setExpandedOutputs] = useState<Set<string>>(new Set());
   const [connectFieldValues, setConnectFieldValues] = useState<Record<string, Record<string, string>>>({});
@@ -654,6 +752,40 @@ export function TaskCard({
     return task.status === 'failed' || task.status === 'stopped' ? describeTaskLevelLaunchFailure(task.finalReport) : null;
   }, [sections.errors, subscriptionTier, task.finalReport, task.status]);
 
+  // Rendered as its own top-level card (not nested under "View Details") so a dev-browser preview
+  // shows up the moment it exists and keeps showing after the task finishes — the same "open/close
+  // card in the conversation" affordance WorkspaceRuntime's transient browserPreview region can't
+  // give, since that overlay unmounts as soon as the task stops running.
+  const previewScreenshot = useMemo(() => getLatestScreenshot(task), [task]);
+  const previewConsoleErrors = useMemo(
+    () => (getLatestDevBrowserConsole(task) ?? []).filter((entry) => entry.level === 'error'),
+    [task]
+  );
+
+  // Autonomous Work (Ticket Balance) summary — real numbers only, read back from
+  // AutonomousTaskBillingGate.ts's own result data (see its own doc comments): the completion
+  // amount/new balance come from the real billing event the charging RPC actually inserted, never
+  // recomputed here. Completed takes priority over ended/started so a finished run's real cost is
+  // what's shown, not a stale "started" card lingering underneath it.
+  const autonomousSummary = useMemo(() => {
+    const completed = [...task.actions].reverse().find((a) => a.type === 'completeAutonomousEngineeringTask' && a.result?.ok);
+    if (completed) {
+      const data = completed.result!.data as { costUsd?: number; newBalanceUsd?: number } | undefined;
+      return { kind: 'completed' as const, costUsd: data?.costUsd, newBalanceUsd: data?.newBalanceUsd };
+    }
+    const ended = [...task.actions].reverse().find((a) => a.type === 'endAutonomousEngineeringTask' && a.result?.ok);
+    if (ended) {
+      const data = ended.result!.data as { status?: string } | undefined;
+      return { kind: 'ended' as const, status: data?.status };
+    }
+    const started = [...task.actions].reverse().find((a) => a.type === 'startAutonomousEngineeringTask' && a.result?.ok);
+    if (started) {
+      const data = started.result!.data as { balanceUsd?: number; currentTicketPriceUsd?: number; alreadyActive?: boolean } | undefined;
+      return { kind: 'started' as const, balanceUsd: data?.balanceUsd, currentTicketPriceUsd: data?.currentTicketPriceUsd };
+    }
+    return null;
+  }, [task.actions]);
+
   const handleCopy = () => {
     void navigator.clipboard.writeText(buildLogText(task)).then(() => {
       setCopied(true);
@@ -694,7 +826,83 @@ export function TaskCard({
         <div className={styles.stopBanner} role="status" aria-live="polite">
           <strong>{visibleFailure.title}</strong>
           <span>{visibleFailure.message}</span>
-          <FailureActions failure={visibleFailure} />
+          <FailureActions failure={visibleFailure} onOpenTicketBalance={onOpenTicketBalance} />
+        </div>
+      )}
+
+      {previewScreenshot && (
+        <div className={styles.previewCard}>
+          <button
+            type="button"
+            className={styles.previewHeader}
+            onClick={() => setPreviewCollapsed((v) => !v)}
+            aria-expanded={!previewCollapsed}
+          >
+            <span className={styles.previewChevron}>{previewCollapsed ? '▸' : '▾'}</span>
+            <span className={styles.previewTitle}>Live Preview</span>
+            {previewConsoleErrors.length > 0 && (
+              <span className={styles.errBadge}>
+                {previewConsoleErrors.length} console error{previewConsoleErrors.length === 1 ? '' : 's'}
+              </span>
+            )}
+          </button>
+          {!previewCollapsed && (
+            <div className={styles.previewBody}>
+              <img className={styles.previewScreenshot} src={`data:image/png;base64,${previewScreenshot}`} alt="Live preview of the current build" />
+              {previewConsoleErrors.length > 0 && (
+                <div className={styles.previewConsole}>
+                  {previewConsoleErrors.slice(0, 5).map((entry, i) => (
+                    <div key={i} className={styles.previewConsoleRow}>{entry.text}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {autonomousSummary && (
+        <div className={styles.billingCard}>
+          <div className={styles.billingHeader}>Autonomous Work {autonomousSummary.kind === 'completed' ? 'Completed' : autonomousSummary.kind === 'ended' ? 'Ended' : 'Started'}</div>
+          {autonomousSummary.kind === 'completed' && (
+            <div className={styles.workflowGrid}>
+              <div className={styles.workflowStat}>
+                <span className={styles.workflowStatLabel}>Cost</span>
+                <span className={styles.workflowStatValue}>{autonomousSummary.costUsd !== undefined ? `$${autonomousSummary.costUsd.toFixed(2)}` : '—'}</span>
+              </div>
+              <div className={styles.workflowStat}>
+                <span className={styles.workflowStatLabel}>New Balance</span>
+                <span className={styles.workflowStatValue}>{autonomousSummary.newBalanceUsd !== undefined ? `$${autonomousSummary.newBalanceUsd.toFixed(2)}` : '—'}</span>
+              </div>
+            </div>
+          )}
+          {autonomousSummary.kind === 'ended' && (
+            <div className={styles.workflowGrid}>
+              <div className={styles.workflowStat}>
+                <span className={styles.workflowStatLabel}>Status</span>
+                <span className={styles.workflowStatValue}>{autonomousSummary.status ?? 'ended'}</span>
+              </div>
+              <div className={styles.workflowStat}>
+                <span className={styles.workflowStatLabel}>Cost</span>
+                <span className={styles.workflowStatValue}>$0.00 — no charge</span>
+              </div>
+            </div>
+          )}
+          {autonomousSummary.kind === 'started' && (
+            <div className={styles.workflowGrid}>
+              <div className={styles.workflowStat}>
+                <span className={styles.workflowStatLabel}>Ticket Balance</span>
+                <span className={styles.workflowStatValue}>{autonomousSummary.balanceUsd !== undefined ? `$${autonomousSummary.balanceUsd.toFixed(2)}` : '—'}</span>
+              </div>
+              <div className={styles.workflowStat}>
+                <span className={styles.workflowStatLabel}>Current Rate</span>
+                <span className={styles.workflowStatValue}>{autonomousSummary.currentTicketPriceUsd !== undefined ? `$${autonomousSummary.currentTicketPriceUsd.toFixed(2)}/ticket` : '—'}</span>
+              </div>
+            </div>
+          )}
+          {autonomousSummary.kind === 'started' && (
+            <div className={styles.billingNote}>Only charged if this ticket reaches successful completion — a failed, blocked, or cancelled run never costs anything.</div>
+          )}
         </div>
       )}
 
@@ -1168,7 +1376,7 @@ export function TaskCard({
               <h4 className={styles.sectionTitle}>Errors</h4>
               {sections.errors.map((a) => (
                 <div key={a.id} className={styles.errorRow}>
-                  <LaunchFailureDetails action={a} tier={subscriptionTier} />
+                  <LaunchFailureDetails action={a} tier={subscriptionTier} onOpenTicketBalance={onOpenTicketBalance} />
                   {onRetryAction && (
                     <button type="button" className={styles.retryBtn} onClick={() => onRetryAction(task.id, a.id)}>
                       ↻ Retry

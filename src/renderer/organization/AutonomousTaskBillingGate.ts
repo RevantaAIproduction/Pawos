@@ -81,12 +81,19 @@ export function withAutonomousTaskBilling(execute: (request: ActionRequest) => P
           const balance = await autonomousTaskBillingService.getTicketBalance(organizationId);
           const nextTicketPrice = getTicketUnitPriceUsd(balance.ticketsUsedCount + 1);
           if (balance.balanceUsd < nextTicketPrice) {
+            // Distinct from 'entitlement-restricted' (this account's plan already includes
+            // Autonomous Work — the tier gate above already passed) and from 'usage-restricted'
+            // (a different currency: monthly Paw Compute allowance, not this prepaid Ticket
+            // Balance) — 'balance-restricted' lets describeLaunchFailure render a real "add funds"
+            // prompt instead of the generic Retry pill a plain 'failed' would get, since retrying
+            // this exact call can never succeed until the balance actually changes.
             return {
               ok: false,
-              reason: 'failed',
+              reason: 'balance-restricted',
               message: organizationId
                 ? `This organization's ticket balance ($${balance.balanceUsd.toFixed(2)}) can't cover the next ticket at the current rate ($${nextTicketPrice.toFixed(2)}). Add funds from Organization → Autonomous Ticket System before starting a new task.`
                 : `Your ticket balance ($${balance.balanceUsd.toFixed(2)}) can't cover the next ticket at the current rate ($${nextTicketPrice.toFixed(2)}). Add funds from Settings → Billing before starting a new task.`,
+              data: { balanceUsd: balance.balanceUsd, nextTicketPriceUsd: nextTicketPrice, organizationId },
             };
           }
 
@@ -107,6 +114,8 @@ export function withAutonomousTaskBilling(execute: (request: ActionRequest) => P
               data: {
                 runId: run.id,
                 alreadyActive: true,
+                balanceUsd: balance.balanceUsd,
+                currentTicketPriceUsd: nextTicketPrice,
                 message: `An autonomous run for this ticket is already in progress (started ${run.startedAt}). Continue that run instead of starting a new one.`,
               },
             };
@@ -141,7 +150,14 @@ export function withAutonomousTaskBilling(execute: (request: ActionRequest) => P
             });
           }
 
-          return { ok: true, data: { runId: run.id, orchestrated: Boolean(request.cwd) } };
+          // Real, known-today numbers only — the actual per-ticket rate is precomputed from this
+          // account's cumulative ticket count (never a complexity guess before the work happens;
+          // see TICKET_COMPLEXITY_PRICING's own doc comment for why that stays informational-only
+          // until it's wired into the charging RPC itself).
+          return {
+            ok: true,
+            data: { runId: run.id, orchestrated: Boolean(request.cwd), balanceUsd: balance.balanceUsd, currentTicketPriceUsd: nextTicketPrice },
+          };
         } catch (error) {
           return { ok: false, reason: 'failed', message: error instanceof Error ? error.message : String(error) };
         }
@@ -170,7 +186,22 @@ export function withAutonomousTaskBilling(execute: (request: ActionRequest) => P
             prVerified,
             ticketVerified: false,
           });
-          return { ok: true, data: { billingEventId: eventId } };
+          // Read back the real row the RPC just inserted — the exact amount actually deducted,
+          // never recomputed client-side — plus the real post-deduction balance. Best-effort: if
+          // either read fails, completion itself already succeeded (eventId above proves it), so
+          // this only degrades the summary shown, never the real billing outcome.
+          let costUsd: number | undefined;
+          let newBalanceUsd: number | undefined;
+          try {
+            const event = await autonomousTaskBillingService.getBillingEventForRun(request.runId);
+            if (event) {
+              costUsd = event.amountUsd;
+              newBalanceUsd = (await autonomousTaskBillingService.getTicketBalance(event.organizationId)).balanceUsd;
+            }
+          } catch {
+            // Summary data only — swallow, the completion above already succeeded.
+          }
+          return { ok: true, data: { billingEventId: eventId, costUsd, newBalanceUsd } };
         } catch (error) {
           return { ok: false, reason: 'failed', message: error instanceof Error ? error.message : String(error) };
         }
@@ -178,7 +209,10 @@ export function withAutonomousTaskBilling(execute: (request: ActionRequest) => P
       case 'endAutonomousEngineeringTask': {
         try {
           await autonomousTaskBillingService.markTerminal(request.runId, request.status);
-          return { ok: true };
+          // Real invariant, not a claim: transition_autonomous_task_run() structurally can never
+          // reach 'completed' from here, so no billing event was or ever will be created for this
+          // run — costUsd: 0 is a fact, not an estimate.
+          return { ok: true, data: { costUsd: 0, status: request.status } };
         } catch (error) {
           return { ok: false, reason: 'failed', message: error instanceof Error ? error.message : String(error) };
         }

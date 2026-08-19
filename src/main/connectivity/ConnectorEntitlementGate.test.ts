@@ -33,18 +33,20 @@ describe('ConnectorEntitlementGate — final matrix', () => {
     }
   });
 
-  it('Team: every connector allowed', () => {
+  it('Team: every connector allowed except Google Workspace (personal-account capability, deliberately excluded from org tiers)', () => {
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'team', status: 'active', seatTier: 'standard' });
-    for (const id of ['github', 'gitlab', 'vercel', 'netlify', 'railway', 'slack', 'googleWorkspace', 'jira', 'linear']) {
+    for (const id of ['github', 'gitlab', 'vercel', 'netlify', 'railway', 'slack', 'jira', 'linear']) {
       expect(isConnectorEntitled(id)).toBe(true);
     }
+    expect(isConnectorEntitled('googleWorkspace')).toBe(false);
   });
 
-  it('Enterprise: every connector allowed', () => {
+  it('Enterprise: every connector allowed except Google Workspace (personal-account capability, deliberately excluded from org tiers)', () => {
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'enterprise', status: 'active' });
-    for (const id of ['github', 'gitlab', 'vercel', 'netlify', 'railway', 'slack', 'googleWorkspace', 'jira', 'linear']) {
+    for (const id of ['github', 'gitlab', 'vercel', 'netlify', 'railway', 'slack', 'jira', 'linear']) {
       expect(isConnectorEntitled(id)).toBe(true);
     }
+    expect(isConnectorEntitled('googleWorkspace')).toBe(false);
   });
 
   it('an unknown connector id (no CONNECTOR_REQUIRED_FEATURE entry) is honestly unrestricted rather than blocked by default', () => {

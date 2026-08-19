@@ -40,6 +40,9 @@ import { subscriptionStore } from './billing/SubscriptionStore';
 import { creditStore } from './billing/CreditStore';
 import { usageQuotaConfigStore } from './billing/UsageQuotaConfigStore';
 import { usageStore } from './billing/UsageStore';
+import { pawComputeConfigStore } from './billing/PawComputeConfigStore';
+import { pawComputeCapacityStore } from './billing/PawComputeCapacityStore';
+import { usageEventStore } from './billing/UsageEventStore';
 import { onboardingStore } from './onboarding/OnboardingStore';
 import { initInfrastructureConnectors } from './infrastructure/bootstrap';
 import { requirementGate } from './runtime/RequirementGate';
@@ -320,6 +323,12 @@ function createAppTray() {
 }
 
 app.whenReady().then(async () => {
+  // Electron auto-generates a default File/Edit/View/Window/Help menu bar when no
+  // application menu is set — that's stock OS chrome, not anything this product defines, and
+  // doesn't belong on a companion app with no File/Edit/View/Window/Help commands to offer. Null
+  // removes it entirely rather than building a custom one with nothing real to put in it.
+  Menu.setApplicationMenu(null);
+
   // Cold start via a pawos:// click (app wasn't already running): Windows/
   // Linux launch this as a brand-new process with the URL in argv, but that
   // never fires 'second-instance' (nothing was running to receive it) — only
@@ -370,6 +379,9 @@ app.whenReady().then(async () => {
   creditStore.init();
   usageQuotaConfigStore.init();
   usageStore.init();
+  pawComputeConfigStore.init();
+  pawComputeCapacityStore.init();
+  usageEventStore.init();
   onboardingStore.init();
   engineeringMemoryStore.init();
   infraModeStore.init();
@@ -465,6 +477,7 @@ app.whenReady().then(async () => {
   registerIpc({
     app,
     overlayWindowProvider: () => overlayWindow,
+    mainWindowProvider: () => mainWindow,
     getScreenWorkArea: () => screen.getPrimaryDisplay().workAreaSize,
     setOverlayInteractive,
     enableCompanion,

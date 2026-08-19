@@ -166,8 +166,57 @@ export function getTicketUnitPriceUsd(ticketNumber: number): number {
 
 /** Real, finalized minimum top-up: a balance top-up must be at least $30. */
 export const MIN_TICKET_BALANCE_TOPUP_USD = 30;
+/** Real, finalized maximum top-up: a single balance top-up must be at most $20,000. Mirrors MAX_TICKET_BALANCE_TOPUP_USD in pawos-web's razorpay.ts and the $20,000 ceiling enforced independently at the SQL layer in add_ticket_balance_service() — kept in sync manually since pawos-web is a separate deployment with no shared build step. */
+export const MAX_TICKET_BALANCE_TOPUP_USD = 20000;
 /** Preset top-up amounts shown in the UI — not exhaustive, a custom amount at or above the minimum is always accepted. */
 export const TICKET_BALANCE_TOPUP_PRESETS_USD: readonly number[] = [30, 60, 100, 150, 200];
+
+/**
+ * Complexity-based pricing — NOT YET the live charging rate. The real deduction is still computed
+ * by mark_autonomous_task_completed() in Supabase (volume-tiered by cumulative ticket count, see
+ * TICKET_PRICING_TIERS above) — this is deliberately not wired into that RPC yet, so it must never
+ * be presented as "what you'll actually be charged" until it is. Classified only from real,
+ * already-collected evidence (AutonomousExecutionEvidence's filesChanged/commandsExecuted from
+ * AutonomousTaskBillingTypes' sibling type in this file) — never a guess made before the work
+ * happens, matching this codebase's evidence-only billing discipline.
+ */
+export type TicketComplexity = 'simple' | 'medium' | 'complex';
+
+export interface ComplexityPricingBand {
+  complexity: TicketComplexity;
+  /** Inclusive lower bound on filesChanged + commandsExecuted. */
+  minWorkScore: number;
+  minPriceUsd: number;
+  maxPriceUsd: number;
+}
+
+export const TICKET_COMPLEXITY_PRICING: readonly ComplexityPricingBand[] = [
+  { complexity: 'simple', minWorkScore: 0, minPriceUsd: 5, maxPriceUsd: 5 },
+  { complexity: 'medium', minWorkScore: 4, minPriceUsd: 5, maxPriceUsd: 20 },
+  { complexity: 'complex', minWorkScore: 13, minPriceUsd: 20, maxPriceUsd: 50 },
+];
+
+/**
+ * Classifies a completed run's real, already-recorded work (never estimated in advance) into a
+ * complexity band and an informational price within that band's real range. workScore is the sum
+ * of two real counts an orchestrated run already produces (filesChanged + commandsExecuted, see
+ * AutonomousExecutionEvidence) — simple work stays a flat $5; medium and complex scale linearly
+ * within their band up to the stated cap ($20 / $50), snapped to whole dollars.
+ */
+export function classifyTicketComplexity(workScore: number): { complexity: TicketComplexity; priceUsd: number } {
+  if (workScore < TICKET_COMPLEXITY_PRICING[1].minWorkScore) {
+    return { complexity: 'simple', priceUsd: TICKET_COMPLEXITY_PRICING[0].maxPriceUsd };
+  }
+  if (workScore < TICKET_COMPLEXITY_PRICING[2].minWorkScore) {
+    const band = TICKET_COMPLEXITY_PRICING[1];
+    const span = TICKET_COMPLEXITY_PRICING[2].minWorkScore - band.minWorkScore;
+    const priceUsd = Math.round(band.minPriceUsd + ((workScore - band.minWorkScore) / span) * (band.maxPriceUsd - band.minPriceUsd));
+    return { complexity: 'medium', priceUsd: Math.min(priceUsd, band.maxPriceUsd) };
+  }
+  const band = TICKET_COMPLEXITY_PRICING[2];
+  const priceUsd = workScore <= 25 ? 20 : workScore <= 50 ? 30 : 50;
+  return { complexity: 'complex', priceUsd: Math.min(priceUsd, band.maxPriceUsd) };
+}
 
 /** A ticket balance wallet — either an individual's own (organizationId: null) or an organization's. */
 export type TicketBalance = {

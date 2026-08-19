@@ -1,9 +1,11 @@
 import Fuse from 'fuse.js';
+import { v4 as uuidv4 } from 'uuid';
 import type { ParsedSearchIntent, SearchQuery, SearchResult, TimelineScope, UnifiedTimelineEntry } from '../../shared/communication/CommunicationTypes';
 import { communicationTimelineStore } from './CommunicationTimelineStore';
 import { communicationSessionStore } from './CommunicationSessionStore';
 import { communicationIntelligenceStore } from './CommunicationIntelligenceStore';
 import { communicationSearchIndexStore } from './CommunicationSearchIndexStore';
+import { recordUsageEvent } from '../billing/UsageMeteringEngine';
 
 /**
  * Advanced Search (architecture doc §19) — two stages. Natural-language
@@ -32,6 +34,7 @@ Known projects: ${knownProjects.map((p) => `${p.name} (id: ${p.id})`).join(', ')
 
 Only set participantId/companyId/projectId if the query clearly names one of the KNOWN entities above (use its exact id) — never invent an id. Only set a dateRange if the query implies one (e.g. "last month", "this week") — resolve it to real millisecond timestamps relative to now (${Date.now()}). fullTextTerms are the remaining meaningful keywords (e.g. topic words like "pricing," "budget") — never the participant/company/project names already captured as filters.`;
 
+  const requestId = uuidv4();
   const res = await fetch(`${baseUrl}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -60,6 +63,23 @@ Only set participantId/companyId/projectId if the query clearly names one of the
   }
 
   const json = (await res.json()) as any;
+  const usageMetadata = json.usageMetadata;
+  if (usageMetadata) {
+    recordUsageEvent(
+      {
+        provider: 'gemini',
+        model,
+        inputTokens: typeof usageMetadata.promptTokenCount === 'number' ? usageMetadata.promptTokenCount : null,
+        outputTokens: typeof usageMetadata.candidatesTokenCount === 'number' ? usageMetadata.candidatesTokenCount : null,
+        cachedInputTokens: typeof usageMetadata.cachedContentTokenCount === 'number' ? usageMetadata.cachedContentTokenCount : null,
+        totalTokens: typeof usageMetadata.totalTokenCount === 'number' ? usageMetadata.totalTokenCount : null,
+        thoughtsTokens: typeof usageMetadata.thoughtsTokenCount === 'number' ? usageMetadata.thoughtsTokenCount : null,
+        requestId,
+      },
+      'backgroundTask',
+      { sessionId: null, runId: null }
+    );
+  }
   const text: string = json.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}';
   let parsed: { participantId?: string; companyId?: string; projectId?: string; dateFrom?: number; dateTo?: number; fullTextTerms?: string[] };
   try {

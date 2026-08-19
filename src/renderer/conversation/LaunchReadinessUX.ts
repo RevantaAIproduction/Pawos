@@ -3,7 +3,7 @@ import type { FeatureId, SubscriptionTierId } from '../../shared/billing/Billing
 import { isExecutionClassification, type CodingRequestClassification } from '../../shared/actions/RequestClassification';
 import { isPersonalEmailDomain } from '../../shared/organization/PersonalEmailDomains';
 
-export type FailureAction = 'upgrade' | 'buyCompute' | 'upgradeProMax' | 'contactAdmin' | 'retry' | 'none';
+export type FailureAction = 'upgrade' | 'buyCompute' | 'upgradeProMax' | 'buyTicketBalance' | 'contactAdmin' | 'retry' | 'none';
 
 export type FailurePresentation = {
   title: string;
@@ -109,6 +109,18 @@ export function describeLaunchFailure(
       title: 'BUILD BLOCKED',
       message: orgNote ? `${baseMessage} ${orgNote}` : baseMessage,
       actions: actionsForRequiredTier(blockData.requiredTier, isOrgContext),
+    };
+  }
+
+  if (result.reason === 'balance-restricted') {
+    // Ticket Balance is a prepaid dollar balance, never gated by tier (the tier check already
+    // passed to get here) — an org-scoped account still gets 'contactAdmin' since only an admin
+    // can top up the organization's shared balance, same discipline as the usage-restricted org
+    // branch above, but the individual case always offers buyTicketBalance, never a plain retry.
+    return {
+      title: 'BUILD BLOCKED',
+      message: result.message ?? 'Your Ticket Balance is too low to start this autonomous task.',
+      actions: isOrganizationRequest(request) ? ['contactAdmin'] : ['buyTicketBalance'],
     };
   }
 

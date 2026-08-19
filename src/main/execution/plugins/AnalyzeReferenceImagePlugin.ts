@@ -2,6 +2,7 @@ import type { ActionRequest, ActionResult } from '../../../shared/actions/Action
 import { BasePlugin } from '../BasePlugin';
 import { describeFailure } from '../describeFailure';
 import { analyzeUiReference } from '../../../shared/ai/analyzeUiReference';
+import { recordUsageEvent } from '../../billing/UsageMeteringEngine';
 
 /**
  * Reference Intelligence — real Gemini vision analysis of the screenshots/
@@ -38,7 +39,8 @@ export class AnalyzeReferenceImagePlugin extends BasePlugin {
     if (!request.imageDataUrls?.length) return { ok: false, reason: 'failed', message: 'No reference image to analyze.' };
 
     try {
-      const analysis = await analyzeUiReference({ apiKey: request.apiKey, imageDataUrls: request.imageDataUrls });
+      const { analysis, usage } = await analyzeUiReference({ apiKey: request.apiKey, imageDataUrls: request.imageDataUrls });
+      if (usage) recordUsageEvent(usage, 'backgroundTask', { sessionId: null, runId: null });
       return { ok: true, data: analysis };
     } catch (error) {
       return { ok: false, reason: 'failed', message: (error as Error).message };

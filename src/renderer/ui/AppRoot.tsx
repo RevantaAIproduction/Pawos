@@ -6,6 +6,7 @@ import { OnboardingWizard } from './Onboarding/OnboardingWizard';
 import { useAuth } from '../auth/useAuth';
 import { ipc } from '../services/ipc/ipcBridgeImplementation';
 import { startNotificationDispatcher } from '../mobilePresence/NotificationRuntime';
+import { startTicketNotificationWatcher } from '../infrastructure/TicketNotificationWatcher';
 import { useOrganizationTierSync } from '../organization/useOrganizationTierSync';
 import type { ThemeMode } from '../services/ipc/ipcTypes';
 import type { AuthUser } from '../auth/AuthTypes';
@@ -33,6 +34,23 @@ function NotificationDispatcher({ user }: { user: AuthUser }) {
       cancelled = true;
       unsubscribe?.();
     };
+  }, [user.isGuest, user.id]);
+
+  return null;
+}
+
+/**
+ * Ticket Notifications — periodic urgency/deadline check across every connected project
+ * management connector (Jira/Linear/GitHub Issues). Desktop delivery (companionShowNotification)
+ * needs no entitlement gate — Notification is a plain OS API, not a paid feature. Mobile delivery
+ * rides the same 'connectorAlert' path NotificationDispatcher above already uses, which already
+ * silently no-ops when there's no paired, push-capable device — so no separate gate is needed here
+ * either. Skipped for Guest (no real connected tickets to watch).
+ */
+function TicketNotifications({ user }: { user: AuthUser }) {
+  useEffect(() => {
+    if (user.isGuest) return;
+    return startTicketNotificationWatcher(user.id);
   }, [user.isGuest, user.id]);
 
   return null;
@@ -144,6 +162,7 @@ export default function AppRoot() {
   return (
     <>
       <NotificationDispatcher user={auth.user} />
+      <TicketNotifications user={auth.user} />
       <Dashboard
         user={auth.user}
         onSignOut={async () => {

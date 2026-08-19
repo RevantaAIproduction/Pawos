@@ -53,6 +53,13 @@ export type UsageQuotaTierKey = SubscriptionTierId | 'teamPremium';
 export type CapabilityQuotaConfig = {
   /** null = uncapped for this tier/capability. Never used for Go's execution-class capabilities today (Go blocks those entirely via monthlyLimit: 0, not null-as-uncapped) — see UsageQuotaConfigStore.defaultConfig(). */
   monthlyLimit: number | null;
+  /**
+   * Weekly-cadence cap, additive alongside monthlyLimit — both are enforced independently
+   * (whichever binds first blocks further usage this period). null = no weekly cap for this
+   * tier/capability. Only 'aiReasoning' on pro/proMax has a real weekly number today (Pro:
+   * 1,000/week, Pro Max: 10,000/week) — every other tier/capability stays monthly-only.
+   */
+  weeklyLimit: number | null;
 };
 
 export type TierUsageQuotaConfig = {
@@ -71,8 +78,11 @@ export type TierUsageQuotaConfig = {
    * quota at read time, never a second hardcoded number. This is the
    * mechanism that makes "Pro Max = 20x Pro" true by construction: change
    * Pro's number and Pro Max's effective quota changes with it automatically.
+   * weeklyMultiplier is a separate ratio for the weekly cadence specifically
+   * (Pro Max's weekly cap is 10x Pro's, not 20x — a deliberately different
+   * ratio from the monthly one) — falls back to `multiplier` when unset.
    */
-  derivedFrom?: { tier: UsageQuotaTierKey; multiplier: number };
+  derivedFrom?: { tier: UsageQuotaTierKey; multiplier: number; weeklyMultiplier?: number };
 };
 
 export type UsageQuotaConfig = {
@@ -84,6 +94,7 @@ export type CapabilityUsageSummary = {
   /** Resolved effective limit for the account's current tier (Pro Max already multiplied out) — null means uncapped. */
   limit: number | null;
   used: number;
-  periodResetsAt: number;
+  /** Timestamp of next reset boundary. null for rolling-window capabilities (aiReasoning) which have no fixed reset. */
+  periodResetsAt: number | null;
   pooled: boolean;
 };

@@ -5,6 +5,7 @@ import { describeFailure } from '../describeFailure';
 import { browserRuntime } from '../browser/BrowserRuntime';
 import { structureExtractionScript } from './ExtractPageStructurePlugin';
 import { verifyUiScreenshot } from '../../../shared/ai/analyzeUiReference';
+import { recordUsageEvent } from '../../billing/UsageMeteringEngine';
 
 type StructureElement = { rect: { x: number; y: number; width: number; height: number } };
 type PageStructure = { viewport: { width: number; height: number }; elements: Record<string, StructureElement[]> };
@@ -84,12 +85,13 @@ export class VisualVerificationPlugin extends BasePlugin {
     // never disappear just because one verification stage failed.
     try {
       const imageDataUrl = `data:image/png;base64,${screenshotResult.base64Png}`;
-      const visionResult = await verifyUiScreenshot({
+      const { result: visionResult, usage } = await verifyUiScreenshot({
         apiKey: request.apiKey,
         imageDataUrl,
         structuralIssues,
         consoleErrors,
       });
+      if (usage) recordUsageEvent(usage, 'backgroundTask', { sessionId: null, runId: null });
       const allIssues = [...baseIssues, ...visionResult.issues];
       return {
         ok: true,

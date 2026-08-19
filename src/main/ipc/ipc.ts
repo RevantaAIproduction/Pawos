@@ -23,7 +23,11 @@ import type { CompanionPackageInput } from '../../shared/companion/CompanionPack
 import { pricingConfigStore } from '../billing/PricingConfigStore';
 import { ticketPricingConfigStore } from '../billing/TicketPricingConfigStore';
 import { subscriptionStore } from '../billing/SubscriptionStore';
+import { rollingUsageGate } from '../billing/RollingUsageGate';
 import { creditStore } from '../billing/CreditStore';
+import { recordTurnUsage, recordUsageEvent } from '../billing/UsageMeteringEngine';
+import { usageEventStore } from '../billing/UsageEventStore';
+import type { ProviderUsageMetadata, TurnUsageSubmission, UsageRequestType } from '../../shared/billing/UsageMeteringTypes';
 import { createBillingProvider } from '../billing/BillingProviderRegistry';
 import { createCreditsCheckoutUrl } from '../billing/providers/RazorpayBillingProvider';
 import { verifyRealOrganizationTier } from '../billing/OrganizationTierVerification';
@@ -56,6 +60,7 @@ function toFileUrl(dir: string): string {
 export function registerIpc(opts: {
   app: typeof app;
   overlayWindowProvider: () => BrowserWindow | null;
+  mainWindowProvider: () => BrowserWindow | null;
   getScreenWorkArea: () => { width: number; height: number };
   setOverlayInteractive: (active: boolean) => boolean;
   enableCompanion: () => void;
@@ -256,6 +261,19 @@ export function registerIpc(opts: {
     opts.overlayWindowProvider()?.webContents.send('ui:open-settings');
   });
 
+  // "Upgrade" is always a real, billed subscription change — it belongs in the
+  // Dashboard's own Billing/Upgrade page, never in the companion overlay's local
+  // Coding/Infrastructure mode preference panel. Focuses the main window and asks
+  // its own renderer to navigate there.
+  ipcMain.on('ui:open-upgrade', () => {
+    const win = opts.mainWindowProvider();
+    if (!win) return;
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+    win.webContents.send('ui:navigate-upgrade');
+  });
+
   // Lets the overlay's own renderer slide itself across the desktop for the
   // idle "walk around" behavior — only the overlay window (never the main
   // dashboard) can be moved this way, and only ever within the primary
@@ -263,6 +281,12 @@ export function registerIpc(opts: {
   ipcMain.handle('overlay:moveWindow', (_evt, x: number, y: number) => {
     const win = opts.overlayWindowProvider();
     if (!win) return false;
+    // The animation/idle-behavior controllers compute x/y from live window-bounds math (walk
+    // interpolation, peek offsets, dock targets) — a stale or momentarily-null bounds read upstream
+    // can produce NaN/undefined, which Electron's setPosition() throws on (uncaught, since this is
+    // a fire-and-forget `void` call on the renderer side). Reject non-finite input here rather than
+    // letting every caller re-validate its own math.
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
     win.setPosition(Math.round(x), Math.round(y));
     return true;
   });
@@ -373,10 +397,74 @@ export function registerIpc(opts: {
   // carries over to the next account that signs in — see SubscriptionStore.reset()'s own comment.
   ipcMain.handle('billing:resetSubscription', () => subscriptionStore.reset());
   ipcMain.handle('billing:getCreditBalance', () => ({ ...creditStore.getBalance(), limit: entitlementService.getCreditLimit() }));
-  ipcMain.handle('billing:consumeCredit', (_evt, amount: number, reason: string, category?: AiUsageCategory) => {
-    creditStore.consume(amount, reason, category);
+  ipcMain.handle('billing:consumeCredit', (_evt, amount: number, reason: string, category?: AiUsageCategory, pawModelId?: PawModelId) => {
+    creditStore.consume(amount, reason, category, pawModelId === 'paw-fable');
     return { ...creditStore.getBalance(), limit: entitlementService.getCreditLimit() };
   });
+  /**
+   * Rolling-window gate for new billable Gemini generations — the authoritative main-process check
+   * before any Gemini call starts. The renderer calls this before dispatching a turn; the result is
+   * computed entirely from main-process state (UsageEventStore + PawComputeCapacityStore +
+   * SubscriptionStore) — the renderer cannot supply tier, usage, limit, or the authorization result
+   * itself. Pooled (Enterprise) tiers always return allowed=true locally; callers must go through
+   * organizationUsageService for the real server-side pool check.
+   */
+  ipcMain.handle('billing:canStartGeneration', (_evt, pawModelId?: PawModelId) => {
+    if (pawModelId === 'paw-fable') {
+      const remaining = entitlementService.getFableCreditsRemaining();
+      return { allowed: remaining > 0, reason: remaining > 0 ? undefined : 'Paw Fable credits exhausted' };
+    }
+    const tier = entitlementService.getEntitlements().tier;
+    const seatTier = entitlementService.getSeatTier();
+    const result = rollingUsageGate.canStartGeneration(tier, seatTier);
+    // Reserve an in-flight slot atomically (Node.js single-threaded — no race between the check
+    // above and the reserve here). Released by billing:recordTurnUsage or auto-released on timeout.
+    if (result.allowed && !result.pooled) {
+      rollingUsageGate.reserveSlot();
+    }
+    return result;
+  });
+  /**
+   * Records real Gemini usage for one completed turn. The renderer sends only raw, provider-reported
+   * usage — this handler is the ONLY place that turns real token counts into Paw Compute (via
+   * UsageMeteringEngine) and the only place that calls creditStore.consume() for history/Fable
+   * tracking. The rolling-window gate (billing:canStartGeneration / hasCreditsRemaining) reads from
+   * UsageEventStore directly and is unaffected by creditStore's counters, which are now kept only
+   * for history and Fable attribution. Fable turns are marked fable=true so rolling windows exclude
+   * them (see RollingUsageGate.ts / NormalizedUsageRecord.fable).
+   */
+  ipcMain.handle(
+    'billing:recordTurnUsage',
+    (_evt, submission: TurnUsageSubmission, reason: string, category?: AiUsageCategory, pawModelId?: PawModelId) => {
+      const isFable = pawModelId === 'paw-fable';
+      // Release the in-flight slot reserved by billing:canStartGeneration for non-Fable, non-pooled
+      // turns. Fable turns gate on purchased-credit headroom and never reserve a rolling-window slot;
+      // pooled (Enterprise) turns go through organizationUsageService and also don't reserve one.
+      if (!isFable && !entitlementService.isComputePooled()) {
+        rollingUsageGate.releaseSlot();
+      }
+      const aggregated = recordTurnUsage(submission.requests, { sessionId: submission.sessionId, runId: submission.runId }, isFable);
+      creditStore.consume(aggregated.totalNormalizedCompute, reason, category, isFable);
+      return { aggregated, balance: { ...creditStore.getBalance(), limit: entitlementService.getCreditLimit() } };
+    }
+  );
+  /**
+   * Ledger-only usage reporting for a real Gemini request made from a renderer-side call site that
+   * has no main-process equivalent (today: SessionClassifier.ts, which lives purely in the renderer
+   * and so cannot import UsageMeteringEngine directly). Deliberately does NOT call
+   * creditStore.consume() — this mirrors the already-established `backgroundTask` convention every
+   * other non-conversation-turn Gemini call site in the main process already follows: the request is
+   * durably recorded to UsageEventStore, but only billing:consumeCredit / billing:recordTurnUsage
+   * ever charge. Idempotent on usage.requestId (see UsageMeteringEngine.recordUsageEvent).
+   */
+  ipcMain.handle(
+    'billing:reportUsageEvent',
+    (_evt, usage: ProviderUsageMetadata, requestType: UsageRequestType, context: { sessionId: string | null; runId: string | null }) =>
+      recordUsageEvent(usage, requestType, context)
+  );
+  // Real, per-request usage ledger — the Usage Details view's data source (Model / Input / Output /
+  // Total tokens / Paw Compute consumed, all real provider-reported values, never fabricated).
+  ipcMain.handle('billing:getUsageEvents', (_evt, limit?: number) => usageEventStore.list(limit));
   // Real per-turn consumption history (up to 200 entries, see CreditStore.ts) — the Analytics
   // dashboard's usage breakdown/activity feed/insights are all derived from this, never fabricated.
   ipcMain.handle('billing:getCreditHistory', () => creditStore.getHistory());

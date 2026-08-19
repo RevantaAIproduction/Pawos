@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { app } from 'electron';
 import type { TicketPricingConfig } from '../../shared/billing/BillingTypes';
-import { MIN_TICKET_BALANCE_TOPUP_USD, TICKET_BALANCE_TOPUP_PRESETS_USD } from '../../shared/organization/AutonomousTaskBillingTypes';
+import { MIN_TICKET_BALANCE_TOPUP_USD, MAX_TICKET_BALANCE_TOPUP_USD, TICKET_BALANCE_TOPUP_PRESETS_USD } from '../../shared/organization/AutonomousTaskBillingTypes';
 
 const FILE_NAME = 'ticketPricing.json';
 
@@ -17,6 +17,7 @@ function defaultConfig(): TicketPricingConfig {
   return {
     topupPresetsUsd: [...TICKET_BALANCE_TOPUP_PRESETS_USD],
     minTopupUsd: MIN_TICKET_BALANCE_TOPUP_USD,
+    maxTopupUsd: MAX_TICKET_BALANCE_TOPUP_USD,
   };
 }
 
@@ -35,6 +36,7 @@ class TicketPricingConfigStore {
           ? persisted.topupPresetsUsd.filter((n) => typeof n === 'number' && n > 0)
           : fresh.topupPresetsUsd,
         minTopupUsd: typeof persisted.minTopupUsd === 'number' && persisted.minTopupUsd > 0 ? persisted.minTopupUsd : fresh.minTopupUsd,
+        maxTopupUsd: typeof persisted.maxTopupUsd === 'number' && persisted.maxTopupUsd > 0 ? persisted.maxTopupUsd : fresh.maxTopupUsd,
       };
     } catch {
       this.config = defaultConfig();

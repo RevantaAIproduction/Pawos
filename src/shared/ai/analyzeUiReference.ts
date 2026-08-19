@@ -1,3 +1,5 @@
+import { v4 as uuidv4 } from 'uuid';
+
 export type UiReferenceAnalysis = {
   summary: string;
   imageCount: number;
@@ -15,6 +17,36 @@ export type UiVerificationResult = {
   ok: boolean;
   issues: string[];
 };
+
+/** Minimal, locally-defined shape mirroring shared/billing/UsageMeteringTypes.ProviderUsageMetadata
+ *  — duplicated rather than imported so this environment-agnostic file (usable from the renderer)
+ *  never depends on a type module that could grow a non-type export later. Callers in main-process
+ *  plugins (the only real callers today) pass this straight into UsageMeteringEngine's recordUsageEvent. */
+export type UiVisionUsage = {
+  provider: 'gemini';
+  model: string;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  cachedInputTokens: number | null;
+  totalTokens: number | null;
+  thoughtsTokens: number | null;
+  requestId: string | null;
+};
+
+function extractUsage(json: any, model: string, requestId: string): UiVisionUsage | null {
+  const usageMetadata = json?.usageMetadata;
+  if (!usageMetadata) return null;
+  return {
+    provider: 'gemini',
+    model,
+    inputTokens: typeof usageMetadata.promptTokenCount === 'number' ? usageMetadata.promptTokenCount : null,
+    outputTokens: typeof usageMetadata.candidatesTokenCount === 'number' ? usageMetadata.candidatesTokenCount : null,
+    cachedInputTokens: typeof usageMetadata.cachedContentTokenCount === 'number' ? usageMetadata.cachedContentTokenCount : null,
+    totalTokens: typeof usageMetadata.totalTokenCount === 'number' ? usageMetadata.totalTokenCount : null,
+    thoughtsTokens: typeof usageMetadata.thoughtsTokenCount === 'number' ? usageMetadata.thoughtsTokenCount : null,
+    requestId,
+  };
+}
 
 /**
  * Real Gemini vision call using structured JSON output, same shape as
@@ -37,7 +69,7 @@ export async function analyzeUiReference(params: {
   imageDataUrls: string[];
   model?: string;
   baseUrl?: string;
-}): Promise<UiReferenceAnalysis> {
+}): Promise<{ analysis: UiReferenceAnalysis; usage: UiVisionUsage | null }> {
   const {
     apiKey,
     imageDataUrls,
@@ -59,6 +91,10 @@ export async function analyzeUiReference(params: {
       ? `You are analyzing a reference image (a screenshot, UI mockup, wireframe, logo, or design reference) so its design LANGUAGE can be reused to build an original implementation. Describe: the sections/regions present (e.g. hero, nav, cards, footer), the overall layout and visual hierarchy, the real colors you see (as hex or named approximations), the typography style (serif/sans, weight, scale), the UI components present (buttons, forms, cards, nav bar), and the navigation pattern. Also give one short note describing what this image actually is (e.g. "a logo," "a product photo," "a dashboard screenshot"). Never transcribe copyrighted text or claim to reproduce the exact image — describe the design language only.`
       : `You are analyzing ${imageDataUrls.length} reference images together, provided in order (Image 1 through Image ${imageDataUrls.length}), as ONE reference set for a single project (e.g. a logo plus product photos, or several screens of one app) — not as unrelated images. First give a one-line note per image (perImageNotes, same order) describing what each one actually is. Then describe the reference set as a whole: the sections/regions it implies (e.g. hero, nav, cards, footer), overall layout and visual hierarchy, the real colors present across the set (as hex or named approximations), typography style, the UI components present, and any navigation pattern implied. Never transcribe copyrighted text or claim to reproduce any image exactly — describe the design language only.`;
 
+  // Minted once, right here, for this one real outgoing request — PawOS's own per-request identity
+  // (Gemini's response body carries no stable id of its own). Used to make the usage-ledger write
+  // idempotent regardless of how many times this one real network call's result gets processed.
+  const requestId = uuidv4();
   const res = await fetch(`${baseUrl}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -104,15 +140,18 @@ export async function analyzeUiReference(params: {
   }
 
   return {
-    summary: String(parsed.summary ?? ''),
-    imageCount: imageDataUrls.length,
-    perImageNotes: Array.isArray(parsed.perImageNotes) ? parsed.perImageNotes.map(String) : [],
-    sections: Array.isArray(parsed.sections) ? parsed.sections.map(String) : [],
-    layout: String(parsed.layout ?? ''),
-    colors: Array.isArray(parsed.colors) ? parsed.colors.map(String) : [],
-    typography: String(parsed.typography ?? ''),
-    components: Array.isArray(parsed.components) ? parsed.components.map(String) : [],
-    navigationPattern: String(parsed.navigationPattern ?? ''),
+    analysis: {
+      summary: String(parsed.summary ?? ''),
+      imageCount: imageDataUrls.length,
+      perImageNotes: Array.isArray(parsed.perImageNotes) ? parsed.perImageNotes.map(String) : [],
+      sections: Array.isArray(parsed.sections) ? parsed.sections.map(String) : [],
+      layout: String(parsed.layout ?? ''),
+      colors: Array.isArray(parsed.colors) ? parsed.colors.map(String) : [],
+      typography: String(parsed.typography ?? ''),
+      components: Array.isArray(parsed.components) ? parsed.components.map(String) : [],
+      navigationPattern: String(parsed.navigationPattern ?? ''),
+    },
+    usage: extractUsage(json, model, requestId),
   };
 }
 
@@ -126,7 +165,7 @@ export async function generateAltTextForImage(params: {
   imageDataUrl: string;
   model?: string;
   baseUrl?: string;
-}): Promise<string> {
+}): Promise<{ altText: string; usage: UiVisionUsage | null }> {
   const {
     apiKey,
     imageDataUrl,
@@ -138,6 +177,7 @@ export async function generateAltTextForImage(params: {
   if (!match) throw new Error('Expected a base64 data: URL for the image.');
   const [, mimeType, base64Data] = match;
 
+  const requestId = uuidv4();
   const res = await fetch(`${baseUrl}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -161,7 +201,7 @@ export async function generateAltTextForImage(params: {
 
   const json = (await res.json()) as any;
   const text: string = json.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-  return text.trim();
+  return { altText: text.trim(), usage: extractUsage(json, model, requestId) };
 }
 
 /**
@@ -178,7 +218,7 @@ export async function verifyUiScreenshot(params: {
   consoleErrors: string[];
   model?: string;
   baseUrl?: string;
-}): Promise<UiVerificationResult> {
+}): Promise<{ result: UiVerificationResult; usage: UiVisionUsage | null }> {
   const {
     apiKey,
     imageDataUrl,
@@ -199,6 +239,7 @@ export async function verifyUiScreenshot(params: {
 
   const prompt = `You are visually verifying a rendered web page from a real screenshot. ${context} Look at the actual screenshot and report any visible problems: broken/overlapping layout, misalignment, missing or broken images, obviously wrong spacing, unstyled/raw HTML, or anything that looks unfinished. Only report what you can actually see or was actually measured — never invent an issue.`;
 
+  const requestId = uuidv4();
   const res = await fetch(`${baseUrl}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -238,7 +279,10 @@ export async function verifyUiScreenshot(params: {
   }
 
   return {
-    ok: Boolean(parsed.ok),
-    issues: Array.isArray(parsed.issues) ? parsed.issues.map(String) : [],
+    result: {
+      ok: Boolean(parsed.ok),
+      issues: Array.isArray(parsed.issues) ? parsed.issues.map(String) : [],
+    },
+    usage: extractUsage(json, model, requestId),
   };
 }

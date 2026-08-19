@@ -12,6 +12,7 @@ import { usageEngine } from './UsageEngine';
 import { usageStore } from './UsageStore';
 import { usageQuotaConfigStore } from './UsageQuotaConfigStore';
 import { subscriptionStore } from './SubscriptionStore';
+import { usageEventStore } from './UsageEventStore';
 
 beforeAll(() => {
   usageQuotaConfigStore.init();
@@ -31,7 +32,7 @@ describe('UsageQuotaConfigStore — config-driven quotas, no hardcoded Pro Max n
     const config = usageQuotaConfigStore.get();
     usageQuotaConfigStore.applySyncedConfig({
       ...config,
-      tiers: { ...config.tiers, pro: { ...config.tiers.pro, perUserQuotas: { ...config.tiers.pro.perUserQuotas, browserAutomation: { monthlyLimit: 9 } } } },
+      tiers: { ...config.tiers, pro: { ...config.tiers.pro, perUserQuotas: { ...config.tiers.pro.perUserQuotas, browserAutomation: { monthlyLimit: 9, weeklyLimit: null } } } },
     });
     const after = usageQuotaConfigStore.getEffectiveQuota('proMax', undefined, 'browserAutomation');
     expect(after).toBe(9 * 20);
@@ -125,12 +126,17 @@ describe('UsageEngine — per-user (non-pooled) enforcement', () => {
     expect(usageStore.getUsage('desktopAutomation').usedThisPeriod).toBe(before);
   });
 
-  it('getUnifiedUsageSummary() includes all 8 capabilities, with aiReasoning sourced from CreditStore rather than a duplicate counter', () => {
+  it('getUnifiedUsageSummary() includes all 8 capabilities, with aiReasoning sourced from the rolling window (not a duplicate counter)', () => {
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'pro', status: 'active' });
+    vi.spyOn(usageEventStore, 'list').mockReturnValue([]);
     const summary = usageEngine.getUnifiedUsageSummary();
     expect(summary).toHaveLength(8);
     expect(summary.map((s) => s.capability)).toContain('aiReasoning');
     const aiReasoning = summary.find((s) => s.capability === 'aiReasoning');
     expect(aiReasoning?.pooled).toBe(false);
+    // periodResetsAt must be null — rolling windows have no fixed reset boundary
+    expect(aiReasoning?.periodResetsAt).toBeNull();
+    // limit5h (the 5h window limit) is the limit exposed for aiReasoning
+    expect(aiReasoning?.limit).toBeGreaterThan(0);
   });
 });

@@ -1,7 +1,9 @@
 import * as fs from 'fs';
+import { v4 as uuidv4 } from 'uuid';
 import { communicationSessionStore } from './CommunicationSessionStore';
 import { unwrapSessionKey, decryptFramedBuffer } from './CommunicationEncryption';
 import type { CommunicationRecord } from '../../shared/communication/CommunicationTypes';
+import { recordUsageEvent } from '../billing/UsageMeteringEngine';
 
 /**
  * Real Gemini audio-understanding calls for the Intelligence Layer
@@ -27,6 +29,10 @@ function mimeTypeForAudioPath(audioPath: string): string {
 /** Exported so other same-purpose pipelines (e.g. the Business Intelligence pipeline, Phase 3B) can reuse the exact same fetch/schema mechanism rather than duplicating it — the function itself is unchanged, only its visibility. */
 export async function callGemini(params: { apiKey: string; parts: unknown[]; responseSchema: unknown; model?: string; baseUrl?: string }): Promise<any> {
   const { apiKey, parts, responseSchema, model = DEFAULT_MODEL, baseUrl = DEFAULT_BASE_URL } = params;
+  // Minted once, right here, for this one real outgoing request — PawOS's own per-request identity
+  // (Gemini's response body carries no stable id of its own). Used to make the usage-ledger write
+  // idempotent regardless of how many times this one real network call's result gets processed.
+  const requestId = uuidv4();
   const res = await fetch(`${baseUrl}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -39,6 +45,29 @@ export async function callGemini(params: { apiKey: string; parts: unknown[]; res
     throw new Error(`Gemini request failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
   }
   const json = (await res.json()) as any;
+  // Real Gemini usage metadata — same shape Gemini's non-streaming generateContent always returns
+  // (promptTokenCount/candidatesTokenCount/totalTokenCount/cachedContentTokenCount), meaning this one
+  // real API call (shared by transcription, summarization, action-item/decision extraction, signal
+  // detection, and the Business Intelligence pipeline — every caller of this function) is now metered
+  // centrally rather than needing per-caller instrumentation. No sessionId/runId context exists at
+  // this layer, so both are honestly null on the ledger record.
+  const usageMetadata = json.usageMetadata;
+  if (usageMetadata && typeof usageMetadata === 'object') {
+    recordUsageEvent(
+      {
+        provider: 'gemini',
+        model,
+        inputTokens: typeof usageMetadata.promptTokenCount === 'number' ? usageMetadata.promptTokenCount : null,
+        outputTokens: typeof usageMetadata.candidatesTokenCount === 'number' ? usageMetadata.candidatesTokenCount : null,
+        cachedInputTokens: typeof usageMetadata.cachedContentTokenCount === 'number' ? usageMetadata.cachedContentTokenCount : null,
+        totalTokens: typeof usageMetadata.totalTokenCount === 'number' ? usageMetadata.totalTokenCount : null,
+        thoughtsTokens: typeof usageMetadata.thoughtsTokenCount === 'number' ? usageMetadata.thoughtsTokenCount : null,
+        requestId,
+      },
+      'backgroundTask',
+      { sessionId: null, runId: null }
+    );
+  }
   const text: string = json.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}';
   try {
     return JSON.parse(text);

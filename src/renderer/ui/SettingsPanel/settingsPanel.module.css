@@ -10,6 +10,8 @@
 
 .panel{
   width:320px;
+  max-height:92vh;
+  overflow-y:auto;
   background:#1b1b1b;
   color:#f3f3f3;
   border:1px solid rgba(255,255,255,0.12);
@@ -18,13 +20,26 @@
   box-shadow:0 10px 40px rgba(0,0,0,0.35);
 }
 
-.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+/* Sticky header/footer so the close controls stay reachable even when the
+   panel's content (coding/infra mode + connector list) grows taller than
+   the overlay window's fixed viewport — previously both scrolled fully out
+   of view with no way to close the panel. */
+.header{
+  position:sticky;top:-14px;
+  display:flex;align-items:center;justify-content:space-between;
+  margin:-14px -14px 10px;padding:14px 14px 10px;
+  background:#1b1b1b;z-index:1;
+}
 .title{font-weight:700;}
 .closeBtn{background:transparent;border:0;color:#fff;font-size:18px;cursor:pointer;}
 
 .row{display:flex;flex-direction:column;gap:6px;margin:10px 0;font-size:13px;}
 
-.actions{display:flex;gap:10px;margin-top:12px;justify-content:flex-end;}
+.actions{
+  position:sticky;bottom:-14px;
+  display:flex;gap:10px;margin:12px -14px -14px;justify-content:flex-end;
+  padding:10px 14px 14px;background:#1b1b1b;z-index:1;
+}
 .primary{background:#4d90fe;border:0;color:#fff;padding:8px 12px;border-radius:8px;cursor:pointer;}
 .secondary{background:transparent;border:1px solid rgba(255,255,255,0.2);color:#fff;padding:8px 12px;border-radius:8px;cursor:pointer;}
 

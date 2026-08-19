@@ -2,7 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { MIN_TICKET_BALANCE_TOPUP_USD, TICKET_BALANCE_TOPUP_PRESETS_USD, TICKET_PRICING_TIERS } from "@/lib/billing/razorpay";
+import { MIN_TICKET_BALANCE_TOPUP_USD, MAX_TICKET_BALANCE_TOPUP_USD, TICKET_BALANCE_TOPUP_PRESETS_USD, TICKET_PRICING_TIERS } from "@/lib/billing/razorpay";
 
 declare global {
   interface Window {
@@ -42,6 +42,7 @@ export function CreditsCheckoutClient() {
   const [pricingConfig, setPricingConfig] = useState({
     topupPresetsUsd: [...TICKET_BALANCE_TOPUP_PRESETS_USD],
     minTopupUsd: MIN_TICKET_BALANCE_TOPUP_USD,
+    maxTopupUsd: MAX_TICKET_BALANCE_TOPUP_USD,
   });
 
   useEffect(() => {
@@ -54,11 +55,16 @@ export function CreditsCheckoutClient() {
   const startCheckout = async () => {
     setStatus("loading");
     setMessage(null);
+    if (!accessToken) {
+      setStatus("error");
+      setMessage("Missing your PawOS session — please reopen this checkout from the desktop app.");
+      return;
+    }
     try {
       const response = await fetch("/api/billing/checkout-credits", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amountUsd, organizationId }),
+        body: JSON.stringify({ amountUsd, organizationId, accessToken }),
       });
       const result = await response.json();
 
@@ -144,7 +150,7 @@ export function CreditsCheckoutClient() {
         Top up any amount — funds are deducted per ticket only once an Autonomous Ticket System
         investigation genuinely completes. The rate per ticket ranges from ${TICKET_PRICING_TIERS[TICKET_PRICING_TIERS.length - 1].pricePerTicketUsd.toFixed(2)}
         {" "}to ${TICKET_PRICING_TIERS[0].pricePerTicketUsd.toFixed(2)} depending on your account&apos;s cumulative ticket volume.
-        Minimum top-up is ${pricingConfig.minTopupUsd}.
+        Minimum top-up is ${pricingConfig.minTopupUsd}, maximum ${pricingConfig.maxTopupUsd.toLocaleString()}.
       </p>
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -169,8 +175,13 @@ export function CreditsCheckoutClient() {
           id="custom-amount"
           type="number"
           min={pricingConfig.minTopupUsd}
+          max={pricingConfig.maxTopupUsd}
           value={amountUsd}
-          onChange={(e) => setAmountUsd(Math.max(pricingConfig.minTopupUsd, Number(e.target.value) || pricingConfig.minTopupUsd))}
+          onChange={(e) =>
+            setAmountUsd(
+              Math.min(pricingConfig.maxTopupUsd, Math.max(pricingConfig.minTopupUsd, Number(e.target.value) || pricingConfig.minTopupUsd))
+            )
+          }
           className="w-24 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-center text-sm"
         />
       </div>

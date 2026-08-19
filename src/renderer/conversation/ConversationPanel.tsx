@@ -67,6 +67,7 @@ export function ConversationPanel({
   onOpenPath,
   onConnectCapability,
   onNavigateToSettingsConnector,
+  onOpenTicketBalance,
   creditsNoticeTier,
   creditsNoticeSeatTier,
   creditsNoticePooled,
@@ -111,6 +112,8 @@ export function ConversationPanel({
   ) => Promise<{ ok: boolean; message?: string }> | void;
   /** "Connect in Settings" for a capability with no inline form yet. */
   onNavigateToSettingsConnector?: (connectorId: string) => void;
+  /** "Add Funds" on a balance-restricted Autonomous Work failure — opens the Ticket Balance wallet (Settings → Billing). */
+  onOpenTicketBalance?: () => void;
   /** Set when the last submit was blocked by the entitlement/credit gate (see useConversationController). */
   creditsNoticeTier?: SubscriptionTierId | null;
   /** Only meaningful when tier === 'team' — which seat rate determines the exhaustion notice's upgrade target. */
@@ -366,6 +369,7 @@ export function ConversationPanel({
                 onOpenPath={onOpenPath}
                 onConnectCapability={onConnectCapability}
                 onNavigateToSettingsConnector={onNavigateToSettingsConnector}
+                onOpenTicketBalance={onOpenTicketBalance}
               />
             ) : (
               <div key={message.id} className={styles.systemLineWrap}>
@@ -377,6 +381,15 @@ export function ConversationPanel({
                 </div>
               </div>
             )
+          ) : message.role === 'assistant' && message.status !== 'streaming' && !message.content.trim() ? (
+            // A finished assistant turn with no narration text at all — the model made a
+            // tool call and said nothing alongside it. The real record of what happened
+            // already renders as its own TaskCard/system-line entry elsewhere in this same
+            // list; rendering an empty "assistant" bubble here would only add a blank box
+            // with no information, which is exactly the "I can't see what it's doing"
+            // complaint this was fixed for. Skip it outright rather than showing nothing
+            // inside a labeled box.
+            null
           ) : (
             <React.Fragment key={message.id}>
               {message.role === 'assistant' && message.status !== 'streaming' && isProjectPlanMessage(message.content) ? (
@@ -512,6 +525,9 @@ export function ConversationPanel({
             };
             const reasoningModels = PAW_MODEL_CATALOG.filter((m) => REASONING_PAW_MODEL_IDS.includes(m.id));
             const otherModels = PAW_MODEL_CATALOG.filter((m) => !REASONING_PAW_MODEL_IDS.includes(m.id));
+            // One running sequence (1, 2, 3, ...) across both groups, in catalog order — a stable
+            // quick-reference number per model, not per-group numbering that would restart at 1 twice.
+            const modelNumber = new Map(PAW_MODEL_CATALOG.map((m, i) => [m.id, i + 1]));
             return (
               <div className={styles.modelPickerMenu} role="listbox">
                 <div className={styles.modelPickerGroupLabel}>Reasoning models</div>
@@ -544,6 +560,7 @@ export function ConversationPanel({
                             {state === 'available' && model.description}
                           </span>
                         </span>
+                        <span className={styles.modelPickerOptionNumber}>{modelNumber.get(model.id)}</span>
                       </button>
                       {state === 'locked' && (
                         <button
@@ -587,11 +604,11 @@ export function ConversationPanel({
                           state === 'available' ? styles.modelPickerBadgeAvailable : styles.modelPickerBadgeMuted
                         }`}
                       >
-                        {state === 'comingSoon' && 'Coming soon'}
                         {state === 'locked' && `🔒 ${formatTierLabel(requiredTier ?? 'pro')} required`}
                         {state === 'exhausted' && 'Usage limit reached'}
                         {state === 'available' && 'Available'}
                       </span>
+                      <span className={styles.modelPickerOptionNumber}>{modelNumber.get(model.id)}</span>
                     </div>
                   );
                 })}

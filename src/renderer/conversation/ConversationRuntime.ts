@@ -39,6 +39,7 @@ import {
   isVoiceOutputOffRequest,
   isVoiceOutputOnRequest,
 } from './SpeechPresentation';
+import type { TurnUsageSubmission, UsageRequestType } from '../../shared/billing/UsageMeteringTypes';
 
 const MAX_LOG_ENTRIES = 200;
 const MAX_TURN_RECORDS = 50;
@@ -73,6 +74,11 @@ type TurnContext = {
   ttsBuffer: string;
   finalResponse: string;
   assistantMessageId: string | null;
+  /** Every real Gemini request's reported usage this turn actually made — the initial runTurn() call
+   *  plus every tool-continuation continueTurn() call, in call order. Reported once, in full, right
+   *  before the turn is finalized (see drainPendingActionsAndFinalize's onTurnUsage call) — this is
+   *  what replaces the old flat "1 credit per turn" charge with the turn's real aggregate cost. */
+  usages: TurnUsageSubmission['requests'];
 };
 
 /** States where a new mic/typed input should interrupt whatever's in flight rather than being ignored. */
@@ -308,6 +314,16 @@ export class ConversationRuntime {
       speechSynthesis: TextToSpeechProvider;
       reasoningRuntime: ReasoningRuntime;
       onStateChange?: (state: ConversationState) => void;
+      /**
+       * Fires once per completed turn with every real Gemini request the turn actually made — the
+       * initial reasoning call plus every tool-continuation call — never a fabricated "1 credit"
+       * placeholder. The caller (useConversationController.ts) is the one that actually calls
+       * ipc.billingRecordTurnUsage() with this submission; ConversationRuntime itself has no IPC
+       * access and never computes a charge — it only reports the real, provider-supplied numbers it
+       * already collected via buildStreamCallbacks' onComplete handler. Omitted entirely means no
+       * usage is ever reported (silently, not an error) — the caller is expected to wire this.
+       */
+      onTurnUsage?: (submission: TurnUsageSubmission) => void;
       /**
        * Executes an action the AI requested (via IPC to the main-process
        * ActionEngine). The AI only ever names an intent; PawOS decides how
@@ -848,7 +864,7 @@ export class ConversationRuntime {
     let turnHandle: ReasoningTurnHandle;
     // Shared with handleToolCall/continueReasoningTurn — a tool-result
     // continuation streams into the SAME buffers as this initial call.
-    const turnContext: TurnContext = { ttsBuffer: '', finalResponse: '', assistantMessageId: null };
+    const turnContext: TurnContext = { ttsBuffer: '', finalResponse: '', assistantMessageId: null, usages: [] };
 
     try {
       turnHandle = this.args.reasoningRuntime.runTurn(reasoningInput, this.buildStreamCallbacks(currentTurn, turnContext));
@@ -957,6 +973,11 @@ export class ConversationRuntime {
     this.currentTurnRecord.assistantResponse = ctx.finalResponse;
     this.log('starting-tts', { textLength: ctx.finalResponse.length });
 
+    // Report the turn's real, aggregate Gemini usage — every request this turn actually made,
+    // including tool continuations — BEFORE finalizing, so the caller's billing call always sees a
+    // fully-settled ctx.usages for this turn (finalizeCurrentTurn/persistTurn never touch usage).
+    this.args.onTurnUsage?.({ sessionId: this.activeSessionId, runId: this.args.autonomousRunId ?? null, requests: ctx.usages });
+
     this.reasoningTurn = null;
     this.finalizeCurrentTurn('completed');
     this.updateSnapshot({ state: 'completed', draftTranscript: '' });
@@ -1051,7 +1072,11 @@ export class ConversationRuntime {
    * exactly where the initial call's would have (same message id semantics,
    * same speech queue).
    */
-  private buildStreamCallbacks(currentTurn: number, ctx: TurnContext): ReasoningRuntimeCallbacks {
+  private buildStreamCallbacks(
+    currentTurn: number,
+    ctx: TurnContext,
+    requestType: UsageRequestType = 'conversationTurn'
+  ): ReasoningRuntimeCallbacks {
     return {
       onDelta: (delta, assistantMessage) => {
         if (this.closed || currentTurn !== this.turnId) return;
@@ -1070,6 +1095,11 @@ export class ConversationRuntime {
       },
       onComplete: (result) => {
         if (this.closed || currentTurn !== this.turnId) return;
+        // Real, provider-reported usage for THIS single request only — never fabricated, never
+        // estimated. Accumulated here (not charged here) so every real Gemini request this turn
+        // makes, including every tool-continuation, is captured exactly once; the full set is
+        // reported via onTurnUsage right before the turn is finalized (drainPendingActionsAndFinalize).
+        if (result.usage) ctx.usages.push({ usage: result.usage, requestType });
         ctx.finalResponse = result.response || result.assistantMessage?.content || ctx.finalResponse;
         if (result.assistantMessage) {
           ctx.assistantMessageId = result.assistantMessage.id;
@@ -1135,7 +1165,7 @@ export class ConversationRuntime {
     if (this.closed || currentTurn !== this.turnId) return;
     this.updateSnapshot({ state: 'thinking' });
 
-    const handle = this.args.reasoningRuntime.continueTurn(this.buildStreamCallbacks(currentTurn, ctx));
+    const handle = this.args.reasoningRuntime.continueTurn(this.buildStreamCallbacks(currentTurn, ctx, 'toolContinuation'));
     this.reasoningTurn = handle;
     try {
       const result = await handle.completed;
@@ -1357,7 +1387,7 @@ export class ConversationRuntime {
     // A fresh turn (started in handleTranscript's confirmation branch), so
     // it gets its own buffers — same shape as the initial runTurn's, and
     // shared with any tool calls this continuation itself triggers.
-    const ctx: TurnContext = { ttsBuffer: '', finalResponse: '', assistantMessageId: null };
+    const ctx: TurnContext = { ttsBuffer: '', finalResponse: '', assistantMessageId: null, usages: [] };
 
     const actionStartedAt = Date.now();
     const inProgressText = await this.args.describeAction?.(request).catch(() => null) ?? 'Working on that…';

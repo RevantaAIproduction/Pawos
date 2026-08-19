@@ -118,6 +118,8 @@ export type PricingConfig = {
 export type TicketPricingConfig = {
   topupPresetsUsd: number[];
   minTopupUsd: number;
+  /** Maximum single top-up, in USD. Client-side UX hinting only — the server (pawos-web's checkout-credits/credit-ticket-balance routes and the add_ticket_balance_service() SQL RPC) remains the sole authority. */
+  maxTopupUsd: number;
 };
 
 export type CreditBalance = {
@@ -127,6 +129,17 @@ export type CreditBalance = {
   /** Bonus Paw Compute headroom granted for the current period only (e.g. via Referral Credits redemption) — added on top of the tier's own configured limit, never replacing it. */
   bonusThisPeriod: number;
   periodResetsAt: number;
+  /** Weekly-cadence counter, tracked independently of usedThisPeriod (monthly) — resets on its own weekly boundary. Real usage since the last weekly reset, regardless of whether the account's tier has a configured weekly limit at all. */
+  usedThisWeek: number;
+  weekResetsAt: number;
+  /**
+   * Paw Fable's own consumption counter — completely independent of usedThisPeriod/usedThisWeek,
+   * since Fable never draws from the tier's included Paw Compute allowance. Fable turns increment
+   * only this counter, against bonusThisPeriod (the purchased/redeemed Paw Credits pool) as the
+   * ceiling; every other model's turn never touches this counter either direction. Resets alongside
+   * bonusThisPeriod at the same monthly boundary — see CreditStore.freshPeriod().
+   */
+  fableUsedThisPeriod: number;
 };
 
 export type CreditConsumptionRecord = {
@@ -206,6 +219,8 @@ export type TierEntitlements = {
   features: FeatureId[];
   /** null = uncapped. Resolved live from UsageQuotaConfigStore's single 'aiReasoning' config (Pro Max derives 20x Pro automatically) — never a static per-tier literal. */
   monthlyCreditLimit: number | null;
+  /** Weekly-cadence cap, additive alongside monthlyCreditLimit — null means this tier has no weekly cap configured (today: every tier except pro/proMax). Resolved the same live way, Pro Max derives 10x Pro's weekly number (a different ratio from the monthly 20x). */
+  weeklyCreditLimit: number | null;
   /** Only set when tier === 'team' — echoes which seat rate produced this entitlement set. */
   seatTier?: SeatTier;
 };
@@ -218,10 +233,13 @@ export type EntitlementSnapshot = {
   models: PawModelId[];
   features: FeatureId[];
   runtimeEntitlements: RuntimeEntitlementId[];
+  /** Always null — monthly limits replaced by rolling windows. Kept for backward compatibility. */
   creditLimit: number | null;
+  /** Deprecated: use usage5hPc / usage7dPc instead. Kept for backward compatibility. */
   creditsUsedThisPeriod: number;
   /** Extra Paw Compute headroom redeemed from Referral Credits ("Paw Credits") for the current period — see EntitlementService.grantComputeBonus(). Always 0 unless the user has redeemed credits this period. */
   bonusComputeThisPeriod: number;
+  /** True when the account has Paw Compute remaining in both rolling windows (5h and 7d). Always true for pooled (Enterprise) tiers — the real check is server-side. */
   hasCreditsRemaining: boolean;
   /**
    * True only for Enterprise — the account's Paw Compute allowance is pooled
@@ -236,4 +254,27 @@ export type EntitlementSnapshot = {
   pooled: boolean;
   /** Only set when tier === 'team' — which seat rate (Standard/Premium) this account holds. */
   seatTier?: SeatTier;
+  /** Always null — replaced by rolling windows. Kept for backward compatibility. */
+  weeklyCreditLimit: number | null;
+  /** Deprecated: use usage7dPc instead. Kept for backward compatibility. */
+  creditsUsedThisWeek: number;
+  /** Deprecated: no fixed reset boundary in rolling windows. Kept for backward compatibility. */
+  weekResetsAt: number;
+  /**
+   * Real remaining purchased-Paw-Credits headroom for Paw Fable specifically — max(0,
+   * bonusComputeThisPeriod - fableUsedThisPeriod). Never derived from creditLimit/weeklyCreditLimit
+   * or hasCreditsRemaining, since Fable is gated purely on this number: a turn on Paw Fable is
+   * blocked once this reaches 0, even if hasCreditsRemaining is still true for every other model.
+   */
+  fableCreditsRemaining: number;
+
+  // ── Rolling window Paw Compute (the active enforcement system) ──────────────
+  /** Paw Compute consumed in the last 5 hours (rolling). */
+  usage5hPc: number;
+  /** Maximum Paw Compute allowed in any 5-hour rolling window for this tier. null = no cap. */
+  limit5hPc: number | null;
+  /** Paw Compute consumed in the last 7 days (rolling). */
+  usage7dPc: number;
+  /** Maximum Paw Compute allowed in any 7-day rolling window for this tier. null = no cap. */
+  limit7dPc: number | null;
 };

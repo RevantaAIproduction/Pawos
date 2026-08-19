@@ -66,6 +66,16 @@ export type InfraTicket = {
   url?: string;
   status?: string;
   labels?: string[];
+  /** The provider's own raw priority label (e.g. Jira "High", Linear "Urgent") — never inferred
+   *  from labels/text. Omitted (not guessed) for providers with no native priority concept
+   *  (GitHub Issues). */
+  priority?: string;
+  /** ISO 8601 date, only when the provider actually has a due-date field set on this ticket. */
+  dueDate?: string;
+  /** Display name of who the ticket is currently assigned to — who's in charge of it. */
+  assignee?: string;
+  /** Display name of who filed/reported the ticket — who to report progress back to. */
+  reporter?: string;
 };
 
 export type InfraRepository = { name: string; fullName: string; defaultBranch: string; url: string };
@@ -105,6 +115,10 @@ export interface ProjectManagementConnector {
   isConfigured(): boolean;
   getTicket(ticketId: string): Promise<ConnectorResult<{ ticket: InfraTicket }>>;
   searchTickets(query: string): Promise<ConnectorResult<{ tickets: InfraTicket[] }>>;
+  /** Tickets assigned to the account whose token/OAuth grant is actually connected — identified
+   *  through the provider's own "who am I" mechanism (Jira's `currentUser()`, Linear's `viewer`,
+   *  GitHub's `assignee:@me`), never a client-supplied username. */
+  listMyTickets(): Promise<ConnectorResult<{ tickets: InfraTicket[] }>>;
 }
 
 export interface CiCdConnector {

@@ -10,6 +10,7 @@ import type {
   ReasoningProviderCallbacks,
   ReasoningProviderSession,
 } from './ReasoningProvider';
+import type { ProviderUsageMetadata } from '../../shared/billing/UsageMeteringTypes';
 
 export type ReasoningRuntimeCallbacks = {
   onStart?: () => void;
@@ -127,6 +128,7 @@ export class ReasoningRuntime {
         response: '',
         assistantMessage: null,
         toolCalls: [],
+        usage: null,
       });
       return {
         cancel: () => {
@@ -169,6 +171,7 @@ export class ReasoningRuntime {
     const toolCalls: ReasoningToolCall[] = [];
     let response = '';
     let assistantMessage: ReasoningMessage | null = null;
+    let usage: ProviderUsageMetadata | null = null;
     let resolveCompleted!: (result: ReasoningTurnResult) => void;
     let rejectCompleted!: (error: Error) => void;
     let settled = false;
@@ -231,6 +234,13 @@ export class ReasoningRuntime {
             toolCalls.push(toolCall);
             callbacks.onToolCall?.(toolCall);
           },
+          onUsage: (reportedUsage) => {
+            if (this.activeTurnId !== turnId) return;
+            // A streaming response may report cumulative usage more than once (Gemini's chunk-by-chunk
+            // usageMetadata, Anthropic's message_start + message_delta) — the last call before
+            // onComplete carries the authoritative final totals, so simply overwriting is correct.
+            usage = reportedUsage;
+          },
           onComplete: (providerResponse) => {
             if (this.activeTurnId !== turnId) return;
             response = providerResponse || response;
@@ -254,6 +264,7 @@ export class ReasoningRuntime {
               response,
               assistantMessage,
               toolCalls: [...toolCalls],
+              usage,
             };
             callbacks.onComplete?.(result);
             settleResolved(result);

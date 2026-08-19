@@ -10,13 +10,12 @@ export type PawModelId =
   | 'paw-flash'
   | 'paw-swift'
   | 'paw-core'
-  | 'paw-creative'
+  | 'paw-fable'
   | 'paw-vision'
   | 'paw-voice'
-  | 'paw-motion'
   | 'paw-memory';
 
-export type PawModelCategory = 'reasoning' | 'creative' | 'vision' | 'voice' | 'motion' | 'memory';
+export type PawModelCategory = 'reasoning' | 'vision' | 'voice' | 'memory';
 
 export type PawModelStatus = 'available' | 'comingSoon';
 
@@ -41,7 +40,17 @@ export type PawModelDescriptor = {
  */
 export const DEFAULT_PAW_MODEL_ID: PawModelId = 'paw-swift';
 
-export const REASONING_PAW_MODEL_IDS: PawModelId[] = ['paw-flash', 'paw-swift', 'paw-core'];
+/**
+ * Fable answers turns exactly like Flash/Swift/Core do (same selectable "Reasoning models" group,
+ * same reasoning provider plumbing) — what's different is billing, not reasoning capability. It
+ * always draws from purchased Paw Credits and never the plan's included Paw Compute allowance (see
+ * EntitlementService.hasCreditsRemaining()/CreditStore's fableUsedThisPeriod counter) — callers that
+ * need to special-case that billing behavior check identity against PAW_FABLE_MODEL_ID directly,
+ * never by excluding it from REASONING_PAW_MODEL_IDS (which stays about UI selectability only).
+ */
+export const PAW_FABLE_MODEL_ID: PawModelId = 'paw-fable';
+
+export const REASONING_PAW_MODEL_IDS: PawModelId[] = ['paw-flash', 'paw-swift', 'paw-core', 'paw-fable'];
 
 export const PAW_MODEL_CATALOG: PawModelDescriptor[] = [
   {
@@ -69,12 +78,12 @@ export const PAW_MODEL_CATALOG: PawModelDescriptor[] = [
     status: 'available',
   },
   {
-    id: 'paw-creative',
-    label: 'Paw Creative',
-    category: 'creative',
-    description: 'Image, UI, and logo generation, concept art, and design assistance.',
-    switchMessage: 'Paw Creative is reserved for image and design generation — not available yet.',
-    status: 'comingSoon',
+    id: 'paw-fable',
+    label: 'Paw Fable',
+    category: 'reasoning',
+    description: "Paw's own dedicated model — always runs on your purchased Paw Credits, never your plan's included Paw Compute allowance.",
+    switchMessage: "Paw Fable always spends Paw Credits, never your plan's included Paw Compute — it needs a real Paw Credits balance to answer.",
+    status: 'available',
   },
   {
     id: 'paw-vision',
@@ -91,14 +100,6 @@ export const PAW_MODEL_CATALOG: PawModelDescriptor[] = [
     description: 'Speech conversations — text-to-speech and speech-to-text.',
     switchMessage: 'Paw Voice powers spoken conversations.',
     status: 'available',
-  },
-  {
-    id: 'paw-motion',
-    label: 'Paw Motion',
-    category: 'motion',
-    description: 'Companion motion generation — reserved for a future release.',
-    switchMessage: 'Paw Motion is not available yet.',
-    status: 'comingSoon',
   },
   {
     id: 'paw-memory',

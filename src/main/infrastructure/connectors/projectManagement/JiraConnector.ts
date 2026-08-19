@@ -2,6 +2,20 @@ import type { ConnectorResult, InfraTicket, ProjectManagementConnector } from '.
 
 type JiraDescriptionNode = { type?: string; text?: string; content?: JiraDescriptionNode[] };
 
+type JiraIssue = {
+  key: string;
+  fields: {
+    summary: string;
+    description?: JiraDescriptionNode | string;
+    status?: { name: string };
+    labels?: string[];
+    priority?: { name: string };
+    duedate?: string | null;
+    assignee?: { displayName: string } | null;
+    reporter?: { displayName: string } | null;
+  };
+};
+
 /** Best-effort flatten of Jira's Atlassian Document Format description into plain text — never fabricates content that isn't there. */
 function flattenDescription(node: JiraDescriptionNode | string | null | undefined): string {
   if (!node) return '';
@@ -44,7 +58,7 @@ export class JiraConnector implements ProjectManagementConnector {
     return { Authorization: `Basic ${basic}`, Accept: 'application/json' };
   }
 
-  private toTicket(issue: { key: string; fields: { summary: string; description?: JiraDescriptionNode | string; status?: { name: string }; labels?: string[] } }): InfraTicket {
+  private toTicket(issue: JiraIssue): InfraTicket {
     return {
       id: issue.key,
       title: issue.fields.summary,
@@ -52,6 +66,13 @@ export class JiraConnector implements ProjectManagementConnector {
       url: `${(this.baseUrl ?? '').replace(/\/+$/, '')}/browse/${issue.key}`,
       status: issue.fields.status?.name,
       labels: issue.fields.labels ?? [],
+      // Real Jira fields, present in every standard issue payload (no extra `fields` request
+      // param needed) — never inferred or guessed. A ticket genuinely lacking one of these
+      // (no priority scheme, no due date set, unassigned) honestly comes back undefined.
+      priority: issue.fields.priority?.name,
+      dueDate: issue.fields.duedate ?? undefined,
+      assignee: issue.fields.assignee?.displayName,
+      reporter: issue.fields.reporter?.displayName,
     };
   }
 
@@ -62,8 +83,26 @@ export class JiraConnector implements ProjectManagementConnector {
         headers: this.headers(),
       });
       if (!res.ok) return { ok: false, reason: `Jira API returned ${res.status} for ${ticketId}` };
-      const issue = (await res.json()) as { key: string; fields: { summary: string; description?: JiraDescriptionNode; status?: { name: string }; labels?: string[] } };
+      const issue = (await res.json()) as JiraIssue;
       return { ok: true, ticket: this.toTicket(issue) };
+    } catch (error) {
+      return { ok: false, reason: `Failed to reach Jira: ${error instanceof Error ? error.message : String(error)}` };
+    }
+  }
+
+  /** Atlassian sunset `GET /rest/api/3/search` (returns 410 Gone as of May 2025) in favor of the
+   *  Enhanced JQL endpoint, `POST /rest/api/3/search/jql` — same JQL semantics, same issue shape,
+   *  just a POST body instead of query params. Shared by searchTickets/listMyTickets below. */
+  private async runJqlSearch(jql: string, maxResults: number): Promise<ConnectorResult<{ tickets: InfraTicket[] }>> {
+    try {
+      const res = await fetch(`${(this.baseUrl ?? '').replace(/\/+$/, '')}/rest/api/3/search/jql`, {
+        method: 'POST',
+        headers: { ...this.headers(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jql, maxResults, fields: ['summary', 'description', 'status', 'labels', 'priority', 'duedate', 'assignee', 'reporter'] }),
+      });
+      if (!res.ok) return { ok: false, reason: `Jira API returned ${res.status} for search` };
+      const data = (await res.json()) as { issues: JiraIssue[] };
+      return { ok: true, tickets: data.issues.map((issue) => this.toTicket(issue)) };
     } catch (error) {
       return { ok: false, reason: `Failed to reach Jira: ${error instanceof Error ? error.message : String(error)}` };
     }
@@ -71,15 +110,15 @@ export class JiraConnector implements ProjectManagementConnector {
 
   async searchTickets(query: string): Promise<ConnectorResult<{ tickets: InfraTicket[] }>> {
     if (!this.isConfigured()) return this.notConfigured();
-    try {
-      const jql = `text ~ "${query.replace(/"/g, '\\"')}" ORDER BY updated DESC`;
-      const params = new URLSearchParams({ jql, maxResults: '20' });
-      const res = await fetch(`${(this.baseUrl ?? '').replace(/\/+$/, '')}/rest/api/3/search?${params.toString()}`, { headers: this.headers() });
-      if (!res.ok) return { ok: false, reason: `Jira API returned ${res.status} for search` };
-      const data = (await res.json()) as { issues: Array<{ key: string; fields: { summary: string; description?: JiraDescriptionNode; status?: { name: string }; labels?: string[] } }> };
-      return { ok: true, tickets: data.issues.map((issue) => this.toTicket(issue)) };
-    } catch (error) {
-      return { ok: false, reason: `Failed to reach Jira: ${error instanceof Error ? error.message : String(error)}` };
-    }
+    const jql = `text ~ "${query.replace(/"/g, '\\"')}" ORDER BY updated DESC`;
+    return this.runJqlSearch(jql, 20);
+  }
+
+  /** `currentUser()` is a real Jira JQL function resolved server-side against whichever account
+   *  the connected token belongs to — never a locally-guessed username/accountId. */
+  async listMyTickets(): Promise<ConnectorResult<{ tickets: InfraTicket[] }>> {
+    if (!this.isConfigured()) return this.notConfigured();
+    const jql = 'assignee = currentUser() ORDER BY updated DESC';
+    return this.runJqlSearch(jql, 50);
   }
 }

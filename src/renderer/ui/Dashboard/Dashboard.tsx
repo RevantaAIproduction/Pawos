@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import styles from './dashboard.module.css';
 import { Sidebar } from './Sidebar';
+import { TicketBalanceIndicator } from './TicketBalanceIndicator';
 import type { ProfileMenuAction } from './ProfileMenu';
 import { OverviewSection } from './sections/OverviewSection';
 import { CompanionLabSection } from './sections/CompanionLabSection';
@@ -50,6 +51,25 @@ export function Dashboard({
 }) {
   const ipc = useIpcBridge();
   const [active, setActive] = useState<SectionId>('home');
+  // Real navigation history (not a fabricated stack) — every section change goes through
+  // navigateTo() below, which pushes the section being left onto this before switching, so Back
+  // always returns to wherever the user actually was, not a guessed "previous" screen.
+  const [navHistory, setNavHistory] = useState<SectionId[]>([]);
+  const navigateTo = useCallback((id: SectionId) => {
+    setActive((current) => {
+      if (current !== id) setNavHistory((h) => [...h, current]);
+      return id;
+    });
+  }, []);
+  const goBack = useCallback(() => {
+    setNavHistory((h) => {
+      if (h.length === 0) return h;
+      const next = [...h];
+      const prev = next.pop()!;
+      setActive(prev);
+      return next;
+    });
+  }, []);
   const [companionEnabled, setCompanionEnabled] = useState(false);
   const [pending, setPending] = useState(false);
   // companion:enable resolves the instant the overlay window is created —
@@ -93,6 +113,13 @@ export function Dashboard({
       clearWakeTimeout();
     });
   }, [ipc, clearWakeTimeout]);
+
+  // The companion overlay's "Upgrade" button (on a locked model, or the usage-exhaustion
+  // flow) has no billing UI of its own — it asks the main process to focus this window and
+  // land here, on the real Upgrade/Billing page, instead of a local preference panel.
+  useEffect(() => {
+    ipc.onUiNavigateUpgrade(() => navigateTo('upgrade'));
+  }, [ipc]);
 
   // P0-2 security fix: this used to be the one place that called the security-definer
   // add_ticket_balance() RPC directly with a client-supplied amount after an UNVERIFIED loopback
@@ -163,12 +190,12 @@ export function Dashboard({
 
   const openSettingsTab = (tab: SettingsTab) => {
     setSettingsInitialTab(tab);
-    setActive('settings');
+    navigateTo('settings');
   };
 
   const openWorkRecord = (id: string) => {
     setSelectedWorkId(id);
-    setActive('workHistory');
+    navigateTo('workHistory');
   };
 
   const handleProfileAction = (action: ProfileMenuAction) => {
@@ -177,7 +204,7 @@ export function Dashboard({
         openSettingsTab('Account');
         break;
       case 'upgrade':
-        setActive('upgrade');
+        navigateTo('upgrade');
         break;
       case 'logout':
         onSignOut();
@@ -196,7 +223,9 @@ export function Dashboard({
       <RatingFeedbackModal />
       <Sidebar
         active={active}
-        onSelect={setActive}
+        onSelect={navigateTo}
+        onBack={goBack}
+        canGoBack={navHistory.length > 0}
         userName={user.name}
         tierLabel={tierLabel}
         isGuest={user.isGuest}
@@ -205,6 +234,9 @@ export function Dashboard({
         onOpenUrl={openUrl}
       />
       <main className={styles.main}>
+        <div className={styles.topBar}>
+          <TicketBalanceIndicator isGuest={user.isGuest} onOpen={() => openSettingsTab('Billing')} />
+        </div>
         <div className={styles.content}>
           {active === 'home' && (
             <OverviewSection

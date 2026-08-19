@@ -15,8 +15,12 @@ export function ForgotPasswordForm() {
     setMessage(null);
     try {
       const supabase = createClient();
+      // Routed through /auth/callback (not straight to /reset-password) so the PKCE `code`
+      // Supabase appends to the link actually gets exchanged for a real session first — the
+      // same exchange login/signup/OAuth already rely on. Without this, /reset-password would
+      // load with no session and updateUser() would fail with "Auth session missing".
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
       });
       if (error) {
         setStatus("error");

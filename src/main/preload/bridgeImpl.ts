@@ -50,6 +50,13 @@ import type {
   SeatTier,
 } from "../../shared/billing/BillingTypes";
 import type { AiUsageCategory } from "../../shared/billing/AiUsageCategories";
+import type {
+  TurnUsageSubmission,
+  AggregatedTurnUsage,
+  NormalizedUsageRecord,
+  ProviderUsageMetadata,
+  UsageRequestType,
+} from "../../shared/billing/UsageMeteringTypes";
 import {
   ORGANIZATION_USAGE_RECORD_REQUEST_CHANNEL,
   ORGANIZATION_USAGE_RECORD_RESPONSE_CHANNEL_PREFIX,
@@ -166,6 +173,11 @@ export function contextBridge() {
       ipcRenderer.on("ui:open-settings", () => cb());
     },
 
+    openUpgradeInDashboard: () => ipcRenderer.send("ui:open-upgrade"),
+    onUiNavigateUpgrade: (cb: () => void) => {
+      ipcRenderer.on("ui:navigate-upgrade", () => cb());
+    },
+
     overlayMoveWindow: (x: number, y: number) => ipcRenderer.invoke("overlay:moveWindow", x, y) as Promise<boolean>,
     overlayGetWindowBounds: () =>
       ipcRenderer.invoke("overlay:getWindowBounds") as Promise<{ x: number; y: number; width: number; height: number } | null>,
@@ -209,8 +221,18 @@ export function contextBridge() {
       ipcRenderer.invoke("billing:reconcileForAccount", accountId) as Promise<SubscriptionState>,
     billingResetSubscription: () => ipcRenderer.invoke("billing:resetSubscription") as Promise<SubscriptionState>,
     billingGetCreditBalance: () => ipcRenderer.invoke("billing:getCreditBalance") as Promise<CreditBalance>,
-    billingConsumeCredit: (amount: number, reason: string, category?: AiUsageCategory) =>
-      ipcRenderer.invoke("billing:consumeCredit", amount, reason, category) as Promise<CreditBalance>,
+    billingConsumeCredit: (amount: number, reason: string, category?: AiUsageCategory, pawModelId?: PawModelId) =>
+      ipcRenderer.invoke("billing:consumeCredit", amount, reason, category, pawModelId) as Promise<CreditBalance>,
+    billingCanStartGeneration: (pawModelId?: PawModelId) =>
+      ipcRenderer.invoke("billing:canStartGeneration", pawModelId) as Promise<{ allowed: boolean; reason?: string; pooled?: boolean }>,
+    billingRecordTurnUsage: (submission: TurnUsageSubmission, reason: string, category?: AiUsageCategory, pawModelId?: PawModelId) =>
+      ipcRenderer.invoke("billing:recordTurnUsage", submission, reason, category, pawModelId) as Promise<{ aggregated: AggregatedTurnUsage; balance: CreditBalance }>,
+    billingReportUsageEvent: (
+      usage: ProviderUsageMetadata,
+      requestType: UsageRequestType,
+      context: { sessionId: string | null; runId: string | null }
+    ) => ipcRenderer.invoke("billing:reportUsageEvent", usage, requestType, context) as Promise<NormalizedUsageRecord>,
+    billingGetUsageEvents: (limit?: number) => ipcRenderer.invoke("billing:getUsageEvents", limit) as Promise<NormalizedUsageRecord[]>,
     billingGetCreditHistory: () => ipcRenderer.invoke("billing:getCreditHistory") as Promise<CreditConsumptionRecord[]>,
     billingGrantComputeBonus: (units: number) => ipcRenderer.invoke("billing:grantComputeBonus", units) as Promise<EntitlementSnapshot>,
 
@@ -232,7 +254,7 @@ export function contextBridge() {
     onSubscriptionUpdated: (cb: () => void) => {
       ipcRenderer.on("billing:subscriptionUpdated", () => cb());
     },
-    onTaskCreditsPurchased: (cb: (payload: { amountUsd: number; organizationId?: string }) => void) => {
+    onTaskCreditsPurchased: (cb: (payload: { amountUsd?: number; organizationId?: string }) => void) => {
       ipcRenderer.on("billing:taskCreditsPurchased", (_evt, payload) => cb(payload));
     },
 

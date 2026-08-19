@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { entitlementService } from './EntitlementService';
 import { subscriptionStore } from './SubscriptionStore';
 import { creditStore } from './CreditStore';
+import { usageEventStore } from './UsageEventStore';
+import { pawComputeCapacityStore } from './PawComputeCapacityStore';
 import type { RuntimeEntitlementGrant } from '../../shared/billing/BillingTypes';
 
 describe('EntitlementService — Go tier Think-not-Execute redesign', () => {
@@ -14,13 +16,17 @@ describe('EntitlementService — Go tier Think-not-Execute redesign', () => {
     expect(entitlementService.isModelAvailable('paw-flash')).toBe(true);
   });
 
-  it('caps Go credits at a real positive number — not 0 (no AI) and not null (unlimited)', () => {
+  it('getCreditLimit() returns null for all tiers — monthly flat-credit limits replaced by rolling windows', () => {
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'go', status: 'none' });
+    expect(entitlementService.getCreditLimit()).toBeNull();
+  });
 
-    const limit = entitlementService.getCreditLimit();
-    expect(limit).not.toBeNull();
-    expect(limit).toBeGreaterThan(0);
-    expect(limit).toBe(20);
+  it('Go has a finite rolling 5-hour Paw Compute capacity (not null/unlimited)', () => {
+    vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'go', status: 'none' });
+    vi.spyOn(usageEventStore, 'list').mockReturnValue([]);
+    const snap = entitlementService.getSnapshot();
+    expect(snap.limit5hPc).not.toBeNull();
+    expect(snap.limit5hPc as number).toBeGreaterThan(0);
   });
 
   it('does not grant advancedRuntimes (the Execute-class entitlement) to Go', () => {
@@ -30,13 +36,17 @@ describe('EntitlementService — Go tier Think-not-Execute redesign', () => {
     expect(entitlementService.isRuntimeEntitled('coding')).toBe(false);
   });
 
-  it('Paw Credits can extend compute headroom but never unlock Go execution entitlements', () => {
+  it('bonus Paw Credits extend Fable headroom but never unlock Go execution entitlements', () => {
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'go', status: 'none' });
+    vi.spyOn(usageEventStore, 'list').mockReturnValue([]);
     vi.spyOn(creditStore, 'getBalance').mockReturnValue({
       limit: null,
       usedThisPeriod: 20,
       bonusThisPeriod: 5,
       periodResetsAt: Date.now() + 1000,
+      usedThisWeek: 0,
+      weekResetsAt: Date.now() + 1000,
+      fableUsedThisPeriod: 0,
     });
 
     expect(entitlementService.hasCreditsRemaining()).toBe(true);
@@ -44,8 +54,9 @@ describe('EntitlementService — Go tier Think-not-Execute redesign', () => {
     expect(entitlementService.isRuntimeEntitled('coding')).toBe(false);
   });
 
-  it('still reports hasCreditsRemaining() true when nothing has been consumed yet', () => {
+  it('still reports hasCreditsRemaining() true when nothing has been consumed yet (rolling window empty)', () => {
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'go', status: 'none' });
+    vi.spyOn(usageEventStore, 'list').mockReturnValue([]);
 
     expect(entitlementService.hasCreditsRemaining()).toBe(true);
   });
@@ -60,35 +71,53 @@ describe('EntitlementService — Go tier Think-not-Execute redesign', () => {
 describe('EntitlementService — Paw Compute usage-limit enforcement (paid tiers)', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('Pro has a real, finite, positive monthly Paw Compute limit — not unlimited', () => {
-    vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'pro', status: 'active' });
-
-    const limit = entitlementService.getCreditLimit();
-    expect(limit).not.toBeNull();
-    expect(limit).toBeGreaterThan(0);
+  it('getCreditLimit() always returns null — rolling windows replace monthly flat-credit limits', () => {
+    for (const tier of ['go', 'pro', 'proMax', 'team', 'enterprise'] as const) {
+      vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier, status: 'active' });
+      expect(entitlementService.getCreditLimit()).toBeNull();
+    }
   });
 
-  it('Pro Max derives its limit as exactly 20x Pro, never a second hardcoded number', () => {
+  it('Pro has a real, finite, positive 5-hour rolling window limit — not null/unlimited', () => {
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'pro', status: 'active' });
-    const proLimit = entitlementService.getCreditLimit();
+    vi.spyOn(usageEventStore, 'list').mockReturnValue([]);
+    const snap = entitlementService.getSnapshot();
+    expect(snap.limit5hPc).not.toBeNull();
+    expect(snap.limit5hPc as number).toBeGreaterThan(0);
+  });
+
+  it('Pro Max 5h limit is larger than Pro — different rolling window capacity, not 20x monthly', () => {
+    vi.spyOn(usageEventStore, 'list').mockReturnValue([]);
+    vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'pro', status: 'active' });
+    const proSnap = entitlementService.getSnapshot();
 
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'proMax', status: 'active' });
-    const proMaxLimit = entitlementService.getCreditLimit();
+    const proMaxSnap = entitlementService.getSnapshot();
 
-    expect(proLimit).not.toBeNull();
-    expect(proMaxLimit).toBe((proLimit as number) * 20);
+    expect((proMaxSnap.limit5hPc as number)).toBeGreaterThan((proSnap.limit5hPc as number));
   });
 
-  it('Team Standard and Team Premium seats have different, real, per-seat monthly limits', () => {
+  it('Team Premium seats have a larger 5h rolling window than Team Standard', () => {
+    vi.spyOn(usageEventStore, 'list').mockReturnValue([]);
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'team', status: 'active', seatTier: 'standard' });
-    const standardLimit = entitlementService.getCreditLimit();
+    const standardSnap = entitlementService.getSnapshot();
 
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'team', status: 'active', seatTier: 'premium' });
-    const premiumLimit = entitlementService.getCreditLimit();
+    const premiumSnap = entitlementService.getSnapshot();
 
-    expect(standardLimit).not.toBeNull();
-    expect(premiumLimit).not.toBeNull();
-    expect(premiumLimit as number).toBeGreaterThan(standardLimit as number);
+    expect((premiumSnap.limit5hPc as number)).toBeGreaterThan((standardSnap.limit5hPc as number));
+  });
+
+  it('hasCreditsRemaining() is false when 5h usage equals the limit (rolling window exhausted)', () => {
+    vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'pro', status: 'active' });
+    const capacity = pawComputeCapacityStore.resolve('pro');
+    const limit5h = capacity.window5hPc as number;
+    const now = Date.now();
+    // Fill the 5h window exactly to the limit with non-fable records inside the window
+    vi.spyOn(usageEventStore, 'list').mockReturnValue([
+      { usageEventId: 'e1', requestId: 'r1', timestamp: now - 1000, normalizedCompute: limit5h, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, totalTokens: null, thoughtsTokens: null, requestType: 'conversationTurn', sessionId: null, runId: null, provider: 'gemini', model: 'gemini-2.0-flash' },
+    ]);
+    expect(entitlementService.hasCreditsRemaining()).toBe(false);
   });
 
   it('Enterprise is reported as pooled, and hasCreditsRemaining() stays true locally regardless of local CreditStore usage (the real check is server-side)', () => {
@@ -99,6 +128,7 @@ describe('EntitlementService — Paw Compute usage-limit enforcement (paid tiers
   });
 
   it('getSnapshot() reports pooled: false for every non-Enterprise paid tier', () => {
+    vi.spyOn(usageEventStore, 'list').mockReturnValue([]);
     for (const tier of ['pro', 'proMax', 'team'] as const) {
       vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier, status: 'active' });
       expect(entitlementService.getSnapshot().pooled).toBe(false);
@@ -106,8 +136,17 @@ describe('EntitlementService — Paw Compute usage-limit enforcement (paid tiers
   });
 
   it('getSnapshot() reports pooled: true for Enterprise', () => {
+    vi.spyOn(usageEventStore, 'list').mockReturnValue([]);
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'enterprise', status: 'active' });
     expect(entitlementService.getSnapshot().pooled).toBe(true);
+  });
+
+  it('getSnapshot() reports creditLimit and weeklyCreditLimit as null — deprecated, rolling windows are now the enforcement system', () => {
+    vi.spyOn(usageEventStore, 'list').mockReturnValue([]);
+    vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'pro', status: 'active' });
+    const snap = entitlementService.getSnapshot();
+    expect(snap.creditLimit).toBeNull();
+    expect(snap.weeklyCreditLimit).toBeNull();
   });
 
   it.each(['pro', 'proMax', 'team', 'enterprise'] as const)('%s tier still grants advancedRuntimes', (tier) => {
@@ -120,31 +159,29 @@ describe('EntitlementService — Paw Compute usage-limit enforcement (paid tiers
 describe('EntitlementService — runtime entitlement foundation', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it.each(['pro', 'proMax'] as const)('new %s accounts do not automatically receive every runtime entitlement', (tier) => {
+  it.each(['pro', 'proMax'] as const)('new %s accounts get the Coding Runtime plan-derived, but no other runtime entitlement, with no separate purchase', (tier) => {
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier, status: 'active' });
     vi.spyOn(subscriptionStore, 'getPurchasedRuntimeEntitlements').mockReturnValue([]);
+    vi.spyOn(usageEventStore, 'list').mockReturnValue([]);
 
-    expect(entitlementService.isRuntimeEntitled('coding')).toBe(false);
-    expect(entitlementService.getSnapshot().runtimeEntitlements).toEqual([]);
+    expect(entitlementService.isRuntimeEntitled('coding')).toBe(true);
+    expect(entitlementService.isRuntimeEntitled('office')).toBe(false);
+    expect(entitlementService.getSnapshot().runtimeEntitlements).toEqual(['coding']);
   });
 
   it.each(['team', 'enterprise'] as const)('%s keeps the existing organization runtime entitlement behavior for this phase', (tier) => {
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier, status: 'active' });
     vi.spyOn(subscriptionStore, 'getPurchasedRuntimeEntitlements').mockReturnValue([]);
+    vi.spyOn(usageEventStore, 'list').mockReturnValue([]);
 
     expect(entitlementService.isRuntimeEntitled('coding')).toBe(true);
     expect(entitlementService.getSnapshot().runtimeEntitlements).toContain('communication');
   });
 
-  it('keeps UsageEngine and Paw Credits separate from runtime entitlement', () => {
+  it('keeps rolling-window Paw Compute and Paw Credits separate from runtime entitlement', () => {
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'go', status: 'none' });
     vi.spyOn(subscriptionStore, 'getPurchasedRuntimeEntitlements').mockReturnValue([]);
-    vi.spyOn(creditStore, 'getBalance').mockReturnValue({
-      limit: null,
-      usedThisPeriod: 20,
-      bonusThisPeriod: 100,
-      periodResetsAt: Date.now() + 1000,
-    });
+    vi.spyOn(usageEventStore, 'list').mockReturnValue([]);
 
     expect(entitlementService.hasCreditsRemaining()).toBe(true);
     expect(entitlementService.isRuntimeEntitled('coding')).toBe(false);
@@ -180,12 +217,7 @@ describe('EntitlementService — runtime entitlement foundation', () => {
       runtimeEntitlementsGrandfatheredAt: 1,
     });
     vi.spyOn(subscriptionStore, 'getPurchasedRuntimeEntitlements').mockReturnValue(grants);
-    vi.spyOn(creditStore, 'getBalance').mockReturnValue({
-      limit: null,
-      usedThisPeriod: 2000,
-      bonusThisPeriod: 100,
-      periodResetsAt: Date.now() + 1000,
-    });
+    vi.spyOn(usageEventStore, 'list').mockReturnValue([]);
 
     expect(entitlementService.isRuntimeEntitled('coding')).toBe(true);
     expect(entitlementService.isRuntimeEntitled('office')).toBe(false);
@@ -211,10 +243,9 @@ describe('EntitlementService — getModelTierRequirements (model picker)', () =>
     expect(requirements['paw-flash']).toBe('go');
     expect(requirements['paw-swift']).toBe('pro');
     expect(requirements['paw-core']).toBe('pro');
-    expect(requirements['paw-creative']).toBe('pro');
+    expect(requirements['paw-fable']).toBe('pro');
     expect(requirements['paw-vision']).toBe('pro');
     expect(requirements['paw-voice']).toBe('pro');
-    expect(requirements['paw-motion']).toBe('pro');
     expect(requirements['paw-memory']).toBe('pro');
   });
 

@@ -9,6 +9,7 @@ import {
   classifySessionContinuation,
   type SessionContinuationCandidate,
   type SessionContinuationDecision,
+  type SessionClassifierUsage,
 } from './SessionClassifier';
 import { resolveReasoningModel } from './PawModelRegistry';
 import { PAW_MODEL_CATALOG, getPawModel, type PawModelId, type PawModelDescriptor } from '../../shared/ai/PawModelTypes';
@@ -72,9 +73,9 @@ export class AIRouter {
   async classifySessionContinuation(
     transcript: string,
     candidates: SessionContinuationCandidate[]
-  ): Promise<SessionContinuationDecision> {
+  ): Promise<{ decision: SessionContinuationDecision; usage: SessionClassifierUsage | null }> {
     const apiKey = aiProviderConfigStore.getApiKey('gemini');
-    if (!apiKey) return { action: 'new', sessionId: null };
+    if (!apiKey) return { decision: { action: 'new', sessionId: null }, usage: null };
     return classifySessionContinuation({ apiKey, transcript, candidates });
   }
 }

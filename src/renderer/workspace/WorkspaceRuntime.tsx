@@ -13,6 +13,12 @@ import {
   getErrorTimeline,
   getLatestDevBrowserConsole,
   getLatestCodingMemory,
+  getLatestGitDiff,
+  getLatestGitLog,
+  getLatestValidationReport,
+  getLatestAffectedFiles,
+  type ValidationReportSummary,
+  type GitCommitEntry,
 } from '../conversation/TaskCard';
 import type { ConversationTaskRecord } from '../conversation/ConversationTypes';
 import type { WorkspaceRegionSlot } from './WorkspaceTypes';
@@ -83,6 +89,7 @@ const CODING_TASK_ACTION_TYPES = new Set<ActionRequest['type']>([
   'recordCodingPreference',
   'queryCodingRuntimeMemory',
   'gitRevertCommit',
+  'gitCreateWorktree',
 ]);
 
 /**
@@ -323,7 +330,7 @@ export function WorkspaceRuntime({
     return () => {
       cancelled = true;
     };
-  }, [codingTask]);
+  }, [codingTask, task.actions.length]);
 
   const proOnlyPlaceholder = (whenGo: string, whenProEmpty: string) =>
     codingMode === 'go' ? whenGo : whenProEmpty;
@@ -407,6 +414,10 @@ export function WorkspaceRuntime({
   const [fileSearch, setFileSearch] = useState('');
   const [searchResults, setSearchResults] = useState<string[]>([]);
   const [searchStatus, setSearchStatus] = useState<'idle' | 'searching' | 'error'>('idle');
+  const [selectedKind, setSelectedKind] = useState<'file' | 'folder' | null>(null);
+  const [fileContent, setFileContent] = useState<string | null>(null);
+  const [fileContentLoading, setFileContentLoading] = useState(false);
+  const [fileContentError, setFileContentError] = useState<string | null>(null);
 
   useEffect(() => {
     setProjectContextCleared(false);
@@ -416,6 +427,9 @@ export function WorkspaceRuntime({
     setSearchResults([]);
     setFileSearch('');
     setSearchStatus('idle');
+    setSelectedKind(null);
+    setFileContent(null);
+    setFileContentError(null);
   }, [task.id]);
 
   useEffect(() => {
@@ -425,7 +439,10 @@ export function WorkspaceRuntime({
   }, [activeRoot, projectContextCleared, workspaceRoots]);
 
   useEffect(() => {
-    if (inferredActiveFile) setSelectedPath(inferredActiveFile);
+    if (inferredActiveFile) {
+      setSelectedPath(inferredActiveFile);
+      setSelectedKind('file');
+    }
   }, [inferredActiveFile]);
 
   async function loadDirectory(path: string) {
@@ -470,12 +487,48 @@ export function WorkspaceRuntime({
 
   function selectPath(path: string, kind: 'file' | 'folder') {
     setSelectedPath(path);
+    setSelectedKind(kind);
     if (kind === 'folder') {
       if (!expandedPaths.has(path)) toggleDirectory(path);
       return;
     }
     onOpenPath?.(path, 'file');
   }
+
+  // P0.1 — fetch file content whenever a file (not folder) is selected
+  useEffect(() => {
+    if (!selectedPath || selectedKind !== 'file') {
+      setFileContent(null);
+      setFileContentError(null);
+      setFileContentLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setFileContentLoading(true);
+    setFileContent(null);
+    setFileContentError(null);
+    ipc.actionExecute({ type: 'readFile', path: selectedPath }).then((result) => {
+      if (cancelled) return;
+      setFileContentLoading(false);
+      if (!result.ok) {
+        setFileContentError(result.message ?? 'Could not read file.');
+        return;
+      }
+      const data = result.data as { content?: string } | undefined;
+      setFileContent(typeof data?.content === 'string' ? data.content : '');
+    }).catch((err: unknown) => {
+      if (cancelled) return;
+      setFileContentLoading(false);
+      setFileContentError(err instanceof Error ? err.message : 'Could not read file.');
+    });
+    return () => { cancelled = true; };
+  }, [selectedPath, selectedKind]);
+
+  // P3.2 — sync discoverAffectedFiles results to the explorer search results panel
+  useEffect(() => {
+    const discovered = getLatestAffectedFiles(task);
+    if (discovered && discovered.length > 0) setSearchResults(discovered);
+  }, [task.actions.length]);
 
   async function runFileSearch(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -551,7 +604,27 @@ export function WorkspaceRuntime({
         );
       },
     },
-    { id: 'gitTimeline', render: null },
+    {
+      id: 'gitTimeline',
+      render: () => {
+        const commits = getLatestGitLog(task);
+        if (!commits) return null;
+        return (
+          <div className={styles.codingSection}>
+            <span className={styles.codingSectionTitle}>Git Timeline</span>
+            <ul className={styles.todoList}>
+              {commits.slice(0, 10).map((c: GitCommitEntry) => (
+                <li key={c.hash} className={styles.todoItem}>
+                  <span className={styles.gitHash}>{c.hash.slice(0, 7)}</span>
+                  <span className={styles.gitSubject}>{c.subject}</span>
+                  <span className={styles.gitMeta}>{c.author}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      },
+    },
   ];
 
   if (codingTask) {
@@ -609,23 +682,18 @@ export function WorkspaceRuntime({
         id: 'runningProcesses',
         render: () => {
           const processes = getLatestRunningProcesses(task);
+          if (!processes || processes.length === 0) return null;
           return (
             <div className={styles.codingSection}>
               <span className={styles.codingSectionTitle}>Running Processes</span>
-              {processes && processes.length > 0 ? (
-                <ul className={styles.todoList}>
-                  {processes.map((p) => (
-                    <li key={p.id} className={styles.todoItem}>
-                      <span>{p.status === 'running' ? '●' : p.status === 'starting' ? '◐' : '○'}</span>
-                      <span>{p.command} — {p.status}{p.pid ? ` (pid ${p.pid})` : ''}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <span className={styles.codingSectionEmpty}>
-                  {proOnlyPlaceholder('Paw Go is planning & analysis only — no processes run in this mode.', 'No processes running yet.')}
-                </span>
-              )}
+              <ul className={styles.todoList}>
+                {processes.map((p) => (
+                  <li key={p.id} className={styles.todoItem}>
+                    <span>{p.status === 'running' ? '●' : p.status === 'starting' ? '◐' : '○'}</span>
+                    <span>{p.command} — {p.status}{p.pid ? ` (pid ${p.pid})` : ''}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           );
         },
@@ -634,16 +702,11 @@ export function WorkspaceRuntime({
         id: 'terminalOutput',
         render: () => {
           const output = getLatestTerminalOutput(task);
+          if (!output) return null;
           return (
             <div className={styles.codingSection}>
               <span className={styles.codingSectionTitle}>Terminal Output</span>
-              {output ? (
-                <pre className={styles.terminalPreview}>{output.slice(-1200)}</pre>
-              ) : (
-                <span className={styles.codingSectionEmpty}>
-                  {proOnlyPlaceholder('Paw Go is planning & analysis only — no terminal output in this mode.', 'No commands run yet.')}
-                </span>
-              )}
+              <pre className={styles.terminalPreview}>{output.slice(-1200)}</pre>
             </div>
           );
         },
@@ -651,24 +714,48 @@ export function WorkspaceRuntime({
       {
         id: 'codeDiff',
         render: () => {
+          const diff = getLatestGitDiff(task);
           const stat = getLatestCodeDiffStat(task);
+          if (!diff && (!stat || stat.filesChanged.length === 0)) return null;
+          if (diff) {
+            // Parse unified diff into typed lines for rendering
+            const diffLines = diff.diff.split('\n').map((line) => {
+              if (line.startsWith('diff --git') || line.startsWith('index ') || line.startsWith('--- ') || line.startsWith('+++ ')) {
+                return { kind: 'header' as const, content: line };
+              }
+              if (line.startsWith('@@')) return { kind: 'hunk' as const, content: line };
+              if (line.startsWith('+')) return { kind: 'added' as const, content: line.slice(1) };
+              if (line.startsWith('-')) return { kind: 'deleted' as const, content: line.slice(1) };
+              return { kind: 'context' as const, content: line.slice(1) };
+            });
+            return (
+              <div className={styles.codingSection}>
+                <span className={styles.codingSectionTitle}>Live Code Diff{diff.truncated ? ' (truncated)' : ''}</span>
+                <div className={styles.diffView}>
+                  {diffLines.map((l, i) => (
+                    <div key={i} className={`${styles.diffLine} ${styles[`diffLine_${l.kind}`] ?? ''}`}>
+                      <span className={styles.diffPrefix}>
+                        {l.kind === 'added' ? '+' : l.kind === 'deleted' ? '-' : l.kind === 'hunk' ? '@@' : ''}
+                      </span>
+                      <span className={styles.diffContent}>{l.content}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          }
+          // Fall back to stat-only view when no unified diff is available yet
           return (
             <div className={styles.codingSection}>
               <span className={styles.codingSectionTitle}>Live Code Diff</span>
-              {stat && stat.filesChanged.length > 0 ? (
-                <ul className={styles.todoList}>
-                  {stat.filesChanged.map((f, i) => (
-                    <li key={i} className={styles.todoItem}>
-                      <span>{f.path}</span>
-                      <span>(+{f.added}/-{f.deleted})</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <span className={styles.codingSectionEmpty}>
-                  {proOnlyPlaceholder('Paw Go is planning & analysis only — no file changes in this mode.', 'No changes made yet in this session.')}
-                </span>
-              )}
+              <ul className={styles.todoList}>
+                {stat!.filesChanged.map((f, i) => (
+                  <li key={i} className={styles.todoItem}>
+                    <span>{f.path}</span>
+                    <span className={styles.diffStatBadge}>{f.added > 0 ? `+${f.added}` : ''}{f.deleted > 0 ? ` -${f.deleted}` : ''}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           );
         },
@@ -677,22 +764,17 @@ export function WorkspaceRuntime({
         id: 'buildStatus',
         render: () => {
           const build = getLatestBuildStatus(task);
+          if (!build) return null;
           return (
             <div className={styles.codingSection}>
               <span className={styles.codingSectionTitle}>Build Status</span>
-              {build ? (
-                <div className={styles.codingSectionBody}>
-                  <span className={styles.codingSectionEmpty}>
-                    {build.status === 'success' ? '✓' : '✗'} {build.buildTool ?? 'Build'} — {build.status === 'success' ? 'succeeded' : 'failed'}
-                    {build.durationMs !== undefined ? ` (${(build.durationMs / 1000).toFixed(1)}s)` : ''}
-                  </span>
-                  {build.failureDetail && <pre className={styles.terminalPreview}>{build.failureDetail.slice(-500)}</pre>}
-                </div>
-              ) : (
-                <span className={styles.codingSectionEmpty}>
-                  {proOnlyPlaceholder('Paw Go is planning & analysis only — builds aren’t run in this mode.', 'Not built yet.')}
+              <div className={styles.codingSectionBody}>
+                <span className={build.status === 'success' ? styles.diffAdded : styles.diffDeleted}>
+                  {build.status === 'success' ? '✓' : '✗'} {build.buildTool ?? 'Build'} — {build.status === 'success' ? 'succeeded' : 'failed'}
+                  {build.durationMs !== undefined ? ` (${(build.durationMs / 1000).toFixed(1)}s)` : ''}
                 </span>
-              )}
+                {build.failureDetail && <pre className={styles.terminalPreview}>{build.failureDetail.slice(-500)}</pre>}
+              </div>
             </div>
           );
         },
@@ -701,23 +783,18 @@ export function WorkspaceRuntime({
         id: 'testResults',
         render: () => {
           const results = getLatestTestResults(task);
+          if (!results) return null;
           return (
             <div className={styles.codingSection}>
               <span className={styles.codingSectionTitle}>Test Results</span>
-              {results ? (
-                <div className={styles.codingSectionBody}>
-                  <span className={styles.codingSectionEmpty}>
-                    {results.status === 'passed' ? '✓' : results.status === 'failed' ? '✗' : '?'}{' '}
-                    {results.status === 'passed' ? 'Passed' : results.status === 'failed' ? 'Failed' : 'Unknown'}
-                    {results.total !== undefined ? ` — ${results.passed ?? 0}/${results.total}` : ''}
-                  </span>
-                  {results.failureDetail && <pre className={styles.terminalPreview}>{results.failureDetail.slice(-500)}</pre>}
-                </div>
-              ) : (
-                <span className={styles.codingSectionEmpty}>
-                  {proOnlyPlaceholder('Paw Go is planning & analysis only — tests aren’t run in this mode.', 'No tests run yet.')}
+              <div className={styles.codingSectionBody}>
+                <span className={results.status === 'passed' ? styles.diffAdded : styles.diffDeleted}>
+                  {results.status === 'passed' ? '✓' : results.status === 'failed' ? '✗' : '?'}{' '}
+                  {results.status === 'passed' ? 'Passed' : results.status === 'failed' ? 'Failed' : 'Unknown'}
+                  {results.total !== undefined ? ` — ${results.passed ?? 0}/${results.total}` : ''}
                 </span>
-              )}
+                {results.failureDetail && <pre className={styles.terminalPreview}>{results.failureDetail.slice(-500)}</pre>}
+              </div>
             </div>
           );
         },
@@ -726,23 +803,18 @@ export function WorkspaceRuntime({
         id: 'browserConsole',
         render: () => {
           const entries = getLatestDevBrowserConsole(task);
+          if (!entries || entries.length === 0) return null;
           return (
             <div className={styles.codingSection}>
               <span className={styles.codingSectionTitle}>Browser Console</span>
-              {entries && entries.length > 0 ? (
-                <ul className={styles.todoList}>
-                  {entries.map((e, i) => (
-                    <li key={i} className={styles.todoItem}>
-                      <span>{e.level === 'error' ? '✗' : e.level === 'warning' ? '⚠' : '·'}</span>
-                      <span>{e.text}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <span className={styles.codingSectionEmpty}>
-                  {proOnlyPlaceholder('Browser console monitoring is a Paw Pro feature.', 'No browser session open yet.')}
-                </span>
-              )}
+              <ul className={styles.todoList}>
+                {entries.map((e, i) => (
+                  <li key={i} className={styles.todoItem}>
+                    <span>{e.level === 'error' ? '✗' : e.level === 'warning' ? '⚠' : '·'}</span>
+                    <span>{e.text}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           );
         },
@@ -751,23 +823,18 @@ export function WorkspaceRuntime({
         id: 'errorTimeline',
         render: () => {
           const errors = getErrorTimeline(task);
+          if (errors.length === 0) return null;
           return (
             <div className={styles.codingSection}>
               <span className={styles.codingSectionTitle}>Error Timeline</span>
-              {errors.length > 0 ? (
-                <ul className={styles.todoList}>
-                  {errors.map((e) => (
-                    <li key={e.id} className={styles.todoItem}>
-                      <span>✗</span>
-                      <span>{e.actionType}: {e.message}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <span className={styles.codingSectionEmpty}>
-                  {proOnlyPlaceholder('Paw Go is planning & analysis only — no execution errors occur in this mode.', 'No errors recorded yet.')}
-                </span>
-              )}
+              <ul className={styles.todoList}>
+                {errors.map((e) => (
+                  <li key={e.id} className={styles.todoItem}>
+                    <span>✗</span>
+                    <span>{e.actionType}: {e.message}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           );
         },
@@ -829,6 +896,52 @@ export function WorkspaceRuntime({
                       ))}
                     </>
                   )}
+                </ul>
+              )}
+            </div>
+          );
+        },
+      },
+      // P0.3 — Validation results panel: all 6 pipeline steps from RunValidationPipelinePlugin
+      {
+        id: 'validationResults',
+        render: () => {
+          const report: ValidationReportSummary | undefined = getLatestValidationReport(task);
+          if (!report) return null;
+          return (
+            <div className={styles.codingSection}>
+              <span className={styles.codingSectionTitle}>
+                Validation {report.blockingIssues.length === 0 ? '✓' : `✗ ${report.blockingIssues.length} issue${report.blockingIssues.length === 1 ? '' : 's'}`}
+                <span className={styles.validationConfidence}>{report.confidence} confidence</span>
+              </span>
+              <ul className={styles.validationStepList}>
+                {report.steps.map((step) => (
+                  <li key={step.id} className={styles.validationStep}>
+                    <span className={
+                      step.status === 'passed' ? styles.validationPassed :
+                      step.status === 'failed' ? styles.validationFailed :
+                      styles.validationSkipped
+                    }>
+                      {step.status === 'passed' ? '✓' : step.status === 'failed' ? '✗' : '–'}
+                    </span>
+                    <span className={styles.validationStepName}>{step.id}</span>
+                    {step.status === 'skipped' && step.skippedReason && (
+                      <span className={styles.validationSkippedReason}>{step.skippedReason}</span>
+                    )}
+                    {step.durationMs !== undefined && (
+                      <span className={styles.validationDuration}>{(step.durationMs / 1000).toFixed(1)}s</span>
+                    )}
+                    {step.errorDetail && (
+                      <pre className={styles.validationErrorDetail}>{step.errorDetail.slice(-300)}</pre>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {report.blockingIssues.length > 0 && (
+                <ul className={styles.validationIssueList}>
+                  {report.blockingIssues.map((issue, i) => (
+                    <li key={i} className={styles.validationIssueItem}>{issue}</li>
+                  ))}
                 </ul>
               )}
             </div>
@@ -1264,31 +1377,40 @@ export function WorkspaceRuntime({
   if (intelligenceTask || codingTask) {
     regions.push({
       id: 'executionPlan',
-      render: () => (
-        <div className={styles.codingSection}>
-          <span className={styles.codingSectionTitle}>Execution Plan</span>
-          {executionPlan ? (
-            <ul className={styles.todoList}>
-              <li className={styles.todoItem}>
-                <span>◆</span>
-                <span>
-                  {executionPlan.steps.length} proposed step{executionPlan.steps.length === 1 ? '' : 's'} — review before anything runs
-                </span>
-              </li>
-              {executionPlan.unplannableFindingIds.length > 0 && (
-                <li className={styles.todoItem}>
-                  <span>◆</span>
-                  <span>
-                    {executionPlan.unplannableFindingIds.length} approved finding{executionPlan.unplannableFindingIds.length === 1 ? '' : 's'} had no safe automated fix
-                  </span>
-                </li>
-              )}
+      render: () => {
+        if (!executionPlan) return null;
+        return (
+          <div className={styles.codingSection}>
+            <span className={styles.codingSectionTitle}>
+              Execution Plan — {executionPlan.steps.length} step{executionPlan.steps.length === 1 ? '' : 's'}
+            </span>
+            <ul className={styles.planStepList}>
+              {executionPlan.steps.map((step, i) => {
+                const req = step.actionRequest as Record<string, unknown>;
+                const targetPath = typeof req.path === 'string' ? req.path : typeof req.cwd === 'string' ? req.cwd : undefined;
+                return (
+                  <li key={step.id} className={styles.planStep}>
+                    <span className={styles.planStepIndex}>{i + 1}</span>
+                    <div className={styles.planStepBody}>
+                      <span className={styles.planStepAction}>{step.actionRequest.type}</span>
+                      {targetPath && <span className={styles.planStepPath}>{targetPath.split(/[/\\]/).pop()}</span>}
+                      <span className={styles.planStepRationale}>{step.rationale}</span>
+                    </div>
+                    <span className={`${styles.planStepStatus} ${styles[`planStatus_${step.status}`] ?? ''}`}>
+                      {step.status}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
-          ) : (
-            <span className={styles.codingSectionEmpty}>No execution plan proposed yet in this session.</span>
-          )}
-        </div>
-      ),
+            {executionPlan.unplannableFindingIds.length > 0 && (
+              <span className={styles.codingSectionEmpty}>
+                {executionPlan.unplannableFindingIds.length} finding{executionPlan.unplannableFindingIds.length === 1 ? '' : 's'} had no safe automated fix.
+              </span>
+            )}
+          </div>
+        );
+      },
     });
   }
 
@@ -1336,11 +1458,13 @@ export function WorkspaceRuntime({
       'todoProgress',
       'runningProcesses',
       'codeDiff',
+      'validationResults',
       'buildStatus',
       'testResults',
       'browserConsole',
       'errorTimeline',
       'codingMemory',
+      'gitTimeline',
       'executionPlan',
       'evidence',
       'browserPreview',
@@ -1364,6 +1488,7 @@ export function WorkspaceRuntime({
                     setProjectContextCleared(true);
                     setActiveRoot(null);
                     setSelectedPath(null);
+                    setSelectedKind(null);
                     setSearchResults([]);
                     setExpandedPaths(new Set());
                   }}
@@ -1436,88 +1561,136 @@ export function WorkspaceRuntime({
 
           <main className={styles.workspaceMain}>
             {renderRegion('goal')}
-            <div className={styles.selectedFilePanel}>
-              <span className={styles.selectedFileEyebrow}>Active File</span>
-              <span className={styles.selectedFileName}>{selectedLabel}</span>
-              {selectedParent && <span className={styles.selectedFilePath}>{selectedParent}</span>}
-              <div className={styles.completionGrid}>
-                <div className={styles.completionTile}>
-                  <span className={styles.completionLabel}>Files</span>
-                  <span className={styles.completionValue}>
-                    {completion.createdFiles.length} created / {completion.modifiedFiles.length} modified
-                  </span>
+            {/* P1.4 — Go/Pro mode badge */}
+            {codingMode && (
+              <div className={styles.modeRow}>
+                <span className={`${styles.modeBadge} ${codingMode === 'pro' ? styles.modeBadgePro : styles.modeBadgeGo}`}>
+                  Paw {codingMode === 'pro' ? 'Pro' : 'Go'}
+                </span>
+                <span className={styles.modeDesc}>
+                  {codingMode === 'pro' ? 'Full execution enabled' : 'Planning & analysis only'}
+                </span>
+              </div>
+            )}
+            {/* P0.1 — Inline file viewer when a file is selected */}
+            {selectedPath && selectedKind === 'file' ? (
+              <div className={styles.fileViewerPanel}>
+                <div className={styles.fileViewerHeader}>
+                  <div>
+                    <span className={styles.selectedFileEyebrow}>Active File</span>
+                    <span className={styles.selectedFileName}>{selectedLabel}</span>
+                    {selectedParent && <span className={styles.selectedFilePath}>{selectedParent}</span>}
+                  </div>
+                  {fileContent && (
+                    <button
+                      type="button"
+                      className={styles.clearContextButton}
+                      onClick={() => void navigator.clipboard.writeText(fileContent)}
+                    >
+                      Copy
+                    </button>
+                  )}
                 </div>
+                {fileContentLoading && <div className={styles.fileViewerStatus}>Loading…</div>}
+                {fileContentError && <div className={styles.explorerError}>{fileContentError}</div>}
+                {fileContent !== null && !fileContentLoading && (
+                  <div className={styles.fileViewerBody}>
+                    {fileContent.split('\n').map((line, i) => (
+                      <div key={i} className={styles.fileViewerLine}>
+                        <span className={styles.lineNumber}>{i + 1}</span>
+                        <span className={styles.lineContent}>{line}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className={styles.selectedFilePanel}>
+                <span className={styles.selectedFileEyebrow}>{selectedKind === 'folder' ? 'Active Folder' : 'Context'}</span>
+                <span className={styles.selectedFileName}>{selectedLabel}</span>
+                {selectedParent && <span className={styles.selectedFilePath}>{selectedParent}</span>}
+              </div>
+            )}
+            {/* P2.2 — Completion stats: only show tiles with real data */}
+            <div className={styles.completionGrid}>
+              <div className={styles.completionTile}>
+                <span className={styles.completionLabel}>Files</span>
+                <span className={styles.completionValue}>
+                  {completion.createdFiles.length} created / {completion.modifiedFiles.length} modified
+                </span>
+              </div>
+              {completion.diff && (
                 <div className={styles.completionTile}>
                   <span className={styles.completionLabel}>Diff</span>
-                  <span className={styles.completionValue}>
-                    {completion.diff ? `+${completion.diff.totalAdded} / -${completion.diff.totalDeleted}` : 'No git diff stat yet'}
-                  </span>
+                  <span className={styles.completionValue}>+{completion.diff.totalAdded} / -{completion.diff.totalDeleted}</span>
                 </div>
+              )}
+              {completion.commands.length > 0 && (
                 <div className={styles.completionTile}>
                   <span className={styles.completionLabel}>Commands</span>
                   <span className={styles.completionValue}>{completion.commands.length}</span>
                 </div>
+              )}
+              {completion.usage.taskUsedUnits !== undefined && (
                 <div className={styles.completionTile}>
                   <span className={styles.completionLabel}>Paw Compute</span>
-                  <span className={styles.completionValue}>
-                    {completion.usage.taskUsedUnits !== undefined ? `${completion.usage.taskUsedUnits} units` : 'Not emitted for this task'}
-                  </span>
-                </div>
-              </div>
-              <div className={`${styles.completionState} ${completion.readiness.status === 'completed' ? styles.completionStateOk : styles.completionStateIncomplete}`}>
-                <strong>{completion.readiness.status === 'completed' ? 'COMPLETED' : 'INCOMPLETE'}</strong>
-                <span>{completion.readiness.status === 'completed' ? completion.readiness.message : completion.readiness.reason}</span>
-              </div>
-              {completion.readiness.status === 'incomplete' && (
-                <ul className={styles.evidenceIssueList}>
-                  {completion.readiness.evidence.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              )}
-              {completion.commands.length > 0 && (
-                <div className={styles.commandSummaryList}>
-                  {completion.commands.map((command) => (
-                    <div key={command.id} className={styles.commandSummaryCard}>
-                      <div className={styles.commandSummaryHeader}>
-                        <span className={command.status === 'failed' ? styles.evidenceIssues : styles.evidenceOk}>
-                          {command.status === 'running' ? 'RUNNING' : command.status === 'failed' ? 'COMMAND FAILED' : 'COMMAND COMPLETED'}
-                        </span>
-                        {command.durationMs !== undefined && <span>{(command.durationMs / 1000).toFixed(1)}s</span>}
-                      </div>
-                      <code>{command.command}</code>
-                      {command.cwd && <span className={styles.selectedFilePath}>{command.cwd}</span>}
-                      {command.exitCode !== undefined && <span className={styles.codingSectionEmpty}>Exit code: {command.exitCode}</span>}
-                      {command.output && <pre className={styles.terminalPreview}>{command.output.slice(-900)}</pre>}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {(completion.createdFiles.length > 0 || completion.modifiedFiles.length > 0) && (
-                <div className={styles.fileActivitySummary}>
-                  {completion.createdFiles.length > 0 && (
-                    <div>
-                      <span className={styles.codingSectionTitle}>Created</span>
-                      <ul className={styles.todoList}>
-                        {completion.createdFiles.map((path) => (
-                          <li key={path} className={styles.todoItem}>{path}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {completion.modifiedFiles.length > 0 && (
-                    <div>
-                      <span className={styles.codingSectionTitle}>Modified</span>
-                      <ul className={styles.todoList}>
-                        {completion.modifiedFiles.map((path) => (
-                          <li key={path} className={styles.todoItem}>{path}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+                  <span className={styles.completionValue}>{completion.usage.taskUsedUnits} units</span>
                 </div>
               )}
             </div>
+            <div className={`${styles.completionState} ${completion.readiness.status === 'completed' ? styles.completionStateOk : styles.completionStateIncomplete}`}>
+              <strong>{completion.readiness.status === 'completed' ? 'COMPLETED' : 'INCOMPLETE'}</strong>
+              <span>{completion.readiness.status === 'completed' ? completion.readiness.message : completion.readiness.reason}</span>
+            </div>
+            {completion.readiness.status === 'incomplete' && (
+              <ul className={styles.evidenceIssueList}>
+                {completion.readiness.evidence.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            )}
+            {completion.commands.length > 0 && (
+              <div className={styles.commandSummaryList}>
+                {completion.commands.map((command) => (
+                  <div key={command.id} className={styles.commandSummaryCard}>
+                    <div className={styles.commandSummaryHeader}>
+                      <span className={command.status === 'failed' ? styles.evidenceIssues : styles.evidenceOk}>
+                        {command.status === 'running' ? 'RUNNING' : command.status === 'failed' ? 'COMMAND FAILED' : 'COMMAND COMPLETED'}
+                      </span>
+                      {command.durationMs !== undefined && <span>{(command.durationMs / 1000).toFixed(1)}s</span>}
+                    </div>
+                    <code>{command.command}</code>
+                    {command.cwd && <span className={styles.selectedFilePath}>{command.cwd}</span>}
+                    {command.exitCode !== undefined && <span className={styles.codingSectionEmpty}>Exit code: {command.exitCode}</span>}
+                    {command.output && <pre className={styles.terminalPreview}>{command.output.slice(-900)}</pre>}
+                  </div>
+                ))}
+              </div>
+            )}
+            {(completion.createdFiles.length > 0 || completion.modifiedFiles.length > 0) && (
+              <div className={styles.fileActivitySummary}>
+                {completion.createdFiles.length > 0 && (
+                  <div>
+                    <span className={styles.codingSectionTitle}>Created</span>
+                    <ul className={styles.todoList}>
+                      {completion.createdFiles.map((path) => (
+                        <li key={path} className={styles.todoItem}>{path}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {completion.modifiedFiles.length > 0 && (
+                  <div>
+                    <span className={styles.codingSectionTitle}>Modified</span>
+                    <ul className={styles.todoList}>
+                      {completion.modifiedFiles.map((path) => (
+                        <li key={path} className={styles.todoItem}>{path}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
           </main>
 
           <aside className={styles.workspaceContext}>

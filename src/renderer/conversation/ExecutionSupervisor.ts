@@ -54,7 +54,7 @@ function statusFor(result: ActionResult): 'completed' | 'failed' | 'blocked' {
 }
 
 function isBlockedFailure(result: ActionResult): boolean {
-  return !result.ok && (result.reason === 'entitlement-restricted' || result.reason === 'usage-restricted' || result.reason === 'security-restricted' || result.reason === 'coding-mode-restricted');
+  return !result.ok && (result.reason === 'entitlement-restricted' || result.reason === 'usage-restricted' || result.reason === 'balance-restricted' || result.reason === 'security-restricted' || result.reason === 'coding-mode-restricted');
 }
 
 function commandEvidence(request: ActionRequest, result: ActionResult, timing: { startedAt: number; endedAt: number } | undefined): ExecutionCommandEvidence | null {
@@ -288,7 +288,9 @@ export class ExecutionSupervisor {
           ? 'Upgrade to Paw Pro and enable the Coding Runtime entitlement.'
           : result.reason === 'usage-restricted'
             ? 'Review Paw Compute usage and add credits or contact the administrator.'
-            : 'Review the selected workspace/security boundary and retry.';
+            : result.reason === 'balance-restricted'
+              ? 'Add funds to the Ticket Balance before starting another autonomous task.'
+              : 'Review the selected workspace/security boundary and retry.';
     }
     this.persistCurrent();
   }

@@ -3,7 +3,7 @@ import styles from '../dashboard.module.css';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import { autonomousTaskBillingService } from '../../../organization/AutonomousTaskBillingService';
 import { getSupabaseClient } from '../../../auth/supabaseClient';
-import { MIN_TICKET_BALANCE_TOPUP_USD, TICKET_BALANCE_TOPUP_PRESETS_USD, TICKET_PRICING_TIERS, getTicketUnitPriceUsd } from '../../../../shared/organization/AutonomousTaskBillingTypes';
+import { MIN_TICKET_BALANCE_TOPUP_USD, MAX_TICKET_BALANCE_TOPUP_USD, TICKET_BALANCE_TOPUP_PRESETS_USD, TICKET_PRICING_TIERS, getTicketUnitPriceUsd } from '../../../../shared/organization/AutonomousTaskBillingTypes';
 import type { OrganizationBillingEvent, TicketBalance, TicketBalanceTopup } from '../../../../shared/organization/AutonomousTaskBillingTypes';
 import type { AuthUser } from '../../../auth/AuthTypes';
 import type { SubscriptionTierId, TicketPricingConfig } from '../../../../shared/billing/BillingTypes';
@@ -46,6 +46,7 @@ export function TaskCreditsSection({ user }: { user: AuthUser }) {
   const [pricingConfig, setPricingConfig] = useState<TicketPricingConfig>({
     topupPresetsUsd: [...TICKET_BALANCE_TOPUP_PRESETS_USD],
     minTopupUsd: MIN_TICKET_BALANCE_TOPUP_USD,
+    maxTopupUsd: MAX_TICKET_BALANCE_TOPUP_USD,
   });
   const [amountInput, setAmountInput] = useState(String(TICKET_BALANCE_TOPUP_PRESETS_USD[0]));
   const [busy, setBusy] = useState(false);
@@ -87,6 +88,10 @@ export function TaskCreditsSection({ user }: { user: AuthUser }) {
     const parsed = Number.parseFloat(amountInput);
     if (!Number.isFinite(parsed) || parsed < pricingConfig.minTopupUsd) {
       setError(`Minimum top-up is $${pricingConfig.minTopupUsd}.`);
+      return;
+    }
+    if (parsed > pricingConfig.maxTopupUsd) {
+      setError(`Maximum top-up is $${pricingConfig.maxTopupUsd.toLocaleString()}.`);
       return;
     }
     setBusy(true);
@@ -180,7 +185,8 @@ export function TaskCreditsSection({ user }: { user: AuthUser }) {
         Top up any dollar amount into a Ticket Balance — never for chat, research, meetings,
         documents, browser automation, or manual coding help. Funds are deducted only once a ticket
         investigation reaches successful completion, at the current volume-tiered rate for your
-        account (currently ${nextTicketPrice.toFixed(2)}/ticket).
+        account (currently ${nextTicketPrice.toFixed(2)}/ticket). Available for tickets from Jira,
+        Linear, and GitHub Issues.
       </p>
 
       <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 14 }}>
@@ -233,6 +239,7 @@ export function TaskCreditsSection({ user }: { user: AuthUser }) {
           style={inputStyle}
           type="number"
           min={pricingConfig.minTopupUsd}
+          max={pricingConfig.maxTopupUsd}
           value={amountInput}
           onChange={(e) => setAmountInput(e.target.value)}
         />

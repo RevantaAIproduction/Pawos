@@ -117,3 +117,45 @@ describe('commandSafety — resolveSafeInvocation (P0-1)', () => {
     expect(result.ok).toBe(false);
   });
 });
+
+describe('commandSafety — path traversal is inert, not a bypass (P0-1 audit follow-up)', () => {
+  it('passes a traversal-shaped argument through as one literal argv element — never expanded or specially interpreted', () => {
+    const result = resolveSafeInvocation('node ../../../../etc/passwd');
+    expect(result).toEqual({ ok: true, invocation: { bin: 'node', args: ['../../../../etc/passwd'] } });
+  });
+
+  it('passes a Windows-style traversal argument through as one literal argv element', () => {
+    const result = resolveSafeInvocation('git -C ..\\..\\..\\..\\ status');
+    expect(result).toEqual({ ok: true, invocation: { bin: 'git', args: ['-C', '..\\..\\..\\..\\', 'status'] } });
+  });
+
+  it('a traversal-shaped argument cannot smuggle a chained command — dangerous-syntax rejection still applies first', () => {
+    const result = resolveSafeInvocation('node ../../../../etc/passwd && whoami');
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe('commandSafety — every prefix the user relies on tokenizes safely (P0-1 audit follow-up)', () => {
+  it.each([
+    ['pnpm run build', { bin: 'pnpm', args: ['run', 'build'] }],
+    ['docker ps -a', { bin: 'docker', args: ['ps', '-a'] }],
+    ['docker-compose up -d', { bin: 'docker-compose', args: ['up', '-d'] }],
+    ['kubectl get pods -n default', { bin: 'kubectl', args: ['get', 'pods', '-n', 'default'] }],
+    ['python3 -m pytest', { bin: 'python3', args: ['-m', 'pytest'] }],
+    ['pip install -r requirements.txt', { bin: 'pip', args: ['install', '-r', 'requirements.txt'] }],
+    ['npm run test:watch', { bin: 'npm', args: ['run', 'test:watch'] }],
+  ])('%s resolves to a safe argv invocation, never a shell string', (command, expected) => {
+    const result = resolveSafeInvocation(command);
+    expect(result).toEqual({ ok: true, invocation: expected });
+  });
+});
+
+describe('commandSafety — supply-chain regression guard (CVE-2024-27980)', () => {
+  it('cross-spawn stays at or above the version that fixed Windows .cmd/.bat argument-injection', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const crossSpawnPkg = require('cross-spawn/package.json') as { version: string };
+    const [major, minor, patch] = crossSpawnPkg.version.split('.').map(Number);
+    const meetsMinimum = major! > 7 || (major === 7 && (minor! > 0 || (minor === 0 && patch! >= 5)));
+    expect(meetsMinimum, `cross-spawn@${crossSpawnPkg.version} predates the 7.0.5 fix for CVE-2024-27980`).toBe(true);
+  });
+});

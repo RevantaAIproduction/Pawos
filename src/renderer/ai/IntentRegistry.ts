@@ -1732,7 +1732,7 @@ export const ACTION_TOOL_DEFINITIONS: ReasoningToolDefinition[] = [
   },
   {
     name: 'set_coding_mode',
-    description: 'Switch the local Paw Go/Paw Pro coding mode preference. Only call this when the user explicitly asks to switch modes (e.g. "switch to Pro" / "go back to Go mode") — never switch modes on your own initiative.',
+    description: 'Switch the local Paw Go/Paw Pro coding mode preference. Only call this when the user explicitly asks to switch this specific local preference (e.g. "switch to Pro mode" / "go back to Go mode") — never switch modes on your own initiative, and never call this in response to a request about the account\'s real subscription/billing tier (e.g. "make my tier Pro", "upgrade my plan") — that is a paid subscription change this tool cannot make; tell the user to use Settings -> Billing/Upgrade instead. The result includes `executionEntitled` (whether the account\'s real subscription actually allows execution) — never tell the user they now have "full access" or can run/build/test unless that is true.',
     parameters: {
       type: 'object',
       properties: { mode: { type: 'string', enum: ['go', 'pro'] } },
@@ -1895,6 +1895,12 @@ export const ACTION_TOOL_DEFINITIONS: ReasoningToolDefinition[] = [
       },
       required: ['ticketId'],
     },
+  },
+  {
+    name: 'list_my_tickets',
+    description:
+      'Lists tickets assigned to the user across every connected project management connector (Jira/Linear/GitHub Issues) — the assignee is identified server-side by each provider\'s own "who am I" mechanism (Jira currentUser(), Linear viewer, GitHub assignee:@me), never guessed locally. Use this for "list my tickets" / "what\'s assigned to me" / "what am I working on" / "what\'s urgent". Each ticket includes real id/title/status/url plus, when the provider actually has them, priority (Jira/Linear only — GitHub Issues honestly has none), dueDate, assignee (who\'s in charge), and reporter (who filed it — who to report back to). The result also includes a real, pre-computed `summary` (counts by urgency/deadline bucket, computed only from each provider\'s own structured fields, never inferred from labels) — read it directly rather than re-deriving urgency yourself. To investigate one ticket in depth afterward, call investigate_ticket with its id. Read-only, never gated.',
+    parameters: { type: 'object', properties: {}, required: [] },
   },
   {
     name: 'start_autonomous_engineering_task',
@@ -3274,6 +3280,9 @@ export function toolCallToActionRequest(toolCall: ReasoningToolCall): ActionRequ
 
     case 'investigate_ticket':
       return typeof args.ticketId === 'string' ? { type: 'investigateTicket', ticketId: args.ticketId, cwd: typeof args.cwd === 'string' ? args.cwd : undefined } : null;
+
+    case 'list_my_tickets':
+      return { type: 'listMyTickets' };
 
     case 'investigate_production_issue':
       return typeof args.description === 'string' && typeof args.cwd === 'string' ? { type: 'investigateProductionIssue', description: args.description, cwd: args.cwd } : null;

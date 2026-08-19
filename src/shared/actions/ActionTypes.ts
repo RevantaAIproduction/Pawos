@@ -570,6 +570,11 @@ export type ActionRequest = { scope?: ConnectivityScope; codingRuntimeSession?: 
   // normal gated writeFile/gitCommit/deployProject actions, each with its
   // own confirmation) — this action alone is read-only investigation.
   | { type: 'investigateTicket'; ticketId: string; cwd?: string }
+  // Lists tickets assigned to the connected account, identified server-side by each provider's
+  // own "who am I" mechanism (Jira currentUser(), Linear viewer, GitHub assignee:@me) — never a
+  // client-supplied username. Queries every configured project-management connector, not just
+  // one. Read-only, never gated, same as investigateTicket above.
+  | { type: 'listMyTickets' }
   // "Fix production" / "Production is slow" / "Users cannot login" / "Payment
   // is failing" — the same real evidence-gathering pipeline as
   // investigateTicket, just without a ticket to read first. Read-only, never gated.
@@ -759,6 +764,7 @@ export type ActionResult =
         | 'infra-mode-restricted'
         | 'entitlement-restricted'
         | 'usage-restricted'
+        | 'balance-restricted'
         | 'security-restricted'
         | 'failed';
       message?: string;

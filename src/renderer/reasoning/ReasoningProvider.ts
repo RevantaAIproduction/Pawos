@@ -3,6 +3,7 @@ import type {
   ReasoningToolCall,
   ReasoningToolDefinition,
 } from './ReasoningTypes';
+import type { ProviderUsageMetadata } from '../../shared/billing/UsageMeteringTypes';
 
 export type ReasoningProviderRequest = {
   systemPrompt: string;
@@ -17,6 +18,13 @@ export type ReasoningProviderCallbacks = {
   onStart?: () => void;
   onDelta: (delta: string) => void;
   onToolCall?: (toolCall: ReasoningToolCall) => void;
+  /**
+   * Real, provider-reported usage for this request — called whenever the provider's own response
+   * actually carries usage metadata (may fire more than once as a streaming response accumulates
+   * cumulative totals; the last call before onComplete is authoritative). Never called with an
+   * estimated/guessed value — a provider that returns no usage data simply never calls this.
+   */
+  onUsage?: (usage: ProviderUsageMetadata) => void;
   onComplete: (response: string) => void;
   onError: (error: Error) => void;
 };

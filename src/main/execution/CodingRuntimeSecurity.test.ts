@@ -102,4 +102,30 @@ describe('CodingRuntimeSecurity', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.result.message).toContain('Validation scripts');
   });
+
+  it('derives an implicit root from a single path field with no session or explicit root/cwd', () => {
+    const project = makeProject();
+    // No codingRuntimeSession, no rootPath/cwd — the shape a real open_folder/list_directory/
+    // read_file/write_file/create_folder tool call actually has, since none of those schemas
+    // carry a cwd/rootPath parameter today.
+    const result = enforceCodingRuntimeSecurity({ type: 'listDirectory', path: project.root });
+    expect(result.ok).toBe(true);
+  });
+
+  it('derives an implicit root for a brand-new nested file that does not exist yet', () => {
+    const project = makeProject();
+    const target = path.join(project.root, 'src', 'components', 'App.tsx');
+    const result = enforceCodingRuntimeSecurity({ type: 'writeFile', path: target, content: 'export {}', confirmed: true });
+    expect(result.ok).toBe(true);
+  });
+
+  it('still requires an explicit root/cwd when a request touches more than one distinct path', () => {
+    const from = fs.mkdtempSync(path.join(os.tmpdir(), 'pawos-runtime-move-from-'));
+    const to = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'pawos-runtime-move-to-')), 'dest.txt');
+    const fromFile = path.join(from, 'src.txt');
+    fs.writeFileSync(fromFile, 'x', 'utf-8');
+    const result = enforceCodingRuntimeSecurity({ type: 'movePath', from: fromFile, to, confirmed: true });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.result.message).toBe('Select a workspace root before running file or code actions.');
+  });
 });

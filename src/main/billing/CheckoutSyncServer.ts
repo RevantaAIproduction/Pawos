@@ -95,17 +95,19 @@ export function startCheckoutCallbackServer(): Promise<string> {
       res.end('ok');
 
       // `type=credits` distinguishes a Ticket Balance top-up (see
-      // CreditsCheckoutClient.tsx) from a subscription purchase — the
-      // renderer (which holds the Supabase session) is the one that
-      // actually calls add_ticket_balance(), since this main-process server
-      // has no Supabase client of its own.
+      // CreditsCheckoutClient.tsx) from a subscription purchase. Crediting the wallet has ALREADY
+      // happened server-side by the time this ping ever arrives (CreditsCheckoutClient.tsx only
+      // pings this endpoint after /api/billing/credit-ticket-balance already returned ok:true) —
+      // this ping carries no amount and is never authoritative for anything. It exists purely to
+      // tell Electron's already-open windows "go re-fetch your real balance from Supabase now"
+      // rather than waiting for the next natural refresh. Broadcasting unconditionally (not gated on
+      // any query param) is the fix: previously this branch required a caller-supplied amountUsd
+      // param that the real checkout flow never actually sends, so this notification never fired in
+      // practice.
       if (url.searchParams.get('type') === 'credits') {
-        const amountUsd = Number(url.searchParams.get('amountUsd'));
         const organizationId = url.searchParams.get('organizationId') || undefined;
-        if (Number.isFinite(amountUsd) && amountUsd > 0) {
-          for (const win of BrowserWindow.getAllWindows()) {
-            win.webContents.send('billing:taskCreditsPurchased', { amountUsd, organizationId });
-          }
+        for (const win of BrowserWindow.getAllWindows()) {
+          win.webContents.send('billing:taskCreditsPurchased', { organizationId });
         }
         clearTimeout(timeoutHandle);
         server.close();

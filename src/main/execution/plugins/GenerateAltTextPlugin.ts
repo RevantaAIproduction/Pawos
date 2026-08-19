@@ -4,6 +4,7 @@ import type { ActionRequest, ActionResult } from '../../../shared/actions/Action
 import { BasePlugin } from '../BasePlugin';
 import { describeFailure } from '../describeFailure';
 import { generateAltTextForImage } from '../../../shared/ai/analyzeUiReference';
+import { recordUsageEvent } from '../../billing/UsageMeteringEngine';
 
 const MIME_BY_EXT: Record<string, string> = {
   '.png': 'image/png',
@@ -42,7 +43,8 @@ export class GenerateAltTextPlugin extends BasePlugin {
     try {
       const buffer = await fs.promises.readFile(request.path);
       const imageDataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`;
-      const altText = await generateAltTextForImage({ apiKey: request.apiKey, imageDataUrl });
+      const { altText, usage } = await generateAltTextForImage({ apiKey: request.apiKey, imageDataUrl });
+      if (usage) recordUsageEvent(usage, 'backgroundTask', { sessionId: null, runId: null });
       return { ok: true, data: { altText } };
     } catch (error) {
       return { ok: false, reason: 'failed', message: (error as Error).message };

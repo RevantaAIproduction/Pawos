@@ -8,5 +8,6 @@
   "muted": false,
   "notifyOnTaskComplete": true,
   "themeMode": "dark",
-  "speechLanguage": "en-US"
+  "speechLanguage": "en-US",
+  "bypassPermissionsEnabled": false
 }

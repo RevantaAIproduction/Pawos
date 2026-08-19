@@ -46,11 +46,16 @@ export class ActionController implements CompanionSubsystem, StateRequester {
   private dockedForForeground = false;
 
   /**
-   * workspaceActiveRef: Workspace Runtime presence hint — set by
-   * CompanionExperience.tsx (via a ref, same pattern as VoiceController's
-   * isSpeakingRef/conversationStateRef) to whether a task is actively
-   * running. Ranked below real foreground-app docking (a more specific,
-   * already-real signal) but above idle wandering.
+   * workspaceActiveRef: "stay put" hint — set by CompanionExperience.tsx
+   * (via a ref, same pattern as VoiceController's isSpeakingRef/
+   * conversationStateRef) to true whenever a Workspace Runtime task is
+   * actively running OR the chat panel is simply open. A walk moves the
+   * whole overlay window (avatar + chat panel are siblings inside it), so
+   * wandering while the panel is visible can carry it off toward a screen
+   * edge and make it unreadable — this ref suppresses that regardless of
+   * whether a task happens to be running. Ranked below real foreground-app
+   * docking (a more specific, already-real signal) but above idle
+   * wandering.
    *
    * celebrateUntilRef: set to a future timestamp the moment a task
    * transitions to 'completed'; while now < that timestamp this outranks

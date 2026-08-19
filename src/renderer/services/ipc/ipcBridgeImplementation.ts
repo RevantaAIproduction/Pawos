@@ -49,6 +49,13 @@ import type {
   SeatTier,
 } from '../../../shared/billing/BillingTypes';
 import type { AiUsageCategory } from '../../../shared/billing/AiUsageCategories';
+import type {
+  TurnUsageSubmission,
+  AggregatedTurnUsage,
+  NormalizedUsageRecord,
+  ProviderUsageMetadata,
+  UsageRequestType,
+} from '../../../shared/billing/UsageMeteringTypes';
 import type { OrganizationUsageRecordRequest, OrganizationUsageRecordResponse } from '../../../shared/billing/OrganizationUsageBridgeTypes';
 import type { PawModelId } from '../../../shared/ai/PawModelTypes';
 import type { OnboardingState } from '../../../shared/onboarding/OnboardingTypes';
@@ -141,6 +148,12 @@ export const ipc = {
   },
   onUiOpenSettings(cb: () => void) {
     getBridge().onUiOpenSettings(cb);
+  },
+  openUpgradeInDashboard() {
+    getBridge().openUpgradeInDashboard();
+  },
+  onUiNavigateUpgrade(cb: () => void) {
+    getBridge().onUiNavigateUpgrade(cb);
   },
   async feedbackSubmit(submission: FeedbackSubmission): Promise<boolean> {
     return getBridge().feedbackSubmit(submission);
@@ -268,8 +281,29 @@ export const ipc = {
   async billingGetCreditBalance(): Promise<CreditBalance> {
     return getBridge().billingGetCreditBalance();
   },
-  async billingConsumeCredit(amount: number, reason: string, category?: AiUsageCategory): Promise<CreditBalance> {
-    return getBridge().billingConsumeCredit(amount, reason, category);
+  async billingCanStartGeneration(pawModelId?: PawModelId): Promise<{ allowed: boolean; reason?: string; pooled?: boolean }> {
+    return getBridge().billingCanStartGeneration(pawModelId);
+  },
+  async billingConsumeCredit(amount: number, reason: string, category?: AiUsageCategory, pawModelId?: PawModelId): Promise<CreditBalance> {
+    return getBridge().billingConsumeCredit(amount, reason, category, pawModelId);
+  },
+  async billingRecordTurnUsage(
+    submission: TurnUsageSubmission,
+    reason: string,
+    category?: AiUsageCategory,
+    pawModelId?: PawModelId
+  ): Promise<{ aggregated: AggregatedTurnUsage; balance: CreditBalance }> {
+    return getBridge().billingRecordTurnUsage(submission, reason, category, pawModelId);
+  },
+  async billingReportUsageEvent(
+    usage: ProviderUsageMetadata,
+    requestType: UsageRequestType,
+    context: { sessionId: string | null; runId: string | null }
+  ): Promise<NormalizedUsageRecord> {
+    return getBridge().billingReportUsageEvent(usage, requestType, context);
+  },
+  async billingGetUsageEvents(limit?: number): Promise<NormalizedUsageRecord[]> {
+    return getBridge().billingGetUsageEvents(limit);
   },
   async billingGetCreditHistory(): Promise<CreditConsumptionRecord[]> {
     return getBridge().billingGetCreditHistory();
@@ -304,7 +338,7 @@ export const ipc = {
   onSubscriptionUpdated(cb: () => void) {
     return getBridge().onSubscriptionUpdated(cb);
   },
-  onTaskCreditsPurchased(cb: (payload: { amountUsd: number; organizationId?: string }) => void) {
+  onTaskCreditsPurchased(cb: (payload: { amountUsd?: number; organizationId?: string }) => void) {
     return getBridge().onTaskCreditsPurchased(cb);
   },
   async onboardingGet(): Promise<OnboardingState> {

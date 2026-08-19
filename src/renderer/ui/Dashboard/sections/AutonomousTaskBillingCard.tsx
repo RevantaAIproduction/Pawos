@@ -4,7 +4,7 @@ import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import { autonomousTaskBillingService } from '../../../organization/AutonomousTaskBillingService';
 import { resumeAutonomousRun } from '../../../organization/AutonomousOrchestrator';
 import { getSupabaseClient } from '../../../auth/supabaseClient';
-import { MIN_TICKET_BALANCE_TOPUP_USD, TICKET_BALANCE_TOPUP_PRESETS_USD, getTicketUnitPriceUsd } from '../../../../shared/organization/AutonomousTaskBillingTypes';
+import { MIN_TICKET_BALANCE_TOPUP_USD, MAX_TICKET_BALANCE_TOPUP_USD, TICKET_BALANCE_TOPUP_PRESETS_USD, getTicketUnitPriceUsd } from '../../../../shared/organization/AutonomousTaskBillingTypes';
 import type { AutonomousTaskRun, OrganizationBillingEvent, TicketBalance, TicketBalanceTopup } from '../../../../shared/organization/AutonomousTaskBillingTypes';
 import type { TicketPricingConfig } from '../../../../shared/billing/BillingTypes';
 
@@ -72,6 +72,7 @@ export function AutonomousTaskBillingCard({ organizationId }: { organizationId: 
   const [pricingConfig, setPricingConfig] = useState<TicketPricingConfig>({
     topupPresetsUsd: [...TICKET_BALANCE_TOPUP_PRESETS_USD],
     minTopupUsd: MIN_TICKET_BALANCE_TOPUP_USD,
+    maxTopupUsd: MAX_TICKET_BALANCE_TOPUP_USD,
   });
   const [amountInput, setAmountInput] = useState(String(TICKET_BALANCE_TOPUP_PRESETS_USD[0]));
   const [busy, setBusy] = useState(false);
@@ -141,6 +142,10 @@ export function AutonomousTaskBillingCard({ organizationId }: { organizationId: 
       setError(`Minimum top-up is $${pricingConfig.minTopupUsd}.`);
       return;
     }
+    if (parsed > pricingConfig.maxTopupUsd) {
+      setError(`Maximum top-up is $${pricingConfig.maxTopupUsd.toLocaleString()}.`);
+      return;
+    }
     setBusy(true);
     setError(null);
     setMessage(null);
@@ -187,7 +192,8 @@ export function AutonomousTaskBillingCard({ organizationId }: { organizationId: 
         documents, browser automation, or manual coding help. Funds are deducted only once a ticket
         investigation reaches successful completion, at the current volume-tiered rate for this
         organization (currently ${nextTicketPrice.toFixed(2)}/ticket); a ticket that fails, is
-        cancelled, hits its retry limit, or is denied approval never consumes balance.
+        cancelled, hits its retry limit, or is denied approval never consumes balance. Available
+        for tickets from Jira, Linear, and GitHub Issues.
       </p>
 
       {pendingPermissionRuns.length > 0 && (
@@ -273,6 +279,7 @@ export function AutonomousTaskBillingCard({ organizationId }: { organizationId: 
           style={inputStyle}
           type="number"
           min={pricingConfig.minTopupUsd}
+          max={pricingConfig.maxTopupUsd}
           value={amountInput}
           onChange={(e) => setAmountInput(e.target.value)}
         />

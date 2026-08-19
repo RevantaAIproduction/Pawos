@@ -176,7 +176,14 @@ export default function CompanionExperience() {
   // workspace collapses immediately regardless of what's still running in
   // the background, rather than staying expanded unattended.
   const isWorkspaceActive = Boolean(activeTask) && conversationSnapshot.panelOpen;
-  workspaceActiveRef.current = isWorkspaceActive;
+  // ActionController's "don't wander" signal is intentionally broader than isWorkspaceActive
+  // above (which only drives the compact-avatar CSS class and the WorkspaceRuntime slot): a
+  // walk moves the whole overlay window via moveOverlayWindow(), and the chat panel renders as
+  // a sibling inside that same window — so a walk starting (or continuing) while the panel is
+  // open can carry it toward a screen edge, making it unreadable or covering it entirely. The
+  // companion must stay put whenever the chat panel is visible at all, not only during an
+  // active task.
+  workspaceActiveRef.current = isWorkspaceActive || conversationSnapshot.panelOpen;
 
   // Celebrate on completion: the companion's own CELEBRATING clip, timed to
   // match CompanionRuntime's 2500ms 'celebrating' duration — the only live
@@ -289,11 +296,12 @@ export default function CompanionExperience() {
             creditsNoticePooled={conversation.entitlement?.pooled ?? false}
             enterpriseContactAvailable
             onDismissCreditsNotice={() => conversation.dismissCreditsNotice()}
-            onUpgrade={() => setSettingsOpen(true)}
+            onUpgrade={() => ipc.openUpgradeInDashboard()}
             onBuyCompute={() => setSettingsOpen(true)}
             onContactSales={() => void ipc.executeAction({ type: 'openUrl', url: 'https://pawos.revantaai.com/enterprise' })}
             onContactAdmin={() => setSettingsOpen(true)}
             onRequestMoreCompute={() => setSettingsOpen(true)}
+            onOpenTicketBalance={() => setSettingsOpen(true)}
             pawCreditsBalanceUsd={conversation.pawCreditsBalanceUsd}
             onUseCredits={() => conversation.useCreditsForCompute()}
             redeemingCredits={conversation.redeemingCredits}

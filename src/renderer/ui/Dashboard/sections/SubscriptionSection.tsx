@@ -146,18 +146,50 @@ export function SubscriptionSection({
         </div>
 
         <div className={styles.card}>
-          <h3 className={styles.cardTitle}>Credits Remaining</h3>
-          <p className={styles.cardBody}>
-            {entitlement ? `${entitlement.creditsUsedThisPeriod} used this period` : '…'}
-            {entitlement && (entitlement.creditLimit === null ? ' — no cap configured yet' : ` / ${entitlement.creditLimit}`)}
-          </p>
-          <p className={styles.cardBody} style={{ marginTop: 4 }}>
-            {entitlement?.models.length === 0
-              ? 'No AI credits on this plan.'
-              : entitlement?.hasCreditsRemaining === false
-                ? 'Credits exhausted for this period.'
-                : 'AI credits available.'}
-          </p>
+          <h3 className={styles.cardTitle}>Paw Compute Usage</h3>
+          {entitlement ? (
+            entitlement.pooled ? (
+              <p className={styles.cardBody}>Pooled organization — usage tracked by your org.</p>
+            ) : (
+              <>
+                <p className={styles.cardBody} style={{ marginTop: 4 }}>
+                  <strong>Last 5 hours:</strong>{' '}
+                  {entitlement.usage5hPc.toFixed(2)} PC used
+                  {entitlement.limit5hPc !== null ? ` / ${entitlement.limit5hPc} PC` : ' — no cap'}
+                  {entitlement.limit5hPc !== null && (
+                    <span style={{ marginLeft: 6, opacity: 0.7 }}>
+                      ({Math.max(0, entitlement.limit5hPc - entitlement.usage5hPc).toFixed(2)} remaining)
+                    </span>
+                  )}
+                </p>
+                <p className={styles.cardBody} style={{ marginTop: 4 }}>
+                  <strong>Last 7 days:</strong>{' '}
+                  {entitlement.usage7dPc.toFixed(2)} PC used
+                  {entitlement.limit7dPc !== null ? ` / ${entitlement.limit7dPc} PC` : ' — no cap'}
+                  {entitlement.limit7dPc !== null && (
+                    <span style={{ marginLeft: 6, opacity: 0.7 }}>
+                      ({Math.max(0, entitlement.limit7dPc - entitlement.usage7dPc).toFixed(2)} remaining)
+                    </span>
+                  )}
+                </p>
+                {entitlement.fableCreditsRemaining > 0 && (
+                  <p className={styles.cardBody} style={{ marginTop: 4 }}>
+                    <strong>Paw Fable credits:</strong> {entitlement.fableCreditsRemaining.toFixed(2)} PC remaining
+                  </p>
+                )}
+                <p className={styles.cardBody} style={{ marginTop: 4, opacity: 0.65, fontSize: '0.85em' }}>
+                  1 PC ≈ $0.001 · typical chat turn ≈ 8–32 PC
+                </p>
+                {!entitlement.hasCreditsRemaining && (
+                  <p className={styles.cardBody} style={{ marginTop: 6, fontWeight: 600 }}>
+                    Usage limit reached — generation paused until the window rolls forward.
+                  </p>
+                )}
+              </>
+            )
+          ) : (
+            <p className={styles.cardBody}>…</p>
+          )}
         </div>
       </div>
 

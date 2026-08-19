@@ -26,10 +26,22 @@ function resolveOrigin(request: Request): string {
   return new URL(request.url).origin;
 }
 
+/**
+ * Only ever a same-origin relative path (e.g. "/reset-password") — never trusts an absolute or
+ * protocol-relative URL from the query string, which would otherwise turn this into an open
+ * redirect. Falls back to the original /dashboard destination for every existing caller
+ * (login/signup/OAuth) that doesn't pass `next` at all.
+ */
+function resolveNextPath(raw: string | null): string {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/dashboard";
+  return raw;
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const origin = resolveOrigin(request);
   const code = searchParams.get("code");
+  const next = resolveNextPath(searchParams.get("next"));
   const errorDescription = searchParams.get("error_description") ?? searchParams.get("error");
 
   if (errorDescription) {
@@ -46,7 +58,7 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(error.message)}`);
     }
 
-    return NextResponse.redirect(`${origin}/dashboard`);
+    return NextResponse.redirect(`${origin}${next}`);
   } catch (e) {
     // A misconfigured deployment (e.g. NEXT_PUBLIC_SUPABASE_URL missing on
     // this host) must never surface as a raw 502 — redirect to a real,

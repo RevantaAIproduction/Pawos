@@ -1,6 +1,7 @@
 import { subscriptionStore } from './SubscriptionStore';
 import { creditStore } from './CreditStore';
 import { usageQuotaConfigStore } from './UsageQuotaConfigStore';
+import { rollingUsageGate } from './RollingUsageGate';
 import type {
   EntitlementSnapshot,
   FeatureId,
@@ -24,10 +25,9 @@ const AI_MODELS: PawModelId[] = [
   'paw-flash',
   'paw-swift',
   'paw-core',
-  'paw-creative',
+  'paw-fable',
   'paw-vision',
   'paw-voice',
-  'paw-motion',
   'paw-memory',
 ];
 
@@ -106,9 +106,17 @@ const PRO_MAX_FEATURES: FeatureId[] = [
  * connectLinear/connectJira/autonomousTaskBilling are no longer listed here
  * directly — they're inherited from PRO_MAX_FEATURES (see above), since
  * Team is a superset of Pro Max.
+ *
+ * connectGoogleWorkspace is deliberately excluded (explicitly instructed, 2026-08-18): a personal
+ * Gmail/Drive/Calendar/Contacts connection is an individual-account capability (Pro/Pro Max), not
+ * something an org-wide Team/Enterprise seat should inherit automatically — connecting someone's
+ * personal Google account isn't an organization-scoped capability the way Jira/Linear ticket access
+ * or Git collaboration are. PRO_MAX_FEATURES still includes it (spread in below), so it has to be
+ * filtered back out here rather than simply never added — this is the one place Team/Enterprise's
+ * "superset of Pro Max" inheritance is deliberately narrowed rather than only extended.
  */
 const TEAM_FEATURES: FeatureId[] = [
-  ...PRO_MAX_FEATURES,
+  ...PRO_MAX_FEATURES.filter((feature) => feature !== 'connectGoogleWorkspace'),
   'sharedWorkspaces',
   'organizationMembers',
   'sharedCompanions',
@@ -145,10 +153,20 @@ const ENTERPRISE_FEATURES: FeatureId[] = [...TEAM_FEATURES, 'organizationCrossDe
 
 export const LEGACY_PLAN_RUNTIME_ENTITLEMENTS: RuntimeEntitlementId[] = ALL_RUNTIME_ENTITLEMENT_IDS;
 
+/**
+ * Explicitly decided (2026-08-18): Coding Runtime is included in Pro and Pro Max, not a separate
+ * a-la-carte purchase — a Pro/Pro Max account with advancedRuntimes should never see "This action
+ * requires Paw Pro" while already on Paw Pro. Only 'coding' is added here (not every id in
+ * RuntimeCatalog.ts's pro/proMax `supportedTiers` list) since it's the only one actually
+ * `purchasable`/'available' for those tiers today — the rest (office/browser/communication/
+ * companion) are still `deferred`/`implementationStatus !== 'production-capable'`, so granting them
+ * would be premature. RuntimeCatalog.ts's `purchasable: true` flag on 'coding' is now a no-op for
+ * pro/proMax (nothing left to purchase there) but is left as-is rather than touched here.
+ */
 export const PLAN_DERIVED_RUNTIME_ENTITLEMENTS: Record<SubscriptionTierId, RuntimeEntitlementId[]> = {
   go: [],
-  pro: [],
-  proMax: [],
+  pro: ['coding'],
+  proMax: ['coding'],
   team: LEGACY_PLAN_RUNTIME_ENTITLEMENTS,
   enterprise: LEGACY_PLAN_RUNTIME_ENTITLEMENTS,
 };
@@ -166,7 +184,7 @@ export const PLAN_DERIVED_RUNTIME_ENTITLEMENTS: Record<SubscriptionTierId, Runti
  * check) — not the previous "zero AI models, zero AI credits" design,
  * which the Intelligence Layer architecture explicitly reversed.
  */
-const TIER_ENTITLEMENTS: Record<SubscriptionTierId, Omit<TierEntitlements, 'monthlyCreditLimit' | 'seatTier'>> = {
+const TIER_ENTITLEMENTS: Record<SubscriptionTierId, Omit<TierEntitlements, 'monthlyCreditLimit' | 'weeklyCreditLimit' | 'seatTier'>> = {
   go: { tier: 'go', models: ['paw-flash'], features: GO_FEATURES },
   pro: { tier: 'pro', models: AI_MODELS, features: PRO_FEATURES },
   proMax: { tier: 'proMax', models: AI_MODELS, features: PRO_MAX_FEATURES },
@@ -209,8 +227,11 @@ class EntitlementService {
     const tier = this.currentTier();
     const base = TIER_ENTITLEMENTS[tier];
     const seatTier = this.getSeatTier();
-    const monthlyCreditLimit = usageQuotaConfigStore.getEffectiveQuota(tier, seatTier, 'aiReasoning');
-    return seatTier ? { ...base, monthlyCreditLimit, seatTier } : { ...base, monthlyCreditLimit };
+    // Monthly and weekly flat-credit limits are superseded by rolling windows (PawComputeCapacityStore).
+    // These fields remain on TierEntitlements for backward compat but are always null now.
+    const monthlyCreditLimit: number | null = null;
+    const weeklyCreditLimit: number | null = null;
+    return seatTier ? { ...base, monthlyCreditLimit, weeklyCreditLimit, seatTier } : { ...base, monthlyCreditLimit, weeklyCreditLimit };
   }
 
   isModelAvailable(modelId: PawModelId): boolean {
@@ -292,6 +313,11 @@ class EntitlementService {
     return this.getEntitlements().monthlyCreditLimit;
   }
 
+  /** null = no weekly cap configured for this tier (today: every tier except pro/proMax) — see hasCreditsRemaining(), which enforces this alongside the monthly limit, whichever binds first. */
+  getWeeklyCreditLimit(): number | null {
+    return this.getEntitlements().weeklyCreditLimit;
+  }
+
   /**
    * True only for Enterprise — Paw Compute for this tier is pooled
    * organization-wide and enforced server-side by
@@ -306,15 +332,32 @@ class EntitlementService {
     return usageQuotaConfigStore.isPooled(this.currentTier());
   }
 
-  /** Non-AI desktop functionality never consumes credits and is never gated by this. Always true for a pooled tier at this layer — see isComputePooled(). Factors in any bonus Paw Compute redeemed this period (see CreditStore.grantBonus()) on top of the tier's own configured limit. */
-  hasCreditsRemaining(): boolean {
+  /**
+   * Non-AI desktop functionality never consumes credits and is never gated by this. Always true
+   * for a pooled tier at this layer — see isComputePooled(). Factors in any bonus Paw Compute
+   * redeemed this period (see CreditStore.grantBonus()) on top of the tier's own configured
+   * limit. Checks the weekly cap (when one is configured for this tier) alongside the monthly
+   * one — whichever binds first blocks further usage; the bonus applies to both caps equally,
+   * since it's genuinely extra headroom, not scoped to one cadence.
+   *
+   * Paw Fable is a structurally different check, not an extra condition layered on the above: it
+   * never touches the tier's monthly/weekly allowance in either direction, so a Fable request is
+   * gated purely on real purchased-credit headroom (bonusThisPeriod minus what Fable has already
+   * spent this period) — see getFableCreditsRemaining(). A tier with plenty of included allowance
+   * left must still be blocked here if that purchased-credit headroom is exhausted.
+   */
+  hasCreditsRemaining(pawModelId?: PawModelId): boolean {
     if (this.isComputePooled()) return true;
-    const limit = this.getCreditLimit();
-    if (limit === null) return true; // uncapped until a real limit is configured
+    if (pawModelId === 'paw-fable') return this.getFableCreditsRemaining() > 0;
+    const tier = this.currentTier();
+    const seatTier = this.getSeatTier();
+    return rollingUsageGate.canStartGeneration(tier, seatTier).allowed;
+  }
+
+  /** Real remaining purchased-Paw-Credits headroom for Paw Fable — see BillingTypes.ts's EntitlementSnapshot.fableCreditsRemaining doc comment. Never negative. */
+  getFableCreditsRemaining(): number {
     const balance = creditStore.getBalance();
-    const effectiveLimit = limit + balance.bonusThisPeriod;
-    if (effectiveLimit === 0) return false; // a tier with genuinely no AI credit pool at all and no bonus (none today, but the check stays honest if one is ever configured)
-    return balance.usedThisPeriod < effectiveLimit;
+    return Math.max(0, balance.bonusThisPeriod - balance.fableUsedThisPeriod);
   }
 
   /**
@@ -331,17 +374,28 @@ class EntitlementService {
   getSnapshot(): EntitlementSnapshot {
     const entitlements = this.getEntitlements();
     const balance = creditStore.getBalance();
+    const tier = this.currentTier();
+    const seatTier = this.getSeatTier();
+    const rolling = rollingUsageGate.getRollingUsage(tier, seatTier);
     return {
       tier: entitlements.tier,
       models: entitlements.models,
       features: entitlements.features,
       runtimeEntitlements: this.getRuntimeEntitlements(),
-      creditLimit: entitlements.monthlyCreditLimit,
+      creditLimit: null,                        // superseded by rolling windows
       creditsUsedThisPeriod: balance.usedThisPeriod,
       bonusComputeThisPeriod: balance.bonusThisPeriod,
       hasCreditsRemaining: this.hasCreditsRemaining(),
       pooled: this.isComputePooled(),
       seatTier: entitlements.seatTier,
+      weeklyCreditLimit: null,                  // superseded by rolling windows
+      creditsUsedThisWeek: balance.usedThisWeek,
+      weekResetsAt: balance.weekResetsAt,
+      fableCreditsRemaining: this.isComputePooled() ? 0 : Math.max(0, balance.bonusThisPeriod - balance.fableUsedThisPeriod),
+      usage5hPc: rolling.usage5h,
+      limit5hPc: rolling.limit5h,
+      usage7dPc: rolling.usage7d,
+      limit7dPc: rolling.limit7d,
     };
   }
 }

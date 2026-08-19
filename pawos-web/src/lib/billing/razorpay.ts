@@ -69,25 +69,33 @@ export const TICKET_PRICING_TIERS: readonly TicketPricingTier[] = [
 
 /** Real, finalized minimum top-up: a balance top-up must be at least $30. Code default — see getTicketPricingConfig() for the real, editable value. */
 export const MIN_TICKET_BALANCE_TOPUP_USD = 30;
+/** Real, finalized maximum top-up: a single balance top-up must be at most $20,000. Code default — see getTicketPricingConfig() for the real, editable value. Mirrors the same $20,000 ceiling enforced independently, as defense-in-depth, inside add_ticket_balance_service() at the SQL layer. */
+export const MAX_TICKET_BALANCE_TOPUP_USD = 20000;
 /** Preset top-up amounts shown in the UI — not exhaustive, a custom amount at or above the minimum is always accepted. Code default — see getTicketPricingConfig(). */
 export const TICKET_BALANCE_TOPUP_PRESETS_USD: readonly number[] = [30, 60, 100, 150, 200];
 
 /**
  * Editable Ticket Balance top-up configuration, mirroring the Electron app's own
  * TicketPricingConfigStore.ts — new preset amounts (e.g. a future $500 option) or a revised
- * minimum can be added later purely via env vars, no code change or redeploy of application logic
- * required. TICKET_BALANCE_TOPUP_PRESETS/TICKET_BALANCE_MIN_TOPUP_USD are optional; both fall back
- * to the code defaults above when unset.
+ * minimum/maximum can be added later purely via env vars, no code change or redeploy of application
+ * logic required. TICKET_BALANCE_TOPUP_PRESETS/TICKET_BALANCE_MIN_TOPUP_USD/
+ * TICKET_BALANCE_MAX_TOPUP_USD are optional; all fall back to the code defaults above when unset.
+ *
+ * This is the SINGLE source of truth for the min/max top-up policy within pawos-web — both
+ * /api/billing/checkout-credits and /api/billing/credit-ticket-balance read this function rather
+ * than each hardcoding their own copy of the bounds.
  */
-export function getTicketPricingConfig(): { topupPresetsUsd: number[]; minTopupUsd: number } {
+export function getTicketPricingConfig(): { topupPresetsUsd: number[]; minTopupUsd: number; maxTopupUsd: number } {
   const presetsEnv = process.env.TICKET_BALANCE_TOPUP_PRESETS;
   const parsedPresets = presetsEnv
     ? presetsEnv.split(",").map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0)
     : [];
   const minEnv = Number(process.env.TICKET_BALANCE_MIN_TOPUP_USD);
+  const maxEnv = Number(process.env.TICKET_BALANCE_MAX_TOPUP_USD);
   return {
     topupPresetsUsd: parsedPresets.length > 0 ? parsedPresets : [...TICKET_BALANCE_TOPUP_PRESETS_USD],
     minTopupUsd: Number.isFinite(minEnv) && minEnv > 0 ? minEnv : MIN_TICKET_BALANCE_TOPUP_USD,
+    maxTopupUsd: Number.isFinite(maxEnv) && maxEnv > 0 ? maxEnv : MAX_TICKET_BALANCE_TOPUP_USD,
   };
 }
 
@@ -134,6 +142,25 @@ export async function fetchRazorpayPayment(
   credentials: { keyId: string; keySecret: string }
 ): Promise<{ id: string; order_id: string | null; status: string; amount: number; currency: string } | null> {
   const response = await fetch(`https://api.razorpay.com/v1/payments/${encodeURIComponent(paymentId)}`, {
+    headers: { Authorization: razorpayAuthHeader(credentials.keyId, credentials.keySecret) },
+  });
+  if (!response.ok) return null;
+  return response.json();
+}
+
+/**
+ * Fetches a one-time-payment Order from Razorpay's own API — used to independently re-derive the
+ * order's own `notes` (amountUsd, organizationId, userId) server-side. This is the ONLY mechanism
+ * available to resolve "who does this payment belong to" from a bare payment/order id with no
+ * bearer access token in hand — in particular, the webhook handler has no user session to check
+ * against, so it must read identity from the order's own notes, exactly as set at order-creation
+ * time in /api/billing/checkout-credits.
+ */
+export async function fetchRazorpayOrder(
+  orderId: string,
+  credentials: { keyId: string; keySecret: string }
+): Promise<{ id: string; amount: number; currency: string; status: string; notes: Record<string, string> } | null> {
+  const response = await fetch(`https://api.razorpay.com/v1/orders/${encodeURIComponent(orderId)}`, {
     headers: { Authorization: razorpayAuthHeader(credentials.keyId, credentials.keySecret) },
   });
   if (!response.ok) return null;

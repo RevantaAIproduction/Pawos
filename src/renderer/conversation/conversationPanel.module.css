@@ -288,6 +288,7 @@
 .modelPickerOptionSelected{background:rgba(116,167,255,0.14);}
 .modelPickerOptionLocked{opacity:0.7;}
 .modelPickerOptionCheck{width:14px;flex-shrink:0;font-size:12px;color:#89d4ff;padding-top:2px;}
+.modelPickerOptionNumber{flex-shrink:0;font-size:11px;font-variant-numeric:tabular-nums;color:rgba(255,255,255,0.4);padding-left:8px;}
 .modelPickerOptionText{display:flex;flex-direction:column;gap:2px;min-width:0;}
 .modelPickerOptionLabel{font-size:13px;font-weight:600;}
 .modelPickerOptionDesc{font-size:11px;color:rgba(255,255,255,0.58);}

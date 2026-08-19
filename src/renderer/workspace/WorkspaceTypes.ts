@@ -34,6 +34,7 @@ export type WorkspaceRegionId =
   | 'browserConsole'
   | 'errorTimeline'
   | 'codingMemory'
+  | 'validationResults'
   // Infrastructure Canvas (Infrastructure/DevOps/SRE Runtime) — only
   // rendered for a detected infra task (see isInfraTask in
   // WorkspaceRuntime.tsx), same "always renders, honest placeholder when

@@ -87,6 +87,98 @@ select optgroup {
   background: rgba(var(--pawos-overlay-rgb), 0.06);
 }
 
+.sidebarToolbar {
+  display: flex;
+  gap: 4px;
+  padding: 0 10px 10px;
+}
+.sidebarCollapsed .sidebarToolbar {
+  flex-direction: column;
+  align-items: center;
+  padding: 0 0 10px;
+}
+
+.sidebarToolbarButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 7px;
+  background: rgba(var(--pawos-overlay-rgb), 0.04);
+  color: var(--pawos-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+.sidebarToolbarButton:hover:not(:disabled) {
+  color: var(--pawos-fg);
+  background: rgba(var(--pawos-overlay-rgb), 0.08);
+}
+.sidebarToolbarButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.sidebarSearchWrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.sidebarSearchInputRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  background: rgba(var(--pawos-overlay-rgb), 0.06);
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.14);
+  color: var(--pawos-text-secondary);
+}
+.sidebarSearchInput {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--pawos-fg);
+  font-size: 12.5px;
+}
+.sidebarSearchResults {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px;
+  border-radius: 8px;
+  background: var(--pawos-bg-elevated);
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.14);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  max-height: 240px;
+  overflow-y: auto;
+}
+.sidebarSearchResult {
+  text-align: left;
+  padding: 7px 9px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--pawos-text-item);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.sidebarSearchResult:hover {
+  background: rgba(var(--pawos-overlay-rgb), 0.08);
+}
+
+.sidebarCollapsed .sidebarSearchResults {
+  right: auto;
+  width: 220px;
+}
+
 .sidebarCollapsed .navItem {
   justify-content: center;
   padding: 8px;
@@ -575,6 +667,36 @@ div.workRecordList {
 .content {
   padding: 24px 32px 48px;
   min-width: 0;
+}
+
+.topBar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 32px 0;
+  background: var(--pawos-bg);
+}
+
+.walletIndicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(var(--pawos-overlay-rgb), 0.06);
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.12);
+  color: var(--pawos-fg);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.walletIndicator:hover {
+  background: rgba(var(--pawos-overlay-rgb), 0.1);
+}
+.walletIndicatorIcon {
+  font-size: 13px;
 }
 
 .subheading {

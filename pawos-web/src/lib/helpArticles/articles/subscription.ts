@@ -47,8 +47,8 @@ export const SUBSCRIPTION_ARTICLES: HelpArticle[] = [
     title: 'Paw Pro',
     summary: 'Full AI models and advanced runtimes for individual use.',
     overview:
-      'Paw Pro unlocks the full real AI model roster (paw-flash, paw-swift, paw-core, paw-creative, paw-vision, ' +
-      'paw-voice, paw-motion, paw-memory) and advanced runtimes — AI voice conversation, AI coding assistance ' +
+      'Paw Pro unlocks the full real AI model roster (paw-flash, paw-swift, paw-core, paw-fable, paw-vision, ' +
+      'paw-voice, paw-memory) and advanced runtimes — AI voice conversation, AI coding assistance ' +
       'in Paw Pro coding mode, and everything included in Go.',
     features: ['Everything in Paw Go', 'Full AI model access', 'Advanced runtimes (AI coding, voice conversations)'],
     howItWorks: 'Upgrading to Pro immediately unlocks AI models and advanced runtimes through the EntitlementService — no separate configuration is needed beyond having an AI provider set up.',
@@ -60,7 +60,7 @@ export const SUBSCRIPTION_ARTICLES: HelpArticle[] = [
     administration: 'Individual tier — no organization/seat concept.',
     billing: 'Currently uncapped monthly AI credit limit (pricing/limits marked "Business Configuration Required" until finalized).',
     faq: [
-      { question: 'What AI models does Pro unlock?', answer: 'The full roster: paw-flash, paw-swift, paw-core, paw-creative, paw-vision, paw-voice, paw-motion, and paw-memory.' },
+      { question: 'What AI models does Pro unlock?', answer: 'The full roster: paw-flash, paw-swift, paw-core, paw-fable, paw-vision, paw-voice, and paw-memory.' },
       { question: 'Is there a credit limit on Pro?', answer: 'Pro is currently uncapped while specific limits are being finalized.' },
     ],
     relatedArticleIds: ['paw-go', 'paw-pro-max', 'analytics-ai-usage'],

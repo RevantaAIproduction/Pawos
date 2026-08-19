@@ -41,4 +41,8 @@ export type ReasoningTurnResult = {
   response: string;
   assistantMessage: ReasoningMessage | null;
   toolCalls: ReasoningToolCall[];
+  /** Real, provider-reported usage for this single request (never the whole multi-request turn — see
+   *  ConversationRuntime.ts, which aggregates across every request in a turn including tool
+   *  continuations). Null when the provider didn't report any usage data. */
+  usage: import('../../shared/billing/UsageMeteringTypes').ProviderUsageMetadata | null;
 };
