@@ -10,32 +10,53 @@ export function ResetPasswordForm() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
-  // The reset email's link carries a one-time PKCE `code`, not an already-active session —
-  // nothing establishes one automatically just by loading this page. Exchanging it here (rather
-  // than depending on a redirect through /auth/callback, which requires that exact URL to be
-  // pre-approved in Supabase's own Auth settings) keeps this page self-contained: it works
-  // against whatever URL Supabase actually sent, no dashboard config to get right.
+  // The reset email's link establishes a session one of two ways depending on Supabase's own
+  // project config, and this page can't assume which: a PKCE `?code=` query param (exchanged via
+  // exchangeCodeForSession) or the older `#access_token=...&type=recovery` hash fragment, which
+  // @supabase/ssr's browser client auto-detects and consumes during its own init — but that can
+  // resolve asynchronously via a PASSWORD_RECOVERY auth event rather than being available the
+  // instant getSession() is first called, so this listens for that event too rather than trusting
+  // a single synchronous check. The 4s timeout only ever fires for a genuinely broken/expired link
+  // — a working one always resolves via one of the three paths well before that.
   const [sessionReady, setSessionReady] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
 
   useEffect(() => {
+    const supabase = createClient();
     const code = searchParams.get("code");
-    if (!code) {
-      setSessionError("This reset link is missing its code — request a new one from the Forgot Password page.");
+    const invalidLinkMessage = "This reset link is invalid or has expired — request a new one from the Forgot Password page.";
+    let settled = false;
+
+    const markReady = () => {
+      if (settled) return;
+      settled = true;
+      setSessionReady(true);
+    };
+    const markInvalid = () => {
+      if (settled) return;
+      settled = true;
+      setSessionError(invalidLinkMessage);
+    };
+
+    if (code) {
+      supabase.auth.exchangeCodeForSession(code).then(({ error }) => (error ? markInvalid() : markReady()));
       return;
     }
-    const supabase = createClient();
-    supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-      if (error) {
-        setSessionError(
-          error.message.toLowerCase().includes("expired") || error.message.toLowerCase().includes("invalid")
-            ? "This reset link has expired or was already used — request a new one from the Forgot Password page."
-            : error.message
-        );
-        return;
-      }
-      setSessionReady(true);
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY" || (event === "SIGNED_IN" && session)) markReady();
     });
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) markReady();
+    });
+    const timeout = window.setTimeout(markInvalid, 4000);
+
+    return () => {
+      subscription.unsubscribe();
+      window.clearTimeout(timeout);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
