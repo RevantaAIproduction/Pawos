@@ -26,7 +26,10 @@ export function ResetPasswordForm() {
   const [diagnostic, setDiagnostic] = useState<string | null>(null);
 
   useEffect(() => {
-    const supabase = createClient();
+    // 'implicit' — matches the flow ForgotPasswordForm.tsx now requests with (see
+    // createClient()'s own doc comment). Kept consistent so this page reads the same kind of
+    // session the request side produced, rather than mixing flow types.
+    const supabase = createClient("implicit");
     const code = searchParams.get("code");
     const searchKeys = Array.from(searchParams.keys());
     const hashKeys = typeof window !== "undefined" && window.location.hash.length > 1
@@ -78,7 +81,8 @@ export function ResetPasswordForm() {
     setStatus("loading");
     setMessage(null);
     try {
-      const supabase = createClient();
+      // 'implicit' — matches the flow ForgotPasswordForm.tsx now requests with (see the useEffect above and createClient()'s own doc comment).
+      const supabase = createClient("implicit");
       const { error } = await supabase.auth.updateUser({ password });
       if (error) {
         setStatus("error");

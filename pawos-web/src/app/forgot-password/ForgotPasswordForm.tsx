@@ -14,11 +14,10 @@ export function ForgotPasswordForm() {
     setStatus("loading");
     setMessage(null);
     try {
-      const supabase = createClient();
-      // Straight to /reset-password (not routed through /auth/callback) — that route requires
-      // this exact redirect URL to be pre-approved in Supabase's own Auth settings, which isn't
-      // something this code can verify or change. /reset-password now does its own PKCE code
-      // exchange (see ResetPasswordForm.tsx) instead, so this URL has no such dependency.
+      // 'implicit', not the app's usual 'pkce' default — see createClient()'s own doc comment.
+      // A PKCE reset link only works if it's opened in the same browser that requested it, which
+      // isn't true for email in general; implicit flow puts the session directly in the link.
+      const supabase = createClient("implicit");
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`,
       });
