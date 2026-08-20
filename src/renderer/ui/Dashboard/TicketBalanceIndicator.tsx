@@ -14,6 +14,16 @@ import type { TicketPricingConfig } from '../../../shared/billing/BillingTypes';
 
 type WalletState = 'loading' | 'error' | 'normal' | 'low' | 'empty';
 
+function WalletMark() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4 7.5h14.5A2.5 2.5 0 0 1 21 10v7a2.5 2.5 0 0 1-2.5 2.5h-14A2.5 2.5 0 0 1 2 17V6.5A2.5 2.5 0 0 1 4.5 4H17" />
+      <path d="M16 13h5" />
+      <path d="M17.5 13h.01" />
+    </svg>
+  );
+}
+
 function walletStateFor(balanceUsd: number, nextTicketPrice: number): WalletState {
   if (balanceUsd <= 0) return 'empty';
   if (balanceUsd < nextTicketPrice * 2) return 'low';
@@ -146,7 +156,7 @@ export function TicketBalanceIndicator({
     return (
       <div className={styles.walletPopoverWrapper} ref={wrapperRef}>
         <div className={styles.walletIndicator} aria-label="Ticket Wallet loading">
-          <span className={styles.walletIndicatorIcon} aria-hidden>🪙</span>
+          <span className={styles.walletIndicatorIcon}><WalletMark /></span>
           <span className={styles.walletAmountLoading}>…</span>
         </div>
       </div>
@@ -167,7 +177,7 @@ export function TicketBalanceIndicator({
           aria-expanded={eligibilityPopoverOpen}
           aria-haspopup="dialog"
         >
-          <span className={styles.walletIndicatorIcon} aria-hidden>🪙</span>
+          <span className={styles.walletIndicatorIcon}><WalletMark /></span>
           <span>Ticket Wallet</span>
           <span className={styles.walletLockBadge} aria-hidden>🔒 Pro Max+</span>
         </button>
@@ -227,7 +237,7 @@ export function TicketBalanceIndicator({
         aria-expanded={popoverOpen}
         aria-haspopup="dialog"
       >
-        <span className={styles.walletIndicatorIcon} aria-hidden>🪙</span>
+        <span className={styles.walletIndicatorIcon}><WalletMark /></span>
         <span className={walletAmountClass()}>{indicatorLabel()}</span>
         {walletState === 'low' && <span className={styles.walletLowBadge} aria-label="Low balance">Low</span>}
         {walletState === 'empty' && <span className={styles.walletEmptyCta} aria-label="Balance empty">Add Credits</span>}
@@ -241,7 +251,7 @@ export function TicketBalanceIndicator({
           aria-label="Ticket Wallet"
         >
           <div className={styles.walletPopoverHeader}>
-            <span className={styles.walletPopoverTitle}>🪙 Ticket Wallet</span>
+            <span className={styles.walletPopoverTitle}><WalletMark /> Ticket Wallet</span>
             <button
               type="button"
               className={styles.walletPopoverClose}

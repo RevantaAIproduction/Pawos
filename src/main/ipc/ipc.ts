@@ -499,13 +499,10 @@ export function registerIpc(opts: {
   ipcMain.handle(
     'billing:createNativeSubscriptionCheckout',
     async (_evt, tier: SubscriptionTierId, options?: CheckoutOptions): Promise<NativeSubscriptionCheckoutResult> => {
-      if (!VALID_NATIVE_BILLING_TIERS.includes(tier) || tier === 'enterprise') {
+      if (!VALID_NATIVE_BILLING_TIERS.includes(tier)) {
         return {
           ok: false,
-          reason:
-            tier === 'enterprise'
-              ? 'Enterprise billing is custom and must be handled by a PawOS billing administrator.'
-              : 'Unknown paid plan requested.',
+          reason: 'Unknown paid plan requested.',
         };
       }
       try {

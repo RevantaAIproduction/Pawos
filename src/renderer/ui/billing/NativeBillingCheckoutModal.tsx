@@ -119,7 +119,7 @@ export function NativeBillingCheckoutModal({
   const label = isSubscription
     ? subscriptionCheckoutLabel(intent.tier, intent.seatTier)
     : intent.title ?? 'PawOS Ticket Balance';
-  const quantity = isSubscription && intent.tier === 'team' ? Math.max(1, intent.seatCount ?? 1) : 1;
+  const quantity = isSubscription && (intent.tier === 'team' || intent.tier === 'enterprise') ? Math.max(1, intent.seatCount ?? 1) : 1;
   const subscriptionAmount = isSubscription ? subscriptionAmountInr(intent.tier, intent.seatTier, quantity) : null;
   const subtotal = isSubscription ? (subscriptionAmount ?? 0) : intent.amountUsd;
   const estimatedCreditPaymentInr = !isSubscription ? estimateTicketBalancePaymentInr(intent.amountUsd) : null;

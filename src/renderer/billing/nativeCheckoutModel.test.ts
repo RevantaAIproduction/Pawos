@@ -7,7 +7,7 @@ describe('nativeCheckoutModel', () => {
     expect(subscriptionAmountInr('proMax')).toBe(9565);
     expect(subscriptionAmountInr('team', 'standard', 3)).toBe(5739);
     expect(subscriptionAmountInr('team', 'premium', 2)).toBe(19130);
-    expect(subscriptionAmountInr('enterprise')).toBeNull();
+    expect(subscriptionAmountInr('enterprise', undefined, 20)).toBe(38260);
   });
 
   it('labels paid subscription plans without converting them to one-time products', () => {

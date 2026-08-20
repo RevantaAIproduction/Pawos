@@ -99,7 +99,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, reason: "Invalid webhook signature." }, { status: 400 });
   }
 
-  const event = JSON.parse(rawBody) as RazorpayWebhookEvent;
+  let event: RazorpayWebhookEvent;
+  try {
+    event = JSON.parse(rawBody) as RazorpayWebhookEvent;
+  } catch {
+    return NextResponse.json({ ok: false, reason: "Invalid webhook payload." }, { status: 400 });
+  }
 
   if (event.event === "payment.captured") {
     await applyPaymentCapturedEvent(event);

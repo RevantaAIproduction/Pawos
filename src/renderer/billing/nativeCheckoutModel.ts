@@ -13,6 +13,7 @@ export const NATIVE_PAYMENT_METHODS: { id: NativePaymentMethod; label: string; d
 const SUBSCRIPTION_PRICE_INR: Partial<Record<SubscriptionTierId, number>> = {
   pro: 1913,
   proMax: 9565,
+  enterprise: 1913,
 };
 
 const TEAM_SEAT_PRICE_INR: Record<SeatTier, number> = {
@@ -24,6 +25,7 @@ export const TICKET_BALANCE_USD_INR_RATE = 95.65;
 
 export function subscriptionAmountInr(tier: SubscriptionTierId, seatTier?: SeatTier, seatCount = 1): number | null {
   if (tier === 'team') return TEAM_SEAT_PRICE_INR[seatTier ?? 'standard'] * Math.max(1, seatCount);
+  if (tier === 'enterprise') return (SUBSCRIPTION_PRICE_INR.enterprise ?? 0) * Math.max(1, seatCount);
   return SUBSCRIPTION_PRICE_INR[tier] ?? null;
 }
 

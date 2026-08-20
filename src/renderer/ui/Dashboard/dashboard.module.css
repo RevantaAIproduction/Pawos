@@ -696,6 +696,9 @@ div.workRecordList {
   background: rgba(var(--pawos-overlay-rgb), 0.1);
 }
 .walletIndicatorIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 13px;
 }
 
@@ -781,6 +784,9 @@ div.workRecordList {
   border-bottom: 1px solid rgba(var(--pawos-overlay-rgb), 0.08);
 }
 .walletPopoverTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 13px;
   font-weight: 700;
   color: var(--pawos-fg);
