@@ -154,6 +154,18 @@ export type CreditConsumptionRecord = {
 
 export type BillingCheckoutResult = { ok: true; checkoutUrl: string } | { ok: false; reason: string };
 
+export type NativeSubscriptionCheckoutResult =
+  | { ok: true; keyId: string; subscriptionId: string; tier: SubscriptionTierId; seatTier?: SeatTier; runtimeIds?: RuntimeEntitlementId[] }
+  | { ok: false; reason: string };
+
+export type NativeCreditsCheckoutResult =
+  | { ok: true; keyId: string; orderId: string; amountUsd: number; amountInr: number; amountPaise: number; usdInrRate: number; currency: 'INR' }
+  | { ok: false; reason: string };
+
+export type NativeCreditsVerificationResult =
+  | { ok: true; amountUsd: number; topupId?: string }
+  | { ok: false; reason: string };
+
 /**
  * Extra parameters only meaningful for seat-based tiers. `seatTier` selects
  * Team's Standard/Premium rate for the seats being purchased; `seatCount`

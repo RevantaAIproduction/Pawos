@@ -20,6 +20,7 @@ import { UpgradeSection } from './sections/UpgradeSection';
 import { RatingFeedbackModal } from './RatingFeedbackModal';
 import { HelpWidgetPanel } from '../HelpWidget/HelpWidgetPanel';
 import { HelpBubbleIcon } from './NavIcons';
+import { useAutonomousWorkAuthorization } from './AutonomousWorkAuthorizationModal';
 import type { SectionId } from './sections';
 import { useIpcBridge } from '../../services/ipc/useIpcBridge';
 import type { AuthUser } from '../../auth/AuthTypes';
@@ -218,9 +219,12 @@ export function Dashboard({
 
   const openUrl = (url: string) => void ipc.executeAction({ type: 'openUrl', url });
 
+  const { modal: autonomousAuthModal } = useAutonomousWorkAuthorization(() => openSettingsTab('Billing'));
+
   return (
     <div className={styles.shell}>
       <RatingFeedbackModal />
+      {autonomousAuthModal}
       <Sidebar
         active={active}
         onSelect={navigateTo}
@@ -235,7 +239,11 @@ export function Dashboard({
       />
       <main className={styles.main}>
         <div className={styles.topBar}>
-          <TicketBalanceIndicator isGuest={user.isGuest} onOpen={() => openSettingsTab('Billing')} />
+          <TicketBalanceIndicator
+            isGuest={user.isGuest}
+            onOpen={() => openSettingsTab('Billing')}
+            onRequestUpgrade={() => navigateTo('upgrade')}
+          />
         </div>
         <div className={styles.content}>
           {active === 'home' && (

@@ -84,10 +84,10 @@ export function CreditsCheckoutClient() {
       const checkout = new window.Razorpay({
         key: result.keyId,
         order_id: result.orderId,
-        amount: Math.round(result.amountUsd * 100),
-        currency: "USD",
+        amount: result.amountPaise,
+        currency: "INR",
         name: "PawOS",
-        description: `Add $${amountUsd} to Ticket Balance`,
+        description: `Add $${result.amountUsd} USD to Ticket Balance`,
         handler: async (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
           // P0-2: this "success" callback fires client-side and could in principle be invoked by a
           // modified client with no real payment behind it — it is never trusted on its own.
@@ -194,6 +194,11 @@ export function CreditsCheckoutClient() {
       >
         {status === "loading" ? "Starting…" : `Continue to payment — $${amountUsd}`}
       </button>
+      {amountUsd >= 10000 && (
+        <p className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+          {amountUsd >= 20000 ? "Maximum credit purchase" : "Large credit purchase"} — verify this USD amount carefully before continuing.
+        </p>
+      )}
       {message && <p className="mt-6 text-sm text-neutral-400">{message}</p>}
     </div>
   );

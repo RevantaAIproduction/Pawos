@@ -291,6 +291,7 @@ export default function CompanionExperience() {
             onRetryAction={(taskId, actionId) => conversation.retryAction(taskId, actionId)}
             onOpenPath={(path, kind) => conversation.openPath(path, kind)}
             onConnectCapability={(taskId, actionId, connectorId, fields, opts) => conversation.connectCapability(taskId, actionId, connectorId, fields, opts)}
+            onPlanDecision={(_planId, _decision, message) => conversation.submitTranscript(message)}
             creditsNoticeTier={conversation.creditsNoticeTier}
             creditsNoticeSeatTier={conversation.entitlement?.seatTier}
             creditsNoticePooled={conversation.entitlement?.pooled ?? false}
@@ -323,6 +324,7 @@ export default function CompanionExperience() {
             onRetryAction={(taskId, actionId) => conversation.retryAction(taskId, actionId)}
             onOpenPath={(path, kind) => conversation.openPath(path, kind)}
             onConnectCapability={(taskId, actionId, connectorId, fields, opts) => conversation.connectCapability(taskId, actionId, connectorId, fields, opts)}
+            onPlanDecision={(_planId, _decision, message) => conversation.submitTranscript(message)}
           />
         </div>
       )}

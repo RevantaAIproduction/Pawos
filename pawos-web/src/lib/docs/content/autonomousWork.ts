@@ -44,11 +44,16 @@ export const autonomousWorkPages: DocPage[] = [
       {
         type: 'list',
         items: [
-          'An account or organization with the advancedRuntimes entitlement (Pro or higher) — Go accounts cannot use Autonomous Work.',
+          'An account or organization with the autonomousTaskBilling entitlement: Pro Max, Team, or Enterprise. Go and Pro accounts cannot use Autonomous Work.',
           'A connected source-control repository — Autonomous Ticket Resolution needs somewhere real to post its work.',
           'A connected ticket tracker, or a freeform issue description if no tracker connector is used.',
           'An available Autonomous Work Credits balance — see Billing.',
         ],
+      },
+      {
+        type: 'status',
+        status: 'implemented',
+        text: 'The live entitlement gate checks autonomousTaskBilling before the wallet or run authorization opens. Ineligible users see a locked Ticket Balance/Autonomous Work path rather than a spendable wallet.',
       },
     ],
     related: ['autonomous-work/connectors', 'autonomous-work/credits'],

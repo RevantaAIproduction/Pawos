@@ -27,7 +27,7 @@ const VALID_TIERS: SubscriptionTierId[] = ['go', 'pro', 'proMax', 'team', 'enter
  * Razorpay's key_secret (never available to Electron) and re-derives the tier from Razorpay's own
  * subscription record, never from anything the caller merely asserts.
  */
-async function verifySubscriptionWithBackend(
+export async function verifySubscriptionWithBackend(
   paymentId: string,
   subscriptionId: string,
   signature: string

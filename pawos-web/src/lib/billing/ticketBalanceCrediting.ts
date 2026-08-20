@@ -4,6 +4,7 @@ import {
   fetchRazorpayPayment,
   fetchRazorpayOrder,
   getTicketPricingConfig,
+  calculateTicketBalanceInrPayment,
 } from "@/lib/billing/razorpay";
 import { createServiceClient } from "@/lib/supabase/serviceClient";
 
@@ -71,7 +72,7 @@ export async function creditVerifiedTicketBalancePayment(params: {
     return { ok: false, status: 400, reason: "Invalid payment signature." };
   }
 
-  // Step 2: re-derive the REAL amount/status from Razorpay's own API — never trust the client.
+  // Step 2: re-derive the REAL payment status/order linkage from Razorpay's own API — never trust the client.
   const payment = await fetchRazorpayPayment(paymentId, credentials);
   if (!payment) {
     return { ok: false, status: 502, reason: "Could not verify payment with Razorpay." };
@@ -82,16 +83,8 @@ export async function creditVerifiedTicketBalancePayment(params: {
   if (payment.status !== "captured") {
     return { ok: false, status: 400, reason: `Payment is not captured (status: ${payment.status}).` };
   }
-  if (payment.currency !== "USD") {
+  if (payment.currency !== "INR") {
     return { ok: false, status: 400, reason: `Unexpected currency: ${payment.currency}.` };
-  }
-  const amountUsd = payment.amount / 100;
-  const { minTopupUsd, maxTopupUsd } = getTicketPricingConfig();
-  if (amountUsd < minTopupUsd) {
-    return { ok: false, status: 400, reason: "Payment amount is below the minimum top-up." };
-  }
-  if (amountUsd > maxTopupUsd) {
-    return { ok: false, status: 400, reason: `Payment amount exceeds the maximum top-up of $${maxTopupUsd.toLocaleString()}.` };
   }
 
   // Step 3: independently re-fetch the ORDER (not just the payment) to read its own notes — the
@@ -100,6 +93,33 @@ export async function creditVerifiedTicketBalancePayment(params: {
   if (!order) {
     return { ok: false, status: 502, reason: "Could not verify order with Razorpay." };
   }
+  if (order.currency !== "INR") {
+    return { ok: false, status: 400, reason: `Unexpected order currency: ${order.currency}.` };
+  }
+  if (payment.amount !== order.amount) {
+    return { ok: false, status: 400, reason: "Payment amount does not match the Razorpay order amount." };
+  }
+
+  const orderAmountUsd = Number(order.notes?.amountUsd);
+  if (!Number.isFinite(orderAmountUsd)) {
+    return { ok: false, status: 400, reason: "Order is missing the server-recorded USD amount." };
+  }
+  const expectedPayment = calculateTicketBalanceInrPayment(orderAmountUsd);
+  if (!expectedPayment) {
+    return { ok: false, status: 400, reason: "Order has an invalid server-recorded USD amount." };
+  }
+  if (payment.amount !== expectedPayment.amountPaise) {
+    return { ok: false, status: 400, reason: "Payment amount does not match the server-calculated INR amount." };
+  }
+  const amountUsd = expectedPayment.amountUsd;
+  const { minTopupUsd, maxTopupUsd } = getTicketPricingConfig();
+  if (amountUsd < minTopupUsd) {
+    return { ok: false, status: 400, reason: "Payment amount is below the minimum top-up." };
+  }
+  if (amountUsd > maxTopupUsd) {
+    return { ok: false, status: 400, reason: `Payment amount exceeds the maximum top-up of $${maxTopupUsd.toLocaleString()}.` };
+  }
+
   const orderUserId = typeof order.notes?.userId === "string" ? order.notes.userId : "";
   const orderOrganizationId = typeof order.notes?.organizationId === "string" ? order.notes.organizationId : "";
 

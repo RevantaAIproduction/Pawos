@@ -3,7 +3,7 @@ import styles from '../dashboard.module.css';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import { autonomousTaskBillingService } from '../../../organization/AutonomousTaskBillingService';
 import { resumeAutonomousRun } from '../../../organization/AutonomousOrchestrator';
-import { getSupabaseClient } from '../../../auth/supabaseClient';
+import { NativeBillingCheckoutModal, type NativeBillingCheckoutIntent } from '../../billing/NativeBillingCheckoutModal';
 import { MIN_TICKET_BALANCE_TOPUP_USD, MAX_TICKET_BALANCE_TOPUP_USD, TICKET_BALANCE_TOPUP_PRESETS_USD, getTicketUnitPriceUsd } from '../../../../shared/organization/AutonomousTaskBillingTypes';
 import type { AutonomousTaskRun, OrganizationBillingEvent, TicketBalance, TicketBalanceTopup } from '../../../../shared/organization/AutonomousTaskBillingTypes';
 import type { TicketPricingConfig } from '../../../../shared/billing/BillingTypes';
@@ -52,7 +52,7 @@ function downloadCsv(filename: string, csv: string): void {
  * Autonomous Ticket System billing dashboard — a dollar-denominated Ticket
  * Balance wallet, completely independent of subscription pricing. Shows the
  * real balance (user_task_credits/organization_task_credits), a top-up flow
- * that opens the real pawos-web Razorpay Orders checkout, the top-up
+ * that creates the real Razorpay Order through pawos-web, the top-up
  * ledger, and the completed-ticket billing history. "Invoice download"
  * here is an honest CSV export of the real rows rather than a fabricated
  * PDF invoice generator.
@@ -76,6 +76,7 @@ export function AutonomousTaskBillingCard({ organizationId }: { organizationId: 
   });
   const [amountInput, setAmountInput] = useState(String(TICKET_BALANCE_TOPUP_PRESETS_USD[0]));
   const [busy, setBusy] = useState(false);
+  const [checkoutIntent, setCheckoutIntent] = useState<NativeBillingCheckoutIntent | null>(null);
 
   function reload() {
     Promise.all([
@@ -146,28 +147,10 @@ export function AutonomousTaskBillingCard({ organizationId }: { organizationId: 
       setError(`Maximum top-up is $${pricingConfig.maxTopupUsd.toLocaleString()}.`);
       return;
     }
-    setBusy(true);
     setError(null);
     setMessage(null);
-    try {
-      const callbackUrl = await ipc.billingStartCheckoutSync().catch(() => undefined);
-      // P0-2: the pawos-web checkout page needs this to verify who is actually paying before it
-      // will credit anything — see /api/billing/credit-ticket-balance.
-      const supabase = await getSupabaseClient();
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
-      const result = await ipc.billingCreateCreditsCheckoutSession(parsed, organizationId, callbackUrl, accessToken);
-      if (result.ok) {
-        await ipc.actionExecute({ type: 'openUrl', url: result.checkoutUrl });
-        setMessage('Opened checkout in your browser. Your balance updates automatically once payment completes.');
-      } else {
-        setError(result.reason);
-      }
-    } catch (e) {
-      setError(getErrorMessage(e));
-    } finally {
-      setBusy(false);
-    }
+    setBusy(false);
+    setCheckoutIntent({ kind: 'credits', amountUsd: parsed, organizationId, title: 'Organization Ticket Balance' });
   }
 
   if (loading) {
@@ -185,6 +168,7 @@ export function AutonomousTaskBillingCard({ organizationId }: { organizationId: 
   const nextTicketPrice = getTicketUnitPriceUsd(ticketsUsedCount + 1);
 
   return (
+    <>
     <div className={styles.card}>
       <h3 className={styles.cardTitle}>Autonomous Ticket System</h3>
       <p className={styles.cardBody} style={{ marginTop: 6, marginBottom: 12 }}>
@@ -336,5 +320,17 @@ export function AutonomousTaskBillingCard({ organizationId }: { organizationId: 
       )}
       {error && <p style={{ color: '#e08c8c', fontSize: 12.5, marginTop: 10 }}>{error}</p>}
     </div>
+    {checkoutIntent && (
+      <NativeBillingCheckoutModal
+        intent={checkoutIntent}
+        onClose={() => setCheckoutIntent(null)}
+        onSuccess={() => {
+          setCheckoutIntent(null);
+          setMessage('Payment verified. Your organization Ticket Balance has been updated.');
+          reload();
+        }}
+      />
+    )}
+    </>
   );
 }

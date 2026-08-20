@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import styles from './taskCard.module.css';
 import type { ConversationTaskAction, ConversationTaskRecord } from './ConversationTypes';
-import type { ExecutionTrail, WorkflowMetadata, BuildStatus, VisualEvidence, TodoProgress, TestRunSummary, CodeDiffStat, PlannedStep } from '../../shared/actions/ExecutionLifecycle';
+import type { ExecutionTrail, WorkflowMetadata, BuildStatus, VisualEvidence, TodoProgress, TestRunSummary, CodeDiffStat, PlannedStep, ExecutionPlan } from '../../shared/actions/ExecutionLifecycle';
 import type { ManagedProcessInfo } from '../../shared/actions/ProcessTypes';
-import type { DevBrowserConsoleEntry } from '../../shared/actions/DevBrowserTypes';
+import type { DevBrowserConsoleEntry, DevBrowserNetworkEntry } from '../../shared/actions/DevBrowserTypes';
 import type { CapabilityConfirmation } from '../../shared/runtime/RequirementTypes';
 import type { Finding, FindingSeverity, FindingConfidence } from '../../shared/intelligence/IntelligenceReportTypes';
 import { groupFindingsByProvenance } from '../../shared/intelligence/IntelligenceReportTypes';
@@ -12,6 +12,7 @@ import type { SubscriptionTierId } from '../../shared/billing/BillingTypes';
 import { ipc } from '../services/ipc/ipcBridgeImplementation';
 import { getIntelligenceReport, getExecutionPlan } from './intelligenceReportShape';
 import { describeLaunchFailure, describeTaskLevelLaunchFailure, type FailurePresentation } from './LaunchReadinessUX';
+import { buildPlanDecisionMessage, buildPlanReviewModel, type PlanDecision } from './planReviewModel';
 
 /**
  * The universal execution UI for Paw — one Task Card per user request
@@ -377,6 +378,19 @@ export function getLatestDevBrowserConsole(task: ConversationTaskRecord): DevBro
   return undefined;
 }
 
+const isNetworkEntryArray = (value: unknown): value is DevBrowserNetworkEntry[] =>
+  Array.isArray(value) && value.every((e): e is DevBrowserNetworkEntry => Boolean(e) && typeof (e as DevBrowserNetworkEntry).url === 'string' && typeof (e as DevBrowserNetworkEntry).failed === 'boolean');
+
+/** Shape-based — ReadBrowserNetworkPlugin's `{ entries: DevBrowserNetworkEntry[] }` result. */
+export function getLatestBrowserNetworkErrors(task: ConversationTaskRecord): DevBrowserNetworkEntry[] | undefined {
+  for (const action of [...task.actions].reverse()) {
+    if (action.request.type !== 'readBrowserNetworkErrors') continue;
+    const data = action.result?.data as { entries?: unknown } | undefined;
+    if (isNetworkEntryArray(data?.entries)) return data!.entries as DevBrowserNetworkEntry[];
+  }
+  return undefined;
+}
+
 /** Shape-based — GitDiffPlugin's `{ diff: string; truncated: boolean }` result — for the Coding Canvas real diff view. */
 export type GitDiffResult = { diff: string; truncated: boolean };
 export function getLatestGitDiff(task: ConversationTaskRecord): GitDiffResult | undefined {
@@ -489,6 +503,134 @@ const STEP_STATUS_PILL_CLASS: Record<PlannedStep['status'], string> = {
   completed: 'stepCompleted',
   failed: 'stepFailed',
 };
+
+function PlanReviewCard({
+  task,
+  action,
+  plan,
+  onPlanDecision,
+}: {
+  task: ConversationTaskRecord;
+  action: ConversationTaskAction;
+  plan: ExecutionPlan;
+  onPlanDecision?: (planId: string, decision: PlanDecision, message: string) => void;
+}) {
+  const [localDecision, setLocalDecision] = useState<PlanDecision | null>(null);
+  const model = useMemo(() => buildPlanReviewModel(task, action, plan), [task, action, plan]);
+  const canDecide = Boolean(onPlanDecision) && !model.terminal && !localDecision;
+
+  const decide = (decision: PlanDecision) => {
+    setLocalDecision(decision);
+    const next = buildPlanDecisionMessage(model.id, decision);
+    onPlanDecision?.(plan.id, decision, next);
+  };
+
+  const requestRevision = () => {
+    setLocalDecision('rejected');
+    const next = `Please revise plan ${model.id}. Keep the plan visible and explain what changed before asking for approval again.`;
+    onPlanDecision?.(plan.id, 'rejected', next);
+  };
+
+  return (
+    <section className={styles.planReviewCard} aria-label="PawOS plan review">
+      <div className={styles.planReviewHeader}>
+        <div>
+          <div className={styles.planKicker}>PawOS Plan</div>
+          <h4 className={styles.planReviewTitle}>{model.title}</h4>
+          <div className={styles.planReviewSubtitle}>Review the proposed work before PawOS moves into execution.</div>
+        </div>
+        <span className={styles.planReviewCount}>{localDecision ? `Locally ${localDecision}` : 'Awaiting approval'}</span>
+      </div>
+      <div className={styles.planStageRail} aria-label="Plan progress">
+        {model.stages.map((stage) => (
+          <div key={stage.label} className={`${styles.planStage} ${styles[`planStage_${stage.status}`] ?? ''}`}>
+            <span className={styles.planStageDot} aria-hidden="true" />
+            <span className={styles.planStageLabel}>{stage.label}</span>
+            <span className={styles.planStageDescription}>{stage.description}</span>
+          </div>
+        ))}
+      </div>
+      <div className={styles.planScopeGrid}>
+        <div><span>Files</span><strong>{model.scope.files}</strong></div>
+        <div><span>Steps</span><strong>{model.scope.steps}</strong></div>
+        <div><span>Patch lines</span><strong>+{model.scope.added} / -{model.scope.deleted}</strong></div>
+        <div><span>Gated steps</span><strong>{model.scope.authorizationSteps}</strong></div>
+      </div>
+      <ol className={styles.planReviewList}>
+        {model.steps.map((step) => {
+          return (
+            <li key={step.id} className={styles.planReviewItem}>
+              <details>
+                <summary>
+                  <span className={`${styles.pill} ${styles[STEP_STATUS_PILL_CLASS[step.status]] ?? ''}`}>{step.status}</span>
+                  <span className={styles.planReviewIndex}>{step.index}.</span>
+                  <span className={styles.planReviewPath}>{step.path}</span>
+                  <span className={styles.planStepMeta}>{step.actionLabel} - {step.authorizationLabel}</span>
+                  <span className={styles.planReviewReason}>{step.rationale}</span>
+                </summary>
+                <div className={styles.planReviewDetail}>
+                  <div className={styles.planDetailGrid}>
+                    <div>
+                      <span className={styles.workflowStatLabel}>File path</span>
+                      <span className={styles.filePath}>{step.path}</span>
+                    </div>
+                    <div>
+                      <span className={styles.workflowStatLabel}>Action</span>
+                      <span className={styles.workflowStatValue}>{step.actionLabel}</span>
+                    </div>
+                    <div>
+                      <span className={styles.workflowStatLabel}>Affected area</span>
+                      <span className={styles.workflowStatValue}>{step.affectedArea}</span>
+                    </div>
+                    <div>
+                      <span className={styles.workflowStatLabel}>Permission</span>
+                      <span className={styles.workflowStatValue}>{step.authorizationLabel}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <span className={styles.workflowStatLabel}>Reason</span>
+                    <div className={styles.finalReport}>{step.rationale}</div>
+                  </div>
+                  {step.diff ? (
+                    <details className={styles.planDiffDetails}>
+                      <summary>View Changes</summary>
+                      <pre className={styles.codeBlock}>{step.diff}</pre>
+                    </details>
+                  ) : (
+                    <div className={styles.planDiffUnavailable}>No patch hunks are attached to this step yet; concrete changes will be shown by the execution action before mutation.</div>
+                  )}
+                </div>
+              </details>
+            </li>
+          );
+        })}
+      </ol>
+      {model.unplannableCount > 0 && (
+        <div className={styles.planReviewNote}>
+          {model.unplannableCount} approved finding{model.unplannableCount === 1 ? '' : 's'} had no safe automated fix and were left out.
+        </div>
+      )}
+      <div className={styles.planPermissionBox}>
+        <span className={styles.planPermissionTitle}>Approval and permission boundary</span>
+        <span>{model.permissionSummary}</span>
+      </div>
+      <div className={styles.planBoundaryNote}>
+        Plan approval records your intent. Code edits, commands, git writes, and other destructive actions still use the existing authorization gate before execution.
+      </div>
+      <div className={styles.planReviewActions}>
+        <button type="button" className={styles.planApproveBtn} disabled={!canDecide} onClick={() => decide('approved')}>
+          {localDecision === 'approved' ? 'Plan Approved' : 'Approve Plan'}
+        </button>
+        <button type="button" className={styles.planReviseBtn} disabled={!canDecide} onClick={requestRevision}>
+          Ask for Revision
+        </button>
+        <button type="button" className={styles.planRejectBtn} disabled={!canDecide} onClick={() => decide('rejected')}>
+          {localDecision === 'rejected' ? 'Plan Rejected' : 'Reject Plan'}
+        </button>
+      </div>
+    </section>
+  );
+}
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
@@ -663,6 +805,7 @@ export function TaskCard({
   onConnectCapability,
   onNavigateToSettingsConnector,
   onOpenTicketBalance,
+  onPlanDecision,
 }: {
   task: ConversationTaskRecord;
   onRetryAction?: (taskId: string, actionId: string) => void;
@@ -679,6 +822,7 @@ export function TaskCard({
    *  balance-restricted failure's "Add Funds" pill actually goes somewhere, instead of being
    *  informational text with nothing behind it. */
   onOpenTicketBalance?: () => void;
+  onPlanDecision?: (planId: string, decision: PlanDecision, message: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -785,6 +929,9 @@ export function TaskCard({
     }
     return null;
   }, [task.actions]);
+
+  const latestExecutionPlanAction = useMemo(() => [...sections.executionPlans].reverse().find((a) => getExecutionPlan(a)), [sections.executionPlans]);
+  const latestExecutionPlan = latestExecutionPlanAction ? getExecutionPlan(latestExecutionPlanAction) : undefined;
 
   const handleCopy = () => {
     void navigator.clipboard.writeText(buildLogText(task)).then(() => {
@@ -904,6 +1051,15 @@ export function TaskCard({
             <div className={styles.billingNote}>Only charged if this ticket reaches successful completion — a failed, blocked, or cancelled run never costs anything.</div>
           )}
         </div>
+      )}
+
+      {latestExecutionPlanAction && latestExecutionPlan && (
+        <PlanReviewCard
+          task={task}
+          action={latestExecutionPlanAction}
+          plan={latestExecutionPlan}
+          onPlanDecision={onPlanDecision}
+        />
       )}
 
       {expanded && (

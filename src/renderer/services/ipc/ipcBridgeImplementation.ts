@@ -43,6 +43,9 @@ import type {
   CreditBalance,
   CreditConsumptionRecord,
   BillingCheckoutResult,
+  NativeSubscriptionCheckoutResult,
+  NativeCreditsCheckoutResult,
+  NativeCreditsVerificationResult,
   CheckoutOptions,
   FeatureId,
   EntitlementSnapshot,
@@ -329,11 +332,23 @@ export const ipc = {
   async billingCreateCheckoutSession(tier: SubscriptionTierId, callbackUrl?: string, options?: CheckoutOptions): Promise<BillingCheckoutResult> {
     return getBridge().billingCreateCheckoutSession(tier, callbackUrl, options);
   },
+  async billingCreateNativeSubscriptionCheckout(tier: SubscriptionTierId, options?: CheckoutOptions): Promise<NativeSubscriptionCheckoutResult> {
+    return getBridge().billingCreateNativeSubscriptionCheckout(tier, options);
+  },
+  async billingConfirmNativeSubscriptionPayment(paymentId: string, subscriptionId: string, signature: string): Promise<{ ok: true; subscription: SubscriptionState } | { ok: false; reason: string }> {
+    return getBridge().billingConfirmNativeSubscriptionPayment(paymentId, subscriptionId, signature);
+  },
   async billingStartCheckoutSync(): Promise<string> {
     return getBridge().billingStartCheckoutSync();
   },
   async billingCreateCreditsCheckoutSession(amountUsd: number, organizationId?: string, callbackUrl?: string, accessToken?: string): Promise<BillingCheckoutResult> {
     return getBridge().billingCreateCreditsCheckoutSession(amountUsd, organizationId, callbackUrl, accessToken);
+  },
+  async billingCreateNativeCreditsCheckout(amountUsd: number, organizationId?: string, accessToken?: string): Promise<NativeCreditsCheckoutResult> {
+    return getBridge().billingCreateNativeCreditsCheckout(amountUsd, organizationId, accessToken);
+  },
+  async billingVerifyNativeCreditsPayment(params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string; organizationId?: string }): Promise<NativeCreditsVerificationResult> {
+    return getBridge().billingVerifyNativeCreditsPayment(params);
   },
   onSubscriptionUpdated(cb: () => void) {
     return getBridge().onSubscriptionUpdated(cb);
@@ -549,4 +564,3 @@ export const ipc = {
 export type IpcApi = typeof ipc;
 
 export type IpcSettings = SettingsState;
-

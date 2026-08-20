@@ -21,6 +21,9 @@ import type {
   CreditBalance,
   CreditConsumptionRecord,
   BillingCheckoutResult,
+  NativeSubscriptionCheckoutResult,
+  NativeCreditsCheckoutResult,
+  NativeCreditsVerificationResult,
   CheckoutOptions,
   FeatureId,
   EntitlementSnapshot,
@@ -242,9 +245,17 @@ export function contextBridge() {
 
     billingCreateCheckoutSession: async (tier: SubscriptionTierId, callbackUrl?: string, options?: CheckoutOptions): Promise<BillingCheckoutResult> =>
       ipcApi.invoke('billing:createCheckoutSession', tier, callbackUrl, options),
+    billingCreateNativeSubscriptionCheckout: async (tier: SubscriptionTierId, options?: CheckoutOptions): Promise<NativeSubscriptionCheckoutResult> =>
+      ipcApi.invoke('billing:createNativeSubscriptionCheckout', tier, options),
+    billingConfirmNativeSubscriptionPayment: async (paymentId: string, subscriptionId: string, signature: string): Promise<{ ok: true; subscription: SubscriptionState } | { ok: false; reason: string }> =>
+      ipcApi.invoke('billing:confirmNativeSubscriptionPayment', paymentId, subscriptionId, signature),
     billingStartCheckoutSync: async (): Promise<string> => ipcApi.invoke('billing:startCheckoutSync'),
     billingCreateCreditsCheckoutSession: async (amountUsd: number, organizationId?: string, callbackUrl?: string, accessToken?: string): Promise<BillingCheckoutResult> =>
       ipcApi.invoke('billing:createCreditsCheckoutSession', amountUsd, organizationId, callbackUrl, accessToken),
+    billingCreateNativeCreditsCheckout: async (amountUsd: number, organizationId?: string, accessToken?: string): Promise<NativeCreditsCheckoutResult> =>
+      ipcApi.invoke('billing:createNativeCreditsCheckout', amountUsd, organizationId, accessToken),
+    billingVerifyNativeCreditsPayment: async (params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string; organizationId?: string }): Promise<NativeCreditsVerificationResult> =>
+      ipcApi.invoke('billing:verifyNativeCreditsPayment', params),
     onSubscriptionUpdated: (cb: () => void) => on('billing:subscriptionUpdated', cb),
     onTaskCreditsPurchased: (cb: (payload: { amountUsd?: number; organizationId?: string }) => void) =>
       on('billing:taskCreditsPurchased', cb),
@@ -376,4 +387,3 @@ export function contextBridge() {
       ipcApi.invoke('connectivity:deploymentProfiles:hydrate', profile),
   };
 }
-

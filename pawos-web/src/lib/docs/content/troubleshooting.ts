@@ -42,9 +42,9 @@ export const troubleshootingPages: DocPage[] = [
     blocks: [
       {
         type: 'warning',
-        text: 'Tool-calling (the mechanism behind every real action PawOS takes — file edits, commands, installs) is currently only implemented for the Gemini reasoning provider. If you’ve configured a different model provider in Settings, PawOS can still converse, but action requests will not be reachable the same way.',
+        text: 'Tool-calling (the mechanism behind every real action PawOS takes — file edits, commands, installs) requires an action-capable PawOS reasoning configuration. If you switch to a provider mode that only supports conversation, PawOS can still answer questions, but action requests will not be reachable the same way.',
       },
-      { type: 'paragraph', text: 'If actions aren’t running at all, check Settings → AI Model and confirm which provider is active.' },
+      { type: 'paragraph', text: 'If actions are not running at all, check Settings → AI Model and confirm the active model/provider is action-capable for your tier.' },
     ],
     related: ['troubleshooting/tool-execution-problems'],
   },

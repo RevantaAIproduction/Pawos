@@ -52,6 +52,7 @@ describe('ReadFilePlugin', () => {
     fs.writeFileSync(envFile, 'SECRET_KEY=hunter2\n', 'utf-8');
     const result = await readFilePlugin.execute({ type: 'readFile', path: envFile });
     expect(result.ok).toBe(false);
+    if (result.ok) return;
     expect(result.message).toMatch(/live secrets/i);
   });
 
@@ -86,6 +87,7 @@ describe('ReadFilePlugin', () => {
   it('fails honestly when path is a directory, not a file', async () => {
     const result = await readFilePlugin.execute({ type: 'readFile', path: tmpDir });
     expect(result.ok).toBe(false);
+    if (result.ok) return;
     expect(result.message).toMatch(/folder/i);
   });
 });

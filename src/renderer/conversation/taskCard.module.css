@@ -144,6 +144,271 @@
 }
 .billingNote{font-size:11px;color:rgba(255,255,255,0.5);}
 
+.planReviewCard{
+  margin:0 10px 10px;
+  padding:12px;
+  border-radius:10px;
+  background:rgba(18,25,38,0.82);
+  border:1px solid rgba(116,167,255,0.26);
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  box-shadow:0 12px 28px rgba(0,0,0,0.16);
+}
+.planReviewHeader{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+}
+.planKicker{
+  font-size:9.5px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:0.08em;
+  color:#bcd6ff;
+}
+.planReviewTitle{
+  margin:2px 0 0;
+  font-size:14px;
+  line-height:1.25;
+  color:rgba(255,255,255,0.94);
+}
+.planReviewSubtitle{
+  margin-top:3px;
+  font-size:11px;
+  line-height:1.35;
+  color:rgba(255,255,255,0.58);
+}
+.planReviewCount{
+  flex-shrink:0;
+  border-radius:999px;
+  border:1px solid rgba(140,196,255,0.28);
+  background:rgba(140,196,255,0.1);
+  padding:4px 8px;
+  font-size:10px;
+  font-weight:800;
+  color:#d7e7ff;
+}
+.planStageRail{
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  gap:6px;
+}
+.planStage{
+  min-width:0;
+  border-radius:8px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(255,255,255,0.045);
+  padding:7px;
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  gap:2px 6px;
+  align-items:center;
+}
+.planStageDot{
+  width:7px;
+  height:7px;
+  border-radius:999px;
+  background:rgba(255,255,255,0.34);
+}
+.planStageLabel{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:10.5px;
+  font-weight:800;
+  color:rgba(255,255,255,0.88);
+}
+.planStageDescription{
+  grid-column:2;
+  min-width:0;
+  overflow-wrap:anywhere;
+  font-size:9.5px;
+  line-height:1.25;
+  color:rgba(255,255,255,0.48);
+}
+.planStage_done .planStageDot{background:#60d78c;}
+.planStage_active{
+  border-color:rgba(140,196,255,0.34);
+  background:rgba(140,196,255,0.09);
+}
+.planStage_active .planStageDot{background:#8cc4ff;}
+.planStage_blocked .planStageDot{background:#ff8e8e;}
+.planStage_pending{opacity:0.72;}
+.planScopeGrid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:6px;
+}
+.planScopeGrid div{
+  border-radius:8px;
+  background:rgba(255,255,255,0.045);
+  border:1px solid rgba(255,255,255,0.08);
+  padding:7px 8px;
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+.planScopeGrid span{
+  font-size:9.5px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:0.04em;
+  color:rgba(255,255,255,0.45);
+}
+.planScopeGrid strong{
+  min-width:0;
+  overflow-wrap:anywhere;
+  font-size:12px;
+  color:rgba(255,255,255,0.92);
+}
+.planReviewList{
+  margin:0;
+  padding:0;
+  list-style:none;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.planReviewItem{
+  border-radius:8px;
+  background:rgba(255,255,255,0.045);
+  border:1px solid rgba(255,255,255,0.1);
+}
+.planReviewItem summary{
+  display:grid;
+  grid-template-columns:auto auto minmax(0,1fr);
+  gap:6px;
+  align-items:center;
+  padding:7px 8px;
+  cursor:pointer;
+}
+.planReviewIndex{
+  font-size:11px;
+  color:rgba(255,255,255,0.45);
+}
+.planReviewPath{
+  min-width:0;
+  overflow-wrap:anywhere;
+  font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
+  font-size:11px;
+  color:rgba(255,255,255,0.88);
+}
+.planReviewReason{
+  grid-column:3;
+  font-size:11px;
+  color:rgba(255,255,255,0.58);
+}
+.planStepMeta{
+  grid-column:3;
+  min-width:0;
+  overflow-wrap:anywhere;
+  font-size:10px;
+  color:rgba(188,214,255,0.74);
+}
+.planReviewDetail{
+  border-top:1px solid rgba(255,255,255,0.08);
+  padding:8px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.planDetailGrid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+  gap:8px;
+}
+.planDiffDetails summary{
+  cursor:pointer;
+  color:#bcd6ff;
+  font-size:11px;
+  font-weight:700;
+}
+.planDiffUnavailable{
+  border-radius:8px;
+  border:1px dashed rgba(255,255,255,0.16);
+  padding:8px;
+  font-size:11px;
+  line-height:1.4;
+  color:rgba(255,255,255,0.58);
+}
+.planReviewNote,.planBoundaryNote{
+  font-size:11px;
+  line-height:1.4;
+  color:rgba(255,255,255,0.62);
+}
+.planPermissionBox{
+  border-radius:8px;
+  border:1px solid rgba(140,196,255,0.2);
+  background:rgba(140,196,255,0.07);
+  padding:8px;
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  font-size:11px;
+  line-height:1.4;
+  color:rgba(255,255,255,0.66);
+}
+.planPermissionTitle{
+  font-size:10px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:0.05em;
+  color:#bcd6ff;
+}
+.planScope{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  font-size:11px;
+  color:rgba(255,255,255,0.65);
+}
+.planScope strong{color:rgba(255,255,255,0.9);}
+.planReviewActions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.planApproveBtn,.planRejectBtn,.planReviseBtn{
+  border:0;
+  border-radius:999px;
+  padding:5px 11px;
+  font-size:10.5px;
+  font-weight:800;
+  cursor:pointer;
+}
+.planApproveBtn{
+  background:rgba(96,215,140,0.2);
+  color:#a8f0c2;
+}
+.planRejectBtn{
+  background:rgba(255,110,110,0.16);
+  color:#ffc4c4;
+}
+.planReviseBtn{
+  background:rgba(255,255,255,0.1);
+  color:rgba(255,255,255,0.86);
+}
+.planApproveBtn:hover{background:rgba(96,215,140,0.3);}
+.planRejectBtn:hover{background:rgba(255,110,110,0.26);}
+.planReviseBtn:hover{background:rgba(255,255,255,0.16);}
+.planApproveBtn:disabled,.planRejectBtn:disabled,.planReviseBtn:disabled{
+  opacity:0.55;
+  cursor:not-allowed;
+}
+
+@media (max-width:720px){
+  .planReviewHeader{flex-direction:column;}
+  .planReviewCount{align-self:flex-start;}
+  .planStageRail{grid-template-columns:1fr;}
+  .planScopeGrid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .planReviewItem summary{grid-template-columns:auto minmax(0,1fr);}
+  .planReviewIndex{display:none;}
+  .planReviewPath,.planReviewReason,.planStepMeta{grid-column:2;}
+}
+
 .details{
   border-top:1px solid rgba(255,255,255,0.1);
   padding:10px;

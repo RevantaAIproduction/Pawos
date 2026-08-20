@@ -30,7 +30,7 @@ describe('GetCodingModePlugin', () => {
   });
 
   it('returns the current mode in the result data', async () => {
-    const result = await getCodingModePlugin.execute({ type: 'getCodingMode' });
+    const result = await getCodingModePlugin.execute();
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const data = result.data as { preferences: { mode: string } };
@@ -39,7 +39,7 @@ describe('GetCodingModePlugin', () => {
 
   it('describeDone reflects go mode when mode is go', async () => {
     const req = { type: 'getCodingMode' as const };
-    const result = await getCodingModePlugin.execute(req);
+    const result = await getCodingModePlugin.execute();
     const desc = getCodingModePlugin.describeDone(req, result);
     expect(desc).toMatch(/Paw Go/i);
   });
@@ -70,7 +70,7 @@ describe('SetCodingModePlugin', () => {
 
   it('persists mode so a subsequent getCodingMode call sees the new value', async () => {
     await setCodingModePlugin.execute({ type: 'setCodingMode', mode: 'pro' });
-    const getResult = await getCodingModePlugin.execute({ type: 'getCodingMode' });
+    const getResult = await getCodingModePlugin.execute();
     expect(getResult.ok).toBe(true);
     if (!getResult.ok) return;
     const data = getResult.data as { preferences: { mode: string } };

@@ -11,8 +11,9 @@ import { billingPages } from './content/billing';
 import { securityPages } from './content/security';
 import { troubleshootingPages } from './content/troubleshooting';
 import { referencePages } from './content/reference';
+import { addDisclosureBlocks } from './disclosure';
 
-export const ALL_DOC_PAGES: DocPage[] = [
+const RAW_DOC_PAGES: DocPage[] = [
   ...gettingStartedPages,
   ...conceptsPages,
   ...codingPages,
@@ -25,6 +26,8 @@ export const ALL_DOC_PAGES: DocPage[] = [
   ...troubleshootingPages,
   ...referencePages,
 ];
+
+export const ALL_DOC_PAGES: DocPage[] = RAW_DOC_PAGES.map(addDisclosureBlocks);
 
 const PAGE_MAP = new Map<string, DocPage>(ALL_DOC_PAGES.map((p) => [`${p.section}/${p.slug}`, p]));
 

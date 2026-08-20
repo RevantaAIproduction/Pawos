@@ -6,9 +6,11 @@ import {
   SUBSCRIPTION_TIER_ORDER,
   type PricingConfig,
   type PricingPlan,
+  type SeatTier,
   type SubscriptionState,
   type SubscriptionTierId,
 } from '../../../../shared/billing/BillingTypes';
+import { NativeBillingCheckoutModal, type NativeBillingCheckoutIntent } from '../../billing/NativeBillingCheckoutModal';
 
 const TIER_LABELS: Record<SubscriptionTierId, string> = {
   go: 'Go',
@@ -47,8 +49,8 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
   const [pricing, setPricing] = useState<PricingConfig | null>(null);
   const [subscription, setSubscription] = useState<SubscriptionState | null>(null);
   const [tab, setTab] = useState<'individual' | 'team'>('individual');
-  const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [checkoutIntent, setCheckoutIntent] = useState<NativeBillingCheckoutIntent | null>(null);
 
   useEffect(() => {
     ipc.billingGetPricing().then(setPricing).catch(() => {});
@@ -58,21 +60,13 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
   const currentTier = subscription?.tier ?? 'go';
   const currentIndex = SUBSCRIPTION_TIER_ORDER.indexOf(currentTier);
 
-  const startCheckout = async (tier: SubscriptionTierId) => {
-    setBusy(true);
+  const startCheckout = (tier: SubscriptionTierId, seatTier?: SeatTier) => {
     setMessage(null);
-    try {
-      const callbackUrl = await ipc.billingStartCheckoutSync().catch(() => undefined);
-      const result = await ipc.billingCreateCheckoutSession(tier, callbackUrl);
-      if (result.ok) {
-        await ipc.actionExecute({ type: 'openUrl', url: result.checkoutUrl });
-        setMessage('Opened checkout in your browser.');
-      } else {
-        setMessage(result.reason);
-      }
-    } finally {
-      setBusy(false);
+    if (tier === 'enterprise') {
+      setCheckoutIntent({ kind: 'subscription', tier: 'enterprise' });
+      return;
     }
+    setCheckoutIntent({ kind: 'subscription', tier: tier as Exclude<SubscriptionTierId, 'go'>, seatTier });
   };
 
   const individualPlans = (pricing?.plans ?? []).filter((p) => !p.seatBased && p.id !== 'go');
@@ -144,6 +138,16 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
                         </span>
                       </div>
                       <p className={styles.cardBody} style={{ fontSize: 11.5, marginTop: 2 }}>{seat.description}</p>
+                      {!isCurrent && !isDowngrade && (
+                        <button
+                          type="button"
+                          className={styles.primaryButton}
+                          style={{ marginTop: 8, width: '100%' }}
+                          onClick={() => startCheckout(plan.id, seat.seatTier)}
+                        >
+                          Get {seat.label}
+                        </button>
+                      )}
                     </div>
                   ))}
                   <p className={styles.cardBody} style={{ fontSize: 11.5 }}>
@@ -182,8 +186,8 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
                   <button type="button" className={styles.chip} disabled>
                     Included in your plan
                   </button>
-                ) : (
-                  <button type="button" className={styles.primaryButton} disabled={busy} onClick={() => startCheckout(plan.id)}>
+                ) : plan.seatOptions ? null : (
+                  <button type="button" className={styles.primaryButton} onClick={() => startCheckout(plan.id)}>
                     Get {plan.label}
                   </button>
                 )}
@@ -194,6 +198,16 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
       </div>
 
       {message && <p className={styles.cardBody} style={{ marginTop: 16, textAlign: 'center' }}>{message}</p>}
+      {checkoutIntent && (
+        <NativeBillingCheckoutModal
+          intent={checkoutIntent}
+          onClose={() => setCheckoutIntent(null)}
+          onSuccess={() => {
+            setMessage('Payment verified. Your plan will refresh automatically.');
+            ipc.billingGetSubscription().then(setSubscription).catch(() => {});
+          }}
+        />
+      )}
     </div>
   );
 }

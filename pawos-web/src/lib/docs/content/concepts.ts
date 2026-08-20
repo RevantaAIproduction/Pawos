@@ -83,12 +83,22 @@ export const conceptsPages: DocPage[] = [
       },
       {
         type: 'paragraph',
-        text: 'A plan is a real, structured list of steps (one per affected file), not free text. Approval today is conversational — you tell PawOS to go ahead in chat.',
+        text: 'A plan is a real, structured list of steps (one per affected file), not free text. Structured plans render in the Task Card as a visual Plan Review surface with approve/reject controls and expandable per-file details.',
       },
       {
         type: 'status',
-        status: 'not-implemented',
-        text: 'A dedicated visual plan-review UI (approve/reject a rendered diff per file, independent of chat) does not exist yet — plan approval is currently a conversational "yes, go ahead."',
+        status: 'partial',
+        text: 'Visual Plan Review is implemented at plan level. Approval/rejection is submitted back into the normal conversation, and actual code edits still require the existing applyCodeEdit/writeFile confirmation. Hunk-level approval is not implemented.',
+      },
+      {
+        type: 'table',
+        headers: ['Concept', 'Meaning'],
+        rows: [
+          ['Plan proposed', 'proposeCodeEditPlan or proposeExecutionPlan returned an ExecutionPlan. No mutation happened.'],
+          ['Plan approved', 'The user approved the plan-level scope through the Plan Review UI or conversation.'],
+          ['Code edit authorized', 'A specific applyCodeEdit/writeFile action passed the existing confirmation gate and may mutate files.'],
+          ['Plan rejected', 'The proposed mutations must not execute; the conversation remains available for revision.'],
+        ],
       },
     ],
     related: ['coding/planning-and-review', 'coding/code-editing'],
@@ -175,7 +185,7 @@ export const conceptsPages: DocPage[] = [
       },
       {
         type: 'note',
-        text: 'Pro Max is deliberately capability-identical to Pro — it never unlocks a runtime feature Pro doesn’t have, only a larger usage allotment.',
+        text: 'Pro and Pro Max share the same normal interactive execution runtime. Pro Max additionally unlocks Pro Max-gated autonomous-work and project-management capabilities such as autonomousTaskBilling, Jira, and Linear, plus a larger Paw Compute allotment.',
       },
     ],
     related: ['billing/plans', 'reference/entitlements'],

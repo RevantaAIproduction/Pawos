@@ -766,6 +766,7 @@ export type ActionResult =
         | 'usage-restricted'
         | 'balance-restricted'
         | 'security-restricted'
+        | 'cancelled'
         | 'failed';
       message?: string;
       data?: unknown;

@@ -76,7 +76,9 @@ export type WorkspaceRegionId =
   // isIntelligenceTask in intelligenceTaskDetection.ts), same "always renders, honest placeholder
   // when empty" discipline as the Coding/Infrastructure/Office Canvases above.
   | 'intelligenceReport'
-  | 'executionPlan';
+  | 'executionPlan'
+  // Coding Canvas additions (Phase hardening) — agent activity timeline from real task.actions
+  | 'agentActivity';
 
 /** null render means the region is reserved but not yet populated — no placeholder chrome is shown for it. */
 export type WorkspaceRegionSlot = {

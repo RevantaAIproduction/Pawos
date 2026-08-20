@@ -55,6 +55,7 @@ export type CodingRuntimeCompletionSummary = {
   commands: CodingRuntimeCommandSummary[];
   createdFiles: string[];
   modifiedFiles: string[];
+  deletedFiles: string[];
   diff?: CodeDiffStat;
   usage: CodingRuntimeUsageSummary;
   readiness: TaskCompletionReadiness;
@@ -149,6 +150,11 @@ export function summarizeCodingRuntimeTask(task: ConversationTaskRecord): Coding
       )
       .map((a) => field(a.request, PATH_KEYS))
   );
+  const deletedFiles = unique(
+    task.actions
+      .filter((a) => a.request.type === 'deletePath' && a.result?.ok)
+      .map((a) => field(a.request, PATH_KEYS))
+  );
   const build = getLatestBuildStatus(task);
   const tests = getLatestTestResults(task);
   const visual = getLatestVisualEvidence(task);
@@ -171,6 +177,7 @@ export function summarizeCodingRuntimeTask(task: ConversationTaskRecord): Coding
     commands,
     createdFiles,
     modifiedFiles,
+    deletedFiles,
     diff: getLatestCodeDiffStat(task),
     usage,
     readiness,

@@ -68,6 +68,7 @@ export function ConversationPanel({
   onConnectCapability,
   onNavigateToSettingsConnector,
   onOpenTicketBalance,
+  onPlanDecision,
   creditsNoticeTier,
   creditsNoticeSeatTier,
   creditsNoticePooled,
@@ -114,6 +115,7 @@ export function ConversationPanel({
   onNavigateToSettingsConnector?: (connectorId: string) => void;
   /** "Add Funds" on a balance-restricted Autonomous Work failure — opens the Ticket Balance wallet (Settings → Billing). */
   onOpenTicketBalance?: () => void;
+  onPlanDecision?: (planId: string, decision: 'approved' | 'rejected', message: string) => void;
   /** Set when the last submit was blocked by the entitlement/credit gate (see useConversationController). */
   creditsNoticeTier?: SubscriptionTierId | null;
   /** Only meaningful when tier === 'team' — which seat rate determines the exhaustion notice's upgrade target. */
@@ -370,6 +372,7 @@ export function ConversationPanel({
                 onConnectCapability={onConnectCapability}
                 onNavigateToSettingsConnector={onNavigateToSettingsConnector}
                 onOpenTicketBalance={onOpenTicketBalance}
+                onPlanDecision={onPlanDecision}
               />
             ) : (
               <div key={message.id} className={styles.systemLineWrap}>

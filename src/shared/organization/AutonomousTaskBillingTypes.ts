@@ -196,6 +196,10 @@ export const TICKET_COMPLEXITY_PRICING: readonly ComplexityPricingBand[] = [
   { complexity: 'complex', minWorkScore: 13, minPriceUsd: 20, maxPriceUsd: 50 },
 ];
 
+const SIMPLE_COMPLEXITY_BAND = TICKET_COMPLEXITY_PRICING[0]!;
+const MEDIUM_COMPLEXITY_BAND = TICKET_COMPLEXITY_PRICING[1]!;
+const COMPLEX_COMPLEXITY_BAND = TICKET_COMPLEXITY_PRICING[2]!;
+
 /**
  * Classifies a completed run's real, already-recorded work (never estimated in advance) into a
  * complexity band and an informational price within that band's real range. workScore is the sum
@@ -204,16 +208,16 @@ export const TICKET_COMPLEXITY_PRICING: readonly ComplexityPricingBand[] = [
  * within their band up to the stated cap ($20 / $50), snapped to whole dollars.
  */
 export function classifyTicketComplexity(workScore: number): { complexity: TicketComplexity; priceUsd: number } {
-  if (workScore < TICKET_COMPLEXITY_PRICING[1].minWorkScore) {
-    return { complexity: 'simple', priceUsd: TICKET_COMPLEXITY_PRICING[0].maxPriceUsd };
+  if (workScore < MEDIUM_COMPLEXITY_BAND.minWorkScore) {
+    return { complexity: 'simple', priceUsd: SIMPLE_COMPLEXITY_BAND.maxPriceUsd };
   }
-  if (workScore < TICKET_COMPLEXITY_PRICING[2].minWorkScore) {
-    const band = TICKET_COMPLEXITY_PRICING[1];
-    const span = TICKET_COMPLEXITY_PRICING[2].minWorkScore - band.minWorkScore;
+  if (workScore < COMPLEX_COMPLEXITY_BAND.minWorkScore) {
+    const band = MEDIUM_COMPLEXITY_BAND;
+    const span = COMPLEX_COMPLEXITY_BAND.minWorkScore - band.minWorkScore;
     const priceUsd = Math.round(band.minPriceUsd + ((workScore - band.minWorkScore) / span) * (band.maxPriceUsd - band.minPriceUsd));
     return { complexity: 'medium', priceUsd: Math.min(priceUsd, band.maxPriceUsd) };
   }
-  const band = TICKET_COMPLEXITY_PRICING[2];
+  const band = COMPLEX_COMPLEXITY_BAND;
   const priceUsd = workScore <= 25 ? 20 : workScore <= 50 ? 30 : 50;
   return { complexity: 'complex', priceUsd: Math.min(priceUsd, band.maxPriceUsd) };
 }

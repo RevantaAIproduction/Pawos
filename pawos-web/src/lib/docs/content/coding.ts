@@ -33,8 +33,23 @@ export const codingPages: DocPage[] = [
       },
       {
         type: 'status',
-        status: 'not-implemented',
-        text: 'Terminal access is a fixed allowlist of known developer tools, not arbitrary shell execution. There is no dedicated visual diff-review UI yet — plan review is conversational.',
+        status: 'partial',
+        text: 'Terminal access is a fixed allowlist of known developer tools, not arbitrary shell execution. Visual Plan Review is implemented for structured ExecutionPlan/code-edit plans, with file-by-file expansion and approve/reject controls. Approval is plan-level and resumes through conversation; code edits, commands, git writes, installs, deploys, and other destructive actions still pass through the existing authorization gate.',
+      },
+      { type: 'heading', level: 2, id: 'lifecycle', text: 'Coding lifecycle' },
+      {
+        type: 'steps',
+        items: [
+          { title: 'Request', detail: 'You describe the outcome. PawOS decides which project facts, files, tools, and validation steps are relevant.' },
+          { title: 'Understand', detail: 'The runtime inspects the workspace, project structure, dependency graph, feature map, domain concepts, and likely affected files where supported.' },
+          { title: 'Plan', detail: 'For multi-file edits, proposeCodeEditPlan returns a structured ExecutionPlan with one planned applyCodeEdit step per affected file.' },
+          { title: 'Review', detail: 'The Plan Review card shows files affected, estimated line scope, per-file rationale, affected area, and proposed hunk diff where available.' },
+          { title: 'Authorize', detail: 'Plan approval records intent. Actual edits and commands remain governed by the existing confirmation mechanism.' },
+          { title: 'Edit', detail: 'Edits are applied as context-anchored hunks against current on-disk content, not blind whole-file rewrites.' },
+          { title: 'Validate', detail: 'PawOS can run syntax, imports, typecheck, lint, build, and tests, reporting skipped steps honestly when a project lacks the script or config.' },
+          { title: 'Preview and verify', detail: 'UI work can produce browser screenshots, console output, network evidence, and visual verification when invoked.' },
+          { title: 'Evidence', detail: 'The Work Record keeps the action timeline, outputs, file changes, validation results, screenshots, failures, retries, and final report.' },
+        ],
       },
     ],
     related: ['coding/coding-workspace', 'coding/project-understanding', 'concepts/entitlements'],
@@ -54,6 +69,27 @@ export const codingPages: DocPage[] = [
         items: [
           'Project understanding and coding memory are visible on every tier (read-only).',
           'Running processes, terminal output, build status, live diff summary, and browser preview require execution access (Pro or higher).',
+        ],
+      },
+      {
+        type: 'heading',
+        level: 2,
+        id: 'agent-activity',
+        text: 'Agent Activity',
+      },
+      {
+        type: 'paragraph',
+        text: 'The Coding Workspace exposes concise operational activity such as analyzing repository, planning changes, editing files, running tests, checking browser, retrying, and verifying. This is execution status and evidence, not hidden chain-of-thought.',
+      },
+      {
+        type: 'table',
+        headers: ['Visible item', 'What it means', 'What it is not'],
+        rows: [
+          ['Running', 'An action has started and no result has returned yet.', 'A transcript of private model reasoning.'],
+          ['Waiting', 'A confirmation, connector, or capability requirement is blocking progress.', 'A failed task.'],
+          ['Done', 'The action returned ok:true and may include structured evidence.', 'A promise that unrelated checks also passed.'],
+          ['Failed', 'The action returned a real failure result or launch/readiness problem.', 'A fabricated diagnosis.'],
+          ['Retried', 'The execution trail recorded recovery attempts.', 'Unlimited self-healing.'],
         ],
       },
     ],
@@ -93,7 +129,42 @@ export const codingPages: DocPage[] = [
       },
       {
         type: 'paragraph',
-        text: 'Approval today happens in conversation ("go ahead"), not through a dedicated visual review UI. See Core Concepts → Plans.',
+        text: 'Approval now has a dedicated visual Plan Review card for structured plans. The card is still intentionally plan-level: it records approval or rejection in the conversation and preserves the existing destructive-action confirmation boundary.',
+      },
+      {
+        type: 'steps',
+        items: [
+          { title: 'When a plan is created', detail: 'For non-trivial code edits, the model calls proposeCodeEditPlan with a description plus proposed edits. The plugin builds an ExecutionPlan and does not apply changes itself.' },
+          { title: 'What the user sees', detail: 'The Task Card shows PAWOS PLAN, files affected, a numbered file list, each file rationale, estimated +/− line scope, and Approve Plan / Reject Plan buttons.' },
+          { title: 'Per-file review', detail: 'Expanding a plan item shows file path, action, reason, affected area, proposed changes, and a View Diff section when applyCodeEdit hunk data exists.' },
+          { title: 'Approve', detail: 'Approve Plan submits a normal user-visible message approving that plan id. The runtime can continue, but actual mutations still need their own confirmation.' },
+          { title: 'Reject', detail: 'Reject Plan submits a normal user-visible rejection. Planned mutations are not executed, the conversation remains intact, and the user can request a revised plan.' },
+          { title: 'Modify', detail: 'Ask for changes in chat after rejecting or before approving. PawOS should prepare a new plan rather than mutating the rejected one.' },
+        ],
+      },
+      {
+        type: 'warning',
+        text: 'Do not confuse Plan Approved with Code Edit Authorized. The UI does not implement hunk-level approval, and it does not bypass applyCodeEdit, writeFile, runCommand, git, install, PATH, deploy, or connector confirmations.',
+      },
+      {
+        type: 'code',
+        lang: 'text',
+        code: `PAWOS PLAN
+Add dark mode
+
+Files affected: 4
+
+1. src/theme.ts
+   CHANGE - Add color tokens
+
+2. src/App.tsx
+   CHANGE - Wire theme state
+
+Estimated scope:
+4 files
++126 / -31 lines
+
+[Approve Plan] [Reject Plan]`,
       },
     ],
     related: ['concepts/plans', 'coding/code-editing'],

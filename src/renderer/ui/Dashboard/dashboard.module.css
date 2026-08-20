@@ -699,6 +699,597 @@ div.workRecordList {
   font-size: 13px;
 }
 
+/* ── Wallet indicator states ──────────────────────────────────────────── */
+
+.walletIndicatorLocked {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(var(--pawos-overlay-rgb), 0.04);
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.10);
+  color: var(--pawos-text-secondary);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: default;
+}
+.walletIndicatorLocked[data-clickable="true"] {
+  cursor: pointer;
+}
+.walletIndicatorLocked[data-clickable="true"]:hover {
+  background: rgba(var(--pawos-overlay-rgb), 0.07);
+}
+.walletLockBadge {
+  font-size: 11px;
+  color: var(--pawos-text-secondary);
+  opacity: 0.7;
+}
+.walletBalanceLabel {
+  font-size: 10.5px;
+  color: var(--pawos-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+.walletAmountNormal { color: var(--pawos-fg); }
+.walletAmountLow    { color: #e0c28c; }
+.walletAmountEmpty  { color: #e08c8c; }
+.walletAmountLoading { color: var(--pawos-text-secondary); font-style: italic; }
+.walletAmountError  { color: #e08c8c; font-style: italic; }
+.walletLowBadge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(224,194,140,0.15);
+  color: #e0c28c;
+  font-weight: 600;
+}
+.walletEmptyCta {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(224,140,140,0.15);
+  color: #e08c8c;
+  font-weight: 600;
+}
+
+/* ── Wallet popover panel ─────────────────────────────────────────────── */
+
+.walletPopoverWrapper {
+  position: relative;
+}
+.walletPopover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 280px;
+  max-width: 320px;
+  background: var(--pawos-bg-elevated);
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.14);
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.28);
+  z-index: 200;
+  overflow: hidden;
+  padding: 0;
+}
+.walletPopoverHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid rgba(var(--pawos-overlay-rgb), 0.08);
+}
+.walletPopoverTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--pawos-fg);
+}
+.walletPopoverClose {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: none;
+  background: rgba(var(--pawos-overlay-rgb), 0.06);
+  color: var(--pawos-text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.walletPopoverClose:hover {
+  background: rgba(var(--pawos-overlay-rgb), 0.12);
+}
+.walletPopoverClose:focus-visible {
+  outline: 2px solid rgba(124,156,255,0.7);
+  outline-offset: 1px;
+}
+.walletPopoverBody {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.walletBalanceRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.walletBalanceFigure {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--pawos-fg);
+  font-variant-numeric: tabular-nums;
+}
+.walletBalanceFigureLow { color: #e0c28c; }
+.walletBalanceFigureEmpty { color: #e08c8c; }
+.walletBalanceSub {
+  font-size: 12px;
+  color: var(--pawos-text-secondary);
+}
+.walletNote {
+  font-size: 11.5px;
+  color: var(--pawos-text-secondary);
+  line-height: 1.5;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(var(--pawos-overlay-rgb), 0.04);
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.08);
+}
+.walletNoteEmphasis { color: var(--pawos-fg); font-weight: 600; }
+.walletSectionLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pawos-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+.walletPresetRow {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.walletPreset {
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  background: rgba(var(--pawos-overlay-rgb), 0.04);
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.12);
+  color: var(--pawos-fg);
+  transition: background 0.12s, border-color 0.12s;
+}
+.walletPreset:hover {
+  background: rgba(var(--pawos-overlay-rgb), 0.08);
+}
+.walletPreset:focus-visible {
+  outline: 2px solid rgba(124,156,255,0.7);
+}
+.walletPresetActive {
+  background: rgba(124,156,255,0.12);
+  border-color: rgba(124,156,255,0.4);
+  color: #cdd8ff;
+}
+.walletCustomRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.walletCurrencySymbol {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pawos-text-secondary);
+}
+.walletCustomInput {
+  flex: 1;
+  min-width: 0;
+  background: rgba(var(--pawos-overlay-rgb), 0.04);
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.12);
+  border-radius: 8px;
+  color: var(--pawos-fg);
+  padding: 7px 10px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.walletCustomInput:focus {
+  outline: none;
+  border-color: rgba(124,156,255,0.5);
+}
+.walletAddBtn {
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  background: rgba(124,156,255,0.15);
+  border: 1px solid rgba(124,156,255,0.35);
+  color: #cdd8ff;
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+.walletAddBtn:hover:not(:disabled) {
+  background: rgba(124,156,255,0.22);
+}
+.walletAddBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.walletAddBtn:focus-visible {
+  outline: 2px solid rgba(124,156,255,0.7);
+}
+.walletMinNote {
+  font-size: 11px;
+  color: var(--pawos-text-secondary);
+}
+.walletPopoverError {
+  font-size: 12px;
+  color: #e08c8c;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(224,140,140,0.06);
+}
+.walletPopoverSuccess {
+  font-size: 12px;
+  color: #8ce0a8;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(140,224,168,0.06);
+}
+.walletRetryBtn {
+  font-size: 12px;
+  color: #cdd8ff;
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(124,156,255,0.3);
+  background: rgba(124,156,255,0.08);
+  cursor: pointer;
+  width: fit-content;
+}
+.walletTopupRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(var(--pawos-overlay-rgb), 0.06);
+  color: var(--pawos-text-secondary);
+}
+.walletTopupAmount { color: var(--pawos-fg); font-weight: 600; }
+.walletComputeNote {
+  font-size: 11px;
+  color: var(--pawos-text-secondary);
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.06);
+}
+.walletEligibilityPopover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 240px;
+  max-width: 280px;
+  padding: 14px 16px;
+  background: var(--pawos-bg-elevated);
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.14);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.24);
+  z-index: 200;
+  font-size: 13px;
+  color: var(--pawos-fg);
+  line-height: 1.5;
+}
+.walletEligibilityText {
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: var(--pawos-text-secondary);
+}
+.walletUpgradeLink {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #cdd8ff;
+  background: rgba(124,156,255,0.12);
+  border: 1px solid rgba(124,156,255,0.3);
+  border-radius: 8px;
+  padding: 6px 14px;
+  cursor: pointer;
+  display: inline-block;
+}
+.walletUpgradeLink:hover {
+  background: rgba(124,156,255,0.2);
+}
+.walletUpgradeLink:focus-visible {
+  outline: 2px solid rgba(124,156,255,0.7);
+}
+
+/* ── Autonomous Work Authorization Modal ──────────────────────────────── */
+
+.authModalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.authModal {
+  background: var(--pawos-bg-elevated);
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.14);
+  border-radius: 18px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+  max-width: 480px;
+  width: 100%;
+  overflow: hidden;
+}
+.authModalHeader {
+  padding: 20px 24px 14px;
+  border-bottom: 1px solid rgba(var(--pawos-overlay-rgb), 0.08);
+}
+.authModalEyebrow {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #cdd8ff;
+  margin-bottom: 4px;
+}
+.authModalTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--pawos-fg);
+}
+.authModalBody {
+  padding: 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.authTicketInfo {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(var(--pawos-overlay-rgb), 0.04);
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.08);
+}
+.authTicketId {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--pawos-text-secondary);
+  margin-bottom: 2px;
+}
+.authTicketTitle {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--pawos-fg);
+}
+.authBillingBlock {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.authBillingItem {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(var(--pawos-overlay-rgb), 0.03);
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.08);
+}
+.authBillingLabel {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--pawos-text-secondary);
+  margin-bottom: 3px;
+}
+.authBillingValue {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--pawos-fg);
+  font-variant-numeric: tabular-nums;
+}
+.authBillingValueOk   { color: #8ce0a8; }
+.authBillingValueWarn { color: #e0c28c; }
+.authWalletNotice {
+  font-size: 12.5px;
+  color: var(--pawos-text-secondary);
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.08);
+  background: rgba(var(--pawos-overlay-rgb), 0.03);
+  line-height: 1.5;
+}
+.authWalletNoticeEmphasis {
+  color: var(--pawos-fg);
+  font-weight: 600;
+}
+.authStagesList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.authStagesLabel {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--pawos-text-secondary);
+  margin-bottom: 2px;
+}
+.authStageItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--pawos-text-secondary);
+  padding: 3px 0;
+}
+.authStageDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(124,156,255,0.5);
+  flex-shrink: 0;
+}
+.authCapNote {
+  font-size: 11px;
+  color: var(--pawos-text-secondary);
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.06);
+}
+.authModalFooter {
+  padding: 12px 24px 20px;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  border-top: 1px solid rgba(var(--pawos-overlay-rgb), 0.08);
+}
+.authCancelBtn {
+  padding: 9px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  background: rgba(var(--pawos-overlay-rgb), 0.04);
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.12);
+  color: var(--pawos-text-secondary);
+  transition: background 0.12s;
+}
+.authCancelBtn:hover {
+  background: rgba(var(--pawos-overlay-rgb), 0.08);
+}
+.authCancelBtn:focus-visible {
+  outline: 2px solid rgba(124,156,255,0.6);
+}
+.authAuthorizeBtn {
+  padding: 9px 20px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  background: rgba(124,156,255,0.18);
+  border: 1px solid rgba(124,156,255,0.4);
+  color: #cdd8ff;
+  transition: background 0.12s;
+}
+.authAuthorizeBtn:hover:not(:disabled) {
+  background: rgba(124,156,255,0.26);
+}
+.authAuthorizeBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.authAuthorizeBtn:focus-visible {
+  outline: 2px solid rgba(124,156,255,0.7);
+}
+.authInsufficientBanner {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(224,140,140,0.08);
+  border: 1px solid rgba(224,140,140,0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.authInsufficientTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: #e08c8c;
+}
+.authInsufficientRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--pawos-text-secondary);
+}
+.authInsufficientValue { color: var(--pawos-fg); }
+.authAddFundsBtn {
+  padding: 7px 16px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  background: rgba(224,140,140,0.12);
+  border: 1px solid rgba(224,140,140,0.35);
+  color: #e08c8c;
+  align-self: flex-start;
+  transition: background 0.12s;
+}
+.authAddFundsBtn:hover {
+  background: rgba(224,140,140,0.2);
+}
+.authAddFundsBtn:focus-visible {
+  outline: 2px solid rgba(224,140,140,0.6);
+}
+
+/* ── Autonomous Work execution status card ────────────────────────────── */
+
+.execStatusCard {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  min-width: 240px;
+  max-width: 300px;
+  background: var(--pawos-bg-elevated);
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.14);
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  z-index: 500;
+  overflow: hidden;
+}
+.execStatusHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid rgba(var(--pawos-overlay-rgb), 0.08);
+}
+.execStatusDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #8ce0a8;
+  animation: pawPulseDot 2s infinite;
+}
+.execStatusTitle {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--pawos-fg);
+  flex: 1;
+}
+.execStatusBody {
+  padding: 10px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.execStatusRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--pawos-text-secondary);
+}
+.execStatusValue {
+  color: var(--pawos-fg);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.execStatusStage {
+  font-size: 11px;
+  color: #cdd8ff;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(124,156,255,0.1);
+  width: fit-content;
+  margin-top: 2px;
+}
+
 .subheading {
   margin: 32px 0 14px;
   font-size: 14px;

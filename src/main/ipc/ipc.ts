@@ -33,9 +33,33 @@ import { createCreditsCheckoutUrl } from '../billing/providers/RazorpayBillingPr
 import { verifyRealOrganizationTier } from '../billing/OrganizationTierVerification';
 import { entitlementService } from '../billing/EntitlementService';
 import { createRendererOrganizationUsageRecorder } from '../billing/RendererOrganizationUsageBridge';
-import { startCheckoutCallbackServer } from '../billing/CheckoutSyncServer';
-import type { SubscriptionTierId, FeatureId, CheckoutOptions, SeatTier } from '../../shared/billing/BillingTypes';
+import { startCheckoutCallbackServer, verifySubscriptionWithBackend } from '../billing/CheckoutSyncServer';
+import type {
+  SubscriptionTierId,
+  FeatureId,
+  CheckoutOptions,
+  SeatTier,
+  RuntimeEntitlementId,
+  NativeSubscriptionCheckoutResult,
+  NativeCreditsCheckoutResult,
+  NativeCreditsVerificationResult,
+} from '../../shared/billing/BillingTypes';
+import { ALL_RUNTIME_ENTITLEMENT_IDS } from '../../shared/billing/RuntimeCatalog';
 import type { AiUsageCategory } from '../../shared/billing/AiUsageCategories';
+
+const PAWOS_BILLING_API_BASE_URL = 'https://pawos.revantaai.com';
+
+const VALID_NATIVE_BILLING_TIERS: SubscriptionTierId[] = ['pro', 'proMax', 'team', 'enterprise'];
+
+function cleanReason(value: unknown, fallback: string): string {
+  if (value && typeof value === 'object' && 'reason' in value) return String((value as { reason: unknown }).reason);
+  return fallback;
+}
+
+function parseVerifiedRuntimeIds(value: string[]): RuntimeEntitlementId[] {
+  const valid = new Set<string>(ALL_RUNTIME_ENTITLEMENT_IDS);
+  return value.filter((runtimeId, index, list): runtimeId is RuntimeEntitlementId => valid.has(runtimeId) && list.indexOf(runtimeId) === index);
+}
 import type { PawModelId } from '../../shared/ai/PawModelTypes';
 import { onboardingStore } from '../onboarding/OnboardingStore';
 import { conversationSessionStore } from '../conversation/ConversationSessionStore';
@@ -472,6 +496,67 @@ export function registerIpc(opts: {
     const provider = createBillingProvider(pricingConfigStore.get().billingProvider);
     return provider.createCheckoutSession(tier, callbackUrl, options);
   });
+  ipcMain.handle(
+    'billing:createNativeSubscriptionCheckout',
+    async (_evt, tier: SubscriptionTierId, options?: CheckoutOptions): Promise<NativeSubscriptionCheckoutResult> => {
+      if (!VALID_NATIVE_BILLING_TIERS.includes(tier) || tier === 'enterprise') {
+        return {
+          ok: false,
+          reason:
+            tier === 'enterprise'
+              ? 'Enterprise billing is custom and must be handled by a PawOS billing administrator.'
+              : 'Unknown paid plan requested.',
+        };
+      }
+      try {
+        const response = await fetch(`${PAWOS_BILLING_API_BASE_URL}/api/billing/checkout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            plan: tier,
+            ...(options?.seatTier ? { seatTier: options.seatTier } : {}),
+            ...(options?.seatCount ? { seatCount: options.seatCount } : {}),
+            ...(options?.runtimeIds?.length ? { runtimeIds: options.runtimeIds } : {}),
+          }),
+        });
+        const result = (await response.json().catch(() => null)) as
+          | { ok?: boolean; reason?: string; keyId?: string; subscriptionId?: string }
+          | null;
+        if (!response.ok || !result?.ok || !result.keyId || !result.subscriptionId) {
+          return { ok: false, reason: cleanReason(result, `Could not create checkout: ${response.statusText}`) };
+        }
+        return {
+          ok: true,
+          keyId: result.keyId,
+          subscriptionId: result.subscriptionId,
+          tier,
+          seatTier: options?.seatTier,
+          runtimeIds: options?.runtimeIds,
+        };
+      } catch (error) {
+        return { ok: false, reason: error instanceof Error ? error.message : 'Could not create checkout.' };
+      }
+    }
+  );
+  ipcMain.handle(
+    'billing:confirmNativeSubscriptionPayment',
+    async (
+      _evt,
+      paymentId: string,
+      subscriptionId: string,
+      signature: string
+    ): Promise<{ ok: true; subscription: ReturnType<typeof subscriptionStore.getEffective> } | { ok: false; reason: string }> => {
+      if (!paymentId || !subscriptionId || !signature) return { ok: false, reason: 'Missing Razorpay payment verification fields.' };
+      const verified = await verifySubscriptionWithBackend(paymentId, subscriptionId, signature);
+      if (!verified.ok) return { ok: false, reason: 'Payment could not be verified.' };
+      subscriptionStore.confirmPurchase(verified.tier, {
+        runtimeIds: parseVerifiedRuntimeIds(verified.runtimeIds),
+        orderId: verified.subscriptionId,
+      });
+      for (const win of BrowserWindow.getAllWindows()) win.webContents.send('billing:subscriptionUpdated');
+      return { ok: true, subscription: subscriptionStore.getEffective() };
+    }
+  );
   // Starts the loopback server the checkout page pings after a real payment
   // completes — see CheckoutSyncServer.ts for why this is the honest sync
   // mechanism available without a shared account/subscription backend.
@@ -490,6 +575,86 @@ export function registerIpc(opts: {
         return { ok: false, reason: 'Ticket Balance requires Paw Pro Max or higher.' };
       }
       return createCreditsCheckoutUrl(amountUsd, organizationId, callbackUrl, accessToken);
+    }
+  );
+  ipcMain.handle(
+    'billing:createNativeCreditsCheckout',
+    async (_evt, amountUsd: number, organizationId?: string, accessToken?: string): Promise<NativeCreditsCheckoutResult> => {
+      if (!entitlementService.isFeatureAvailable('autonomousTaskBilling')) {
+        return { ok: false, reason: 'Ticket Balance requires Paw Pro Max or higher.' };
+      }
+      if (!accessToken) return { ok: false, reason: 'Missing PawOS session. Sign in again before adding funds.' };
+      try {
+        const response = await fetch(`${PAWOS_BILLING_API_BASE_URL}/api/billing/checkout-credits`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amountUsd, organizationId, accessToken }),
+        });
+        const result = (await response.json().catch(() => null)) as
+          | { ok?: boolean; reason?: string; keyId?: string; orderId?: string; amountUsd?: number; amountInr?: number; amountPaise?: number; usdInrRate?: number; currency?: string }
+          | null;
+        if (
+          !response.ok ||
+          !result?.ok ||
+          !result.keyId ||
+          !result.orderId ||
+          typeof result.amountUsd !== 'number' ||
+          typeof result.amountInr !== 'number' ||
+          typeof result.amountPaise !== 'number' ||
+          typeof result.usdInrRate !== 'number' ||
+          result.currency !== 'INR'
+        ) {
+          return { ok: false, reason: cleanReason(result, `Could not create payment order: ${response.statusText}`) };
+        }
+        return {
+          ok: true,
+          keyId: result.keyId,
+          orderId: result.orderId,
+          amountUsd: result.amountUsd,
+          amountInr: result.amountInr,
+          amountPaise: result.amountPaise,
+          usdInrRate: result.usdInrRate,
+          currency: 'INR',
+        };
+      } catch (error) {
+        return { ok: false, reason: error instanceof Error ? error.message : 'Could not create payment order.' };
+      }
+    }
+  );
+  ipcMain.handle(
+    'billing:verifyNativeCreditsPayment',
+    async (
+      _evt,
+      params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string; organizationId?: string }
+    ): Promise<NativeCreditsVerificationResult> => {
+      if (!params.accessToken || !params.orderId || !params.paymentId || !params.signature) {
+        return { ok: false, reason: 'Missing payment verification fields.' };
+      }
+      try {
+        const response = await fetch(`${PAWOS_BILLING_API_BASE_URL}/api/billing/credit-ticket-balance`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            accessToken: params.accessToken,
+            orderId: params.orderId,
+            paymentId: params.paymentId,
+            signature: params.signature,
+            organizationId: params.organizationId,
+          }),
+        });
+        const result = (await response.json().catch(() => null)) as
+          | { ok?: boolean; reason?: string; amountUsd?: number; topupId?: string }
+          | null;
+        if (!response.ok || !result?.ok || typeof result.amountUsd !== 'number') {
+          return { ok: false, reason: cleanReason(result, `Payment could not be verified: ${response.statusText}`) };
+        }
+        for (const win of BrowserWindow.getAllWindows()) {
+          win.webContents.send('billing:taskCreditsPurchased', { amountUsd: result.amountUsd, organizationId: params.organizationId });
+        }
+        return { ok: true, amountUsd: result.amountUsd, topupId: result.topupId };
+      } catch (error) {
+        return { ok: false, reason: error instanceof Error ? error.message : 'Payment verification failed.' };
+      }
     }
   );
   // Grants bonus Paw Compute for the current period after the renderer has already redeemed the

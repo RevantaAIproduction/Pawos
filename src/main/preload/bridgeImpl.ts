@@ -44,6 +44,9 @@ import type {
   CreditBalance,
   CreditConsumptionRecord,
   BillingCheckoutResult,
+  NativeSubscriptionCheckoutResult,
+  NativeCreditsCheckoutResult,
+  NativeCreditsVerificationResult,
   CheckoutOptions,
   FeatureId,
   EntitlementSnapshot,
@@ -248,9 +251,19 @@ export function contextBridge() {
 
     billingCreateCheckoutSession: (tier: SubscriptionTierId, callbackUrl?: string, options?: CheckoutOptions) =>
       ipcRenderer.invoke("billing:createCheckoutSession", tier, callbackUrl, options) as Promise<BillingCheckoutResult>,
+    billingCreateNativeSubscriptionCheckout: (tier: SubscriptionTierId, options?: CheckoutOptions) =>
+      ipcRenderer.invoke("billing:createNativeSubscriptionCheckout", tier, options) as Promise<NativeSubscriptionCheckoutResult>,
+    billingConfirmNativeSubscriptionPayment: (paymentId: string, subscriptionId: string, signature: string) =>
+      ipcRenderer.invoke("billing:confirmNativeSubscriptionPayment", paymentId, subscriptionId, signature) as Promise<
+        { ok: true; subscription: SubscriptionState } | { ok: false; reason: string }
+      >,
     billingStartCheckoutSync: () => ipcRenderer.invoke("billing:startCheckoutSync") as Promise<string>,
     billingCreateCreditsCheckoutSession: (amountUsd: number, organizationId?: string, callbackUrl?: string, accessToken?: string) =>
       ipcRenderer.invoke("billing:createCreditsCheckoutSession", amountUsd, organizationId, callbackUrl, accessToken) as Promise<BillingCheckoutResult>,
+    billingCreateNativeCreditsCheckout: (amountUsd: number, organizationId?: string, accessToken?: string) =>
+      ipcRenderer.invoke("billing:createNativeCreditsCheckout", amountUsd, organizationId, accessToken) as Promise<NativeCreditsCheckoutResult>,
+    billingVerifyNativeCreditsPayment: (params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string; organizationId?: string }) =>
+      ipcRenderer.invoke("billing:verifyNativeCreditsPayment", params) as Promise<NativeCreditsVerificationResult>,
     onSubscriptionUpdated: (cb: () => void) => {
       ipcRenderer.on("billing:subscriptionUpdated", () => cb());
     },
@@ -393,4 +406,3 @@ export function contextBridge() {
 
   electronContextBridge.exposeInMainWorld("__pawos_ipc__", api);
 }
-

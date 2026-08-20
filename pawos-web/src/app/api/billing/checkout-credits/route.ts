@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import { getRazorpayCredentials, razorpayAuthHeader, getTicketPricingConfig } from "@/lib/billing/razorpay";
+import { buildTicketBalanceOrderPayload, getRazorpayCredentials, razorpayAuthHeader } from "@/lib/billing/razorpay";
 
 /**
  * Creates a real Razorpay Order for a one-time Ticket Balance top-up — any dollar amount at or
@@ -25,28 +25,9 @@ export async function POST(request: Request) {
   const amountUsd = typeof body?.amountUsd === "number" && Number.isFinite(body.amountUsd) ? body.amountUsd : undefined;
   const organizationId = typeof body?.organizationId === "string" ? body.organizationId : undefined;
   const accessToken = typeof body?.accessToken === "string" ? body.accessToken : undefined;
-  const { minTopupUsd, maxTopupUsd } = getTicketPricingConfig();
 
   if (!accessToken) {
     return NextResponse.json({ ok: false, reason: "Missing access token." }, { status: 400 });
-  }
-
-  if (!amountUsd || amountUsd < minTopupUsd) {
-    return NextResponse.json(
-      { ok: false, reason: `Minimum top-up is $${minTopupUsd}.` },
-      { status: 400 }
-    );
-  }
-  // P0-2 / Phase 2: server-side max enforcement, not merely a UI hint — the real, authoritative
-  // enforcement happens again at crediting time (see /api/billing/credit-ticket-balance and the
-  // add_ticket_balance_service() RPC), but rejecting an over-limit order at creation time is the
-  // earliest, most honest place to say no. Reads from the same single config source as the
-  // crediting route, never a second hardcoded literal.
-  if (amountUsd > maxTopupUsd) {
-    return NextResponse.json(
-      { ok: false, reason: `Maximum top-up is $${maxTopupUsd.toLocaleString()}.` },
-      { status: 400 }
-    );
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -60,6 +41,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, reason: "Invalid or expired session." }, { status: 401 });
   }
   const userId = userData.user.id;
+  if (typeof amountUsd !== "number") {
+    return NextResponse.json({ ok: false, reason: "Enter a valid USD amount." }, { status: 400 });
+  }
+  const orderPayload = buildTicketBalanceOrderPayload({ amountUsd, organizationId, userId });
+  if (!orderPayload.ok) {
+    return NextResponse.json({ ok: false, reason: orderPayload.reason }, { status: 400 });
+  }
 
   // If ordering on behalf of an organization, confirm real active membership using the caller's OWN
   // token (RLS-scoped) rather than trusting the client's claim — mirrors credit-ticket-balance's own
@@ -96,11 +84,7 @@ export async function POST(request: Request) {
       Authorization: razorpayAuthHeader(credentials.keyId, credentials.keySecret),
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      amount: Math.round(amountUsd * 100), // Razorpay amounts are in the smallest currency unit (cents for USD).
-      currency: "USD",
-      notes: { amountUsd: String(amountUsd), organizationId: organizationId ?? "", userId },
-    }),
+    body: JSON.stringify(orderPayload.payload),
   });
 
   if (!response.ok) {
@@ -112,5 +96,14 @@ export async function POST(request: Request) {
   }
 
   const order = await response.json();
-  return NextResponse.json({ ok: true, orderId: order.id, amountUsd, keyId: credentials.keyId });
+  return NextResponse.json({
+    ok: true,
+    orderId: order.id,
+    amountUsd: orderPayload.amountUsd,
+    amountInr: orderPayload.amountInr,
+    amountPaise: orderPayload.amountPaise,
+    usdInrRate: orderPayload.usdInrRate,
+    currency: "INR",
+    keyId: credentials.keyId,
+  });
 }

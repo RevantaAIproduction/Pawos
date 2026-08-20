@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import styles from './workspaceRuntime.module.css';
 import {
   TaskCard,
@@ -17,6 +17,7 @@ import {
   getLatestGitLog,
   getLatestValidationReport,
   getLatestAffectedFiles,
+  getLatestBrowserNetworkErrors,
   type ValidationReportSummary,
   type GitCommitEntry,
 } from '../conversation/TaskCard';
@@ -35,6 +36,8 @@ import {
   type CodingWorkspaceDirEntry,
 } from './codingWorkspaceModel';
 import { summarizeCodingRuntimeTask } from './CodingRuntimeCompletion';
+import { getIpcBridge } from '../services/ipc/ipcBridge';
+import { autonomousTaskBillingService } from '../organization/AutonomousTaskBillingService';
 
 /**
  * Action types that mark a task as a coding task — shape-based detection
@@ -266,6 +269,23 @@ function isCodingTask(task: ConversationTaskRecord): boolean {
   return task.actions.some((a) => CODING_TASK_ACTION_TYPES.has(a.request.type));
 }
 
+/** P3.1 — All capabilities the Coding Runtime actually implements, shown before task execution starts. */
+const CODING_CAPABILITIES = [
+  { id: 'inspect',    icon: '◉', name: 'Inspect Repository',     desc: 'Analyze project structure, frameworks, and dependencies' },
+  { id: 'understand', icon: '◈', name: 'Understand Architecture', desc: 'Build a semantic index of your codebase' },
+  { id: 'affected',   icon: '◎', name: 'Discover Affected Files', desc: 'Find which files a feature request would touch' },
+  { id: 'edit',       icon: '◇', name: 'Edit Code',               desc: 'Apply precise, validated code edits to your project' },
+  { id: 'diff',       icon: '◆', name: 'Review Diffs',            desc: 'Inspect unified diffs of every change made' },
+  { id: 'commands',   icon: '▷', name: 'Run Commands',            desc: 'Execute build, test, and custom shell commands' },
+  { id: 'test',       icon: '✦', name: 'Run Tests',               desc: 'Run your test suite and surface failures inline' },
+  { id: 'validate',   icon: '✓', name: 'Validate Builds',         desc: 'Syntax, imports, types, lint, build, and test pipeline' },
+  { id: 'git',        icon: '⊕', name: 'Use Git',                 desc: 'Stage, commit, branch, diff, log, and revert' },
+  { id: 'worktree',   icon: '⊞', name: 'Isolated Worktrees',      desc: 'Create Git worktrees for safe parallel experiments' },
+  { id: 'browser',    icon: '◻', name: 'Monitor Dev Browser',     desc: 'Watch console output and network from your local server' },
+  { id: 'screenshot', icon: '◱', name: 'Capture Evidence',        desc: 'Screenshot and verify UI changes against requirements' },
+  { id: 'memory',     icon: '◈', name: 'Remember Decisions',      desc: 'Record architectural decisions and coding preferences' },
+] as const;
+
 /**
  * The universal visual execution surface for the whole Paw platform —
  * Desktop → Workspace Runtime → every individual runtime (Coding, File,
@@ -304,6 +324,7 @@ export function WorkspaceRuntime({
   onRetryAction,
   onOpenPath,
   onConnectCapability,
+  onPlanDecision,
 }: {
   task: ConversationTaskRecord;
   onRetryAction?: (taskId: string, actionId: string) => void;
@@ -315,6 +336,7 @@ export function WorkspaceRuntime({
     fields: Record<string, string>,
     opts?: { incrementalCapability?: string }
   ) => Promise<{ ok: boolean; message?: string }> | void;
+  onPlanDecision?: (planId: string, decision: 'approved' | 'rejected', message: string) => void;
 }) {
   const codingTask = isCodingTask(task);
   const [codingMode, setCodingMode] = useState<'go' | 'pro' | null>(null);
@@ -343,6 +365,10 @@ export function WorkspaceRuntime({
   const [infraConnectors, setInfraConnectors] = useState<{ kind: string; displayName: string; configured: boolean }[]>([]);
   const [approvalQueue, setApprovalQueue] = useState<{ id: string; summary: string }[]>([]);
   const [engineeringMemory, setEngineeringMemory] = useState<{ kind: string; summary: string; at: number; status: string }[]>([]);
+  const [walletCanUse, setWalletCanUse] = useState<boolean | null>(null);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [walletOpen, setWalletOpen] = useState(false);
+  const [livePreviewOpen, setLivePreviewOpen] = useState(true);
   const [infraGraph, setInfraGraph] = useState<{ direction: string; relation: string; otherType: string; otherLabel: string }[] | null>(null);
 
   useEffect(() => {
@@ -377,6 +403,21 @@ export function WorkspaceRuntime({
       cancelled = true;
     };
   }, [infraServiceName]);
+
+  // Autonomous Wallet — load once per coding task; never blocks rendering
+  useEffect(() => {
+    if (!codingTask) return;
+    let cancelled = false;
+    getIpcBridge().entitlementIsFeatureAvailable('autonomousTaskBilling').then((can: boolean) => {
+      if (cancelled) return;
+      setWalletCanUse(can);
+      if (!can) return;
+      autonomousTaskBillingService.getTicketBalance(null).then((b) => {
+        if (!cancelled) setWalletBalance(b.balanceUsd);
+      }).catch(() => { /* balance unavailable — show nothing */ });
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [codingTask]);
 
   const intelligenceTask = isIntelligenceTask(task);
   const intelligenceReport = intelligenceTask ? getLatestIntelligenceReport(task) : undefined;
@@ -418,6 +459,63 @@ export function WorkspaceRuntime({
   const [fileContent, setFileContent] = useState<string | null>(null);
   const [fileContentLoading, setFileContentLoading] = useState(false);
   const [fileContentError, setFileContentError] = useState<string | null>(null);
+  // P3.3 — optional content search toggle
+  const [contentQuery, setContentQuery] = useState('');
+  const [showContentSearch, setShowContentSearch] = useState(false);
+  // P6 — version bump triggers file-content refetch without changing selectedPath
+  const [fileContentRefreshTick, setFileContentRefreshTick] = useState(0);
+
+  // P6 — refs so the one-time workspace:fileChanged subscription always sees fresh state
+  const selectedPathRef = useRef<string | null>(null);
+  const selectedKindRef = useRef<'file' | 'folder' | null>(null);
+  const activeRootRef = useRef<string | null>(null);
+  const expandedPathsRef = useRef<Set<string>>(new Set());
+  useEffect(() => { selectedPathRef.current = selectedPath; }, [selectedPath]);
+  useEffect(() => { selectedKindRef.current = selectedKind; }, [selectedKind]);
+  useEffect(() => { activeRootRef.current = activeRoot; }, [activeRoot]);
+  useEffect(() => { expandedPathsRef.current = expandedPaths; }, [expandedPaths]);
+
+  // P6 — subscribe once to workspace:fileChanged (same one-time pattern as onWorkspaceObservation)
+  useEffect(() => {
+    ipc.onWorkspaceFileChanged((event) => {
+      const currPath = selectedPathRef.current;
+      const currKind = selectedKindRef.current;
+      const currRoot = activeRootRef.current;
+
+      // 1. Stale open file — reload or clear on rename (delete/move)
+      if (currPath && currKind === 'file' && event.changedPath === currPath) {
+        if (event.eventType === 'rename') {
+          setSelectedPath(null);
+          setSelectedKind(null);
+          setFileContent(null);
+          setFileContentError('This file was moved or deleted.');
+        } else {
+          setFileContentRefreshTick((n) => n + 1);
+        }
+      }
+
+      // 2. Invalidate the parent directory listing so the tree stays accurate
+      if (currRoot && event.changedPath.startsWith(currRoot)) {
+        const parentDir = getPathDirname(event.changedPath);
+        if (parentDir && parentDir !== event.changedPath) {
+          setDirectoryEntries((prev) => {
+            if (!(parentDir in prev)) return prev;
+            const next = { ...prev };
+            delete next[parentDir];
+            return next;
+          });
+          // Re-fetch immediately if the parent dir was expanded and visible
+          if (expandedPathsRef.current.has(parentDir)) {
+            void ipc.actionExecute({ type: 'listDirectory', path: parentDir }).then((res) => {
+              if (!res.ok) return;
+              const entries = (res.data as { entries?: CodingWorkspaceDirEntry[] } | undefined)?.entries ?? [];
+              setDirectoryEntries((prev) => ({ ...prev, [parentDir]: sortDirectoryEntries(entries) }));
+            });
+          }
+        }
+      }
+    });
+  }, []); // one-time subscription; handler reads current values through refs
 
   useEffect(() => {
     setProjectContextCleared(false);
@@ -430,6 +528,9 @@ export function WorkspaceRuntime({
     setSelectedKind(null);
     setFileContent(null);
     setFileContentError(null);
+    setContentQuery('');
+    setShowContentSearch(false);
+    setFileContentRefreshTick(0);
   }, [task.id]);
 
   useEffect(() => {
@@ -522,7 +623,7 @@ export function WorkspaceRuntime({
       setFileContentError(err instanceof Error ? err.message : 'Could not read file.');
     });
     return () => { cancelled = true; };
-  }, [selectedPath, selectedKind]);
+  }, [selectedPath, selectedKind, fileContentRefreshTick]);
 
   // P3.2 — sync discoverAffectedFiles results to the explorer search results panel
   useEffect(() => {
@@ -538,7 +639,15 @@ export function WorkspaceRuntime({
       return;
     }
     setSearchStatus('searching');
-    const result = await ipc.actionExecute({ type: 'searchFiles', rootPath: activeRoot, query: fileSearch.trim(), fuzzy: true, maxResults: 30 });
+    const trimmedContent = contentQuery.trim();
+    const result = await ipc.actionExecute({
+      type: 'searchFiles',
+      rootPath: activeRoot,
+      query: fileSearch.trim(),
+      fuzzy: !trimmedContent,   // disable fuzzy when also filtering by content (be precise)
+      contentQuery: trimmedContent || undefined,
+      maxResults: 30,
+    });
     if (!result.ok) {
       setSearchResults([]);
       setSearchStatus('error');
@@ -560,7 +669,7 @@ export function WorkspaceRuntime({
     },
     {
       id: 'liveExecution',
-      render: () => <TaskCard task={task} onRetryAction={onRetryAction} onOpenPath={onOpenPath} onConnectCapability={onConnectCapability} />,
+      render: () => <TaskCard task={task} onRetryAction={onRetryAction} onOpenPath={onOpenPath} onConnectCapability={onConnectCapability} onPlanDecision={onPlanDecision} />,
     },
     {
       id: 'floatingSurface',
@@ -600,6 +709,45 @@ export function WorkspaceRuntime({
                 ))}
               </ul>
             )}
+          </div>
+        );
+      },
+    },
+    {
+      id: 'agentActivity',
+      render: () => {
+        const recent = [...task.actions].slice(-8).reverse();
+        if (recent.length === 0) return null;
+        return (
+          <div className={styles.codingSection}>
+            <span className={styles.codingSectionTitle}>Agent Activity</span>
+            <ul className={styles.agentActivityList}>
+              {recent.map((action, i) => {
+                const isInFlight = !action.result;
+                const isConfirm = !action.result?.ok && action.result?.reason === 'requires-confirmation';
+                const isFailed = !action.result?.ok && action.result && action.result.reason !== 'requires-confirmation';
+                const isDone = action.result?.ok === true;
+                const retryAttempts = action.result?.trail?.attempts ?? 0;
+                const statusClass = isInFlight ? styles.agentStatus_running
+                  : isConfirm ? styles.agentStatus_waiting
+                  : isFailed ? styles.agentStatus_failed
+                  : isDone ? styles.agentStatus_completed
+                  : styles.agentStatus_running;
+                const statusLabel = isInFlight ? 'running' : isConfirm ? 'waiting' : isFailed ? 'failed' : 'done';
+                const label = isInFlight ? (action.inProgressText ?? action.request.type) : (action.doneText ?? action.request.type);
+                return (
+                  <li key={`${action.request.type}-${i}`} className={styles.agentActivityItem}>
+                    <span className={`${styles.agentStatusChip} ${statusClass}`}>{statusLabel}</span>
+                    <span className={styles.agentActivityLabel}>{label}</span>
+                    {retryAttempts > 0 && (
+                      <span className={styles.agentRetryBadge} title={`Recovered after ${retryAttempts} retry attempt${retryAttempts === 1 ? '' : 's'}`}>
+                        retried {retryAttempts}×
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         );
       },
@@ -1454,6 +1602,7 @@ export function WorkspaceRuntime({
     const selectedLabel = selectedPath ? getPathBasename(selectedPath) : activeRoot ? getPathBasename(activeRoot) : 'No project selected';
     const selectedParent = selectedPath ? getPathDirname(selectedPath) : activeRoot;
     const contextRegions: WorkspaceRegionSlot['id'][] = [
+      'agentActivity',
       'projectUnderstanding',
       'todoProgress',
       'runningProcesses',
@@ -1528,12 +1677,35 @@ export function WorkspaceRuntime({
                     Search
                   </button>
                 </form>
+                {/* P3.3 — optional content search */}
+                <button
+                  type="button"
+                  className={styles.contentSearchToggle}
+                  onClick={() => {
+                    setShowContentSearch((v) => !v);
+                    if (showContentSearch) setContentQuery('');
+                  }}
+                >
+                  {showContentSearch ? '▾ Content search on' : '▸ Also search content'}
+                </button>
+                {showContentSearch && (
+                  <input
+                    className={styles.fileSearchInput}
+                    value={contentQuery}
+                    onChange={(e) => setContentQuery(e.target.value)}
+                    placeholder="Files containing…"
+                    aria-label="Search file content"
+                  />
+                )}
                 {searchStatus === 'error' && <div className={styles.explorerError}>Search failed.</div>}
                 {searchResults.length > 0 && (
                   <div className={styles.searchResults}>
                     {searchResults.map((result) => (
                       <button type="button" key={result} className={styles.searchResultRow} onClick={() => selectPath(result, 'file')}>
-                        <span className={styles.searchResultName}>{getPathBasename(result)}</span>
+                        <span className={styles.searchResultName}>
+                          {getPathBasename(result)}
+                          {contentQuery.trim() ? <span className={styles.searchResultContent}>content</span> : null}
+                        </span>
                         <span className={styles.searchResultPath}>{getPathDirname(result)}</span>
                       </button>
                     ))}
@@ -1572,8 +1744,127 @@ export function WorkspaceRuntime({
                 </span>
               </div>
             )}
+            {/* Autonomous Wallet — only when codingTask; tier-gated */}
+            {walletCanUse !== null && (
+              <div className={styles.walletWidget}>
+                <button
+                  type="button"
+                  className={styles.walletButton}
+                  onClick={() => {
+                    if (!walletCanUse) return; // tier gate enforced; clicking shows nothing
+                    setWalletOpen((v) => !v);
+                  }}
+                  title={walletCanUse ? 'Autonomous Work wallet' : 'Autonomous Work is available on Pro Max and higher'}
+                >
+                  <span className={styles.walletIcon}>⬡</span>
+                  {walletCanUse
+                    ? (walletBalance !== null ? `$${walletBalance.toFixed(2)}` : 'Autonomous Work')
+                    : 'Autonomous Work'}
+                </button>
+                {!walletCanUse && (
+                  <span className={styles.walletTierNotice}>Pro Max and higher</span>
+                )}
+                {walletCanUse && walletOpen && (
+                  <div className={styles.walletPanel}>
+                    <span className={styles.walletPanelTitle}>Autonomous Work Balance</span>
+                    <span className={styles.walletPanelBalance}>
+                      {walletBalance !== null ? `$${walletBalance.toFixed(2)}` : 'Loading…'}
+                    </span>
+                    <button
+                      type="button"
+                      className={styles.walletAddButton}
+                      onClick={() => window.dispatchEvent(new CustomEvent('paw:openAutonomousWallet', { detail: { startAmount: 30 } }))}
+                    >
+                      Add Credits ($30 min)
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            {/* Live Preview card — shown when dev processes are running */}
+            {(() => {
+              const processes = getLatestRunningProcesses(task);
+              const screenshot = getLatestScreenshot(task);
+              const consoleEntries = getLatestDevBrowserConsole(task) ?? [];
+              const errorCount = consoleEntries.filter((e) => e.level === 'error').length;
+              const networkEntries = getLatestBrowserNetworkErrors(task) ?? [];
+              const networkFailCount = networkEntries.filter((e) => e.failed).length;
+              const running = processes?.find((p) => p.status === 'running');
+              if (!running && !screenshot) return null;
+              const portMatch = running?.command.match(/(?:port[= ]|:)(\d{4,5})/i) ?? running?.command.match(/\b(3\d{3}|4\d{3}|8\d{3})\b/);
+              const previewUrl = portMatch ? `http://localhost:${portMatch[1]}` : null;
+              return (
+                <div className={styles.livePreviewCard}>
+                  <div className={styles.livePreviewHeader}>
+                    <span className={styles.livePreviewTitle}>
+                      <span className={running ? styles.livePreviewDot : styles.livePreviewDotOff} />
+                      Live Preview
+                      {previewUrl && <span className={styles.livePreviewUrl}>{previewUrl}</span>}
+                    </span>
+                    <div className={styles.livePreviewControls}>
+                      {previewUrl && (() => {
+                        // Reuse the session ID from the most recent openDevBrowser action so
+                        // the button re-opens the same window the agent already opened.
+                        // Falls back to task.id so DevBrowserManager creates a new window if needed.
+                        const existingSessionId = (() => {
+                          for (let ai = task.actions.length - 1; ai >= 0; ai--) {
+                            const a = task.actions[ai];
+                            if (a?.request.type === 'openDevBrowser') return a.request.sessionId;
+                          }
+                          return task.id;
+                        })();
+                        return (
+                          <button
+                            type="button"
+                            className={styles.livePreviewBtn}
+                            onClick={() => void ipc.actionExecute({ type: 'openDevBrowser', sessionId: existingSessionId, url: previewUrl })}
+                          >
+                            Open
+                          </button>
+                        );
+                      })()}
+                      <button
+                        type="button"
+                        className={styles.livePreviewBtn}
+                        onClick={() => setLivePreviewOpen((v) => !v)}
+                      >
+                        {livePreviewOpen ? 'Collapse' : 'Expand'}
+                      </button>
+                    </div>
+                  </div>
+                  {livePreviewOpen && (
+                    <div className={styles.livePreviewBody}>
+                      <div className={styles.livePreviewMeta}>
+                        <span className={errorCount > 0 ? styles.livePreviewErrors : styles.livePreviewNoErrors}>
+                          Console: {errorCount} error{errorCount === 1 ? '' : 's'}
+                        </span>
+                        <span className={networkFailCount > 0 ? styles.livePreviewErrors : styles.livePreviewNoErrors}>
+                          Network: {networkFailCount} failed
+                        </span>
+                        {running && <span className={styles.livePreviewProcess}>{running.command}</span>}
+                      </div>
+                      {screenshot && (
+                        <img
+                          className={styles.livePreviewScreenshot}
+                          src={`data:image/png;base64,${screenshot}`}
+                          alt="Live preview screenshot"
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
             {/* P0.1 — Inline file viewer when a file is selected */}
-            {selectedPath && selectedKind === 'file' ? (
+            {selectedPath && selectedKind === 'file' && completion.deletedFiles.includes(selectedPath) ? (
+              <div className={styles.fileViewerPanel}>
+                <div className={styles.fileViewerHeader}>
+                  <span className={styles.selectedFileEyebrow}>Deleted File</span>
+                  <span className={styles.selectedFileName}>{getPathBasename(selectedPath)}</span>
+                </div>
+                <div className={styles.fileViewerStatus}>This file was deleted during this task.</div>
+              </div>
+            ) : selectedPath && selectedKind === 'file' ? (
               <div className={styles.fileViewerPanel}>
                 <div className={styles.fileViewerHeader}>
                   <div>
@@ -1667,14 +1958,24 @@ export function WorkspaceRuntime({
                 ))}
               </div>
             )}
-            {(completion.createdFiles.length > 0 || completion.modifiedFiles.length > 0) && (
+            {(completion.createdFiles.length > 0 || completion.modifiedFiles.length > 0 || completion.deletedFiles.length > 0) && (
               <div className={styles.fileActivitySummary}>
                 {completion.createdFiles.length > 0 && (
                   <div>
                     <span className={styles.codingSectionTitle}>Created</span>
                     <ul className={styles.todoList}>
-                      {completion.createdFiles.map((path) => (
-                        <li key={path} className={styles.todoItem}>{path}</li>
+                      {completion.createdFiles.map((filePath) => (
+                        <li key={filePath} className={styles.todoItem}>
+                          <button
+                            type="button"
+                            className={styles.fileChangeButton}
+                            onClick={() => selectPath(filePath, 'file')}
+                            title={filePath}
+                          >
+                            <span className={styles.fileChangeBadge}>NEW</span>
+                            {getPathBasename(filePath)}
+                          </button>
+                        </li>
                       ))}
                     </ul>
                   </div>
@@ -1683,12 +1984,63 @@ export function WorkspaceRuntime({
                   <div>
                     <span className={styles.codingSectionTitle}>Modified</span>
                     <ul className={styles.todoList}>
-                      {completion.modifiedFiles.map((path) => (
-                        <li key={path} className={styles.todoItem}>{path}</li>
+                      {completion.modifiedFiles.map((filePath) => (
+                        <li key={filePath} className={styles.todoItem}>
+                          <button
+                            type="button"
+                            className={styles.fileChangeButton}
+                            onClick={() => selectPath(filePath, 'file')}
+                            title={filePath}
+                          >
+                            <span className={`${styles.fileChangeBadge} ${styles.fileChangeBadgeModified}`}>MOD</span>
+                            {getPathBasename(filePath)}
+                          </button>
+                        </li>
                       ))}
                     </ul>
                   </div>
                 )}
+                {completion.deletedFiles.length > 0 && (
+                  <div>
+                    <span className={styles.codingSectionTitle}>Deleted</span>
+                    <ul className={styles.todoList}>
+                      {completion.deletedFiles.map((filePath) => (
+                        <li key={filePath} className={styles.todoItem}>
+                          <button
+                            type="button"
+                            className={styles.fileChangeButton}
+                            onClick={() => {
+                              setSelectedPath(filePath);
+                              setSelectedKind('file');
+                            }}
+                            title={filePath}
+                          >
+                            <span className={`${styles.fileChangeBadge} ${styles.fileChangeBadgeDeleted}`}>DEL</span>
+                            {getPathBasename(filePath)}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {/* Revert Last Commit — uses gitRevertCommit with the latest commit SHA from git log.
+                    File-level accept/reject is not supported by the existing plugin architecture:
+                    gitCheckout only operates on refs (branches/commits), not individual file paths. */}
+                {activeRoot && (() => {
+                  const gitLog = getLatestGitLog(task);
+                  const latestCommit = gitLog?.[0];
+                  if (!latestCommit) return null;
+                  return (
+                    <button
+                      type="button"
+                      className={styles.revertCommitButton}
+                      onClick={() => void ipc.actionExecute({ type: 'gitRevertCommit', cwd: activeRoot, commitSha: latestCommit.hash, confirmed: false })}
+                      title={`Revert commit ${latestCommit.hash.slice(0, 7)}: ${latestCommit.subject}`}
+                    >
+                      Revert Last Commit ({latestCommit.hash.slice(0, 7)})
+                    </button>
+                  );
+                })()}
               </div>
             )}
           </main>
@@ -1723,8 +2075,25 @@ export function WorkspaceRuntime({
     );
   }
 
+  // P3.1 — show coding capabilities when no specialized task has been detected yet
+  const showCapabilityDiscovery = !codingTask && !infraTask && !officeTask && !intelligenceTask;
+
   return (
     <div className={styles.workspaceBorder}>
+      {showCapabilityDiscovery && (
+        <div className={styles.capabilityDiscovery}>
+          <span className={styles.capabilityDiscoveryTitle}>Coding Capabilities</span>
+          <div className={styles.capabilityGrid}>
+            {CODING_CAPABILITIES.map((cap) => (
+              <div key={cap.id} className={styles.capabilityTile}>
+                <span className={styles.capabilityIcon}>{cap.icon}</span>
+                <span className={styles.capabilityName}>{cap.name}</span>
+                <span className={styles.capabilityDesc}>{cap.desc}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className={styles.workspaceGrid}>
         {regions.map((region) =>
           region.render ? (

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import { autonomousTaskBillingService } from '../../../organization/AutonomousTaskBillingService';
-import { getSupabaseClient } from '../../../auth/supabaseClient';
+import { NativeBillingCheckoutModal, type NativeBillingCheckoutIntent } from '../../billing/NativeBillingCheckoutModal';
 import { MIN_TICKET_BALANCE_TOPUP_USD, MAX_TICKET_BALANCE_TOPUP_USD, TICKET_BALANCE_TOPUP_PRESETS_USD, TICKET_PRICING_TIERS, getTicketUnitPriceUsd } from '../../../../shared/organization/AutonomousTaskBillingTypes';
 import type { OrganizationBillingEvent, TicketBalance, TicketBalanceTopup } from '../../../../shared/organization/AutonomousTaskBillingTypes';
 import type { AuthUser } from '../../../auth/AuthTypes';
@@ -50,6 +50,7 @@ export function TaskCreditsSection({ user }: { user: AuthUser }) {
   });
   const [amountInput, setAmountInput] = useState(String(TICKET_BALANCE_TOPUP_PRESETS_USD[0]));
   const [busy, setBusy] = useState(false);
+  const [checkoutIntent, setCheckoutIntent] = useState<NativeBillingCheckoutIntent | null>(null);
 
   function reload() {
     if (user.isGuest) {
@@ -94,28 +95,10 @@ export function TaskCreditsSection({ user }: { user: AuthUser }) {
       setError(`Maximum top-up is $${pricingConfig.maxTopupUsd.toLocaleString()}.`);
       return;
     }
-    setBusy(true);
     setError(null);
     setMessage(null);
-    try {
-      const callbackUrl = await ipc.billingStartCheckoutSync().catch(() => undefined);
-      // P0-2: the pawos-web checkout page needs this to verify who is actually paying before it
-      // will credit anything — see /api/billing/credit-ticket-balance.
-      const supabase = await getSupabaseClient();
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
-      const result = await ipc.billingCreateCreditsCheckoutSession(parsed, undefined, callbackUrl, accessToken);
-      if (result.ok) {
-        await ipc.actionExecute({ type: 'openUrl', url: result.checkoutUrl });
-        setMessage('Opened checkout in your browser. Your balance updates automatically once payment completes.');
-      } else {
-        setError(result.reason);
-      }
-    } catch (e) {
-      setError(getErrorMessage(e));
-    } finally {
-      setBusy(false);
-    }
+    setBusy(false);
+    setCheckoutIntent({ kind: 'credits', amountUsd: parsed, title: 'Personal Ticket Balance' });
   }
 
   if (user.isGuest) return null;
@@ -179,6 +162,7 @@ export function TaskCreditsSection({ user }: { user: AuthUser }) {
   const nextTicketPrice = getTicketUnitPriceUsd(ticketsUsedCount + 1);
 
   return (
+    <>
     <div className={styles.card}>
       <h3 className={styles.cardTitle}>Autonomous Ticket System</h3>
       <p className={styles.cardBody} style={{ marginTop: 6, marginBottom: 12 }}>
@@ -293,5 +277,17 @@ export function TaskCreditsSection({ user }: { user: AuthUser }) {
       )}
       {error && <p style={{ color: '#e08c8c', fontSize: 12.5, marginTop: 10 }}>{error}</p>}
     </div>
+    {checkoutIntent && (
+      <NativeBillingCheckoutModal
+        intent={checkoutIntent}
+        onClose={() => setCheckoutIntent(null)}
+        onSuccess={() => {
+          setCheckoutIntent(null);
+          setMessage('Payment verified. Your Ticket Balance has been updated.');
+          reload();
+        }}
+      />
+    )}
+    </>
   );
 }

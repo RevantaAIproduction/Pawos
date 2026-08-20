@@ -73,6 +73,8 @@ export const MIN_TICKET_BALANCE_TOPUP_USD = 30;
 export const MAX_TICKET_BALANCE_TOPUP_USD = 20000;
 /** Preset top-up amounts shown in the UI — not exhaustive, a custom amount at or above the minimum is always accepted. Code default — see getTicketPricingConfig(). */
 export const TICKET_BALANCE_TOPUP_PRESETS_USD: readonly number[] = [30, 60, 100, 150, 200];
+/** Current configured INR payment conversion for India Razorpay Orders. PawOS ledgers remain USD. */
+export const DEFAULT_TICKET_BALANCE_USD_INR_RATE = 95.65;
 
 /**
  * Editable Ticket Balance top-up configuration, mirroring the Electron app's own
@@ -96,6 +98,92 @@ export function getTicketPricingConfig(): { topupPresetsUsd: number[]; minTopupU
     topupPresetsUsd: parsedPresets.length > 0 ? parsedPresets : [...TICKET_BALANCE_TOPUP_PRESETS_USD],
     minTopupUsd: Number.isFinite(minEnv) && minEnv > 0 ? minEnv : MIN_TICKET_BALANCE_TOPUP_USD,
     maxTopupUsd: Number.isFinite(maxEnv) && maxEnv > 0 ? maxEnv : MAX_TICKET_BALANCE_TOPUP_USD,
+  };
+}
+
+export function getTicketBalanceUsdInrRate(): number {
+  const configured = Number(process.env.TICKET_BALANCE_USD_INR_RATE);
+  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_TICKET_BALANCE_USD_INR_RATE;
+}
+
+function decimalPlaces(value: number): number {
+  const text = String(value);
+  if (/e/i.test(text)) return 99;
+  const [, fraction = ""] = text.split(".");
+  return fraction.length;
+}
+
+export function usdAmountToCents(value: number): number | null {
+  if (!Number.isFinite(value) || value <= 0 || decimalPlaces(value) > 2) return null;
+  const cents = Math.round(value * 100);
+  return Math.abs(cents / 100 - value) < 0.0000001 ? cents : null;
+}
+
+function rateToPaisePerUsd(rate: number): number {
+  return Math.round(rate * 100);
+}
+
+export function calculateTicketBalanceInrPayment(amountUsd: number): {
+  amountUsd: number;
+  usdCents: number;
+  usdInrRate: number;
+  amountPaise: number;
+  amountInr: number;
+} | null {
+  const usdCents = usdAmountToCents(amountUsd);
+  if (usdCents === null) return null;
+  const usdInrRate = getTicketBalanceUsdInrRate();
+  const amountPaise = Math.round((usdCents * rateToPaisePerUsd(usdInrRate)) / 100);
+  return {
+    amountUsd: usdCents / 100,
+    usdCents,
+    usdInrRate,
+    amountPaise,
+    amountInr: amountPaise / 100,
+  };
+}
+
+export function buildTicketBalanceOrderPayload(params: {
+  amountUsd: number;
+  userId: string;
+  organizationId?: string;
+}):
+  | {
+      ok: true;
+      amountUsd: number;
+      usdInrRate: number;
+      amountInr: number;
+      amountPaise: number;
+      payload: { amount: number; currency: "INR"; notes: Record<string, string> };
+    }
+  | { ok: false; reason: string } {
+  const conversion = calculateTicketBalanceInrPayment(params.amountUsd);
+  if (!conversion) return { ok: false, reason: "Enter a valid USD amount with at most two decimal places." };
+
+  const { minTopupUsd, maxTopupUsd } = getTicketPricingConfig();
+  if (conversion.amountUsd < minTopupUsd) return { ok: false, reason: `Minimum top-up is $${minTopupUsd}.` };
+  if (conversion.amountUsd > maxTopupUsd) return { ok: false, reason: `Maximum top-up is $${maxTopupUsd.toLocaleString()}.` };
+
+  return {
+    ok: true,
+    amountUsd: conversion.amountUsd,
+    usdInrRate: conversion.usdInrRate,
+    amountInr: conversion.amountInr,
+    amountPaise: conversion.amountPaise,
+    payload: {
+      amount: conversion.amountPaise,
+      currency: "INR",
+      notes: {
+        productType: "ticket_balance",
+        amountUsd: conversion.amountUsd.toFixed(2),
+        usdInrRate: String(conversion.usdInrRate),
+        amountInr: conversion.amountInr.toFixed(2),
+        amountPaise: String(conversion.amountPaise),
+        currency: "INR",
+        organizationId: params.organizationId ?? "",
+        userId: params.userId,
+      },
+    },
   };
 }
 

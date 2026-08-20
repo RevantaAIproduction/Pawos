@@ -17,6 +17,48 @@ export const CONNECTOR_ID_BY_TICKET_SOURCE: Partial<Record<string, string>> = {
 };
 
 /**
+ * Dispatches a window CustomEvent asking the Dashboard shell to show the
+ * pre-execution authorization modal. Returns true (authorized) or false
+ * (cancelled). If no UI handler is mounted (headless / test context), the
+ * detail._handled flag stays false and this resolves true immediately so
+ * existing test suites are unaffected — the gate's own entitlement and
+ * balance checks are the real safety gates.
+ */
+function requestAutonomousWorkAuthorization(opts: {
+  ticketId: string | null;
+  ticketTitle?: string | null;
+  balanceUsd: number;
+  nextTicketPriceUsd: number;
+}): Promise<boolean> {
+  // Non-browser environments (Node test runner, headless scripts) have no
+  // window — proceed automatically without any UI.
+  if (typeof window === 'undefined') return Promise.resolve(true);
+
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    function settle(v: boolean) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      resolve(v);
+    }
+
+    const detail = { ...opts, resolve: settle, _handled: false };
+    window.dispatchEvent(new CustomEvent('paw:requestAutonomousAuthorization', { detail }));
+
+    if (!detail._handled) {
+      // No modal mounted (headless / test context) — proceed automatically.
+      settle(true);
+      return;
+    }
+    // 5-minute safety timeout: auto-cancel if the user never responds.
+    timeoutId = setTimeout(() => settle(false), 5 * 60 * 1000);
+  });
+}
+
+/**
  * Handles the three Autonomous Engineering Task billing action types
  * entirely in the renderer — never forwarded to IPC/DesktopExecutionEngine,
  * since billing lives in Organization Runtime (Supabase) and has nothing to
@@ -95,6 +137,21 @@ export function withAutonomousTaskBilling(execute: (request: ActionRequest) => P
                 : `Your ticket balance ($${balance.balanceUsd.toFixed(2)}) can't cover the next ticket at the current rate ($${nextTicketPrice.toFixed(2)}). Add funds from Settings → Billing before starting a new task.`,
               data: { balanceUsd: balance.balanceUsd, nextTicketPriceUsd: nextTicketPrice, organizationId },
             };
+          }
+
+          // Pre-execution UI authorization — shows the ticket details, current charge, and wallet
+          // balance to the user and waits for explicit approval before any Supabase run row is
+          // created. If the Dashboard authorization modal is not mounted (headless / test context),
+          // the event detail's _handled flag stays false and the gate proceeds immediately —
+          // this must never block or throw in a non-UI context.
+          const authorized = await requestAutonomousWorkAuthorization({
+            ticketId: request.ticketId ?? null,
+            ticketTitle: request.ticketTitle ?? null,
+            balanceUsd: balance.balanceUsd,
+            nextTicketPriceUsd: nextTicketPrice,
+          });
+          if (!authorized) {
+            return { ok: false, reason: 'cancelled', message: 'Autonomous Work authorization cancelled.' };
           }
 
           // Duplicate-safe start — see AutonomousTaskBillingService.startRun()'s own doc comment.
