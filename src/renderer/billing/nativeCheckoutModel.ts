@@ -1,32 +1,52 @@
 import type { SeatTier, SubscriptionTierId } from '../../shared/billing/BillingTypes';
+import type { NativePaymentMethodId } from '../../shared/billing/BillingTypes';
 
-export type NativePaymentMethod = 'razorpay';
+export type NativePaymentMethod = NativePaymentMethodId;
 
-export const NATIVE_PAYMENT_METHODS: { id: NativePaymentMethod; label: string; description: string }[] = [
-  {
-    id: 'razorpay',
-    label: 'Secure Razorpay payment',
-    description: 'Razorpay shows the payment methods enabled for this account at payment time.',
-  },
-];
-
-const SUBSCRIPTION_PRICE_INR: Partial<Record<SubscriptionTierId, number>> = {
-  pro: 1913,
-  proMax: 9565,
-  enterprise: 1913,
+export const NATIVE_PAYMENT_METHOD_DETAILS: Record<NativePaymentMethod, { label: string; description: string }> = {
+  upi: { label: 'UPI', description: 'Pay using any UPI app or virtual payment address.' },
+  card: { label: 'Card', description: 'Visa, Mastercard, RuPay, and available cards.' },
+  netbanking: { label: 'Netbanking', description: "Pay through your bank's net banking portal." },
+  wallet: { label: 'Wallet', description: 'Pay using a supported digital wallet.' },
 };
 
-const TEAM_SEAT_PRICE_INR: Record<SeatTier, number> = {
-  standard: 1913,
-  premium: 9565,
+// ── Usage Credits (normal Paw Compute top-ups, $5 minimum) ───────────────────
+export const USAGE_CREDITS_PRESETS_USD: readonly number[] = [5, 10, 30, 50, 100];
+export const USAGE_CREDITS_MIN_USD = 5;
+export const USAGE_CREDITS_MAX_USD = 20_000;
+
+// ── Autonomous Work Credits (ticket balance top-ups, $30 minimum) ─────────────
+export const AUTONOMOUS_WORK_CREDITS_PRESETS_USD: readonly number[] = [30, 60, 100, 250, 500];
+export const AUTONOMOUS_WORK_CREDITS_MIN_USD = 30;
+export const AUTONOMOUS_WORK_CREDITS_MAX_USD = 20_000;
+
+const USD_PRICES: Record<SubscriptionTierId, number> = {
+  go: 0,
+  pro: 20,
+  proMax: 100,
+  team: 0,
+  enterprise: 20,
+};
+
+const TEAM_SEAT_USD_PRICES: Record<SeatTier, number> = {
+  standard: 20,
+  premium: 100,
 };
 
 export const TICKET_BALANCE_USD_INR_RATE = 95.65;
 
 export function subscriptionAmountInr(tier: SubscriptionTierId, seatTier?: SeatTier, seatCount = 1): number | null {
-  if (tier === 'team') return TEAM_SEAT_PRICE_INR[seatTier ?? 'standard'] * Math.max(1, seatCount);
-  if (tier === 'enterprise') return (SUBSCRIPTION_PRICE_INR.enterprise ?? 0) * Math.max(1, seatCount);
-  return SUBSCRIPTION_PRICE_INR[tier] ?? null;
+  const rate = TICKET_BALANCE_USD_INR_RATE;
+  if (tier === 'team') {
+    const seatPrice = TEAM_SEAT_USD_PRICES[seatTier ?? 'standard'];
+    return Math.round(seatPrice * rate) * Math.max(1, seatCount);
+  }
+  if (tier === 'enterprise') {
+    return Math.round(USD_PRICES.enterprise * rate) * Math.max(1, seatCount);
+  }
+  const usd = USD_PRICES[tier];
+  if (usd === undefined || usd === 0) return null;
+  return Math.round(usd * rate);
 }
 
 export function subscriptionCheckoutLabel(tier: SubscriptionTierId, seatTier?: SeatTier): string {

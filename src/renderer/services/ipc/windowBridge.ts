@@ -21,6 +21,7 @@ import type {
   CreditBalance,
   CreditConsumptionRecord,
   BillingCheckoutResult,
+  NativePaymentMethodsResult,
   NativeSubscriptionCheckoutResult,
   NativeCreditsCheckoutResult,
   NativeCreditsVerificationResult,
@@ -245,6 +246,8 @@ export function contextBridge() {
 
     billingCreateCheckoutSession: async (tier: SubscriptionTierId, callbackUrl?: string, options?: CheckoutOptions): Promise<BillingCheckoutResult> =>
       ipcApi.invoke('billing:createCheckoutSession', tier, callbackUrl, options),
+    billingGetNativePaymentMethods: async (): Promise<NativePaymentMethodsResult> =>
+      ipcApi.invoke('billing:getNativePaymentMethods'),
     billingCreateNativeSubscriptionCheckout: async (tier: SubscriptionTierId, options?: CheckoutOptions): Promise<NativeSubscriptionCheckoutResult> =>
       ipcApi.invoke('billing:createNativeSubscriptionCheckout', tier, options),
     billingConfirmNativeSubscriptionPayment: async (paymentId: string, subscriptionId: string, signature: string): Promise<{ ok: true; subscription: SubscriptionState } | { ok: false; reason: string }> =>
@@ -256,6 +259,10 @@ export function contextBridge() {
       ipcApi.invoke('billing:createNativeCreditsCheckout', amountUsd, organizationId, accessToken),
     billingVerifyNativeCreditsPayment: async (params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string; organizationId?: string }): Promise<NativeCreditsVerificationResult> =>
       ipcApi.invoke('billing:verifyNativeCreditsPayment', params),
+    billingCreateNativeUsageCreditsCheckout: async (amountUsd: number, organizationId?: string, accessToken?: string): Promise<NativeCreditsCheckoutResult> =>
+      ipcApi.invoke('billing:createNativeUsageCreditsCheckout', amountUsd, organizationId, accessToken),
+    billingVerifyNativeUsageCreditsPayment: async (params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string; organizationId?: string }): Promise<NativeCreditsVerificationResult> =>
+      ipcApi.invoke('billing:verifyNativeUsageCreditsPayment', params),
     onSubscriptionUpdated: (cb: () => void) => on('billing:subscriptionUpdated', cb),
     onTaskCreditsPurchased: (cb: (payload: { amountUsd?: number; organizationId?: string }) => void) =>
       on('billing:taskCreditsPurchased', cb),

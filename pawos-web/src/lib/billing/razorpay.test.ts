@@ -1,11 +1,15 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   buildTicketBalanceOrderPayload,
+  buildUsageCreditsOrderPayload,
   calculateTicketBalanceInrPayment,
   getTicketBalanceUsdInrRate,
   getTicketPricingConfig,
+  getUsageCreditsPricingConfig,
   MIN_TICKET_BALANCE_TOPUP_USD,
   MAX_TICKET_BALANCE_TOPUP_USD,
+  MIN_USAGE_CREDITS_TOPUP_USD,
+  MAX_USAGE_CREDITS_TOPUP_USD,
 } from "./razorpay";
 
 beforeEach(() => {
@@ -13,6 +17,9 @@ beforeEach(() => {
   delete process.env.TICKET_BALANCE_MIN_TOPUP_USD;
   delete process.env.TICKET_BALANCE_MAX_TOPUP_USD;
   delete process.env.TICKET_BALANCE_USD_INR_RATE;
+  delete process.env.USAGE_CREDITS_TOPUP_PRESETS;
+  delete process.env.USAGE_CREDITS_MIN_TOPUP_USD;
+  delete process.env.USAGE_CREDITS_MAX_TOPUP_USD;
 });
 
 describe("getTicketPricingConfig", () => {
@@ -86,5 +93,83 @@ describe("ticket balance INR Razorpay conversion", () => {
   it("rejects $29.99 and $20,000.01 server-side", () => {
     expect(buildTicketBalanceOrderPayload({ amountUsd: 29.99, userId: "user-1" })).toMatchObject({ ok: false });
     expect(buildTicketBalanceOrderPayload({ amountUsd: 20000.01, userId: "user-1" })).toMatchObject({ ok: false });
+  });
+
+  it("stamps productType='ticket_balance' in order notes", () => {
+    const result = buildTicketBalanceOrderPayload({ amountUsd: 30, userId: "user-1" });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.payload.notes.productType).toBe("ticket_balance");
+  });
+});
+
+describe("Usage Credits order payload", () => {
+  it("has $5 minimum and $20,000 maximum by default", () => {
+    expect(MIN_USAGE_CREDITS_TOPUP_USD).toBe(5);
+    expect(MAX_USAGE_CREDITS_TOPUP_USD).toBe(20000);
+    const config = getUsageCreditsPricingConfig();
+    expect(config.minTopupUsd).toBe(5);
+    expect(config.maxTopupUsd).toBe(20000);
+  });
+
+  it("accepts $5 and rejects $4.99", () => {
+    expect(buildUsageCreditsOrderPayload({ amountUsd: 5, userId: "user-1" }).ok).toBe(true);
+    expect(buildUsageCreditsOrderPayload({ amountUsd: 4.99, userId: "user-1" })).toMatchObject({ ok: false });
+  });
+
+  it("accepts $20,000 and rejects $20,000.01", () => {
+    expect(buildUsageCreditsOrderPayload({ amountUsd: 20000, userId: "user-1" }).ok).toBe(true);
+    expect(buildUsageCreditsOrderPayload({ amountUsd: 20000.01, userId: "user-1" })).toMatchObject({ ok: false });
+  });
+
+  it("stamps productType='usage_credits' in order notes (never 'ticket_balance')", () => {
+    const result = buildUsageCreditsOrderPayload({ amountUsd: 5, userId: "user-1" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.notes.productType).toBe("usage_credits");
+    expect(result.payload.notes.productType).not.toBe("ticket_balance");
+  });
+
+  it("$5 → correct INR paise (478.25 INR = 47825 paise)", () => {
+    const result = buildUsageCreditsOrderPayload({ amountUsd: 5, userId: "user-1" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.amount).toBe(47825);
+    expect(result.payload.currency).toBe("INR");
+    expect(result.payload.notes.amountUsd).toBe("5.00");
+    expect(result.payload.notes.amountInr).toBe("478.25");
+  });
+
+  it("$30 → 2869.50 INR", () => {
+    const result = buildUsageCreditsOrderPayload({ amountUsd: 30, userId: "user-1" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.notes.amountInr).toBe("2869.50");
+  });
+
+  it("$100 → 9565.00 INR", () => {
+    const result = buildUsageCreditsOrderPayload({ amountUsd: 100, userId: "user-1" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.payload.notes.amountInr).toBe("9565.00");
+  });
+
+  it("uses the same 95.65 INR/USD rate as ticket balance", () => {
+    const ucResult = buildUsageCreditsOrderPayload({ amountUsd: 100, userId: "user-1" });
+    const tbResult = buildTicketBalanceOrderPayload({ amountUsd: 100, userId: "user-1" });
+    expect(ucResult.ok && tbResult.ok).toBe(true);
+    if (!ucResult.ok || !tbResult.ok) return;
+    expect(ucResult.amountPaise).toBe(tbResult.amountPaise);
+  });
+
+  it("minimum is strictly lower than autonomous work credits minimum", () => {
+    expect(MIN_USAGE_CREDITS_TOPUP_USD).toBeLessThan(MIN_TICKET_BALANCE_TOPUP_USD);
+  });
+
+  it("env var overrides are respected", () => {
+    process.env.USAGE_CREDITS_MIN_TOPUP_USD = "10";
+    process.env.USAGE_CREDITS_MAX_TOPUP_USD = "500";
+    const config = getUsageCreditsPricingConfig();
+    expect(config.minTopupUsd).toBe(10);
+    expect(config.maxTopupUsd).toBe(500);
   });
 });

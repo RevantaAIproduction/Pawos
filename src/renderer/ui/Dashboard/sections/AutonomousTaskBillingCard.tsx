@@ -150,7 +150,7 @@ export function AutonomousTaskBillingCard({ organizationId }: { organizationId: 
     setError(null);
     setMessage(null);
     setBusy(false);
-    setCheckoutIntent({ kind: 'credits', amountUsd: parsed, organizationId, title: 'Organization Ticket Balance' });
+    setCheckoutIntent({ kind: 'autonomousWorkCredits', amountUsd: parsed, organizationId, title: 'Organization Autonomous Work Credits' });
   }
 
   if (loading) {

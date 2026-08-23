@@ -58,8 +58,24 @@ export function CompanionApprovalCenter({ userId }: { userId: string }) {
 
   if (!pending) return null;
 
+  // Add keyboard handling: Space/Enter → approve, Escape → deny
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      respond(true);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      respond(false);
+    }
+  };
+
   return (
-    <div className="mt-6 rounded-2xl border border-amber-800/60 bg-amber-950/20 p-6">
+    <div
+      className="mt-6 rounded-2xl border border-amber-800/60 bg-amber-950/20 p-6"
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      aria-label="Approval dialog"
+    >
       <h2 className="font-semibold text-amber-200">Waiting on your approval</h2>
       <p className="mt-2 text-sm text-neutral-300">{pending.summary}</p>
       <div className="mt-4 flex gap-3">
@@ -67,6 +83,7 @@ export function CompanionApprovalCenter({ userId }: { userId: string }) {
           type="button"
           onClick={() => respond(true)}
           disabled={responding}
+          autoFocus
           className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:opacity-50"
         >
           Approve

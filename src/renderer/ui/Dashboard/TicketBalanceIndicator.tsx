@@ -145,7 +145,7 @@ export function TicketBalanceIndicator({
     setCheckoutError(null);
     setCheckoutMessage(null);
     setCheckoutBusy(false);
-    setCheckoutIntent({ kind: 'credits', amountUsd: parsed, title: 'Ticket Wallet' });
+    setCheckoutIntent({ kind: 'autonomousWorkCredits', amountUsd: parsed, title: 'Autonomous Work Credits' });
   }
 
   if (isGuest) return null;

@@ -43,6 +43,7 @@ import type {
   CreditBalance,
   CreditConsumptionRecord,
   BillingCheckoutResult,
+  NativePaymentMethodsResult,
   NativeSubscriptionCheckoutResult,
   NativeCreditsCheckoutResult,
   NativeCreditsVerificationResult,
@@ -332,6 +333,9 @@ export const ipc = {
   async billingCreateCheckoutSession(tier: SubscriptionTierId, callbackUrl?: string, options?: CheckoutOptions): Promise<BillingCheckoutResult> {
     return getBridge().billingCreateCheckoutSession(tier, callbackUrl, options);
   },
+  async billingGetNativePaymentMethods(): Promise<NativePaymentMethodsResult> {
+    return getBridge().billingGetNativePaymentMethods();
+  },
   async billingCreateNativeSubscriptionCheckout(tier: SubscriptionTierId, options?: CheckoutOptions): Promise<NativeSubscriptionCheckoutResult> {
     return getBridge().billingCreateNativeSubscriptionCheckout(tier, options);
   },
@@ -349,6 +353,12 @@ export const ipc = {
   },
   async billingVerifyNativeCreditsPayment(params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string; organizationId?: string }): Promise<NativeCreditsVerificationResult> {
     return getBridge().billingVerifyNativeCreditsPayment(params);
+  },
+  async billingCreateNativeUsageCreditsCheckout(amountUsd: number, organizationId?: string, accessToken?: string): Promise<NativeCreditsCheckoutResult> {
+    return getBridge().billingCreateNativeUsageCreditsCheckout(amountUsd, organizationId, accessToken);
+  },
+  async billingVerifyNativeUsageCreditsPayment(params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string; organizationId?: string }): Promise<NativeCreditsVerificationResult> {
+    return getBridge().billingVerifyNativeUsageCreditsPayment(params);
   },
   onSubscriptionUpdated(cb: () => void) {
     return getBridge().onSubscriptionUpdated(cb);

@@ -40,6 +40,8 @@ import type {
   CheckoutOptions,
   SeatTier,
   RuntimeEntitlementId,
+  NativePaymentMethodId,
+  NativePaymentMethodsResult,
   NativeSubscriptionCheckoutResult,
   NativeCreditsCheckoutResult,
   NativeCreditsVerificationResult,
@@ -496,6 +498,20 @@ export function registerIpc(opts: {
     const provider = createBillingProvider(pricingConfigStore.get().billingProvider);
     return provider.createCheckoutSession(tier, callbackUrl, options);
   });
+  ipcMain.handle('billing:getNativePaymentMethods', async (): Promise<NativePaymentMethodsResult> => {
+    try {
+      const response = await fetch(`${PAWOS_BILLING_API_BASE_URL}/api/billing/payment-methods`);
+      const result = (await response.json().catch(() => null)) as
+        | { ok?: boolean; reason?: string; methods?: NativePaymentMethodId[] }
+        | null;
+      if (!response.ok || !result?.ok || !Array.isArray(result.methods) || result.methods.length === 0) {
+        return { ok: false, reason: cleanReason(result, `Could not load payment methods: ${response.statusText}`) };
+      }
+      return { ok: true, methods: result.methods };
+    } catch (error) {
+      return { ok: false, reason: error instanceof Error ? error.message : 'Could not load payment methods.' };
+    }
+  });
   ipcMain.handle(
     'billing:createNativeSubscriptionCheckout',
     async (_evt, tier: SubscriptionTierId, options?: CheckoutOptions): Promise<NativeSubscriptionCheckoutResult> => {
@@ -647,6 +663,86 @@ export function registerIpc(opts: {
         }
         for (const win of BrowserWindow.getAllWindows()) {
           win.webContents.send('billing:taskCreditsPurchased', { amountUsd: result.amountUsd, organizationId: params.organizationId });
+        }
+        return { ok: true, amountUsd: result.amountUsd, topupId: result.topupId };
+      } catch (error) {
+        return { ok: false, reason: error instanceof Error ? error.message : 'Payment verification failed.' };
+      }
+    }
+  );
+  // Usage Credits checkout — separate from Autonomous Work Credits (ticket balance).
+  // $5 minimum (vs $30), routes to /api/billing/checkout-usage-credits (productType="usage_credits").
+  ipcMain.handle(
+    'billing:createNativeUsageCreditsCheckout',
+    async (_evt, amountUsd: number, organizationId?: string, accessToken?: string): Promise<NativeCreditsCheckoutResult> => {
+      if (!accessToken) return { ok: false, reason: 'Missing PawOS session. Sign in again before adding funds.' };
+      try {
+        const response = await fetch(`${PAWOS_BILLING_API_BASE_URL}/api/billing/checkout-usage-credits`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amountUsd, organizationId, accessToken }),
+        });
+        const result = (await response.json().catch(() => null)) as
+          | { ok?: boolean; reason?: string; keyId?: string; orderId?: string; amountUsd?: number; amountInr?: number; amountPaise?: number; usdInrRate?: number; currency?: string }
+          | null;
+        if (
+          !response.ok ||
+          !result?.ok ||
+          !result.keyId ||
+          !result.orderId ||
+          typeof result.amountUsd !== 'number' ||
+          typeof result.amountInr !== 'number' ||
+          typeof result.amountPaise !== 'number' ||
+          typeof result.usdInrRate !== 'number' ||
+          result.currency !== 'INR'
+        ) {
+          return { ok: false, reason: cleanReason(result, `Could not create payment order: ${response.statusText}`) };
+        }
+        return {
+          ok: true,
+          keyId: result.keyId,
+          orderId: result.orderId,
+          amountUsd: result.amountUsd,
+          amountInr: result.amountInr,
+          amountPaise: result.amountPaise,
+          usdInrRate: result.usdInrRate,
+          currency: 'INR',
+        };
+      } catch (error) {
+        return { ok: false, reason: error instanceof Error ? error.message : 'Could not create payment order.' };
+      }
+    }
+  );
+  // Usage Credits verification — routes to /api/billing/credit-usage-credits (NOT credit-ticket-balance).
+  ipcMain.handle(
+    'billing:verifyNativeUsageCreditsPayment',
+    async (
+      _evt,
+      params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string; organizationId?: string }
+    ): Promise<NativeCreditsVerificationResult> => {
+      if (!params.accessToken || !params.orderId || !params.paymentId || !params.signature) {
+        return { ok: false, reason: 'Missing payment verification fields.' };
+      }
+      try {
+        const response = await fetch(`${PAWOS_BILLING_API_BASE_URL}/api/billing/credit-usage-credits`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            accessToken: params.accessToken,
+            orderId: params.orderId,
+            paymentId: params.paymentId,
+            signature: params.signature,
+            organizationId: params.organizationId,
+          }),
+        });
+        const result = (await response.json().catch(() => null)) as
+          | { ok?: boolean; reason?: string; amountUsd?: number; topupId?: string }
+          | null;
+        if (!response.ok || !result?.ok || typeof result.amountUsd !== 'number') {
+          return { ok: false, reason: cleanReason(result, `Payment could not be verified: ${response.statusText}`) };
+        }
+        for (const win of BrowserWindow.getAllWindows()) {
+          win.webContents.send('billing:usageCreditsPurchased', { amountUsd: result.amountUsd, organizationId: params.organizationId });
         }
         return { ok: true, amountUsd: result.amountUsd, topupId: result.topupId };
       } catch (error) {

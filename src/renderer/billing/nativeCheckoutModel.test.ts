@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { estimateTicketBalancePaymentInr, formatInr, formatUsd, isExternalBillingUrl, subscriptionAmountInr, subscriptionCheckoutLabel } from './nativeCheckoutModel';
+import {
+  AUTONOMOUS_WORK_CREDITS_MAX_USD,
+  AUTONOMOUS_WORK_CREDITS_MIN_USD,
+  AUTONOMOUS_WORK_CREDITS_PRESETS_USD,
+  NATIVE_PAYMENT_METHOD_DETAILS,
+  USAGE_CREDITS_MAX_USD,
+  USAGE_CREDITS_MIN_USD,
+  USAGE_CREDITS_PRESETS_USD,
+  estimateTicketBalancePaymentInr,
+  formatInr,
+  formatUsd,
+  isExternalBillingUrl,
+  subscriptionAmountInr,
+  subscriptionCheckoutLabel,
+} from './nativeCheckoutModel';
 
 describe('nativeCheckoutModel', () => {
   it('keeps the approved Razorpay subscription display prices unchanged', () => {
@@ -15,6 +29,13 @@ describe('nativeCheckoutModel', () => {
     expect(subscriptionCheckoutLabel('proMax')).toBe('PawOS Pro Max');
     expect(subscriptionCheckoutLabel('team', 'standard')).toBe('PawOS Team Standard');
     expect(subscriptionCheckoutLabel('team', 'premium')).toBe('PawOS Team Premium');
+  });
+
+  it('labels PawOS-owned payment method choices without processor branding', () => {
+    expect(NATIVE_PAYMENT_METHOD_DETAILS.upi.label).toBe('UPI');
+    expect(NATIVE_PAYMENT_METHOD_DETAILS.card.label).toBe('Card');
+    expect(Object.values(NATIVE_PAYMENT_METHOD_DETAILS).some((method) => /razorpay/i.test(method.label))).toBe(false);
+    expect(Object.values(NATIVE_PAYMENT_METHOD_DETAILS).some((method) => /razorpay/i.test(method.description))).toBe(false);
   });
 
   it('formats native checkout totals with zero tax handled by the caller', () => {
@@ -33,5 +54,27 @@ describe('nativeCheckoutModel', () => {
     expect(isExternalBillingUrl('https://pawos.revantaai.com/checkout/credits?amountUsd=50')).toBe(true);
     expect(isExternalBillingUrl('https://pawos.revantaai.com/help/billing')).toBe(false);
     expect(isExternalBillingUrl('https://pawos.revantaai.com/legal/privacy-policy')).toBe(false);
+  });
+
+  it('usage credits: $5 minimum, $20k maximum, presets cover $5–$100', () => {
+    expect(USAGE_CREDITS_MIN_USD).toBe(5);
+    expect(USAGE_CREDITS_MAX_USD).toBe(20_000);
+    expect(USAGE_CREDITS_PRESETS_USD).toContain(5);
+    expect(USAGE_CREDITS_PRESETS_USD).toContain(10);
+    expect(USAGE_CREDITS_PRESETS_USD).toContain(100);
+    expect(Math.min(...USAGE_CREDITS_PRESETS_USD)).toBeGreaterThanOrEqual(USAGE_CREDITS_MIN_USD);
+    expect(Math.max(...USAGE_CREDITS_PRESETS_USD)).toBeLessThanOrEqual(USAGE_CREDITS_MAX_USD);
+  });
+
+  it('autonomous work credits: $30 minimum, $20k maximum, presets start at $30', () => {
+    expect(AUTONOMOUS_WORK_CREDITS_MIN_USD).toBe(30);
+    expect(AUTONOMOUS_WORK_CREDITS_MAX_USD).toBe(20_000);
+    expect(AUTONOMOUS_WORK_CREDITS_PRESETS_USD).toContain(30);
+    expect(Math.min(...AUTONOMOUS_WORK_CREDITS_PRESETS_USD)).toBeGreaterThanOrEqual(AUTONOMOUS_WORK_CREDITS_MIN_USD);
+    expect(Math.max(...AUTONOMOUS_WORK_CREDITS_PRESETS_USD)).toBeLessThanOrEqual(AUTONOMOUS_WORK_CREDITS_MAX_USD);
+  });
+
+  it('usage credits min is lower than autonomous work credits min', () => {
+    expect(USAGE_CREDITS_MIN_USD).toBeLessThan(AUTONOMOUS_WORK_CREDITS_MIN_USD);
   });
 });

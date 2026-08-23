@@ -1,24 +1,17 @@
 import { NextResponse } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import { buildTicketBalanceOrderPayload, getRazorpayCredentials, razorpayAuthHeader } from "@/lib/billing/razorpay";
+import { buildUsageCreditsOrderPayload, getRazorpayCredentials, razorpayAuthHeader } from "@/lib/billing/razorpay";
 
 /**
- * Creates a real Razorpay Order for a one-time Ticket Balance top-up — any dollar amount at or
- * above the real, editable minimum and at or below the real, editable maximum (see
- * getTicketPricingConfig()), enforced on every purchase (not just the first, since pawos-web has no
- * persistent account database to check purchase history against — see the webhook route's own
- * comment on why). The per-ticket rate this balance eventually buys is computed later, server-side,
- * at ticket-completion time in the Electron app's own get_ticket_unit_price() SQL function — this
- * route only ever validates and charges the raw top-up amount, never a credit count or a
- * price-per-ticket.
+ * Creates a Razorpay Order for a one-time Usage Credits top-up — minimum $5, maximum $20,000.
+ * Usage Credits are distinct from Autonomous Work Credits (Ticket Balance):
+ *  - Different product type: productType = "usage_credits" stamped in Razorpay order notes
+ *  - Different minimum: $5 (vs $30 for Autonomous Work)
+ *  - Different destination ledger: add_usage_credits_service RPC (vs add_ticket_balance_service)
  *
- * Phase 2 (Razorpay payment verification) hardening: the caller's Supabase access token is now
- * required and verified server-side, and the resulting REAL, server-confirmed user id is stamped
- * into the order's own `notes` alongside amountUsd/organizationId. This closes a real, narrower gap:
- * without it, a leaked-but-real (orderId, paymentId, signature) triple could be replayed by ANY
- * signed-in session against /api/billing/credit-ticket-balance and credited to a different account
- * than the one that actually paid. The order's notes.userId is the one place a webhook (which has no
- * bearer token) can also resolve "who does this payment belong to".
+ * The server stamps productType = "usage_credits" at order creation time. The renderer cannot
+ * change productType after this point — the webhook and credit-usage-credits route both read it
+ * from the Razorpay order's own notes to route to the correct wallet.
  */
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -42,24 +35,23 @@ export async function POST(request: Request) {
   }
   const userId = userData.user.id;
 
-  // ---- Approval ----
-  const { requestApproval } = await import("@/lib/billing/approvalHelper");
-  const approved = await requestApproval(userId, `Top-up ticket balance of $${amountUsd}`);
-  if (!approved) {
-    return NextResponse.json({ ok: false, reason: "User denied approval." }, { status: 403 });
-  }
   if (typeof amountUsd !== "number") {
     return NextResponse.json({ ok: false, reason: "Enter a valid USD amount." }, { status: 400 });
   }
-  const orderPayload = buildTicketBalanceOrderPayload({ amountUsd, organizationId, userId });
+
+  // ---- Approval ----
+  const { requestApproval } = await import("@/lib/billing/approvalHelper");
+  const approved = await requestApproval(userId, `Top-up usage credits of $${amountUsd}`);
+  if (!approved) {
+    return NextResponse.json({ ok: false, reason: "User denied approval." }, { status: 403 });
+  }
+
+
+  const orderPayload = buildUsageCreditsOrderPayload({ amountUsd, organizationId, userId });
   if (!orderPayload.ok) {
     return NextResponse.json({ ok: false, reason: orderPayload.reason }, { status: 400 });
   }
 
-  // If ordering on behalf of an organization, confirm real active membership using the caller's OWN
-  // token (RLS-scoped) rather than trusting the client's claim — mirrors credit-ticket-balance's own
-  // membership check, applied here too so a forged organizationId can't even make it into the order
-  // notes in the first place.
   if (organizationId) {
     const membershipClient = createSupabaseClient(url, anonKey, {
       auth: { autoRefreshToken: false, persistSession: false },

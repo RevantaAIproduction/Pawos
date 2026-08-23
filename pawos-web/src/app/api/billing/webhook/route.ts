@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getRazorpayWebhookSecret, verifyRazorpayWebhookSignature, getRazorpayPlanId } from "@/lib/billing/razorpay";
 import { creditVerifiedTicketBalancePayment } from "@/lib/billing/ticketBalanceCrediting";
+import { creditVerifiedUsageCreditsPayment } from "@/lib/billing/usageCreditsCrediting";
 
 type RazorpayWebhookEvent = {
   event: string;
@@ -48,29 +49,35 @@ async function applyPaymentCapturedEvent(event: RazorpayWebhookEvent): Promise<v
     return;
   }
 
-  // The webhook payload never carries the Checkout.js signature (that's a client-side-only value) —
-  // the webhook's OWN signature (already verified against RAZORPAY_WEBHOOK_SECRET before this
-  // function is ever called) is the authenticity proof for this event. We still independently
-  // re-fetch the payment/order from Razorpay's own API inside creditVerifiedTicketBalancePayment
-  // rather than trusting this event's own payload amount — but the order-payment-signature check
-  // that route normally performs doesn't apply here, since there is no client-supplied signature to
-  // check in a webhook. Pass the empty string is intentionally never done — instead, this path is
-  // implemented as a signature-free variant scoped to the webhook's own already-verified authenticity.
-  const result = await creditVerifiedTicketBalancePayment({
+  // Dispatch to the correct crediting function based on the server-stamped productType in the
+  // payment entity's notes. Razorpay includes the order's notes in the payment entity in webhook
+  // payloads, making this field available without an extra Razorpay API call.
+  //
+  // The productType was stamped at order-creation time in:
+  //   - /api/billing/checkout-credits     → "ticket_balance"  (Autonomous Work Credits)
+  //   - /api/billing/checkout-usage-credits → "usage_credits" (Usage Credits)
+  //
+  // Neither crediting function ever trusts the webhook payload's amount — both independently
+  // re-fetch the payment and order from Razorpay's own API for authoritative amount verification.
+  const productType = paymentEntity?.notes?.productType;
+
+  const baseParams = {
     orderId,
     paymentId,
     signature: "", // irrelevant here — webhook authenticity already proven via verifyRazorpayWebhookSignature above.
-    identity: { source: "orderNotes" },
-  }).catch((error) => ({ ok: false as const, reason: error instanceof Error ? error.message : String(error) }));
+    identity: { source: "orderNotes" as const },
+  };
+
+  const result = await (productType === "usage_credits"
+    ? creditVerifiedUsageCreditsPayment(baseParams)
+    : creditVerifiedTicketBalancePayment(baseParams) // default: "ticket_balance" (or legacy orders without productType)
+  ).catch((error) => ({ ok: false as const, reason: error instanceof Error ? error.message : String(error) }));
 
   if (!result.ok) {
-    // Never blindly trust the event payload's amount, and never duplicate a browser-callback credit
-    // — a "not credited" outcome here (e.g. "no recorded payer identity", or the browser-callback
-    // path already credited it first) is expected and honest, not necessarily an error.
-    console.log(`[razorpay-webhook] payment.captured for ${paymentId} not credited via webhook: ${result.reason}`);
+    console.log(`[razorpay-webhook] payment.captured for ${paymentId} (${productType ?? "ticket_balance"}) not credited via webhook: ${result.reason}`);
     return;
   }
-  console.log(`[razorpay-webhook] payment.captured for ${paymentId} credited $${result.amountUsd} (topupId: ${result.topupId}).`);
+  console.log(`[razorpay-webhook] payment.captured for ${paymentId} (${productType ?? "ticket_balance"}) credited $${result.amountUsd} (topupId: ${result.topupId}).`);
 }
 
 const SUBSCRIPTION_EVENTS = new Set([

@@ -13,6 +13,10 @@ export type SubscriptionTierId = "go" | "pro" | "proMax" | "team" | "enterprise"
 /** Only meaningful for Team — Standard/Premium seat rate. Enterprise seats are uniform. */
 export type SeatTier = "standard" | "premium";
 
+export type PaymentMethodId = "upi" | "card" | "netbanking" | "wallet";
+
+const VALID_PAYMENT_METHODS: readonly PaymentMethodId[] = ["upi", "card", "netbanking", "wallet"];
+
 const FLAT_PLAN_ENV_VAR: Record<"pro" | "proMax", string> = {
   pro: "RAZORPAY_PLAN_ID_PRO",
   proMax: "RAZORPAY_PLAN_ID_PROMAX",
@@ -32,6 +36,16 @@ export function getRazorpayCredentials(): { keyId: string; keySecret: string } |
   const keySecret = process.env.RAZORPAY_KEY_SECRET;
   if (!keyId || !keySecret) return null;
   return { keyId, keySecret };
+}
+
+export function getConfiguredPaymentMethods(): PaymentMethodId[] {
+  const configured = process.env.RAZORPAY_ENABLED_METHODS;
+  if (!configured) return [];
+  const valid = new Set<string>(VALID_PAYMENT_METHODS);
+  return configured
+    .split(",")
+    .map((method) => method.trim().toLowerCase())
+    .filter((method, index, list): method is PaymentMethodId => valid.has(method) && list.indexOf(method) === index);
 }
 
 /** `seatTier` is required for tier === "team" (no ambiguous default plan); ignored for every other tier. */
@@ -175,6 +189,81 @@ export function buildTicketBalanceOrderPayload(params: {
       currency: "INR",
       notes: {
         productType: "ticket_balance",
+        amountUsd: conversion.amountUsd.toFixed(2),
+        usdInrRate: String(conversion.usdInrRate),
+        amountInr: conversion.amountInr.toFixed(2),
+        amountPaise: String(conversion.amountPaise),
+        currency: "INR",
+        organizationId: params.organizationId ?? "",
+        userId: params.userId,
+      },
+    },
+  };
+}
+
+// ─── Usage Credits (normal Paw Compute top-ups) ──────────────────────────────
+// Separate product from Autonomous Work Credits — different minimum, different ledger (add_usage_credits_service RPC).
+
+/** Real, finalized minimum top-up: a Usage Credits top-up must be at least $5. */
+export const MIN_USAGE_CREDITS_TOPUP_USD = 5;
+/** Real, finalized maximum top-up: a single Usage Credits top-up must be at most $20,000. */
+export const MAX_USAGE_CREDITS_TOPUP_USD = 20000;
+/** Preset top-up amounts shown in the UI for Usage Credits. */
+export const USAGE_CREDITS_TOPUP_PRESETS_USD: readonly number[] = [5, 10, 30, 50, 100];
+
+/** Editable Usage Credits top-up configuration — same pattern as getTicketPricingConfig() but for the usage wallet. */
+export function getUsageCreditsPricingConfig(): { topupPresetsUsd: number[]; minTopupUsd: number; maxTopupUsd: number } {
+  const presetsEnv = process.env.USAGE_CREDITS_TOPUP_PRESETS;
+  const parsedPresets = presetsEnv
+    ? presetsEnv.split(",").map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0)
+    : [];
+  const minEnv = Number(process.env.USAGE_CREDITS_MIN_TOPUP_USD);
+  const maxEnv = Number(process.env.USAGE_CREDITS_MAX_TOPUP_USD);
+  return {
+    topupPresetsUsd: parsedPresets.length > 0 ? parsedPresets : [...USAGE_CREDITS_TOPUP_PRESETS_USD],
+    minTopupUsd: Number.isFinite(minEnv) && minEnv > 0 ? minEnv : MIN_USAGE_CREDITS_TOPUP_USD,
+    maxTopupUsd: Number.isFinite(maxEnv) && maxEnv > 0 ? maxEnv : MAX_USAGE_CREDITS_TOPUP_USD,
+  };
+}
+
+/**
+ * Builds a Razorpay Order payload for a Usage Credits top-up.
+ * Stamps `productType: "usage_credits"` in notes — the server-authoritative product classification
+ * that the webhook and credit-usage-credits route use to route to the correct ledger (add_usage_credits_service).
+ * The renderer cannot change productType after order creation.
+ */
+export function buildUsageCreditsOrderPayload(params: {
+  amountUsd: number;
+  userId: string;
+  organizationId?: string;
+}):
+  | {
+      ok: true;
+      amountUsd: number;
+      usdInrRate: number;
+      amountInr: number;
+      amountPaise: number;
+      payload: { amount: number; currency: "INR"; notes: Record<string, string> };
+    }
+  | { ok: false; reason: string } {
+  const conversion = calculateTicketBalanceInrPayment(params.amountUsd); // reuses the same INR conversion (same rate)
+  if (!conversion) return { ok: false, reason: "Enter a valid USD amount with at most two decimal places." };
+
+  const { minTopupUsd, maxTopupUsd } = getUsageCreditsPricingConfig();
+  if (conversion.amountUsd < minTopupUsd) return { ok: false, reason: `Minimum top-up is $${minTopupUsd}.` };
+  if (conversion.amountUsd > maxTopupUsd) return { ok: false, reason: `Maximum top-up is $${maxTopupUsd.toLocaleString()}.` };
+
+  return {
+    ok: true,
+    amountUsd: conversion.amountUsd,
+    usdInrRate: conversion.usdInrRate,
+    amountInr: conversion.amountInr,
+    amountPaise: conversion.amountPaise,
+    payload: {
+      amount: conversion.amountPaise,
+      currency: "INR",
+      notes: {
+        productType: "usage_credits",
         amountUsd: conversion.amountUsd.toFixed(2),
         usdInrRate: String(conversion.usdInrRate),
         amountInr: conversion.amountInr.toFixed(2),
