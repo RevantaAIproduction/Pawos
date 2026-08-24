@@ -45,13 +45,6 @@ export async function POST(request: Request) {
   }
   const userId = userData.user.id;
 
-  // ---- Approval ----
-  const { requestApproval } = await import("@/lib/billing/approvalHelper");
-  const approved = await requestApproval(userId, `Create subscription for plan ${plan}${seatTier ? `, seat tier ${seatTier}` : ''}${seatCount ? `, ${seatCount} seats` : ''}`);
-  if (!approved) {
-    return NextResponse.json({ ok: false, reason: "User denied approval." }, { status: 403 });
-  }
-
   if (!plan || !VALID_TIERS.includes(plan)) {
     return NextResponse.json({ ok: false, reason: "Unknown plan requested." }, { status: 400 });
   }

@@ -8,6 +8,7 @@ import type { OrganizationRecord, OrganizationMember, OrgRole, OrgTier } from '.
 import type { SeatTier } from '../../../../shared/billing/BillingTypes';
 import type { AuthUser } from '../../../auth/AuthTypes';
 import { getSupabaseClient } from '../../../auth/supabaseClient';
+import { NativeBillingCheckoutModal, type NativeBillingCheckoutIntent } from '../../billing/NativeBillingCheckoutModal';
 import { RolesCapabilityCard } from './RolesCapabilityCard';
 import { OrganizationWorkspaceCard } from './OrganizationWorkspaceCard';
 import { AuditLogCard } from './AuditLogCard';
@@ -102,6 +103,7 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
   const [seatRequestMessage, setSeatRequestMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [seatCheckoutIntent, setSeatCheckoutIntent] = useState<NativeBillingCheckoutIntent | null>(null);
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const [customJobRoles, setCustomJobRoles] = useState<OrgJobRole[]>([]);
   const [roleFilter, setRoleFilter] = useState<string>('all');
@@ -337,22 +339,39 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
       setError(`This organization only accepts teammates with an @${org.domain} email.`);
       return;
     }
+
+    // Seat-limit gate: if the org has a configured seat count, check whether adding one more
+    // member would exceed it. If so, require the admin to purchase an additional seat first.
+    if (org.seatCount && org.seatCount > 0) {
+      const activeMemberCount = members.filter((m) => m.status === 'active').length;
+      if (activeMemberCount >= org.seatCount) {
+        setSeatCheckoutIntent({
+          kind: 'additionalSeat',
+          organizationId: org.id,
+          seatTier: inviteSeatTier,
+          inviteEmail: inviteEmail.trim(),
+          inviteRole: inviteRole,
+        });
+        return;
+      }
+    }
+
+    await doInviteMember(inviteEmail.trim(), inviteRole, tier === 'team' ? inviteSeatTier : undefined);
+  }
+
+  async function doInviteMember(email: string, role: OrgRole, seatTier?: SeatTier) {
+    if (!org) return;
     setBusy(true);
     setError(null);
     try {
-      const member = await organizationService.inviteMember(
-        org.id,
-        inviteEmail.trim(),
-        inviteRole,
-        tier === 'team' ? inviteSeatTier : undefined
-      );
+      const member = await organizationService.inviteMember(org.id, email, role, seatTier);
       setMembers((prev) => [...prev, member]);
       setInviteEmail('');
       try {
         await ipc.mailSendOrganizationInvite({
           to: member.email,
           organizationName: org.name,
-          role: inviteRole,
+          role,
           inviterName: user.name,
         });
       } catch {
@@ -515,7 +534,14 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
 
       <div className={styles.card}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-          <h3 className={styles.cardTitle}>Members</h3>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+            <h3 className={styles.cardTitle}>Members</h3>
+            {org.seatCount && org.seatCount > 0 && (
+              <span style={{ fontSize: 12, color: members.filter((m) => m.status === 'active').length >= org.seatCount! ? '#e08c8c' : '#96969e' }}>
+                {members.filter((m) => m.status === 'active').length} / {org.seatCount} seats in use
+              </span>
+            )}
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ fontSize: 12, color: '#96969e' }}>Filter by role</span>
             <select style={{ ...inputStyle, fontSize: 12, padding: '5px 8px' }} value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
@@ -657,6 +683,11 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
             <p className={styles.cardBody} style={{ marginTop: 6, fontSize: 12 }}>
               Only @{org.domain} emails can be invited to this organization.
               {tier === 'team' && ' Choose Standard or Premium for their seat rate.'}
+              {org.seatCount && org.seatCount > 0 && members.filter((m) => m.status === 'active').length >= org.seatCount && (
+                <span style={{ marginLeft: 6, color: '#e0c28c' }}>
+                  All seats in use — clicking Invite will prompt you to purchase an additional seat first.
+                </span>
+              )}
             </p>
           </div>
         )}
@@ -707,6 +738,24 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
         </SectionDetail>
       ) : (
         <SectionHub tiles={ORG_SECTION_TILES} onSelect={setSelectedSection} />
+      )}
+      {seatCheckoutIntent && (
+        <NativeBillingCheckoutModal
+          intent={seatCheckoutIntent}
+          onClose={() => setSeatCheckoutIntent(null)}
+          onSuccess={() => {
+            setSeatCheckoutIntent(null);
+            // Refresh the org to pick up the updated seat_count, then invite the member
+            if (seatCheckoutIntent.kind === 'additionalSeat') {
+              const { inviteEmail, inviteRole, seatTier } = seatCheckoutIntent;
+              void doInviteMember(inviteEmail, inviteRole as OrgRole, seatTier);
+            }
+            organizationService.getMyOrganizations().then((orgs) => {
+              const mine = orgs[0] ?? null;
+              if (mine) setOrg(mine);
+            }).catch(() => {});
+          }}
+        />
       )}
     </div>
   );

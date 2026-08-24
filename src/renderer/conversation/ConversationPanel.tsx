@@ -405,6 +405,7 @@ export function ConversationPanel({
                   onBuild={() => onSendTranscript('Build Project from the approved PROJECT PLAN.')}
                   onModify={() => onSendTranscript('Modify Plan. I want to adjust the PROJECT PLAN before building.')}
                   onAccept={() => onSendTranscript('I approve this plan as written.')}
+                  onDeny={() => onSendTranscript('I reject this plan and would like a different approach.')}
                 />
               ) : (
                 <article

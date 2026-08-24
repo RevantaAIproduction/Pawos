@@ -42,12 +42,6 @@ export async function POST(request: Request) {
   }
   const userId = userData.user.id;
 
-  // ---- Approval ----
-  const { requestApproval } = await import("@/lib/billing/approvalHelper");
-  const approved = await requestApproval(userId, `Top-up ticket balance of $${amountUsd}`);
-  if (!approved) {
-    return NextResponse.json({ ok: false, reason: "User denied approval." }, { status: 403 });
-  }
   if (typeof amountUsd !== "number") {
     return NextResponse.json({ ok: false, reason: "Enter a valid USD amount." }, { status: 400 });
   }

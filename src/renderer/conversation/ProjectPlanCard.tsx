@@ -15,12 +15,14 @@ export function ProjectPlanCard({
   onBuild,
   onModify,
   onAccept,
+  onDeny,
 }: {
   content: string;
   status?: ProjectPlanStatus;
   onBuild: () => void;
   onModify: () => void;
   onAccept?: () => void;
+  onDeny?: () => void;
 }) {
   const sections = useMemo(() => parseProjectPlanSections(content), [content]);
   const coverage = useMemo(() => summarizePlanCoverage(content), [content]);
@@ -31,12 +33,18 @@ export function ProjectPlanCard({
   // is all the backend ever sees). This reflects the real click that just
   // happened, not a fabricated server-side state; it resets on remount.
   const [locallyAccepted, setLocallyAccepted] = useState(false);
-  const effectiveStatus: ProjectPlanStatus = locallyAccepted && status === 'DRAFT' ? 'APPROVED' : status;
+  const [locallyDenied, setLocallyDenied] = useState(false);
+  const effectiveStatus: ProjectPlanStatus = locallyDenied ? 'DENIED' : locallyAccepted && status === 'DRAFT' ? 'APPROVED' : status;
   const lifecycle = useMemo(() => getProjectPlanLifecycle(effectiveStatus), [effectiveStatus]);
 
   const handleAccept = () => {
     setLocallyAccepted(true);
     onAccept?.();
+  };
+
+  const handleDeny = () => {
+    setLocallyDenied(true);
+    onDeny?.();
   };
 
   return (
@@ -94,13 +102,16 @@ export function ProjectPlanCard({
       </div>
 
       <div className={styles.planActions}>
-        <button type="button" className={styles.planSecondaryAction} onClick={onModify}>
+        <button type="button" className={styles.planSecondaryAction} onClick={onModify} disabled={locallyDenied}>
           Revise Plan
         </button>
-        <button type="button" className={locallyAccepted ? styles.planAcceptedAction : styles.planSecondaryAction} onClick={handleAccept} disabled={locallyAccepted}>
+        <button type="button" className={locallyDenied ? styles.planAcceptedAction : styles.planSecondaryAction} onClick={handleDeny} disabled={locallyDenied}>
+          {locallyDenied ? 'Plan Denied' : 'Deny Plan'}
+        </button>
+        <button type="button" className={locallyAccepted ? styles.planAcceptedAction : styles.planSecondaryAction} onClick={handleAccept} disabled={locallyAccepted || locallyDenied}>
           {locallyAccepted ? 'Plan Accepted' : 'Accept Plan'}
         </button>
-        <button type="button" className={styles.planPrimaryAction} onClick={onBuild}>
+        <button type="button" className={styles.planPrimaryAction} onClick={onBuild} disabled={locallyDenied}>
           Build Project
         </button>
       </div>

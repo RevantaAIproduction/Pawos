@@ -11,7 +11,6 @@ import {
   type SubscriptionTierId,
 } from '../../../../shared/billing/BillingTypes';
 import { NativeBillingCheckoutModal, type NativeBillingCheckoutIntent } from '../../billing/NativeBillingCheckoutModal';
-import { formatInr, subscriptionAmountInr } from '../../../billing/nativeCheckoutModel';
 
 const TIER_LABELS: Record<SubscriptionTierId, string> = {
   go: 'Go',
@@ -52,8 +51,6 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
   const [tab, setTab] = useState<'individual' | 'team'>('individual');
   const [message, setMessage] = useState<string | null>(null);
   const [checkoutIntent, setCheckoutIntent] = useState<NativeBillingCheckoutIntent | null>(null);
-  const [seatCounts, setSeatCounts] = useState<Record<string, number>>({});
-
   useEffect(() => {
     ipc.billingGetPricing().then(setPricing).catch(() => {});
     ipc.billingGetSubscription().then(setSubscription).catch(() => {});
@@ -61,21 +58,6 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
 
   const currentTier = subscription?.tier ?? 'go';
   const currentIndex = SUBSCRIPTION_TIER_ORDER.indexOf(currentTier);
-
-  const seatCountFor = (plan: PricingPlan): number => {
-    const min = plan.minSeats ?? 1;
-    const max = plan.maxSeats ?? 9999;
-    const current = seatCounts[plan.id] ?? min;
-    return Math.max(min, Math.min(max, current));
-  };
-
-  const updateSeatCount = (plan: PricingPlan, value: string) => {
-    const parsed = Number.parseInt(value, 10);
-    const min = plan.minSeats ?? 1;
-    const max = plan.maxSeats ?? 9999;
-    const next = Number.isFinite(parsed) ? parsed : min;
-    setSeatCounts((prev) => ({ ...prev, [plan.id]: Math.max(min, Math.min(max, next)) }));
-  };
 
   const startCheckout = (tier: SubscriptionTierId, seatTier?: SeatTier, seatCount?: number) => {
     setMessage(null);
@@ -129,7 +111,6 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
           const isCurrent = plan.id === currentTier;
           const isDowngrade = SUBSCRIPTION_TIER_ORDER.indexOf(plan.id) < currentIndex;
           const Icon = PLAN_ICONS[plan.id];
-          const seatCount = plan.seatBased ? seatCountFor(plan) : 1;
           return (
             <div key={plan.id} className={styles.card} style={{ width: 300, flex: '0 0 auto' }}>
               {Icon && (
@@ -144,17 +125,6 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
 
               {plan.seatOptions ? (
                 <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, fontSize: 12.5, fontWeight: 600 }}>
-                    People
-                    <input
-                      type="number"
-                      min={plan.minSeats ?? 1}
-                      max={plan.maxSeats}
-                      value={seatCount}
-                      onChange={(e) => updateSeatCount(plan, e.target.value)}
-                      style={{ width: 86, borderRadius: 8, border: '1px solid rgba(var(--pawos-overlay-rgb), 0.14)', background: 'rgba(var(--pawos-overlay-rgb), 0.04)', color: 'var(--pawos-fg)', padding: '7px 9px' }}
-                    />
-                  </label>
                   {plan.seatOptions.map((seat) => (
                     <div
                       key={seat.seatTier}
@@ -167,15 +137,12 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
                         </span>
                       </div>
                       <p className={styles.cardBody} style={{ fontSize: 11.5, marginTop: 2 }}>{seat.description}</p>
-                      <p className={styles.cardBody} style={{ fontSize: 11.5, marginTop: 2 }}>
-                        {seat.priceCents === null ? 'Configuration required' : `$${((seat.priceCents * seatCount) / 100).toFixed(2)}/mo for ${seatCount} people`}
-                      </p>
                       {!isCurrent && !isDowngrade && (
                         <button
                           type="button"
                           className={styles.primaryButton}
                           style={{ marginTop: 8, width: '100%' }}
-                          onClick={() => startCheckout(plan.id, seat.seatTier, seatCount)}
+                          onClick={() => startCheckout(plan.id, seat.seatTier, undefined)}
                         >
                           Get {seat.label}
                         </button>
@@ -195,22 +162,11 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
                     padding: '8px 10px',
                   }}
                 >
-                  <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, fontSize: 12.5, fontWeight: 600, marginBottom: 8 }}>
-                    People
-                    <input
-                      type="number"
-                      min={plan.minSeats ?? 1}
-                      max={plan.maxSeats}
-                      value={seatCount}
-                      onChange={(e) => updateSeatCount(plan, e.target.value)}
-                      style={{ width: 86, borderRadius: 8, border: '1px solid rgba(var(--pawos-overlay-rgb), 0.14)', background: 'rgba(var(--pawos-overlay-rgb), 0.04)', color: 'var(--pawos-fg)', padding: '7px 9px' }}
-                    />
-                  </label>
                   <span style={{ fontSize: 12.5, fontWeight: 600 }}>{plan.usageBilling.label}</span>
                   <p className={styles.cardBody} style={{ fontSize: 11.5, marginTop: 2 }}>
                     {plan.priceCents === null
                       ? 'Configuration required'
-                      : `$${((plan.priceCents * seatCount) / 100).toFixed(2)}/mo base for ${seatCount} people (${formatInr(subscriptionAmountInr('enterprise', undefined, seatCount) ?? 0)})`}
+                      : `$${(plan.priceCents / 100).toFixed(2)}/seat/mo — starts at ${plan.minSeats ?? 20} members`}
                   </p>
                   <p className={styles.cardBody} style={{ fontSize: 11.5, marginTop: 2 }}>{plan.usageBilling.description}</p>
                 </div>
@@ -235,7 +191,7 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
                     Included in your plan
                   </button>
                 ) : plan.seatOptions ? null : (
-                  <button type="button" className={styles.primaryButton} onClick={() => startCheckout(plan.id, undefined, plan.seatBased ? seatCount : undefined)}>
+                  <button type="button" className={styles.primaryButton} onClick={() => startCheckout(plan.id, undefined, undefined)}>
                     Get {plan.label}
                   </button>
                 )}

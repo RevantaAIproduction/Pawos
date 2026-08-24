@@ -1,4 +1,4 @@
-export type ProjectPlanStatus = 'DRAFT' | 'APPROVED' | 'BUILDING' | 'VERIFYING' | 'COMPLETED' | 'INCOMPLETE';
+export type ProjectPlanStatus = 'DRAFT' | 'APPROVED' | 'DENIED' | 'BUILDING' | 'VERIFYING' | 'COMPLETED' | 'INCOMPLETE';
 
 export type ProjectPlanSection = {
   title: string;
@@ -125,7 +125,7 @@ export function buildArchitectureDiagram(content: string): ArchitectureDiagram |
 
 export function getProjectPlanLifecycle(status: ProjectPlanStatus): { label: ProjectPlanStatus; active: boolean; complete: boolean }[] {
   const order: ProjectPlanStatus[] = ['DRAFT', 'APPROVED', 'BUILDING', 'VERIFYING', 'COMPLETED'];
-  const current = status === 'INCOMPLETE' ? 'VERIFYING' : status;
+  const current = status === 'INCOMPLETE' ? 'VERIFYING' : status === 'DENIED' ? 'DENIED' : status;
   const currentIndex = order.indexOf(current);
   return order.map((label, index) => ({
     label,

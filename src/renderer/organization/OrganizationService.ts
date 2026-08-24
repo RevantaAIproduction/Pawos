@@ -12,6 +12,7 @@ type OrgRow = {
   owner_user_id: string;
   created_at: string;
   domain: string;
+  seat_count?: number | null;
 };
 
 type MemberRow = {
@@ -53,7 +54,7 @@ function toJobRole(row: OrgJobRoleRow): OrgJobRole {
 }
 
 function toOrg(row: OrgRow): OrganizationRecord {
-  return { id: row.id, slug: row.slug, name: row.name, tier: row.tier, ownerUserId: row.owner_user_id, createdAt: row.created_at, domain: row.domain };
+  return { id: row.id, slug: row.slug, name: row.name, tier: row.tier, ownerUserId: row.owner_user_id, createdAt: row.created_at, domain: row.domain, seatCount: row.seat_count ?? null };
 }
 
 function emailDomain(email: string): string {
@@ -261,6 +262,27 @@ export const organizationService = {
       .from('org_job_roles')
       .update({ archived, updated_at: new Date().toISOString() })
       .eq('id', id);
+    if (error) throw error;
+  },
+
+  /**
+   * Increments the org's purchased seat count by `delta` (default 1). Called after a
+   * successful "Add member seat" payment. RLS on the organizations table gates this to
+   * org owners and billingAdministrators only.
+   */
+  async incrementSeatCount(organizationId: string, delta = 1): Promise<void> {
+    const supabase = await getSupabaseClient();
+    const { data: orgData, error: orgError } = await supabase
+      .from('organizations')
+      .select('seat_count')
+      .eq('id', organizationId)
+      .single<{ seat_count: number | null }>();
+    if (orgError) throw orgError;
+    const current = orgData?.seat_count ?? 0;
+    const { error } = await supabase
+      .from('organizations')
+      .update({ seat_count: current + delta })
+      .eq('id', organizationId);
     if (error) throw error;
   },
 };

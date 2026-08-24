@@ -39,14 +39,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, reason: "Enter a valid USD amount." }, { status: 400 });
   }
 
-  // ---- Approval ----
-  const { requestApproval } = await import("@/lib/billing/approvalHelper");
-  const approved = await requestApproval(userId, `Top-up usage credits of $${amountUsd}`);
-  if (!approved) {
-    return NextResponse.json({ ok: false, reason: "User denied approval." }, { status: 403 });
-  }
-
-
   const orderPayload = buildUsageCreditsOrderPayload({ amountUsd, organizationId, userId });
   if (!orderPayload.ok) {
     return NextResponse.json({ ok: false, reason: orderPayload.reason }, { status: 400 });

@@ -61,3 +61,20 @@ export function formatPawComputeSummary(entitlement: EntitlementSnapshot | null)
 
   return `${fmt5h} · ${fmt7d}`;
 }
+
+/** Compact percentage summary shown on hover — "Daily: 42% · Weekly: 17%".
+ *  Returns null for pooled (Enterprise) accounts that have no rolling-window limit. */
+export function formatPawComputePercent(entitlement: EntitlementSnapshot | null): string | null {
+  if (!entitlement) return null;
+  if (entitlement.pooled) return null;
+
+  const { usage5hPc, limit5hPc, usage7dPc, limit7dPc } = entitlement;
+  if (limit5hPc === null && limit7dPc === null) return null;
+
+  const pct = (used: number, limit: number | null) =>
+    limit !== null && limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+
+  const daily = pct(usage5hPc, limit5hPc);
+  const weekly = pct(usage7dPc, limit7dPc);
+  return `Daily: ${daily}% · Weekly: ${weekly}%`;
+}

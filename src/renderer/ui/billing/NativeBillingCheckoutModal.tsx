@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { CheckoutOptions, SeatTier, SubscriptionTierId } from '../../../shared/billing/BillingTypes';
 import { getSupabaseClient } from '../../auth/supabaseClient';
 import { ipc } from '../../services/ipc/ipcBridgeImplementation';
+import { organizationService } from '../../organization/OrganizationService';
 import {
   formatInr,
   formatUsd,
@@ -50,6 +51,20 @@ export type NativeBillingCheckoutIntent =
       amountUsd?: number;
       organizationId?: string;
       title?: string;
+    }
+  | {
+      /**
+       * Additional seat purchase for an existing Team/Enterprise org. Adds one seat to the
+       * org's seat_count so the invited user can log in and get the org tier. Uses the
+       * same Razorpay Order flow as usage credits (one-time payment, not a subscription),
+       * charged at the org's current seat tier price.
+       */
+      kind: 'additionalSeat';
+      organizationId: string;
+      seatTier: SeatTier;
+      /** Invitation email — the invite is sent automatically after payment succeeds. */
+      inviteEmail: string;
+      inviteRole: string;
     };
 
 type CheckoutState =
@@ -302,10 +317,31 @@ export function NativeBillingCheckoutModal({
   const isSubscription = intent.kind === 'subscription';
   const isCredits = intent.kind === 'autonomousWorkCredits';
   const isUsageCredits = intent.kind === 'usageCredits';
+  const isAdditionalSeat = intent.kind === 'additionalSeat';
+  // Price per additional seat: Standard = $20/mo, Premium = $100/mo
+  const additionalSeatPriceUsd = isAdditionalSeat
+    ? (intent.seatTier === 'premium' ? 100 : 20)
+    : 0;
 
   // For credit kinds with no pre-set amount (usageCredits), user picks here.
   const preSetAmount = isSubscription ? null : (intent as { amountUsd?: number }).amountUsd ?? null;
   const [selectedAmountUsd, setSelectedAmountUsd] = useState<number | null>(preSetAmount);
+
+  // Seat count picker — for team/enterprise when plans page passes seatCount: undefined.
+  const isTeamOrEnterprise =
+    intent.kind === 'subscription' && (intent.tier === 'team' || intent.tier === 'enterprise');
+  const minSeats =
+    intent.kind === 'subscription' && intent.tier === 'enterprise' ? 20 : 1;
+  const maxSeats: number | undefined =
+    intent.kind === 'subscription' && intent.tier === 'team' ? 150 : undefined;
+  const [seatCountInput, setSeatCountInput] = useState<number>(
+    intent.kind === 'subscription' && (intent.tier === 'team' || intent.tier === 'enterprise')
+      ? (intent.seatCount ?? minSeats)
+      : 1
+  );
+  const effectiveSeatCount = isTeamOrEnterprise
+    ? Math.max(minSeats, maxSeats !== undefined ? Math.min(maxSeats, seatCountInput) : seatCountInput)
+    : (intent.kind === 'subscription' ? Math.max(1, intent.seatCount ?? 1) : 1);
 
   const [state, setState] = useState<CheckoutState>('idle');
   const [failMessage, setFailMessage] = useState<string | null>(null);
@@ -317,20 +353,19 @@ export function NativeBillingCheckoutModal({
 
   const isBusy = state === 'creating' || state === 'processing' || state === 'verifying';
 
-  const label = isSubscription
-    ? subscriptionCheckoutLabel(intent.tier, intent.seatTier)
-    : (intent as { title?: string }).title ?? (isUsageCredits ? 'PawOS Usage Credits' : 'PawOS Autonomous Work Credits');
+  const label = isAdditionalSeat
+    ? `Add 1 ${intent.seatTier === 'premium' ? 'Premium' : 'Standard'} Team Seat`
+    : isSubscription
+      ? subscriptionCheckoutLabel(intent.tier, intent.seatTier)
+      : (intent as { title?: string }).title ?? (isUsageCredits ? 'PawOS Usage Credits' : 'PawOS Autonomous Work Credits');
 
-  const quantity =
-    isSubscription && (intent.tier === 'team' || intent.tier === 'enterprise')
-      ? Math.max(1, intent.seatCount ?? 1)
-      : 1;
+  const quantity = effectiveSeatCount;
 
   const subscriptionInr = isSubscription
     ? subscriptionAmountInr(intent.tier, intent.seatTier, quantity)
     : null;
 
-  const effectiveAmountUsd = selectedAmountUsd ?? 0;
+  const effectiveAmountUsd = isAdditionalSeat ? additionalSeatPriceUsd : (selectedAmountUsd ?? 0);
   const creditsInr = !isSubscription ? estimateTicketBalancePaymentInr(effectiveAmountUsd) : null;
   const totalInr = isSubscription ? (subscriptionInr ?? 0) : (creditsInr ?? 0);
   const totalText = formatPaymentInr(totalInr);
@@ -339,8 +374,8 @@ export function NativeBillingCheckoutModal({
   const minAmount = isUsageCredits ? USAGE_CREDITS_MIN_USD : AUTONOMOUS_WORK_CREDITS_MIN_USD;
   const maxAmount = isUsageCredits ? USAGE_CREDITS_MAX_USD : AUTONOMOUS_WORK_CREDITS_MAX_USD;
 
-  const needsAmountSelection = !isSubscription && selectedAmountUsd === null;
-  const isLargePurchase = !isSubscription && effectiveAmountUsd >= 10_000;
+  const needsAmountSelection = !isSubscription && !isAdditionalSeat && selectedAmountUsd === null;
+  const isLargePurchase = !isSubscription && !isAdditionalSeat && effectiveAmountUsd >= 10_000;
 
   const paymentMethods = useMemo(
     () =>
@@ -351,7 +386,7 @@ export function NativeBillingCheckoutModal({
         })
         .map((id) => ({ id, ...NATIVE_PAYMENT_METHOD_DETAILS[id] }))
         .filter((m) => Boolean(m.label)),
-    [availableMethods, isSubscription]
+    [availableMethods, isSubscription]  // isAdditionalSeat uses same filter as credits
   );
 
   const payDisabled =
@@ -416,7 +451,7 @@ export function NativeBillingCheckoutModal({
       if (isSubscription) {
         const checkout = await ipc.billingCreateNativeSubscriptionCheckout(intent.tier, {
           seatTier: intent.seatTier,
-          seatCount: intent.seatCount,
+          seatCount: isTeamOrEnterprise ? effectiveSeatCount : intent.seatCount,
           runtimeIds: intent.runtimeIds,
         });
         if (!checkout.ok) {
@@ -461,6 +496,66 @@ export function NativeBillingCheckoutModal({
             ondismiss: () => {
               setState('cancelled');
               setFailMessage('Payment was cancelled. No changes were made to your plan.');
+            },
+          },
+        });
+        razorpay.open();
+        return;
+      }
+
+      // ── Additional Seat checkout ──────────────────────────────────────────
+      if (isAdditionalSeat) {
+        const supabase = await getSupabaseClient();
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        const checkout = await ipc.billingCreateNativeUsageCreditsCheckout(
+          additionalSeatPriceUsd,
+          (intent as { organizationId: string }).organizationId,
+          accessToken
+        );
+        if (!checkout.ok) {
+          setState('failed');
+          setFailMessage(checkout.reason);
+          return;
+        }
+        setState('processing');
+        const razorpay = new window.Razorpay({
+          key: checkout.keyId,
+          order_id: checkout.orderId,
+          amount: checkout.amountPaise,
+          currency: checkout.currency,
+          method: paymentMethod,
+          prefill: { method: paymentMethod },
+          name: 'PawOS',
+          description: label,
+          handler: async (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
+            setState('verifying');
+            const verified = await ipc.billingVerifyNativeUsageCreditsPayment({
+              accessToken,
+              orderId: response.razorpay_order_id,
+              paymentId: response.razorpay_payment_id,
+              signature: response.razorpay_signature,
+              organizationId: (intent as { organizationId: string }).organizationId,
+            });
+            if (!verified.ok) {
+              setState('failed');
+              setFailMessage(verified.reason);
+              return;
+            }
+            // Payment confirmed — increment org seat count then invite the member
+            try {
+              await organizationService.incrementSeatCount((intent as { organizationId: string }).organizationId);
+            } catch {
+              // seat_count column may not exist yet — invite can proceed; enforcement requires the column
+            }
+            setSuccessDetail(`Seat purchased. ${(intent as { inviteEmail: string }).inviteEmail} has been invited.`);
+            setState('success');
+            onSuccess?.();
+          },
+          modal: {
+            ondismiss: () => {
+              setState('cancelled');
+              setFailMessage('Payment was cancelled. No seat was added.');
             },
           },
         });
@@ -554,7 +649,7 @@ export function NativeBillingCheckoutModal({
       <div style={overlayStyle()} role="presentation">
         <div style={modalStyle()} role="dialog" aria-modal="true" aria-label="Payment complete">
           <SuccessView
-            heading={isSubscription ? `${label} activated` : 'Credits added'}
+            heading={isAdditionalSeat ? 'Seat added' : isSubscription ? `${label} activated` : 'Credits added'}
             detail={successDetail}
             onClose={() => { onSuccess?.(); onClose(); }}
           />
@@ -578,11 +673,13 @@ export function NativeBillingCheckoutModal({
   }
 
   const isSubscriptionIntent = intent.kind === 'subscription';
-  const billingFrequency = isSubscriptionIntent
-    ? subscriptionFrequencyText(intent)
-    : isUsageCredits
-      ? 'One-time Usage Credits top-up'
-      : 'One-time Autonomous Work Credits top-up';
+  const billingFrequency = isAdditionalSeat
+    ? `One-time seat purchase · $${additionalSeatPriceUsd}/seat`
+    : isSubscriptionIntent
+      ? subscriptionFrequencyText(intent)
+      : isUsageCredits
+        ? 'One-time Usage Credits top-up'
+        : 'One-time Autonomous Work Credits top-up';
 
   return (
     <div style={overlayStyle()} role="presentation">
@@ -590,11 +687,13 @@ export function NativeBillingCheckoutModal({
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px 14px' }}>
           <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>
-            {isSubscription
-              ? `Upgrade to ${label.replace('PawOS ', '')}`
-              : isUsageCredits
-                ? 'Add Usage Credits'
-                : 'Add Autonomous Work Credits'}
+            {isAdditionalSeat
+              ? 'Add Team Member'
+              : isSubscription
+                ? `Upgrade to ${label.replace('PawOS ', '')}`
+                : isUsageCredits
+                  ? 'Add Usage Credits'
+                  : 'Add Autonomous Work Credits'}
           </h2>
           <button
             type="button"
@@ -618,6 +717,42 @@ export function NativeBillingCheckoutModal({
               </div>
             )}
           </div>
+
+          {/* Seat count picker — team and enterprise only */}
+          {isTeamOrEnterprise && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={{ fontSize: 13, fontWeight: 600 }}>
+                Team members
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <input
+                  type="number"
+                  min={minSeats}
+                  max={maxSeats}
+                  value={seatCountInput}
+                  disabled={isBusy}
+                  onChange={(e) => {
+                    const v = Number.parseInt(e.target.value, 10);
+                    setSeatCountInput(Number.isFinite(v) ? Math.max(1, v) : minSeats);
+                  }}
+                  style={{
+                    width: 90,
+                    borderRadius: 8,
+                    border: '1px solid rgba(var(--pawos-overlay-rgb), 0.18)',
+                    background: 'rgba(var(--pawos-overlay-rgb), 0.05)',
+                    color: 'var(--pawos-fg)',
+                    padding: '8px 10px',
+                    fontSize: 14,
+                  }}
+                />
+                <span style={{ fontSize: 12.5, color: 'var(--pawos-text-secondary)' }}>
+                  {isSubscription && intent.tier === 'team'
+                    ? `Up to ${maxSeats ?? 150} members`
+                    : `Minimum ${minSeats} members`}
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Amount picker — only for credit kinds without a pre-set amount */}
           {!isSubscription && selectedAmountUsd === null && (

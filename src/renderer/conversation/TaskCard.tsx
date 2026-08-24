@@ -619,13 +619,13 @@ function PlanReviewCard({
       </div>
       <div className={styles.planReviewActions}>
         <button type="button" className={styles.planApproveBtn} disabled={!canDecide} onClick={() => decide('approved')}>
-          {localDecision === 'approved' ? 'Plan Approved' : 'Approve Plan'}
+          {localDecision === 'approved' ? 'Proceeding' : 'Proceed'}
         </button>
         <button type="button" className={styles.planReviseBtn} disabled={!canDecide} onClick={requestRevision}>
-          Ask for Revision
+          Revise
         </button>
         <button type="button" className={styles.planRejectBtn} disabled={!canDecide} onClick={() => decide('rejected')}>
-          {localDecision === 'rejected' ? 'Plan Rejected' : 'Reject Plan'}
+          {localDecision === 'rejected' ? 'Denied' : 'Deny'}
         </button>
       </div>
     </section>
@@ -968,6 +968,26 @@ export function TaskCard({
         </span>
         <span className={styles.chevron}>{expanded ? '▾' : '▸'}</span>
       </button>
+
+      {!expanded && stageGroups.length > 0 && (
+        <div className={styles.executionSummary} aria-label="Execution progress">
+          {stageGroups.map(({ stage, actions }) => {
+            const okCount = actions.filter((a) => a.result?.ok).length;
+            const failCount = actions.filter((a) => a.result && !a.result.ok).length;
+            const runningCount = actions.filter((a) => !a.result).length;
+            return (
+              <div key={stage} className={styles.summaryStageStat}>
+                <span className={styles.summaryStageLabel}>{stage}</span>
+                <span className={styles.summaryStageCount}>
+                  {okCount > 0 && <span className={styles.summaryOk}>{okCount} ✓</span>}
+                  {runningCount > 0 && <span className={styles.summaryRunning}>{runningCount} ⚙️</span>}
+                  {failCount > 0 && <span className={styles.summaryFail}>{failCount} ✗</span>}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {visibleFailure && (
         <div className={styles.stopBanner} role="status" aria-live="polite">

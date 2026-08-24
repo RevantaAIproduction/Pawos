@@ -35,6 +35,13 @@ export type OrganizationRecord = {
   createdAt: string;
   /** The email domain (e.g. "acme.com") this organization is scoped to — derived from the creator's email at creation time. Every member's email must be on this domain, enforced both client-side and by a DB trigger. */
   domain: string;
+  /**
+   * Number of purchased seats for this organization. Null means no limit has been
+   * configured yet (pre-seat-billing orgs). When set, syncFromOrganization enforces
+   * this limit: active members > seat_count → org tier denied for the over-limit user.
+   * Incremented by the "Add member seat" checkout flow.
+   */
+  seatCount?: number | null;
 };
 
 export type OrganizationMember = {

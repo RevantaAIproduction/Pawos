@@ -718,4 +718,36 @@
   cursor:pointer;
   padding:2px 4px;
 }
+
+.executionSummary{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  padding:8px 10px;
+  background:rgba(255,255,255,0.02);
+  border-top:1px solid rgba(255,255,255,0.08);
+  font-size:11px;
+}
+
+.summaryStageStat{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:2px 0;
+}
+
+.summaryStageLabel{
+  color:rgba(255,255,255,0.55);
+  font-weight:500;
+}
+
+.summaryStageCount{
+  display:flex;
+  gap:6px;
+  font-weight:600;
+}
+
+.summaryOk{color:#a8f0c2;}
+.summaryRunning{color:#bcd6ff;}
+.summaryFail{color:#ffc4c4;}
 .expandOutputBtn:hover{color:rgba(255,255,255,0.8);}

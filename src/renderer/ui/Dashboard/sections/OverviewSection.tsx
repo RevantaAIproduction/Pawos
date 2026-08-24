@@ -4,7 +4,7 @@ import type { SectionId } from './index';
 import { useIpcBridge } from '../../../services/ipc/useIpcBridge';
 import type { ExecutionRecord } from '../../../../shared/actions/ExecutionRecordTypes';
 import type { EntitlementSnapshot } from '../../../../shared/billing/BillingTypes';
-import { formatPawComputeSummary, formatPlanAndRuntimeSummary } from '../../../billing/EntitlementDisplay';
+import { formatPawComputePercent, formatPawComputeSummary, formatTierLabel } from '../../../billing/EntitlementDisplay';
 
 function timeAgo(ts: number): string {
   const diffMs = Date.now() - ts;
@@ -61,8 +61,9 @@ export function OverviewSection({
     .sort((a, b) => b.startedAt - a.startedAt)
     .slice(0, 6);
 
-  const pawComputeText = formatPawComputeSummary(entitlement);
-  const planText = formatPlanAndRuntimeSummary(entitlement);
+  const pawComputeFull = formatPawComputeSummary(entitlement);
+  const pawComputePct = formatPawComputePercent(entitlement);
+  const tierLabel = entitlement ? formatTierLabel(entitlement.tier) : '...';
 
   return (
     <div>
@@ -99,13 +100,49 @@ export function OverviewSection({
       </div>
 
       <div className={styles.statusStrip}>
-        <div className={styles.statusStripItem} onClick={() => onNavigate('analytics')} style={{ cursor: 'pointer' }}>
+        <div
+          className={styles.statusStripItem}
+          onClick={() => onNavigate('analytics')}
+          style={{ cursor: 'pointer', position: 'relative' }}
+          onMouseEnter={(e) => {
+            const tip = e.currentTarget.querySelector<HTMLElement>('[data-tooltip]');
+            if (tip) tip.style.display = 'block';
+          }}
+          onMouseLeave={(e) => {
+            const tip = e.currentTarget.querySelector<HTMLElement>('[data-tooltip]');
+            if (tip) tip.style.display = 'none';
+          }}
+        >
           <span className={styles.statusStripLabel}>Paw Compute</span>
-          <span className={styles.statusStripValue}>{pawComputeText}</span>
+          <span className={styles.statusStripValue}>
+            {pawComputePct ?? (entitlement?.pooled ? 'Pooled' : '...')}
+          </span>
+          <div
+            data-tooltip="true"
+            style={{
+              display: 'none',
+              position: 'absolute',
+              bottom: '100%',
+              left: 0,
+              marginBottom: 6,
+              background: 'var(--pawos-bg-elevated)',
+              border: '1px solid rgba(var(--pawos-overlay-rgb), 0.18)',
+              borderRadius: 8,
+              padding: '7px 12px',
+              fontSize: 12,
+              color: 'var(--pawos-fg)',
+              whiteSpace: 'nowrap',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+              zIndex: 200,
+              pointerEvents: 'none',
+            }}
+          >
+            {pawComputeFull}
+          </div>
         </div>
         <div className={styles.statusStripItem} onClick={() => onNavigate('upgrade')} style={{ cursor: 'pointer' }}>
-          <span className={styles.statusStripLabel}>Plan & runtimes</span>
-          <span className={styles.statusStripValue}>{planText}</span>
+          <span className={styles.statusStripLabel}>Plan</span>
+          <span className={styles.statusStripValue}>{tierLabel}</span>
         </div>
         <div className={styles.statusStripItem}>
           <span className={styles.statusStripLabel}>Version</span>
