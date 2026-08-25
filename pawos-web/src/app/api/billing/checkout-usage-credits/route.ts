@@ -2,6 +2,22 @@ import { NextResponse } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { buildUsageCreditsOrderPayload, getRazorpayCredentials, razorpayAuthHeader } from "@/lib/billing/razorpay";
 
+// Personal/free email providers that require organization email for Team/Enterprise seats
+const PERSONAL_EMAIL_DOMAINS = new Set([
+  "gmail.com",
+  "yahoo.com",
+  "outlook.com",
+  "hotmail.com",
+  "live.com",
+  "icloud.com",
+  "protonmail.com",
+]);
+
+function isPersonalEmail(email: string): boolean {
+  const domain = email.toLowerCase().split("@")[1];
+  return domain ? PERSONAL_EMAIL_DOMAINS.has(domain) : false;
+}
+
 /**
  * Creates a Razorpay Order for a one-time Usage Credits top-up — minimum $5, maximum $20,000.
  * Usage Credits are distinct from Autonomous Work Credits (Ticket Balance):
@@ -34,6 +50,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, reason: "Invalid or expired session." }, { status: 401 });
   }
   const userId = userData.user.id;
+  const userEmail = userData.user.email || "";
+
+  // ---- Email validation for organization purchases (additional seats) ----
+  if (organizationId && isPersonalEmail(userEmail)) {
+    return NextResponse.json(
+      { ok: false, reason: "Team and Enterprise plans require a business or organization email address. Please use your organization email to continue." },
+      { status: 403 }
+    );
+  }
 
   if (typeof amountUsd !== "number") {
     return NextResponse.json({ ok: false, reason: "Enter a valid USD amount." }, { status: 400 });

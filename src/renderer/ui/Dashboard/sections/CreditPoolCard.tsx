@@ -4,6 +4,7 @@ import { creditPoolService } from '../../../organization/CreditPoolService';
 import { permissionService } from '../../../organization/PermissionService';
 import type { OrganizationCreditSummary } from '../../../../shared/organization/CreditPoolTypes';
 import type { OrganizationMember } from '../../../../shared/organization/OrganizationTypes';
+import { CreditUsageDisplay } from '../components/CreditUsageDisplay';
 
 function getErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -82,19 +83,13 @@ export function CreditPoolCard({ organizationId, orgMembers }: { organizationId:
       </p>
 
       {summary && (
-        <div style={{ display: 'flex', gap: 16, marginBottom: 14, fontSize: 13 }}>
-          <div>
-            <div style={{ color: '#96969e', fontSize: 11.5 }}>Pool total</div>
-            <div style={{ fontVariantNumeric: 'tabular-nums' }}>{summary.pool?.totalCredits ?? 0}</div>
-          </div>
-          <div>
-            <div style={{ color: '#96969e', fontSize: 11.5 }}>Used this period</div>
-            <div style={{ fontVariantNumeric: 'tabular-nums' }}>{summary.usedThisPeriod}</div>
-          </div>
-          <div>
-            <div style={{ color: '#96969e', fontSize: 11.5 }}>Remaining</div>
-            <div style={{ fontVariantNumeric: 'tabular-nums' }}>{summary.remaining ?? '—'}</div>
-          </div>
+        <div style={{ marginBottom: 14 }}>
+          <CreditUsageDisplay
+            label="Pool Credits"
+            used={summary.usedThisPeriod}
+            remaining={summary.remaining ?? 0}
+            compact={true}
+          />
         </div>
       )}
 

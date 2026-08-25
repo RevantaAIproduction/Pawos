@@ -7,6 +7,22 @@ const VALID_SEAT_TIERS: SeatTier[] = ["standard", "premium"];
 const PURCHASABLE_RUNTIME_IDS = ["coding"] as const;
 type PurchasableRuntimeId = (typeof PURCHASABLE_RUNTIME_IDS)[number];
 
+// Personal/free email providers that require organization email for Team/Enterprise tiers
+const PERSONAL_EMAIL_DOMAINS = new Set([
+  "gmail.com",
+  "yahoo.com",
+  "outlook.com",
+  "hotmail.com",
+  "live.com",
+  "icloud.com",
+  "protonmail.com",
+]);
+
+function isPersonalEmail(email: string): boolean {
+  const domain = email.toLowerCase().split("@")[1];
+  return domain ? PERSONAL_EMAIL_DOMAINS.has(domain) : false;
+}
+
 /**
  * Creates a Razorpay subscription for the requested tier and returns the
  * subscription id + Razorpay key id the client needs to open Checkout.js.
@@ -44,9 +60,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, reason: "Invalid or expired session." }, { status: 401 });
   }
   const userId = userData.user.id;
+  const userEmail = userData.user.email || "";
 
   if (!plan || !VALID_TIERS.includes(plan)) {
     return NextResponse.json({ ok: false, reason: "Unknown plan requested." }, { status: 400 });
+  }
+
+  // ---- Email validation for Team/Enterprise ----
+  if ((plan === "team" || plan === "enterprise") && isPersonalEmail(userEmail)) {
+    return NextResponse.json(
+      { ok: false, reason: "Team and Enterprise plans require a business or organization email address. Please use your organization email to continue." },
+      { status: 403 }
+    );
   }
   if (plan === "go") {
     return NextResponse.json({ ok: false, reason: "Paw Go is free and has no checkout." }, { status: 400 });

@@ -23,6 +23,10 @@ import { CredentialVaultCard } from './CredentialVaultCard';
 import { SsoSettingsCard } from './SsoSettingsCard';
 import { AutonomousTaskBillingCard } from './AutonomousTaskBillingCard';
 import { OrganizationRolesCard } from './OrganizationRolesCard';
+import { MemberCreditRequestPanel } from '../../components/MemberCreditRequestPanel';
+import { AdminCreditManagementPanel } from '../../components/AdminCreditManagementPanel';
+import { AdminLogoManager } from '../../components/AdminLogoManager';
+import { OrganizationLogo } from '../../components/OrganizationLogo';
 import { credentialVaultService } from '../../../organization/CredentialVaultService';
 import { SectionHub, SectionDetail, type SectionTileDef } from '../SectionHub';
 import {
@@ -56,10 +60,11 @@ const ORG_SECTION_TILES: SectionTileDef[] = [
   { id: 'temporaryPermissions', title: 'Temporary Permissions', description: 'Grant a capability to a member for a limited time.', icon: HistoryIcon },
   { id: 'workspace', title: 'Workspace', description: 'Shared containers for projects, documents, and research.', icon: OfficeIcon },
   { id: 'crm', title: 'Organization CRM', description: 'Contacts, companies, and meeting notes shared to the org.', icon: OrganizationIcon },
-  { id: 'credits', title: 'Credits & Billing', description: 'Credit pool and the Autonomous Ticket System balance.', icon: CardIcon },
+  { id: 'credits', title: 'Credits & Billing', description: 'Credit pool, member credit requests, and the Autonomous Ticket System balance.', icon: CardIcon },
   { id: 'governance', title: 'Governance & Approvals', description: 'Require approval before a member can take an action.', icon: SecurityIcon },
   { id: 'credentialVault', title: 'Credential Vault', description: 'Shared connector credentials for the organization.', icon: PlugIcon },
   { id: 'sso', title: 'Single Sign-On', description: 'Federated identity for Team and Enterprise plans.', icon: LanguageIcon },
+  { id: 'branding', title: 'Organization Branding', description: 'Upload and manage your organization logo.', icon: CardIcon },
   { id: 'auditLog', title: 'Audit Log', description: 'A record of security-relevant actions taken in this organization.', icon: BarsIcon },
 ];
 
@@ -94,6 +99,7 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
   const [org, setOrg] = useState<OrganizationRecord | null>(null);
   const [members, setMembers] = useState<OrganizationMember[]>([]);
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
+  const [accessToken, setAccessToken] = useState<string>('');
   const [newOrgName, setNewOrgName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<OrgRole>('member');
@@ -111,6 +117,16 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
   useEffect(() => {
     if (user.isGuest) return;
     ipc.billingGetSubscription().then((s) => setTier(s.tier)).catch(() => {});
+
+    // Fetch access token for credit governance APIs
+    getSupabaseClient()
+      .then((client) => client.auth.getSession())
+      .then((result) => {
+        if (result.data.session?.access_token) {
+          setAccessToken(result.data.session.access_token);
+        }
+      })
+      .catch(() => {});
   }, [user.isGuest]);
 
   // billingSyncTierFromOrganization() was previously only ever called from
@@ -512,7 +528,18 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div className={styles.card}>
         <h3 className={styles.cardTitle}>General</h3>
-        <div style={{ display: 'flex', gap: 24, marginTop: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 24, marginTop: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          {accessToken && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <p className={styles.cardBody}>Logo</p>
+              <OrganizationLogo
+                organizationId={org.id}
+                accessToken={accessToken}
+                fallbackName={org.name}
+                size="medium"
+              />
+            </div>
+          )}
           <div>
             <p className={styles.cardBody}>Name</p>
             <p style={{ fontSize: 14, fontWeight: 600 }}>{org.name}</p>
@@ -722,6 +749,20 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
             <>
               <CreditPoolCard organizationId={org.id} orgMembers={members} />
               <AutonomousTaskBillingCard organizationId={org.id} />
+              {(tier === 'team' || tier === 'enterprise') && myRole !== 'member' && accessToken && (
+                <AdminCreditManagementPanel
+                  organizationId={org.id}
+                  accessToken={accessToken}
+                  members={members}
+                />
+              )}
+              {(tier === 'team' || tier === 'enterprise') && myRole === 'member' && accessToken && (
+                <MemberCreditRequestPanel
+                  organizationId={org.id}
+                  tier={tier as 'Team' | 'Enterprise'}
+                  accessToken={accessToken}
+                />
+              )}
             </>
           )}
           {selectedSection === 'governance' && (
@@ -733,6 +774,13 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
           {selectedSection === 'credentialVault' && <CredentialVaultCard organizationId={org.id} />}
           {selectedSection === 'sso' && (
             <SsoSettingsCard organizationId={org.id} tier={tier === 'enterprise' ? 'enterprise' : 'team'} />
+          )}
+          {selectedSection === 'branding' && canManageBilling(myRole) && accessToken && (
+            <AdminLogoManager
+              organizationId={org.id}
+              accessToken={accessToken}
+              organizationName={org.name}
+            />
           )}
           {selectedSection === 'auditLog' && <AuditLogCard organizationId={org.id} />}
         </SectionDetail>

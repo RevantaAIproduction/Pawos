@@ -776,6 +776,29 @@ export function registerIpc(opts: {
       }
     }
   );
+  // High-value Team/Enterprise invoices (>$500)
+  ipcMain.handle(
+    'billing:createHighValueInvoices',
+    async (
+      _evt,
+      params: { plan: string; seatTier?: string; seatCount: number; customerName: string; organizationName: string; gstNumber?: string; accessToken?: string }
+    ): Promise<any> => {
+      try {
+        const response = await fetch(`${PAWOS_BILLING_API_BASE_URL}/api/billing/create-high-value-invoices`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(params),
+        });
+        const result = (await response.json().catch(() => null)) as any;
+        if (!response.ok) {
+          return { ok: false, reason: cleanReason(result, `Invoice creation failed: ${response.statusText}`) };
+        }
+        return result || { ok: false, reason: 'No response from server.' };
+      } catch (error) {
+        return { ok: false, reason: error instanceof Error ? error.message : 'Invoice creation failed.' };
+      }
+    }
+  );
   // Grants bonus Paw Compute for the current period after the renderer has already redeemed the
   // matching dollar amount from the caller's Referral Credits balance via Supabase's
   // redeem_referral_credits_for_compute() RPC — this handler never touches money, it only ever

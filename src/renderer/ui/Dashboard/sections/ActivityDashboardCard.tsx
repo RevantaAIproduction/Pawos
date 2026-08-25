@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
 import { activityDashboardService, type OrganizationActivitySummary } from '../../../organization/ActivityDashboardService';
 import type { OrganizationMember } from '../../../../shared/organization/OrganizationTypes';
+import { CreditUsageDisplay } from '../components/CreditUsageDisplay';
 
 function getErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -64,15 +65,13 @@ export function ActivityDashboardCard({ organizationId, orgMembers }: { organiza
             ))}
           </div>
 
-          <div style={{ display: 'flex', gap: 20, marginBottom: 16 }}>
-            <div>
-              <div style={statLabel}>credits used this period</div>
-              <div style={statValue}>{summary.creditsUsedThisPeriod}</div>
-            </div>
-            <div>
-              <div style={statLabel}>credits remaining</div>
-              <div style={statValue}>{summary.creditsRemaining ?? '—'}</div>
-            </div>
+          <div style={{ marginBottom: 16 }}>
+            <CreditUsageDisplay
+              label="Organization Credits"
+              used={summary.creditsUsedThisPeriod}
+              remaining={summary.creditsRemaining ?? 0}
+              compact={false}
+            />
           </div>
 
           {summary.taskCountsByAssignee.length > 0 && (

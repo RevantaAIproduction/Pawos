@@ -940,15 +940,14 @@ export function NativeBillingCheckoutModal({
     setState('creating');
     setFailMessage(null);
     try {
-      const scriptLoaded = await loadPaymentScript();
-      if (!scriptLoaded || !window.Razorpay) {
-        setState('failed');
-        setFailMessage('Could not connect to the secure payment service. Check your internet connection and try again.');
-        return;
-      }
-
       // ── Subscription checkout ────────────────────
       if (isSubscription) {
+        const scriptLoaded = await loadPaymentScript('standard');
+        if (!scriptLoaded || !window.Razorpay) {
+          setState('failed');
+          setFailMessage('Could not connect to the secure payment service. Check your internet connection and try again.');
+          return;
+        }
         // Get access token for verification
         const supabase = await getSupabaseClient();
         const { data: sessionData } = await supabase.auth.getSession();
@@ -984,8 +983,6 @@ export function NativeBillingCheckoutModal({
         const razorpay = new window.Razorpay({
           key: checkout.keyId,
           subscription_id: checkout.subscriptionId,
-          method: paymentMethod,
-          prefill: { method: paymentMethod },
           name: 'PawOS',
           description: `${label} subscription`,
           handler: async (payment: {
@@ -1027,6 +1024,13 @@ export function NativeBillingCheckoutModal({
 
       // ── Order-based checkout (Additional Seat, Usage Credits, Autonomous Work Credits) ────
       // Custom Checkout flow: no .open() modal, PawOS-native form, createPayment() callback
+
+      const scriptLoaded = await loadPaymentScript('custom');
+      if (!scriptLoaded || !window.Razorpay) {
+        setState('failed');
+        setFailMessage('Could not connect to the secure payment service. Check your internet connection and try again.');
+        return;
+      }
 
       const supabase = await getSupabaseClient();
       const { data: sessionData } = await supabase.auth.getSession();
