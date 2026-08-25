@@ -6,6 +6,7 @@ import { TaskCard } from './TaskCard';
 import { ProjectPlanCard } from './ProjectPlanCard';
 import { isProjectPlanMessage } from './ProjectPlanningUX';
 import { SupportPersonaIndicator, useSupportPersona } from './SupportPersonaIndicator';
+import { isSupportRequest } from '../../shared/support/SupportTrigger';
 import { CreditsRequiredNotice, getExhaustionPrimaryActions } from '../ui/billing/CreditsRequiredNotice';
 import type { EntitlementSnapshot, SeatTier, SubscriptionTierId } from '../../shared/billing/BillingTypes';
 import { DEFAULT_EXECUTION_MODE, EXECUTION_MODE_CATALOG, type ConversationExecutionMode } from '../../shared/actions/ExecutionModeTypes';
@@ -233,6 +234,11 @@ export function ConversationPanel({
     const text = draft.trim();
     if (!text) {
       return;
+    }
+    // Auto-activate persona if user requests support
+    if (!supportPersona && isSupportRequest(text)) {
+      setSupportPersona('Support Specialist');
+      setShowPersonaButton(false);
     }
     onSendTranscript(text, wasPasted ? { source: 'pasted' } : undefined);
     setDraft('');

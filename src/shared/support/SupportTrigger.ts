@@ -4,13 +4,13 @@
  */
 
 const SUPPORT_TRIGGER_PATTERNS = [
-  // Explicit requests for a human/person
-  /\b(connect|talk|speak|chat)\s+(to|with)\s+(a\s+)?(person|human|representative|specialist|support|agent)\b/i,
-  /\b(connect|link|put)\s+me\s+(to|with)\s+(support|a\s+person)\b/i,
+  // Explicit requests for a human/person/someone
+  /\b(connect|talk|speak|chat)\s+(to|with)\s+(a\s+)?(person|human|representative|specialist|support|agent|someone)\b/i,
+  /\b(connect|link|put)\s+me\s+(to|with)\s+(support|a\s+person|someone)\b/i,
   /\bi\s+need\s+(human\s+)?support\b/i,
   /\bI\s+need\s+to\s+talk\s+to\s+(someone|a\s+person|support)\b/i,
   /\bcan\s+i\s+(talk|chat|speak)\s+to\s+(someone|a\s+person|a\s+human)\b/i,
-  /\bconnect\s+me\s+with\s+(support|a\s+specialist)\b/i,
+  /\bconnect\s+me\s+with\s+(support|a\s+specialist|billing)\b/i,
   /\bis\s+there\s+a\s+(person|human)\s+(i\s+can\s+)?talk\s+to\b/i,
   /\bI'd\s+like\s+to\s+talk\s+to\s+(someone|a\s+specialist)\b/i,
   /\bplease\s+connect\s+me\s+with\s+(support|billing)\b/i,
