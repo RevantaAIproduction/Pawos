@@ -83,7 +83,7 @@ export function LoginForm() {
           disabled={oauthPending !== null || status === "loading"}
           className="flex items-center justify-center gap-2 rounded-lg border border-neutral-700 bg-neutral-950 px-4 py-2.5 text-sm font-medium text-neutral-100 transition hover:bg-neutral-900 disabled:opacity-50"
         >
-          <svg size={18} viewBox="0 0 24 24" fill="currentColor" className="h-[18px] w-[18px]">
+          <svg viewBox="0 0 24 24" fill="currentColor" className="h-[18px] w-[18px]">
             <path d="M11.4 24H0V12.6h11.4V24zM24 24H12.6V12.6H24V24zM11.4 11.4H0V0h11.4v11.4zm12.6 0H12.6V0H24v11.4z" />
           </svg>
           {oauthPending === "microsoft" ? "Opening Microsoft…" : "Continue with Microsoft"}
