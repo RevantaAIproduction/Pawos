@@ -3,6 +3,7 @@ import * as path from 'path';
 import { pathToFileURL } from 'url';
 import { createTray } from './tray/trayManager';
 import { registerIpc } from './ipc/ipc';
+import { startMicrosoftOAuthFlow } from './auth/MicrosoftOAuthFlow';
 import { SettingsStore } from '../shared/settings/SettingsStore';
 import { readEnvFile } from './env/readEnvFile';
 import { PUBLIC_ENV_DEFAULTS } from './env/publicEnvDefaults';
@@ -521,14 +522,9 @@ app.whenReady().then(async () => {
     isMicrosoftSignInConfigured: () => Boolean(envVars.MICROSOFT_CLIENT_ID && envVars.MICROSOFT_CLIENT_SECRET && envVars.MICROSOFT_TENANT_ID),
     startMicrosoftSignIn: () => {
       if (!envVars.MICROSOFT_CLIENT_ID || !envVars.MICROSOFT_CLIENT_SECRET || !envVars.MICROSOFT_TENANT_ID) {
-        return Promise.reject(
-          new Error("Microsoft sign-in isn’t configured yet - add MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, and MICROSOFT_TENANT_ID to your .env.")
-        );
+        return Promise.reject(new Error("Microsoft sign-in not configured"));
       }
-      return (async () => {
-        const { startMicrosoftOAuthFlow } = await import(‘./auth/MicrosoftOAuthFlow’);
-        return startMicrosoftOAuthFlow(envVars.MICROSOFT_CLIENT_ID, envVars.MICROSOFT_CLIENT_SECRET, envVars.MICROSOFT_TENANT_ID);
-      })();
+      return startMicrosoftOAuthFlow(envVars.MICROSOFT_CLIENT_ID, envVars.MICROSOFT_CLIENT_SECRET, envVars.MICROSOFT_TENANT_ID);
     },
   });
 

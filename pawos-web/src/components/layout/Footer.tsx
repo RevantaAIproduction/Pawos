@@ -40,10 +40,9 @@ const GROUPS: { title: string; links: { href: string; label: string }[] }[] = [
   {
     title: "Legal",
     links: [
-      { href: "/legal/terms", label: "Terms of Service" },
-      { href: "/legal/privacy-policy", label: "Privacy Policy" },
-      { href: "/legal/security-policy", label: "Security Policy" },
-      { href: "/legal", label: "All legal documents" },
+      { href: "/terms", label: "Terms of Service" },
+      { href: "/privacy", label: "Privacy Policy" },
+      { href: "/security", label: "Security" },
     ],
   },
 ];
