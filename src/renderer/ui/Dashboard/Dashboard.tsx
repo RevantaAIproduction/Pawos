@@ -26,7 +26,6 @@ import { useIpcBridge } from '../../services/ipc/useIpcBridge';
 import type { AuthUser } from '../../auth/AuthTypes';
 import type { SubscriptionTierId } from '../../../shared/billing/BillingTypes';
 import { autonomousTaskBillingService } from '../../organization/AutonomousTaskBillingService';
-import { referralService } from '../../organization/ReferralService';
 import { ipc as ipcBridge } from '../../services/ipc/ipcBridgeImplementation';
 
 const TIER_LABELS: Record<SubscriptionTierId, string> = {
@@ -137,21 +136,6 @@ export function Dashboard({
     ipc.onTaskCreditsPurchased(() => {});
   }, [ipc, user.isGuest]);
 
-  // Reports this account's own subscription conversion to the referral
-  // engine whenever the local subscription changes — a no-op unless this
-  // account was itself referred and just reached Pro/Pro Max (see
-  // report_referral_conversion() in the referral engine migration). Uses
-  // the full ipc singleton rather than the useIpcBridge() hook subset
-  // since onSubscriptionUpdated isn't in that scoped hook's method list.
-  useEffect(() => {
-    if (user.isGuest) return;
-    ipcBridge.onSubscriptionUpdated(() => {
-      ipcBridge
-        .billingGetSubscription()
-        .then((s) => referralService.reportConversion(s.tier).catch(() => {}))
-        .catch(() => {});
-    });
-  }, [user.isGuest]);
 
   // Deterministic, server-side safety net for Autonomous Ticket runs the
   // model itself never resolved (never called complete/end) — runs

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
 import { activityDashboardService, type OrganizationActivitySummary } from '../../../organization/ActivityDashboardService';
 import type { OrganizationMember } from '../../../../shared/organization/OrganizationTypes';
-import { CreditUsageDisplay } from '../components/CreditUsageDisplay';
+import { CreditUsageDisplay } from '../../components/CreditUsageDisplay';
 
 function getErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;

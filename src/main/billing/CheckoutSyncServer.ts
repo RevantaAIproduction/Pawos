@@ -7,7 +7,9 @@ import { ALL_RUNTIME_ENTITLEMENT_IDS } from '../../shared/billing/RuntimeCatalog
 
 const CALLBACK_PATH = '/checkout-callback';
 const TIMEOUT_MS = 10 * 60 * 1000; // checkout sessions don't stay open forever — matches a generous real checkout window.
-const VERIFY_SUBSCRIPTION_URL = 'https://pawos.revantaai.com/api/billing/verify-subscription';
+const VERIFY_SUBSCRIPTION_URL =
+  process.env.PAWOS_WEB_URL || 'https://pawos.revantaai.com';
+const VERIFY_SUBSCRIPTION_ENDPOINT = `${VERIFY_SUBSCRIPTION_URL}/api/billing/verify-subscription`;
 
 function parseRuntimeIds(value: string[] | null | undefined): RuntimeEntitlementId[] {
   if (!value) return [];
@@ -34,7 +36,7 @@ export async function verifySubscriptionWithBackend(
   accessToken?: string
 ): Promise<{ ok: true; tier: SubscriptionTierId; seatTier?: SeatTier; subscriptionId: string; runtimeIds: string[] } | { ok: false }> {
   try {
-    const response = await fetch(VERIFY_SUBSCRIPTION_URL, {
+    const response = await fetch(VERIFY_SUBSCRIPTION_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ paymentId, subscriptionId, signature, accessToken }),

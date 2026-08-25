@@ -43,7 +43,7 @@ const CATEGORIES: CategoryDef[] = [
   { tab: 'Security', title: 'Security', description: 'Password, sessions, and account protection.', icon: SecurityIcon, color: '#f87171' },
   { tab: 'Browser Tools', title: 'Browser Tools', description: 'Browser automation preferences — coming soon.', icon: BrowserToolsIcon, color: '#22d3ee' },
   { tab: 'Connections', title: 'Connections', description: 'Cloud services, infrastructure, and local tools PawOS acts through.', icon: PlugIcon, color: '#c084fc' },
-  { tab: 'Billing', title: 'Billing', description: 'Plan, credits, referrals, and usage.', icon: CardIcon, color: '#facc15' },
+  { tab: 'Billing', title: 'Billing', description: 'Plan, credits, and usage.', icon: CardIcon, color: '#facc15' },
   { tab: 'Developers', title: 'Developers', description: 'Coding mode, infrastructure connectors, and updates.', icon: TerminalIcon, color: '#94a3b8' },
 ];
 

@@ -5,6 +5,7 @@ import {
   resolveTierFromRazorpayPlanId,
   verifyRazorpaySubscriptionPaymentSignature,
 } from "@/lib/billing/razorpay";
+import { createServiceClient } from "@/lib/supabase/serviceClient";
 
 const ACTIVE_STATUSES = new Set(["active", "authenticated"]);
 const ALLOWED_RUNTIME_IDS = new Set(["coding"]);
@@ -58,6 +59,15 @@ export async function POST(request: Request) {
     .map((id) => id.trim())
     .filter((id, index, list) => ALLOWED_RUNTIME_IDS.has(id) && list.indexOf(id) === index);
 
+  // Async: grant $40 one-time benefit if this is an eligible tier and the user hasn't already received it.
+  // The grant is idempotent and checked server-side in Supabase.
+  const userId = typeof subscription.notes?.userId === "string" ? subscription.notes.userId : null;
+  if (userId && (resolved.tier === "pro" || resolved.tier === "proMax" || resolved.tier === "team" || resolved.tier === "enterprise")) {
+    grantOneTimeBenefitAsync(userId).catch((error) => {
+      console.warn("[verify-subscription] One-time benefit grant failed:", error);
+    });
+  }
+
   return NextResponse.json({
     ok: true,
     tier: resolved.tier,
@@ -65,4 +75,31 @@ export async function POST(request: Request) {
     subscriptionId: subscription.id,
     runtimeIds,
   });
+}
+
+/**
+ * Grants the $40 one-time onboarding benefit to a user for their first eligible subscription.
+ * The grant is idempotent: if the user has already received it, this is a no-op.
+ * Uses a special phantom payment marker ("onetime-benefit-<userId>") to track idempotently.
+ */
+async function grantOneTimeBenefitAsync(userId: string): Promise<void> {
+  const uniquePaymentId = `onetime-benefit-${userId}`;
+  try {
+    const serviceClient = createServiceClient();
+    // Call add_ticket_balance_service with the phantom payment ID — idempotent on payment ID.
+    // If this user already received the benefit, the RPC will return the existing topup ID (no-op).
+    const { data: topupId, error: rpcError } = await serviceClient.rpc("add_ticket_balance_service", {
+      p_user_id: userId,
+      p_organization_id: null,
+      p_amount_usd: 40,
+      p_razorpay_payment_id: uniquePaymentId,
+    });
+    if (rpcError) {
+      console.warn("[verify-subscription] Failed to grant one-time benefit:", rpcError.message);
+      return;
+    }
+    console.log("[verify-subscription] One-time benefit granted to user", userId, "topupId:", topupId);
+  } catch (error) {
+    console.warn("[verify-subscription] One-time benefit grant request failed:", error);
+  }
 }

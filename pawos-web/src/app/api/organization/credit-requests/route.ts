@@ -91,6 +91,34 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, reason: "Not an organization member." }, { status: 403 });
     }
 
+    // Check for existing pending request (prevent duplicates)
+    const { data: existingPending, error: pendingCheckError } = await client
+      .from("member_credit_requests")
+      .select("id, requested_amount, created_at")
+      .eq("organization_id", organizationId)
+      .eq("requesting_user_id", userData.user.id)
+      .eq("status", "pending")
+      .maybeSingle();
+
+    if (pendingCheckError) {
+      return NextResponse.json({ ok: false, reason: "Failed to check existing requests." }, { status: 500 });
+    }
+
+    if (existingPending) {
+      return NextResponse.json(
+        {
+          ok: false,
+          reason: "You already have a pending credit request.",
+          existingRequest: {
+            id: existingPending.id,
+            requestedAmount: existingPending.requested_amount,
+            createdAt: existingPending.created_at,
+          },
+        },
+        { status: 409 }
+      );
+    }
+
     // Create request
     const { data: newRequest, error } = await client
       .from("member_credit_requests")

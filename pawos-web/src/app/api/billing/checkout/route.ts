@@ -127,8 +127,9 @@ export async function POST(request: Request) {
       ...((plan === "team" || plan === "enterprise") && seatCount ? { quantity: seatCount } : {}),
       // P0-3 security fix: runtimeIds round-trips through Razorpay's own notes field so
       // /api/billing/verify-subscription can read it back as real, Razorpay-attested data instead of
-      // trusting whatever a forged local callback claims.
-      ...(runtimeIds.length > 0 ? { notes: { runtimeIds: runtimeIds.join(",") } } : {}),
+      // trusting whatever a forged local callback claims. userId is also included so the verification
+      // endpoint can identify the user for one-time benefit grants.
+      notes: { runtimeIds: runtimeIds.length > 0 ? runtimeIds.join(",") : "", userId },
     }),
   });
 

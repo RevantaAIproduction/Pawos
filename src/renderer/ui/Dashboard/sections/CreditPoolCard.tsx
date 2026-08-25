@@ -4,7 +4,7 @@ import { creditPoolService } from '../../../organization/CreditPoolService';
 import { permissionService } from '../../../organization/PermissionService';
 import type { OrganizationCreditSummary } from '../../../../shared/organization/CreditPoolTypes';
 import type { OrganizationMember } from '../../../../shared/organization/OrganizationTypes';
-import { CreditUsageDisplay } from '../components/CreditUsageDisplay';
+import { CreditUsageDisplay } from '../../components/CreditUsageDisplay';
 
 function getErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;

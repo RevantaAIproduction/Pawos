@@ -137,7 +137,7 @@ export function SettingsSection({
         {tab === 'Connections' && <ConnectionsPage scope={{ userId: user.id }} onUpgrade={onUpgrade} />}
         {tab === 'Billing' && (
           <>
-            <SettingsPageHeader title="Billing" description="Plan, credits, referrals, and usage." />
+            <SettingsPageHeader title="Billing" description="Plan, credits, and usage." />
             <BillingSettingsPage user={user} onGoToAccount={goToAccount} onUpgrade={onUpgrade} />
           </>
         )}

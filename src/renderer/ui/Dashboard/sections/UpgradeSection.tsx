@@ -172,6 +172,14 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
                 </p>
               )}
 
+              {(plan.id === 'pro' || plan.id === 'proMax' || plan.id === 'team' || plan.id === 'enterprise') && !isCurrent && (
+                <div style={{ marginTop: 12, padding: '8px 12px', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderRadius: '6px', textAlign: 'center' }}>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#3b82f6' }}>
+                    You get $40
+                  </p>
+                </div>
+              )}
+
               <ul style={{ margin: '14px 0 0', paddingLeft: 18 }}>
                 {plan.features.map((f) => (
                   <li key={f} className={styles.cardBody}>

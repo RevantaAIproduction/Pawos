@@ -3,6 +3,8 @@ import type { CheckoutOptions, SeatTier, SubscriptionTierId } from '../../../sha
 import { getSupabaseClient } from '../../auth/supabaseClient';
 import { ipc } from '../../services/ipc/ipcBridgeImplementation';
 import { organizationService } from '../../organization/OrganizationService';
+import { HighValueOrderForm, type HighValueOrderData } from './HighValueOrderForm';
+import { PaymentEvidenceUpload } from './PaymentEvidenceUpload';
 import {
   formatInr,
   formatUsd,
@@ -791,6 +793,31 @@ export function NativeBillingCheckoutModal({
   const [selectedBankCode, setSelectedBankCode] = useState<string | null>(null);
   const [selectedWalletCode, setSelectedWalletCode] = useState<string | null>(null);
 
+  // High-value Team/Enterprise order handling (>₹40,000 / $500 USD)
+  const isHighValue = useMemo(() => {
+    // Team/Enterprise subscriptions >$500
+    if (isSubscription && intent.kind === 'subscription') {
+      const intentSub = intent as Extract<typeof intent, { kind: 'subscription' }>;
+      if (intentSub.tier === 'team' || intentSub.tier === 'enterprise') {
+        const basePriceUsd = intentSub.tier === 'team' && intentSub.seatTier === 'premium' ? 100 : 20;
+        const totalUsd = basePriceUsd * effectiveSeatCount;
+        return totalUsd > 500;
+      }
+    }
+    // Credit purchases (autonomous/usage) >$500 USD
+    if (!isSubscription && intent.kind === 'autonomousWorkCredits' || intent.kind === 'usageCredits') {
+      const selectedUsd = selectedAmountUsd ?? 0;
+      return selectedUsd > 500;
+    }
+    return false;
+  }, [isSubscription, intent, effectiveSeatCount, selectedAmountUsd]);
+
+  const [highValueFormData, setHighValueFormData] = useState<HighValueOrderData | null>(null);
+  const [highValueInvoices, setHighValueInvoices] = useState<Array<{ id: string; amount: number; url: string }> | null>(null);
+  const [highValuePersona, setHighValuePersona] = useState<string | null>(null);
+  const [highValueCaseId, setHighValueCaseId] = useState<string | null>(null);
+  const [highValueAccessToken, setHighValueAccessToken] = useState<string | null>(null);
+
   const isBusy = state === 'creating' || state === 'processing' || state === 'verifying';
 
   // Early email validation for Team/Enterprise tiers
@@ -886,9 +913,9 @@ export function NativeBillingCheckoutModal({
         if (cancelled) return;
 
         // SAFE DEBUG: Log payment methods fetch result
-        console.log('[Payment Methods] Backend IPC result:', { ok: result.ok, reason: result.reason, methods: result.ok ? result.methods : 'N/A' });
+        console.log('[Payment Methods] Backend IPC result:', { ok: result.ok, methods: result.ok ? result.methods : 'N/A' });
 
-        let methodsToUse: NativePaymentMethodId[];
+        let methodsToUse: typeof result.methods = [];
         if (!result.ok) {
           // Use sensible defaults if API fails
           methodsToUse = isSubscription ? ['card'] : ['card', 'netbanking', 'wallet'];
@@ -951,8 +978,25 @@ export function NativeBillingCheckoutModal({
         // Get access token for verification
         const supabase = await getSupabaseClient();
         const { data: sessionData } = await supabase.auth.getSession();
-        const accessToken = sessionData.session?.access_token;
+        let accessToken = sessionData.session?.access_token;
         const userEmail = sessionData.session?.user?.email || '';
+
+        // If session is expired or missing, try to refresh it
+        if (!accessToken && sessionData.session?.refresh_token) {
+          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+          if (refreshError || !refreshData.session) {
+            setState('failed');
+            setFailMessage('Your session has expired. Please sign in again and retry the purchase.');
+            return;
+          }
+          accessToken = refreshData.session.access_token;
+        }
+
+        if (!accessToken) {
+          setState('failed');
+          setFailMessage('Your session has expired. Please sign in again and retry the purchase.');
+          return;
+        }
 
         // Validate email domain for Team/Enterprise tiers
         if ((intent.tier === 'team' || intent.tier === 'enterprise') && userEmail) {
@@ -1034,7 +1078,25 @@ export function NativeBillingCheckoutModal({
 
       const supabase = await getSupabaseClient();
       const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
+      let accessToken = sessionData.session?.access_token;
+
+      // If session is expired or missing, try to refresh it
+      if (!accessToken && sessionData.session?.refresh_token) {
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError || !refreshData.session) {
+          setState('failed');
+          setFailMessage('Your session has expired. Please sign in again and retry the purchase.');
+          return;
+        }
+        accessToken = refreshData.session.access_token;
+      }
+
+      if (!accessToken) {
+        setState('failed');
+        setFailMessage('Your session has expired. Please sign in again and retry the purchase.');
+        return;
+      }
+
       const organizationId = (intent as { organizationId?: string }).organizationId;
 
       // Create the appropriate Order based on product type
@@ -1199,6 +1261,125 @@ export function NativeBillingCheckoutModal({
     }
   }
 
+  // ── High-value Team/Enterprise form submission handler ────────────────────────────
+  async function handleHighValueFormSubmit(formData: HighValueOrderData) {
+    setState('creating');
+    try {
+      const supabase = await getSupabaseClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) throw new Error('Session expired. Please sign in again.');
+
+      let totalUsd = 0;
+      let tier = '';
+      let organizationId = '';
+
+      if (isSubscription && intent.kind === 'subscription') {
+        const intentSub = intent as Extract<typeof intent, { kind: 'subscription' }>;
+        const basePriceUsd = intentSub.seatTier === 'premium' ? 100 : 20;
+        totalUsd = basePriceUsd * effectiveSeatCount;
+        tier = intentSub.tier;
+        organizationId = (intentSub as { organizationId?: string }).organizationId || '';
+      } else if (!isSubscription && (intent.kind === 'autonomousWorkCredits' || intent.kind === 'usageCredits')) {
+        totalUsd = selectedAmountUsd ?? 0;
+        tier = 'credit-purchase';
+        organizationId = (intent as { organizationId?: string }).organizationId || '';
+      } else {
+        throw new Error('Invalid intent');
+      }
+
+      const totalInr = Math.round(totalUsd * 80);
+
+      // Step 1: Create billing case with persona assignment
+      const casePayload: Record<string, unknown> = {
+        accessToken,
+        organizationId,
+        tier,
+        customerName: formData.customerName,
+        organizationName: formData.organizationName,
+        billingEmail: formData.billingEmail,
+        gstPercent: formData.hasGst ? formData.gstPercent : undefined,
+        amountUsd: totalUsd,
+        amountInr: totalInr,
+      };
+
+      // Add subscription-specific fields
+      if (isSubscription && intent.kind === 'subscription') {
+        const intentSub = intent as Extract<typeof intent, { kind: 'subscription' }>;
+        casePayload.plan = intentSub.seatTier || null;
+        casePayload.memberCount = effectiveSeatCount;
+      } else {
+        // Credit purchase
+        casePayload.plan = null;
+        casePayload.memberCount = 1;
+        if (intent.kind === 'autonomousWorkCredits') {
+          casePayload.autonomousTicketAmountUsd = totalUsd;
+        } else {
+          casePayload.normalCreditAmountUsd = totalUsd;
+        }
+      }
+
+      const caseResponse = await fetch('/api/billing/create-billing-case', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(casePayload),
+      });
+
+      if (!caseResponse.ok) {
+        const error = await caseResponse.json().catch(() => ({ reason: 'Failed to create billing case' }));
+        throw new Error(error.reason || 'Failed to create billing case');
+      }
+
+      const caseData = await caseResponse.json() as { ok: boolean; caseId: string; personaName: string; amountInr: number };
+      if (!caseData.ok) throw new Error('Failed to create billing case');
+
+      setHighValueCaseId(caseData.caseId);
+      setHighValuePersona(caseData.personaName);
+      setHighValueAccessToken(accessToken);
+
+      // Step 2: Create invoices (persona "creates" them server-side)
+      let invoiceDescription = '';
+      if (isSubscription && intent.kind === 'subscription') {
+        const intentSub = intent as Extract<typeof intent, { kind: 'subscription' }>;
+        invoiceDescription = `${intentSub.tier === 'team' ? 'Paw Team' : 'Paw Enterprise'} - ${effectiveSeatCount} ${effectiveSeatCount === 1 ? 'seat' : 'seats'}`;
+      } else if (intent.kind === 'autonomousWorkCredits') {
+        invoiceDescription = `Autonomous Work Credits - $${totalUsd.toFixed(2)}`;
+      } else {
+        invoiceDescription = `Usage Credits - $${totalUsd.toFixed(2)}`;
+      }
+
+      const invoiceResponse = await fetch('/api/billing/create-high-value-invoice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accessToken,
+          organizationId,
+          billingEmail: formData.billingEmail,
+          organizationName: formData.organizationName,
+          amountInr: totalInr,
+          description: invoiceDescription,
+          gstPercent: formData.hasGst ? formData.gstPercent : undefined,
+          billingCaseId: caseData.caseId,
+        }),
+      });
+
+      if (!invoiceResponse.ok) {
+        const error = await invoiceResponse.json().catch(() => ({ reason: 'Invoice creation failed' }));
+        throw new Error(error.reason || 'Failed to create invoices');
+      }
+
+      const invoiceData = await invoiceResponse.json() as { ok: boolean; invoices: Array<{ id: string; amount: number; url: string }> };
+      if (!invoiceData.ok) throw new Error('Invoice creation failed');
+
+      setHighValueFormData(formData);
+      setHighValueInvoices(invoiceData.invoices);
+      setState('success');
+    } catch (error) {
+      setState('failed');
+      setFailMessage(error instanceof Error ? error.message : 'Failed to create invoices');
+    }
+  }
+
   // ── Render success / onboarding / failure full-screen views ────────────────────────────
   if (state === 'success' && isSubscription) {
     // For subscriptions, enter onboarding flow
@@ -1337,6 +1518,114 @@ export function NativeBillingCheckoutModal({
     );
   }
 
+  // High-value form (Team/Enterprise or credits >$500)
+  if (isHighValue && !highValueFormData) {
+    let tierDisplay = '';
+    let totalUsd = 0;
+    let basePriceUsd = 0;
+
+    if (isSubscription && intent.kind === 'subscription') {
+      const intentSub = intent as Extract<typeof intent, { kind: 'subscription' }>;
+      tierDisplay = intentSub.tier;
+      basePriceUsd = intentSub.seatTier === 'premium' ? 100 : 20;
+      totalUsd = basePriceUsd * effectiveSeatCount;
+    } else if (intent.kind === 'autonomousWorkCredits' || intent.kind === 'usageCredits') {
+      tierDisplay = 'credit-purchase';
+      basePriceUsd = selectedAmountUsd ?? 0;
+      totalUsd = selectedAmountUsd ?? 0;
+    } else {
+      return null;
+    }
+
+    return (
+      <div style={overlayStyle()} role="presentation">
+        <div style={modalStyle()} role="dialog" aria-modal="true" aria-label="Order details">
+          <HighValueOrderForm
+            tier={tierDisplay as any}
+            seatCount={effectiveSeatCount}
+            basePriceUsd={basePriceUsd}
+            totalUsd={totalUsd}
+            totalInr={totalInr}
+            onSubmit={handleHighValueFormSubmit}
+            onCancel={onClose}
+            isSubmitting={state === 'creating'}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Show invoices after high-value submission
+  if (isHighValue && highValueInvoices && highValueFormData) {
+    return (
+      <div style={overlayStyle()} role="presentation">
+        <div style={modalStyle()} role="dialog" aria-modal="true" aria-label="Invoice details">
+          <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {highValuePersona && (
+              <div style={{ padding: '12px', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderRadius: '4px', borderLeft: '3px solid #3b82f6' }}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: '4px' }}>
+                  {highValuePersona}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--pawos-text-secondary)' }}>
+                  PawOS AI Support
+                </div>
+                <div style={{ fontSize: 12, marginTop: '8px', lineHeight: 1.5 }}>
+                  Hi, I'm {highValuePersona}. I've reviewed your request. Invoices are now ready below.
+                </div>
+              </div>
+            )}
+            <h3 style={{ margin: '0 0 8px 0', fontSize: 16, fontWeight: 700 }}>Invoices Created</h3>
+            <div style={{ fontSize: 13, color: 'var(--pawos-text-secondary)' }}>
+              Invoice(s) sent to {highValueFormData.billingEmail}
+            </div>
+            {highValueInvoices.map((invoice, idx) => (
+              <div key={invoice.id} style={{ backgroundColor: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '4px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: 13, fontWeight: 600 }}>
+                  <span>Invoice {idx + 1}</span>
+                  <span>₹{invoice.amount.toLocaleString()}</span>
+                </div>
+                <a
+                  href={invoice.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: '#3b82f6', fontSize: 12, textDecoration: 'underline', wordBreak: 'break-all' }}
+                >
+                  {invoice.url}
+                </a>
+              </div>
+            ))}
+            <div style={{ fontSize: 12, color: 'var(--pawos-text-secondary)', marginTop: '12px', lineHeight: 1.6 }}>
+              A support specialist will connect with you shortly to discuss payment and next steps.
+            </div>
+
+            {highValueCaseId && highValueAccessToken && (
+              <PaymentEvidenceUpload
+                billingCaseId={highValueCaseId}
+                invoiceIds={highValueInvoices.map(inv => inv.id)}
+                accessToken={highValueAccessToken}
+              />
+            )}
+
+            <button
+              onClick={onClose}
+              style={{
+                padding: '10px',
+                borderRadius: '4px',
+                backgroundColor: '#3b82f6',
+                color: 'white',
+                border: 'none',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const billingFrequency = isAdditionalSeat
     ? `One-time seat purchase · $${additionalSeatPriceUsd}/seat`
     : isSubscriptionIntent
@@ -1378,6 +1667,11 @@ export function NativeBillingCheckoutModal({
             {quantity > 1 && (
               <div style={{ marginTop: 3, fontSize: 12.5, color: 'var(--pawos-text-secondary)' }}>
                 {quantity} {quantity === 1 ? 'seat' : 'seats'}
+              </div>
+            )}
+            {isSubscription && intent.kind === 'subscription' && (intent.tier === 'pro' || intent.tier === 'proMax' || intent.tier === 'team' || intent.tier === 'enterprise') && (
+              <div style={{ marginTop: 8, padding: '8px 12px', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderRadius: '6px', textAlign: 'center' }}>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#3b82f6' }}>You get $40</p>
               </div>
             )}
           </div>
