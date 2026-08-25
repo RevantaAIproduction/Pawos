@@ -7,6 +7,7 @@ import { ProjectPlanCard } from './ProjectPlanCard';
 import { isProjectPlanMessage } from './ProjectPlanningUX';
 import { SupportPersonaIndicator, useSupportPersona } from './SupportPersonaIndicator';
 import { isSupportRequest } from '../../shared/support/SupportTrigger';
+import { getSupabaseClient } from '../auth/supabaseClient';
 import { CreditsRequiredNotice, getExhaustionPrimaryActions } from '../ui/billing/CreditsRequiredNotice';
 import type { EntitlementSnapshot, SeatTier, SubscriptionTierId } from '../../shared/billing/BillingTypes';
 import { DEFAULT_EXECUTION_MODE, EXECUTION_MODE_CATALOG, type ConversationExecutionMode } from '../../shared/actions/ExecutionModeTypes';
@@ -159,7 +160,29 @@ export function ConversationPanel({
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [supportPersona, setSupportPersona] = useState<string | null>(null);
   const [showPersonaButton, setShowPersonaButton] = useState(true);
+  const conversationIdRef = useRef(snapshot.messages.length > 0 ? 'conv-' + Date.now() : null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load persisted persona on mount
+  useEffect(() => {
+    const loadPersistedPersona = async () => {
+      const convId = conversationIdRef.current;
+      if (!convId || supportPersona) return;
+      try {
+        const supabase = await getSupabaseClient();
+        const { data } = await supabase
+          .from('support_sessions')
+          .select('assigned_persona')
+          .eq('conversation_id', convId)
+          .maybeSingle();
+        if (data?.assigned_persona) {
+          setSupportPersona(data.assigned_persona);
+          setShowPersonaButton(false);
+        }
+      } catch {}
+    };
+    loadPersistedPersona();
+  }, []);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const modeMenuRef = useRef<HTMLDivElement>(null);
@@ -237,8 +260,25 @@ export function ConversationPanel({
     }
     // Auto-activate persona if user requests support
     if (!supportPersona && isSupportRequest(text)) {
-      setSupportPersona('Support Specialist');
+      const personaName = 'Support Specialist';
+      setSupportPersona(personaName);
       setShowPersonaButton(false);
+      // Persist persona to support_sessions
+      const convId = conversationIdRef.current;
+      if (convId) {
+        getSupabaseClient().then(async (supabase) => {
+          try {
+            const { data: session } = await supabase.auth.getSession();
+            if (session?.user?.id) {
+              await supabase.from('support_sessions').upsert({
+                user_id: session.user.id,
+                conversation_id: convId,
+                assigned_persona: personaName,
+              });
+            }
+          } catch {}
+        });
+      }
     }
     onSendTranscript(text, wasPasted ? { source: 'pasted' } : undefined);
     setDraft('');

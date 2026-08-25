@@ -78,3 +78,32 @@ CREATE POLICY "Admins update cases"
 CREATE INDEX idx_billing_cases_user_id ON billing_cases(user_id);
 CREATE INDEX idx_billing_cases_email ON billing_cases(billing_email);
 CREATE INDEX idx_billing_cases_validation_status ON billing_cases(validation_status);
+
+-- Support session persistence for normal chat support personas
+CREATE TABLE IF NOT EXISTS support_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  conversation_id TEXT NOT NULL,
+  assigned_persona TEXT NOT NULL,
+  session_status TEXT DEFAULT 'active' CHECK (session_status IN ('active', 'completed', 'closed')),
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(user_id, conversation_id)
+);
+
+ALTER TABLE support_sessions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users view own support sessions"
+  ON support_sessions FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users update own support sessions"
+  ON support_sessions FOR UPDATE
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users insert own support sessions"
+  ON support_sessions FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE INDEX idx_support_sessions_user_id ON support_sessions(user_id);
+CREATE INDEX idx_support_sessions_conversation_id ON support_sessions(conversation_id);
