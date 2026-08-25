@@ -513,10 +513,22 @@ app.whenReady().then(async () => {
     startGithubSignIn: (authorizeUrl: string) => {
       if (!envVars.GITHUB_REDIRECT_URI) {
         return Promise.reject(
-          new Error('GitHub sign-in isn’t configured yet — add GITHUB_REDIRECT_URI to your .env.')
+          new Error(‘GitHub sign-in isn’t configured yet — add GITHUB_REDIRECT_URI to your .env.’)
         );
       }
       return waitForGitHubOAuthCallback(envVars.GITHUB_REDIRECT_URI, authorizeUrl);
+    },
+    isMicrosoftSignInConfigured: () => Boolean(envVars.MICROSOFT_CLIENT_ID && envVars.MICROSOFT_CLIENT_SECRET && envVars.MICROSOFT_TENANT_ID),
+    startMicrosoftSignIn: () => {
+      if (!envVars.MICROSOFT_CLIENT_ID || !envVars.MICROSOFT_CLIENT_SECRET || !envVars.MICROSOFT_TENANT_ID) {
+        return Promise.reject(
+          new Error(‘Microsoft sign-in isn’t configured yet — add MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, and MICROSOFT_TENANT_ID to your .env.’)
+        );
+      }
+      return (async () => {
+        const { startMicrosoftOAuthFlow } = await import(‘./auth/MicrosoftOAuthFlow’);
+        return startMicrosoftOAuthFlow(envVars.MICROSOFT_CLIENT_ID, envVars.MICROSOFT_CLIENT_SECRET, envVars.MICROSOFT_TENANT_ID);
+      })();
     },
   });
 

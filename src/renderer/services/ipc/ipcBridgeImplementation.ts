@@ -237,6 +237,12 @@ export const ipc = {
   async authStartGithubSignIn(authorizeUrl: string): Promise<{ code: string }> {
     return getBridge().authStartGithubSignIn(authorizeUrl);
   },
+  async authIsMicrosoftSignInConfigured(): Promise<boolean> {
+    return getBridge().authIsMicrosoftSignInConfigured();
+  },
+  async authStartMicrosoftSignIn(): Promise<{ profile: any; idToken: string; accessToken: string }> {
+    return getBridge().authStartMicrosoftSignIn();
+  },
   async authSendOtp(email: string): Promise<{ expiresInMinutes: number }> {
     return getBridge().authSendOtp(email);
   },

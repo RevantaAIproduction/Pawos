@@ -7,10 +7,14 @@ import type {
 import { EmailAuthProvider } from './providers/EmailAuthProvider';
 import { GoogleAuthProvider } from './providers/GoogleAuthProvider';
 import { GitHubAuthProvider } from './providers/GitHubAuthProvider';
+import { MicrosoftAuthProvider } from './providers/MicrosoftAuthProvider';
 import { ipc } from '../services/ipc/ipcBridgeImplementation';
+import { getSupabaseClient } from './supabaseClient';
+import type { SharedAuthSession } from '../../shared/auth/AuthSessionSync';
 
 const STORAGE_KEY = 'pawos:auth:user';
 const REMEMBER_KEY = 'pawos:auth:rememberMe';
+const SUPABASE_SESSION_KEY = 'pawos:supabase:session';
 
 /**
  * The one place the rest of PawOS touches for authentication (via useAuth)
@@ -33,10 +37,31 @@ export class AuthenticationProvider implements AuthService {
   private emailProvider = new EmailAuthProvider();
   private googleProvider = new GoogleAuthProvider();
   private githubProvider = new GitHubAuthProvider();
+  private microsoftProvider = new MicrosoftAuthProvider();
 
   private setSession(user: AuthUser, rememberMe = true): void {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
     window.localStorage.setItem(REMEMBER_KEY, JSON.stringify(rememberMe));
+  }
+
+  private async saveSupabaseSession(): Promise<void> {
+    try {
+      const supabase = await getSupabaseClient();
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        const session: SharedAuthSession = {
+          user_id: data.session.user.id,
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token || '',
+          email: data.session.user.email || '',
+          provider: data.session.user.user_metadata?.provider || 'unknown',
+          created_at: Date.now(),
+        };
+        window.localStorage.setItem(SUPABASE_SESSION_KEY, JSON.stringify(session));
+      }
+    } catch (err) {
+      console.warn('Failed to save Supabase session:', err);
+    }
   }
 
   private async reconcileSubscriptionFor(user: AuthUser): Promise<void> {
@@ -48,6 +73,7 @@ export class AuthenticationProvider implements AuthService {
     const user = await this.googleProvider.signIn();
     await this.reconcileSubscriptionFor(user);
     this.setSession(user);
+    await this.saveSupabaseSession();
     return user;
   }
 
@@ -55,6 +81,15 @@ export class AuthenticationProvider implements AuthService {
     const user = await this.githubProvider.signIn();
     await this.reconcileSubscriptionFor(user);
     this.setSession(user);
+    await this.saveSupabaseSession();
+    return user;
+  }
+
+  async signInWithMicrosoft(): Promise<AuthUser> {
+    const user = await this.microsoftProvider.signIn();
+    await this.reconcileSubscriptionFor(user);
+    this.setSession(user);
+    await this.saveSupabaseSession();
     return user;
   }
 

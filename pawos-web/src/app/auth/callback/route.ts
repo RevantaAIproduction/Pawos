@@ -44,10 +44,14 @@ export async function GET(request: Request) {
   const next = resolveNextPath(searchParams.get("next"));
   const errorDescription = searchParams.get("error_description") ?? searchParams.get("error");
 
+  console.log('[OAuth Callback]', { code: code ? 'present' : 'missing', origin, next, error: errorDescription });
+
   if (errorDescription) {
+    console.error('[OAuth Callback] Error from provider:', errorDescription);
     return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(errorDescription)}`);
   }
   if (!code) {
+    console.error('[OAuth Callback] Missing authorization code');
     return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent("Missing authorization code.")}`);
   }
 
@@ -55,15 +59,15 @@ export async function GET(request: Request) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
+      console.error('[OAuth Callback] Code exchange failed:', error.message);
       return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(error.message)}`);
     }
 
+    console.log('[OAuth Callback] Session created, redirecting to:', next);
     return NextResponse.redirect(`${origin}${next}`);
   } catch (e) {
-    // A misconfigured deployment (e.g. NEXT_PUBLIC_SUPABASE_URL missing on
-    // this host) must never surface as a raw 502 — redirect to a real,
-    // actionable error page instead of crashing the route handler.
     const message = e instanceof Error ? e.message : "Sign-in is temporarily unavailable.";
+    console.error('[OAuth Callback] Exception:', message);
     return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(message)}`);
   }
 }

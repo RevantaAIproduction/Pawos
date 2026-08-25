@@ -199,6 +199,9 @@ export function contextBridge() {
     authIsGithubSignInConfigured: () => ipcRenderer.invoke("auth:isGithubSignInConfigured") as Promise<boolean>,
     authStartGithubSignIn: (authorizeUrl: string) =>
       ipcRenderer.invoke("auth:startGithubSignIn", authorizeUrl) as Promise<{ code: string }>,
+    authIsMicrosoftSignInConfigured: () => ipcRenderer.invoke("auth:isMicrosoftSignInConfigured") as Promise<boolean>,
+    authStartMicrosoftSignIn: () =>
+      ipcRenderer.invoke("auth:startMicrosoftSignIn") as Promise<{ profile: any; idToken: string; accessToken: string }>,
     authSendOtp: (email: string) => ipcRenderer.invoke("auth:sendOtp", email) as Promise<{ expiresInMinutes: number }>,
     authVerifyOtp: (email: string, code: string) =>
       ipcRenderer.invoke("auth:verifyOtp", email, code) as Promise<{ valid: boolean; reason?: string }>,
