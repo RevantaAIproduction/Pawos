@@ -974,7 +974,7 @@ export function NativeBillingCheckoutModal({
           seatTier: intent.seatTier,
           seatCount: isTeamOrEnterprise ? effectiveSeatCount : intent.seatCount,
           runtimeIds: intent.runtimeIds,
-        });
+        }, accessToken);
         if (!checkout.ok) {
           setState('failed');
           setFailMessage(checkout.reason);

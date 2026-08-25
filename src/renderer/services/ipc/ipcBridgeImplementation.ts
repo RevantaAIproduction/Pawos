@@ -336,8 +336,8 @@ export const ipc = {
   async billingGetNativePaymentMethods(accessToken?: string): Promise<NativePaymentMethodsResult> {
     return getBridge().billingGetNativePaymentMethods(accessToken);
   },
-  async billingCreateNativeSubscriptionCheckout(tier: SubscriptionTierId, options?: CheckoutOptions): Promise<NativeSubscriptionCheckoutResult> {
-    return getBridge().billingCreateNativeSubscriptionCheckout(tier, options);
+  async billingCreateNativeSubscriptionCheckout(tier: SubscriptionTierId, options?: CheckoutOptions, accessToken?: string): Promise<NativeSubscriptionCheckoutResult> {
+    return getBridge().billingCreateNativeSubscriptionCheckout(tier, options, accessToken);
   },
   async billingConfirmNativeSubscriptionPayment(paymentId: string, subscriptionId: string, signature: string, accessToken?: string): Promise<{ ok: true; subscription: SubscriptionState } | { ok: false; reason: string }> {
     return getBridge().billingConfirmNativeSubscriptionPayment(paymentId, subscriptionId, signature, accessToken);

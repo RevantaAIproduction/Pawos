@@ -61,10 +61,6 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
 
   const startCheckout = (tier: SubscriptionTierId, seatTier?: SeatTier, seatCount?: number) => {
     setMessage(null);
-    if (tier === 'enterprise') {
-      setMessage('Enterprise billing is managed via custom invoicing. Please contact sales at sales@revantaai.com to set up your Enterprise organization.');
-      return;
-    }
     setCheckoutIntent({ kind: 'subscription', tier: tier as Exclude<SubscriptionTierId, 'go'>, seatTier, seatCount });
   };
 
@@ -144,7 +140,7 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
                           style={{ marginTop: 8, width: '100%' }}
                           onClick={() => startCheckout(plan.id, seat.seatTier, undefined)}
                         >
-                          Get {seat.label}
+                          {plan.id === 'enterprise' ? 'Configure Enterprise' : `Get ${seat.label}`}
                         </button>
                       )}
                     </div>

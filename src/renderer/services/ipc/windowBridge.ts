@@ -248,8 +248,8 @@ export function contextBridge() {
       ipcApi.invoke('billing:createCheckoutSession', tier, callbackUrl, options),
     billingGetNativePaymentMethods: async (accessToken?: string): Promise<NativePaymentMethodsResult> =>
       ipcApi.invoke('billing:getNativePaymentMethods', accessToken),
-    billingCreateNativeSubscriptionCheckout: async (tier: SubscriptionTierId, options?: CheckoutOptions): Promise<NativeSubscriptionCheckoutResult> =>
-      ipcApi.invoke('billing:createNativeSubscriptionCheckout', tier, options),
+    billingCreateNativeSubscriptionCheckout: async (tier: SubscriptionTierId, options?: CheckoutOptions, accessToken?: string): Promise<NativeSubscriptionCheckoutResult> =>
+      ipcApi.invoke('billing:createNativeSubscriptionCheckout', tier, options, accessToken),
     billingConfirmNativeSubscriptionPayment: async (paymentId: string, subscriptionId: string, signature: string): Promise<{ ok: true; subscription: SubscriptionState } | { ok: false; reason: string }> =>
       ipcApi.invoke('billing:confirmNativeSubscriptionPayment', paymentId, subscriptionId, signature),
     billingStartCheckoutSync: async (): Promise<string> => ipcApi.invoke('billing:startCheckoutSync'),

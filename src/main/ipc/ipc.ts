@@ -494,9 +494,9 @@ export function registerIpc(opts: {
   // Real per-turn consumption history (up to 200 entries, see CreditStore.ts) — the Analytics
   // dashboard's usage breakdown/activity feed/insights are all derived from this, never fabricated.
   ipcMain.handle('billing:getCreditHistory', () => creditStore.getHistory());
-  ipcMain.handle('billing:createCheckoutSession', (_evt, tier: SubscriptionTierId, callbackUrl?: string, options?: CheckoutOptions) => {
+  ipcMain.handle('billing:createCheckoutSession', (_evt, tier: SubscriptionTierId, callbackUrl?: string, options?: CheckoutOptions, accessToken?: string) => {
     const provider = createBillingProvider(pricingConfigStore.get().billingProvider);
-    return provider.createCheckoutSession(tier, callbackUrl, options);
+    return provider.createCheckoutSession(tier, callbackUrl, options, accessToken);
   });
   ipcMain.handle('billing:getNativePaymentMethods', async (_evt, accessToken?: string): Promise<NativePaymentMethodsResult> => {
     try {
@@ -531,7 +531,7 @@ export function registerIpc(opts: {
   });
   ipcMain.handle(
     'billing:createNativeSubscriptionCheckout',
-    async (_evt, tier: SubscriptionTierId, options?: CheckoutOptions): Promise<NativeSubscriptionCheckoutResult> => {
+    async (_evt, tier: SubscriptionTierId, options?: CheckoutOptions, accessToken?: string): Promise<NativeSubscriptionCheckoutResult> => {
       if (!VALID_NATIVE_BILLING_TIERS.includes(tier)) {
         return {
           ok: false,
@@ -539,9 +539,17 @@ export function registerIpc(opts: {
         };
       }
       try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (accessToken) {
+          console.log('[Native Subscription Checkout] accessToken present: true, length:', accessToken.length);
+          headers['Authorization'] = `Bearer ${accessToken}`;
+        } else {
+          console.log('[Native Subscription Checkout] accessToken present: false');
+        }
+
         const response = await fetch(`${PAWOS_BILLING_API_BASE_URL}/api/billing/checkout`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             plan: tier,
             ...(options?.seatTier ? { seatTier: options.seatTier } : {}),
@@ -549,6 +557,7 @@ export function registerIpc(opts: {
             ...(options?.runtimeIds?.length ? { runtimeIds: options.runtimeIds } : {}),
           }),
         });
+        console.log('[Native Subscription Checkout] response status:', response.status);
         const result = (await response.json().catch(() => null)) as
           | { ok?: boolean; reason?: string; keyId?: string; subscriptionId?: string }
           | null;
