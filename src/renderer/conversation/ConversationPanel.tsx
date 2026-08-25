@@ -5,6 +5,7 @@ import { conversationStateLabels } from './ConversationTypes';
 import { TaskCard } from './TaskCard';
 import { ProjectPlanCard } from './ProjectPlanCard';
 import { isProjectPlanMessage } from './ProjectPlanningUX';
+import { SupportPersonaIndicator, useSupportPersona } from './SupportPersonaIndicator';
 import { CreditsRequiredNotice, getExhaustionPrimaryActions } from '../ui/billing/CreditsRequiredNotice';
 import type { EntitlementSnapshot, SeatTier, SubscriptionTierId } from '../../shared/billing/BillingTypes';
 import { DEFAULT_EXECUTION_MODE, EXECUTION_MODE_CATALOG, type ConversationExecutionMode } from '../../shared/actions/ExecutionModeTypes';
@@ -155,6 +156,8 @@ export function ConversationPanel({
   const [attachError, setAttachError] = useState<string | null>(null);
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [supportPersona, setSupportPersona] = useState<string | null>(null);
+  const [showPersonaButton, setShowPersonaButton] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
@@ -360,6 +363,44 @@ export function ConversationPanel({
       <div ref={transcriptRef} className={styles.transcript} role="log" aria-live="polite" aria-relevant="additions text">
         {snapshot.messages.length === 0 && (
           <div className={styles.emptyState}>No conversation yet. Activate listening or type a message.</div>
+        )}
+        {showPersonaButton && !supportPersona && (
+          <div style={{ marginBottom: '16px' }}>
+            <button
+              onClick={() => {
+                setSupportPersona('Support Specialist');
+                setShowPersonaButton(false);
+              }}
+              style={{
+                padding: '8px 12px',
+                fontSize: 12,
+                backgroundColor: '#f0f0f0',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontWeight: 500,
+                color: '#333',
+              }}
+            >
+              Connect with support specialist
+            </button>
+          </div>
+        )}
+        {supportPersona && (
+          <div
+            style={{
+              padding: '12px',
+              backgroundColor: 'rgba(59, 130, 246, 0.08)',
+              border: '1px solid rgba(59, 130, 246, 0.2)',
+              borderRadius: '6px',
+              marginBottom: '16px',
+              fontSize: 12,
+              fontWeight: 500,
+              color: '#3b82f6',
+            }}
+          >
+            ✓ {supportPersona} connected
+          </div>
         )}
         {snapshot.messages.map((message) =>
           message.role === 'system' ? (

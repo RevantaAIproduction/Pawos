@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import { assignPersonaForConversation } from "@/shared/support/SupportPersonas";
+import { assignPersonaForConversation } from "@/lib/support/SupportPersonas";
 
 /**
  * Creates a billing case for high-value Team/Enterprise orders.
