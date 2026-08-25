@@ -851,7 +851,7 @@ export function NativeBillingCheckoutModal({
     };
 
     validateEmail();
-  }, [isSubscription, intent.tier]);
+  }, [isSubscription, isSubscription ? (intent as any).tier : undefined]);
 
   const label = isAdditionalSeat
     ? `Add 1 ${intent.seatTier === 'premium' ? 'Premium' : 'Standard'} Team Seat`
@@ -915,7 +915,7 @@ export function NativeBillingCheckoutModal({
         // SAFE DEBUG: Log payment methods fetch result
         console.log('[Payment Methods] Backend IPC result:', { ok: result.ok, methods: result.ok ? result.methods : 'N/A' });
 
-        let methodsToUse: typeof result.methods = [];
+        let methodsToUse: NativePaymentMethodId[] = [];
         if (!result.ok) {
           // Use sensible defaults if API fails
           methodsToUse = isSubscription ? ['card'] : ['card', 'netbanking', 'wallet'];
@@ -923,7 +923,7 @@ export function NativeBillingCheckoutModal({
           setMethodsMessage(result.reason);
         } else {
           // Apply product-specific filtering
-          methodsToUse = result.methods.filter((id) => {
+          methodsToUse = (result.methods.filter((id) => {
             if (isSubscription) {
               // Subscriptions: only UPI or Card
               return id === 'upi' || id === 'card';
@@ -931,11 +931,11 @@ export function NativeBillingCheckoutModal({
               // Order-based products (Credits, Seat): Card, Netbanking, Wallet only (UPI disabled)
               return id === 'card' || id === 'netbanking' || id === 'wallet';
             }
-          });
+          }) as unknown as NativePaymentMethodId[]);
         }
 
         setAvailableMethods(methodsToUse);
-        setPaymentMethod((cur) => (cur && methodsToUse.includes(cur) ? cur : methodsToUse[0] ?? null));
+        setPaymentMethod((cur) => (cur && methodsToUse.includes(cur) ? cur : (methodsToUse[0] ?? null)));
         setMethodsLoading(false);
       } catch (error) {
         console.error('[Payment Methods] Error fetching payment methods:', error);

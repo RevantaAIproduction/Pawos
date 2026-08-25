@@ -494,9 +494,9 @@ export function registerIpc(opts: {
   // Real per-turn consumption history (up to 200 entries, see CreditStore.ts) — the Analytics
   // dashboard's usage breakdown/activity feed/insights are all derived from this, never fabricated.
   ipcMain.handle('billing:getCreditHistory', () => creditStore.getHistory());
-  ipcMain.handle('billing:createCheckoutSession', (_evt, tier: SubscriptionTierId, callbackUrl?: string, options?: CheckoutOptions, accessToken?: string) => {
+  ipcMain.handle('billing:createCheckoutSession', (_evt, tier: SubscriptionTierId, callbackUrl?: string, options?: CheckoutOptions) => {
     const provider = createBillingProvider(pricingConfigStore.get().billingProvider);
-    return provider.createCheckoutSession(tier, callbackUrl, options, accessToken);
+    return provider.createCheckoutSession(tier, callbackUrl, options);
   });
   ipcMain.handle('billing:getNativePaymentMethods', async (_evt, accessToken?: string): Promise<NativePaymentMethodsResult> => {
     try {

@@ -753,7 +753,9 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
                 <AdminCreditManagementPanel
                   organizationId={org.id}
                   accessToken={accessToken}
-                  members={members}
+                  members={members
+                    .filter((m): m is typeof members[0] & { userId: string; displayName: string } => m.userId !== null && m.displayName !== null)
+                    .map(m => ({ userId: m.userId, email: m.email, displayName: m.displayName }))}
                 />
               )}
               {(tier === 'team' || tier === 'enterprise') && myRole === 'member' && accessToken && (

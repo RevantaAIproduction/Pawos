@@ -269,9 +269,10 @@ export function ConversationPanel({
         getSupabaseClient().then(async (supabase) => {
           try {
             const { data: session } = await supabase.auth.getSession();
-            if (session?.user?.id) {
+            const userId = session?.user?.id;
+            if (userId) {
               await supabase.from('support_sessions').upsert({
-                user_id: session.user.id,
+                user_id: userId,
                 conversation_id: convId,
                 assigned_persona: personaName,
               });
