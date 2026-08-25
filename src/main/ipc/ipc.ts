@@ -539,22 +539,21 @@ export function registerIpc(opts: {
         };
       }
       try {
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         if (accessToken) {
           console.log('[Native Subscription Checkout] accessToken present: true, length:', accessToken.length);
-          headers['Authorization'] = `Bearer ${accessToken}`;
         } else {
           console.log('[Native Subscription Checkout] accessToken present: false');
         }
 
         const response = await fetch(`${PAWOS_BILLING_API_BASE_URL}/api/billing/checkout`, {
           method: 'POST',
-          headers,
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             plan: tier,
             ...(options?.seatTier ? { seatTier: options.seatTier } : {}),
             ...(options?.seatCount ? { seatCount: options.seatCount } : {}),
             ...(options?.runtimeIds?.length ? { runtimeIds: options.runtimeIds } : {}),
+            ...(accessToken ? { accessToken } : {}),
           }),
         });
         console.log('[Native Subscription Checkout] response status:', response.status);
