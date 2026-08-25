@@ -793,6 +793,39 @@ export function NativeBillingCheckoutModal({
 
   const isBusy = state === 'creating' || state === 'processing' || state === 'verifying';
 
+  // Early email validation for Team/Enterprise tiers
+  useEffect(() => {
+    if (!isSubscription || (intent.tier !== 'team' && intent.tier !== 'enterprise')) {
+      return; // Not a Team/Enterprise subscription
+    }
+
+    const validateEmail = async () => {
+      try {
+        const supabase = await getSupabaseClient();
+        const { data: sessionData } = await supabase.auth.getSession();
+        const userEmail = sessionData.session?.user?.email || '';
+
+        if (!userEmail) return;
+
+        const isPersonalEmail = userEmail.endsWith('@gmail.com') ||
+                                 userEmail.endsWith('@yahoo.com') ||
+                                 userEmail.endsWith('@outlook.com') ||
+                                 userEmail.endsWith('@hotmail.com') ||
+                                 userEmail.endsWith('@icloud.com') ||
+                                 userEmail.endsWith('@protonmail.com');
+
+        if (isPersonalEmail) {
+          setState('failed');
+          setFailMessage(`Teams and Enterprise tiers require organization email addresses. Your current email (${userEmail}) is not supported. Please use a work email address instead.`);
+        }
+      } catch (error) {
+        console.error('Email validation error:', error);
+      }
+    };
+
+    validateEmail();
+  }, [isSubscription, intent.tier]);
+
   const label = isAdditionalSeat
     ? `Add 1 ${intent.seatTier === 'premium' ? 'Premium' : 'Standard'} Team Seat`
     : isSubscription
@@ -842,29 +875,48 @@ export function NativeBillingCheckoutModal({
     setMethodsLoading(true);
     setMethodsMessage(null);
 
-    // Get configured payment methods from server
-    void ipc.billingGetNativePaymentMethods().then((result) => {
-      if (cancelled) return;
-      if (!result.ok) {
-        setAvailableMethods([]);
-        setPaymentMethod(null);
-        setMethodsMessage(result.reason);
-      } else {
-        // Apply product-specific filtering
-        const filtered = result.methods.filter((id) => {
-          if (isSubscription) {
-            // Subscriptions: only UPI or Card
-            return id === 'upi' || id === 'card';
-          } else {
-            // Order-based products (Credits, Seat): Card, Netbanking, Wallet only (UPI disabled)
-            return id === 'card' || id === 'netbanking' || id === 'wallet';
-          }
-        });
-        setAvailableMethods(filtered);
-        setPaymentMethod((cur) => (cur && filtered.includes(cur) ? cur : filtered[0] ?? null));
+    const fetchPaymentMethods = async () => {
+      try {
+        const supabase = await getSupabaseClient();
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+
+        // Get configured payment methods from server
+        const result = await ipc.billingGetNativePaymentMethods(accessToken);
+        if (cancelled) return;
+
+        // SAFE DEBUG: Log payment methods fetch result
+        console.log('[Payment Methods] Backend IPC result:', { ok: result.ok, reason: result.reason, methods: result.ok ? result.methods : 'N/A' });
+
+        let methodsToUse: NativePaymentMethodId[];
+        if (!result.ok) {
+          // Use sensible defaults if API fails
+          methodsToUse = isSubscription ? ['card'] : ['card', 'netbanking', 'wallet'];
+          console.log('[Payment Methods] Fallback to defaults:', methodsToUse);
+          setMethodsMessage(result.reason);
+        } else {
+          // Apply product-specific filtering
+          methodsToUse = result.methods.filter((id) => {
+            if (isSubscription) {
+              // Subscriptions: only UPI or Card
+              return id === 'upi' || id === 'card';
+            } else {
+              // Order-based products (Credits, Seat): Card, Netbanking, Wallet only (UPI disabled)
+              return id === 'card' || id === 'netbanking' || id === 'wallet';
+            }
+          });
+        }
+
+        setAvailableMethods(methodsToUse);
+        setPaymentMethod((cur) => (cur && methodsToUse.includes(cur) ? cur : methodsToUse[0] ?? null));
+        setMethodsLoading(false);
+      } catch (error) {
+        console.error('[Payment Methods] Error fetching payment methods:', error);
+        setMethodsLoading(false);
       }
-      setMethodsLoading(false);
-    });
+    };
+
+    void fetchPaymentMethods();
     return () => { cancelled = true; };
   }, [isSubscription]);
 
@@ -895,8 +947,29 @@ export function NativeBillingCheckoutModal({
         return;
       }
 
-      // ── Subscription checkout (Standard Checkout, unchanged) ────────────────────
+      // ── Subscription checkout ────────────────────
       if (isSubscription) {
+        // Get access token for verification
+        const supabase = await getSupabaseClient();
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        const userEmail = sessionData.session?.user?.email || '';
+
+        // Validate email domain for Team/Enterprise tiers
+        if ((intent.tier === 'team' || intent.tier === 'enterprise') && userEmail) {
+          const isPersonalEmail = userEmail.endsWith('@gmail.com') ||
+                                   userEmail.endsWith('@yahoo.com') ||
+                                   userEmail.endsWith('@outlook.com') ||
+                                   userEmail.endsWith('@hotmail.com') ||
+                                   userEmail.endsWith('@icloud.com') ||
+                                   userEmail.endsWith('@protonmail.com');
+          if (isPersonalEmail) {
+            setState('failed');
+            setFailMessage('Teams and Enterprise tiers require organization email addresses. Gmail, Yahoo, Outlook, and other personal email providers are not supported.');
+            return;
+          }
+        }
+
         const checkout = await ipc.billingCreateNativeSubscriptionCheckout(intent.tier, {
           seatTier: intent.seatTier,
           seatCount: isTeamOrEnterprise ? effectiveSeatCount : intent.seatCount,
@@ -929,7 +1002,8 @@ export function NativeBillingCheckoutModal({
             const verified = await ipc.billingConfirmNativeSubscriptionPayment(
               payment.razorpay_payment_id,
               payment.razorpay_subscription_id,
-              payment.razorpay_signature
+              payment.razorpay_signature,
+              accessToken
             );
             if (!verified.ok) {
               setState('failed');
@@ -1061,6 +1135,9 @@ export function NativeBillingCheckoutModal({
       // Listen for ready event to verify available methods (official Custom Checkout flow)
       razorpayInstance.on('ready', (readyResponse: unknown) => {
         const response = readyResponse as { methods?: string[] };
+        // SAFE DEBUG: Log only method names, no secrets/keys
+        console.log('[Razorpay Ready] Available methods from account:', response.methods);
+        console.log('[Razorpay Ready] Selected payment method:', paymentMethod);
         if (response.methods && !response.methods.includes(paymentMethod)) {
           setState('failed');
           setFailMessage(`${paymentMethod} is not available for this payment.`);
@@ -1390,8 +1467,8 @@ export function NativeBillingCheckoutModal({
             </div>
           )}
 
-          {/* Payment method selector — for order-based products, always show; for subscriptions, show once amount is determined */}
-          {(!needsAmountSelection || isSubscription) && !isOneTimeOrder && (
+          {/* Payment method selector — for all products (subscriptions + order-based) */}
+          {!needsAmountSelection && (
             <div>
               <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 4 }}>Payment method</div>
               <div style={{ marginBottom: 10, fontSize: 12.5, color: 'var(--pawos-text-secondary)' }}>

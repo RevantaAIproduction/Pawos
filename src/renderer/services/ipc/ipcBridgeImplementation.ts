@@ -333,14 +333,14 @@ export const ipc = {
   async billingCreateCheckoutSession(tier: SubscriptionTierId, callbackUrl?: string, options?: CheckoutOptions): Promise<BillingCheckoutResult> {
     return getBridge().billingCreateCheckoutSession(tier, callbackUrl, options);
   },
-  async billingGetNativePaymentMethods(): Promise<NativePaymentMethodsResult> {
-    return getBridge().billingGetNativePaymentMethods();
+  async billingGetNativePaymentMethods(accessToken?: string): Promise<NativePaymentMethodsResult> {
+    return getBridge().billingGetNativePaymentMethods(accessToken);
   },
   async billingCreateNativeSubscriptionCheckout(tier: SubscriptionTierId, options?: CheckoutOptions): Promise<NativeSubscriptionCheckoutResult> {
     return getBridge().billingCreateNativeSubscriptionCheckout(tier, options);
   },
-  async billingConfirmNativeSubscriptionPayment(paymentId: string, subscriptionId: string, signature: string): Promise<{ ok: true; subscription: SubscriptionState } | { ok: false; reason: string }> {
-    return getBridge().billingConfirmNativeSubscriptionPayment(paymentId, subscriptionId, signature);
+  async billingConfirmNativeSubscriptionPayment(paymentId: string, subscriptionId: string, signature: string, accessToken?: string): Promise<{ ok: true; subscription: SubscriptionState } | { ok: false; reason: string }> {
+    return getBridge().billingConfirmNativeSubscriptionPayment(paymentId, subscriptionId, signature, accessToken);
   },
   async billingStartCheckoutSync(): Promise<string> {
     return getBridge().billingStartCheckoutSync();

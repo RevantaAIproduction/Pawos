@@ -30,13 +30,14 @@ const VALID_TIERS: SubscriptionTierId[] = ['go', 'pro', 'proMax', 'team', 'enter
 export async function verifySubscriptionWithBackend(
   paymentId: string,
   subscriptionId: string,
-  signature: string
+  signature: string,
+  accessToken?: string
 ): Promise<{ ok: true; tier: SubscriptionTierId; seatTier?: SeatTier; subscriptionId: string; runtimeIds: string[] } | { ok: false }> {
   try {
     const response = await fetch(VERIFY_SUBSCRIPTION_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paymentId, subscriptionId, signature }),
+      body: JSON.stringify({ paymentId, subscriptionId, signature, accessToken }),
     });
     if (!response.ok) return { ok: false };
     const result = (await response.json()) as {

@@ -498,12 +498,29 @@ export function registerIpc(opts: {
     const provider = createBillingProvider(pricingConfigStore.get().billingProvider);
     return provider.createCheckoutSession(tier, callbackUrl, options);
   });
-  ipcMain.handle('billing:getNativePaymentMethods', async (): Promise<NativePaymentMethodsResult> => {
+  ipcMain.handle('billing:getNativePaymentMethods', async (_evt, accessToken?: string): Promise<NativePaymentMethodsResult> => {
     try {
-      const response = await fetch(`${PAWOS_BILLING_API_BASE_URL}/api/billing/payment-methods`);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+      const headers: Record<string, string> = {};
+      if (accessToken) {
+        console.log('[Payment Methods IPC] accessToken present: true, length:', accessToken.length);
+        headers['Authorization'] = `Bearer ${accessToken}`;
+      } else {
+        console.log('[Payment Methods IPC] accessToken present: false');
+      }
+
+      const response = await fetch(`${PAWOS_BILLING_API_BASE_URL}/api/billing/payment-methods`, {
+        signal: controller.signal,
+        headers,
+      });
+      clearTimeout(timeout);
+
       const result = (await response.json().catch(() => null)) as
         | { ok?: boolean; reason?: string; methods?: NativePaymentMethodId[] }
         | null;
+      console.log('[Payment Methods IPC] response status:', response.status);
       if (!response.ok || !result?.ok || !Array.isArray(result.methods) || result.methods.length === 0) {
         return { ok: false, reason: cleanReason(result, `Could not load payment methods: ${response.statusText}`) };
       }
@@ -557,10 +574,11 @@ export function registerIpc(opts: {
       _evt,
       paymentId: string,
       subscriptionId: string,
-      signature: string
+      signature: string,
+      accessToken?: string
     ): Promise<{ ok: true; subscription: ReturnType<typeof subscriptionStore.getEffective> } | { ok: false; reason: string }> => {
       if (!paymentId || !subscriptionId || !signature) return { ok: false, reason: 'Missing Razorpay payment verification fields.' };
-      const verified = await verifySubscriptionWithBackend(paymentId, subscriptionId, signature);
+      const verified = await verifySubscriptionWithBackend(paymentId, subscriptionId, signature, accessToken);
       if (!verified.ok) return { ok: false, reason: 'Payment could not be verified.' };
       subscriptionStore.confirmPurchase(verified.tier, {
         runtimeIds: parseVerifiedRuntimeIds(verified.runtimeIds),

@@ -151,7 +151,7 @@ app.commandLine.appendSwitch('enable-unsafe-swiftshader');
  */
 function attachDiagnostics(win: BrowserWindow, label: string) {
   win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
-    if (level >= 2) console.error(`[${label} console]`, message, `(${sourceId}:${line})`);
+    if (level >= 1) console.log(`[${label} console L${level}]`, message, `(${sourceId}:${line})`);
   });
   win.webContents.on('render-process-gone', (_event, details) => {
     console.error(`[${label} render-process-gone]`, details.reason);

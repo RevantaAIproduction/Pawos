@@ -44,6 +44,7 @@ import type {
   CreditBalance,
   CreditConsumptionRecord,
   BillingCheckoutResult,
+  NativePaymentMethodsResult,
   NativeSubscriptionCheckoutResult,
   NativeCreditsCheckoutResult,
   NativeCreditsVerificationResult,
@@ -251,10 +252,12 @@ export function contextBridge() {
 
     billingCreateCheckoutSession: (tier: SubscriptionTierId, callbackUrl?: string, options?: CheckoutOptions) =>
       ipcRenderer.invoke("billing:createCheckoutSession", tier, callbackUrl, options) as Promise<BillingCheckoutResult>,
+    billingGetNativePaymentMethods: (accessToken?: string) =>
+      ipcRenderer.invoke("billing:getNativePaymentMethods", accessToken) as Promise<NativePaymentMethodsResult>,
     billingCreateNativeSubscriptionCheckout: (tier: SubscriptionTierId, options?: CheckoutOptions) =>
       ipcRenderer.invoke("billing:createNativeSubscriptionCheckout", tier, options) as Promise<NativeSubscriptionCheckoutResult>,
-    billingConfirmNativeSubscriptionPayment: (paymentId: string, subscriptionId: string, signature: string) =>
-      ipcRenderer.invoke("billing:confirmNativeSubscriptionPayment", paymentId, subscriptionId, signature) as Promise<
+    billingConfirmNativeSubscriptionPayment: (paymentId: string, subscriptionId: string, signature: string, accessToken?: string) =>
+      ipcRenderer.invoke("billing:confirmNativeSubscriptionPayment", paymentId, subscriptionId, signature, accessToken) as Promise<
         { ok: true; subscription: SubscriptionState } | { ok: false; reason: string }
       >,
     billingStartCheckoutSync: () => ipcRenderer.invoke("billing:startCheckoutSync") as Promise<string>,
