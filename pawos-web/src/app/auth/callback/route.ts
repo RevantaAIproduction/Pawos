@@ -44,30 +44,62 @@ export async function GET(request: Request) {
   const next = resolveNextPath(searchParams.get("next"));
   const errorDescription = searchParams.get("error_description") ?? searchParams.get("error");
 
-  console.log('[OAuth Callback]', { code: code ? 'present' : 'missing', origin, next, error: errorDescription });
+  console.log('[OAuth Callback] Request received', {
+    code: code ? 'present' : 'missing',
+    origin,
+    next,
+    error: errorDescription,
+    url: request.url,
+  });
 
   if (errorDescription) {
-    console.error('[OAuth Callback] Error from provider:', errorDescription);
-    return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(errorDescription)}`);
+    console.error('[OAuth Callback] Provider error:', errorDescription);
+    const errorUrl = `${origin}/login?error=${encodeURIComponent(errorDescription)}`;
+    console.log('[OAuth Callback] Redirecting to:', errorUrl);
+    return NextResponse.redirect(errorUrl);
   }
+
   if (!code) {
     console.error('[OAuth Callback] Missing authorization code');
-    return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent("Missing authorization code.")}`);
+    const errorUrl = `${origin}/login?error=${encodeURIComponent("Missing authorization code.")}`;
+    console.log('[OAuth Callback] Redirecting to:', errorUrl);
+    return NextResponse.redirect(errorUrl);
   }
 
   try {
+    console.log('[OAuth Callback] Creating Supabase client...');
     const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+    console.log('[OAuth Callback] Exchanging code for session...');
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+
     if (error) {
-      console.error('[OAuth Callback] Code exchange failed:', error.message);
-      return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(error.message)}`);
+      console.error('[OAuth Callback] Code exchange failed:', {
+        message: error.message,
+        status: error.status,
+        code: error.code,
+      });
+      const errorUrl = `${origin}/login?error=${encodeURIComponent(`Auth failed: ${error.message}`)}`;
+      console.log('[OAuth Callback] Redirecting to:', errorUrl);
+      return NextResponse.redirect(errorUrl);
     }
 
-    console.log('[OAuth Callback] Session created, redirecting to:', next);
-    return NextResponse.redirect(`${origin}${next}`);
+    console.log('[OAuth Callback] Session created successfully', {
+      userId: data.session?.user?.id,
+      email: data.session?.user?.email,
+    });
+
+    const redirectUrl = `${origin}${next}`;
+    console.log('[OAuth Callback] Redirecting to dashboard:', redirectUrl);
+    return NextResponse.redirect(redirectUrl);
   } catch (e) {
     const message = e instanceof Error ? e.message : "Sign-in is temporarily unavailable.";
-    console.error('[OAuth Callback] Exception:', message);
-    return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(message)}`);
+    console.error('[OAuth Callback] Exception:', {
+      message,
+      stack: e instanceof Error ? e.stack : 'unknown',
+    });
+    const errorUrl = `${origin}/login?error=${encodeURIComponent(message)}`;
+    console.log('[OAuth Callback] Redirecting to:', errorUrl);
+    return NextResponse.redirect(errorUrl);
   }
 }
