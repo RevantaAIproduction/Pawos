@@ -3,7 +3,6 @@ import * as path from 'path';
 import { pathToFileURL } from 'url';
 import { createTray } from './tray/trayManager';
 import { registerIpc } from './ipc/ipc';
-import { startMicrosoftOAuthFlow } from './auth/MicrosoftOAuthFlow';
 import { SettingsStore } from '../shared/settings/SettingsStore';
 import { readEnvFile } from './env/readEnvFile';
 import { PUBLIC_ENV_DEFAULTS } from './env/publicEnvDefaults';
@@ -67,6 +66,7 @@ import { vercelConnectorSDK } from './connectivity/connectors/VercelConnectorSDK
 import { netlifyConnectorSDK } from './connectivity/connectors/NetlifyConnectorSDK';
 import { railwayConnectorSDK } from './connectivity/connectors/RailwayConnectorSDK';
 import { slackConnectorSDK } from './connectivity/connectors/SlackConnectorSDK';
+import { microsoftConnectorSDK } from './connectivity/connectors/MicrosoftConnectorSDK';
 import { startRatingPromptScheduler } from './feedback/RatingPromptScheduler';
 // One constant size, always — the overlay window itself never resizes at
 // runtime. A native window resize inherently reads as "an application
@@ -417,6 +417,7 @@ app.whenReady().then(async () => {
     netlifyConnectorSDK,
     railwayConnectorSDK,
     slackConnectorSDK,
+    microsoftConnectorSDK,
   ] as const;
   for (const sdk of oauthConnectorSDKs) {
     connectorRegistry.register(sdk);

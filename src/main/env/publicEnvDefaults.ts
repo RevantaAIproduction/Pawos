@@ -39,6 +39,7 @@ export const PUBLIC_ENV_DEFAULTS: Record<string, string> = {
   LINEAR_REDIRECT_URL: 'https://pawos.revantaai.com/api/connectors/linear/callback',
   CONNECTOR_JIRA_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectors/jira/callback',
   CONNECTOR_SLACK_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectors/slack/callback',
+  CONNECTOR_MICROSOFT_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectors/microsoft/callback',
   CONNECTOR_VERCEL_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectors/vercel/callback',
   CONNECTOR_NETLIFY_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectors/netlify/callback',
   CONNECTOR_RAILWAY_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectors/railway/callback',

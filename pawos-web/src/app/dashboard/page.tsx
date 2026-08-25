@@ -58,6 +58,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-16">
+
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           {avatar ? (

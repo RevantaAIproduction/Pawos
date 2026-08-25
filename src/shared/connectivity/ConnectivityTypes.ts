@@ -21,6 +21,7 @@ export const CONNECTOR_REQUIRED_FEATURE: Partial<Record<string, FeatureId>> = {
   googleWorkspace: 'connectGoogleWorkspace',
   jira: 'connectJira',
   slack: 'connectSlack',
+  microsoft: 'connectMicrosoft',
   github: 'connectGithub',
   gitlab: 'connectGitlab',
   vercel: 'connectVercel',

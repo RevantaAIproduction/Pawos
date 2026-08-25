@@ -219,6 +219,7 @@ export type FeatureId =
   | 'connectGoogleWorkspace'
   | 'connectJira'
   | 'connectSlack'
+  | 'connectMicrosoft'
   | 'connectGithub'
   | 'connectGitlab'
   | 'connectVercel'

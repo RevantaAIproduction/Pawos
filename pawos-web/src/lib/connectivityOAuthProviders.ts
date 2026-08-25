@@ -44,6 +44,10 @@ export function getConnectivityOAuthProviderConfig(connectorId: string): Connect
       return provider('CONNECTOR_JIRA_CLIENT_ID', 'CONNECTOR_JIRA_CLIENT_SECRET', 'https://auth.atlassian.com/oauth/token');
     case 'slack':
       return provider('SLACK_CLIENT_ID', 'SLACK_CLIENT_SECRET', 'https://slack.com/api/oauth.v2.access');
+    case 'microsoft': {
+      const tenantId = process.env.MICROSOFT_TENANT_ID || 'common';
+      return provider('MICROSOFT_CLIENT_ID', 'MICROSOFT_CLIENT_SECRET', `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`);
+    }
     case 'googleWorkspace':
       return provider('GOOGLE_WORKSPACE_CLIENT_ID', 'GOOGLE_WORKSPACE_CLIENT_SECRET', 'https://oauth2.googleapis.com/token');
     case 'vercel':

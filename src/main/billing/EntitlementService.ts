@@ -62,6 +62,7 @@ const PRO_FEATURES: FeatureId[] = [
   'mobileNotifications',
   'connectGoogleWorkspace',
   'connectSlack',
+  'connectMicrosoft',
   'connectGithub',
   'connectGitlab',
   'connectVercel',
