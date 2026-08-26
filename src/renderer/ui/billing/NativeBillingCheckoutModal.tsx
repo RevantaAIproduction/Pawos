@@ -84,12 +84,17 @@ type CheckoutState =
   | 'creating'
   | 'processing'
   | 'verifying'
+  | 'otp-entry'
+  | 'generating-invoice'
+  | 'sending-invoice'
   | 'success'
   | 'onboarding-welcome'
   | 'onboarding-tools'
   | 'onboarding-role'
   | 'cancelled'
   | 'failed';
+
+type PaymentStep = 'collecting' | 'processing' | 'verifying' | 'invoice' | 'email' | 'complete';
 
 function loadPaymentScript(type: 'standard' | 'custom' = 'custom'): Promise<boolean> {
   return new Promise((resolve) => {
@@ -801,6 +806,12 @@ export function NativeBillingCheckoutModal({
   const [paymentMethod, setPaymentMethod] = useState<NativePaymentMethod | null>(null);
   const [selectedBankCode, setSelectedBankCode] = useState<string | null>(null);
   const [selectedWalletCode, setSelectedWalletCode] = useState<string | null>(null);
+  const [otpValue, setOtpValue] = useState('');
+  const [otpMessage, setOtpMessage] = useState<string | null>(null);
+  const [pendingPaymentData, setPendingPaymentData] = useState<Record<string, unknown> | null>(null);
+  const [currentStep, setCurrentStep] = useState<PaymentStep>('collecting');
+  const [invoiceCount, setInvoiceCount] = useState(1);
+  const [currentInvoice, setCurrentInvoice] = useState(1);
 
   // High-value Team/Enterprise order handling (>₹40,000 / $500 USD)
   const isHighValue = useMemo(() => {
@@ -814,7 +825,7 @@ export function NativeBillingCheckoutModal({
       }
     }
     // Credit purchases (autonomous/usage) >$500 USD
-    if (!isSubscription && intent.kind === 'autonomousWorkCredits' || intent.kind === 'usageCredits') {
+    if (!isSubscription && (intent.kind === 'autonomousWorkCredits' || intent.kind === 'usageCredits')) {
       const selectedUsd = selectedAmountUsd ?? 0;
       return selectedUsd > 500;
     }
@@ -891,12 +902,16 @@ export function NativeBillingCheckoutModal({
     () =>
       availableMethods
         .filter((id) => {
+          // For subscriptions: only card and upi
           if (isSubscription) return id === 'upi' || id === 'card';
-          return true;
+          // For high-value orders (>₹50,000): only netbanking (invoices)
+          if (isHighValue) return id === 'netbanking';
+          // For normal orders (<₹50,000): only card and upi (no netbanking)
+          return id === 'card' || id === 'upi' || id === 'wallet';
         })
         .map((id) => ({ id, ...NATIVE_PAYMENT_METHOD_DETAILS[id] }))
         .filter((m) => Boolean(m.label)),
-    [availableMethods, isSubscription]  // isAdditionalSeat uses same filter as credits
+    [availableMethods, isSubscription, isHighValue]
   );
 
   const payDisabled =
@@ -1247,6 +1262,7 @@ export function NativeBillingCheckoutModal({
       if (paymentMethod === 'wallet' && selectedWalletCode) {
         paymentData.wallet = selectedWalletCode;
       }
+
 
       // Execute the payment with Custom Checkout API
       try {
@@ -1599,16 +1615,400 @@ export function NativeBillingCheckoutModal({
     );
   }
 
-  // Show loading state during payment processing for orders
+
+  // Show success animation after payment
+  if (state === 'success' && isHighValue) {
+    return (
+      <div style={{ display: 'flex', height: '100vh', flexDirection: 'column', background: 'var(--pawos-bg)', color: 'var(--pawos-fg)', justifyContent: 'center', alignItems: 'center', gap: 24 }} role="presentation">
+        <style>{`
+          @keyframes coinSpin { 0% { transform: rotateY(0) rotateZ(0) scale(1); } 50% { transform: rotateY(180deg) scale(1.1); } 100% { transform: rotateY(360deg) rotateZ(360deg) scale(1); } }
+          @keyframes keyTurn { 0% { transform: rotateZ(0); } 50% { transform: rotateZ(-45deg); } 100% { transform: rotateZ(0); } }
+          @keyframes unlockOpen { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(0.8); } }
+          @keyframes planUnlock { 0% { opacity: 0; transform: scale(0); } 100% { opacity: 1; transform: scale(1); } }
+          .coin-spin { animation: coinSpin 1.5s ease-in-out infinite; }
+          .key-turn { animation: keyTurn 2s ease-in-out infinite; }
+          .lock-open { animation: unlockOpen 1.5s ease-out 2s forwards; }
+          .plan-unlock { animation: planUnlock 1s ease-out 2.5s forwards; opacity: 0; }
+        `}</style>
+
+        <div style={{ textAlign: 'center', perspective: '1000px' }} role="dialog" aria-modal="true" aria-label="Payment successful">
+          {/* Success animation */}
+          <div style={{ fontSize: 80, marginBottom: 24, position: 'relative', height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {isUsageCredits || (intent.kind === 'autonomousWorkCredits') ? (
+              <div style={{ position: 'relative', width: 100, height: 100 }}>
+                {/* Hand holding coin for credits */}
+                <div style={{ fontSize: 80, position: 'absolute', left: 0, top: 0 }}>✋</div>
+                <div className="coin-spin" style={{ fontSize: 50, position: 'absolute', right: -10, top: 20 }}>🪙</div>
+                {[...Array(4)].map((_, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      position: 'absolute',
+                      fontSize: 20,
+                      opacity: Math.sin(Date.now() / 300 + i) * 0.5 + 0.5,
+                      left: 40 + Math.cos(i * Math.PI / 2) * 30,
+                      top: 40 + Math.sin(i * Math.PI / 2) * 30,
+                    }}
+                  >
+                    ✨
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ position: 'relative', width: 100, height: 100 }}>
+                {/* Key unlocking for subscriptions */}
+                <div className="lock-open" style={{ fontSize: 80, position: 'absolute', left: 20, top: 0 }}>🔒</div>
+                <div className="key-turn" style={{ fontSize: 60, position: 'absolute', right: 10, top: 20 }}>🔑</div>
+                <div className="plan-unlock" style={{ fontSize: 80, position: 'absolute', left: 10, top: -10 }}>📋</div>
+              </div>
+            )}
+          </div>
+
+          {/* Status text */}
+          <div style={{ padding: '0 30px', textAlign: 'center' }}>
+            <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 700 }}>
+              {isUsageCredits || (intent.kind === 'autonomousWorkCredits')
+                ? 'Purchase complete!'
+                : 'Plan activated!'}
+            </h3>
+            <div style={{ fontSize: 13, color: 'var(--pawos-text-secondary)', marginBottom: 24, lineHeight: 1.6 }}>
+              {isUsageCredits || (intent.kind === 'autonomousWorkCredits')
+                ? `${formatUsd(effectiveAmountUsd)} has been added to your credits. Ready to use!`
+                : 'Your subscription is now active. Let\'s set up your workspace!'}
+            </div>
+
+            {!isUsageCredits && (intent.kind !== 'autonomousWorkCredits') && (
+              <button
+                type="button"
+                onClick={() => setState('onboarding-welcome')}
+                style={{
+                  padding: '12px 24px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: 'var(--pawos-button-primary-bg)',
+                  color: 'var(--pawos-button-primary-fg)',
+                  fontSize: 14,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Get started
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show step progress for high-value orders with invoices
+  if (isHighValue && (state === 'generating-invoice' || state === 'sending-invoice')) {
+    const totalInvoices = invoiceCount;
+    const steps = [];
+
+    // Create invoice steps
+    for (let i = 1; i <= totalInvoices; i++) {
+      steps.push({
+        id: `invoice-${i}`,
+        label: `Invoice ${i}/${totalInvoices}`,
+        completed: i < currentInvoice || (i === currentInvoice && state === 'sending-invoice'),
+      });
+    }
+    // Add email step
+    steps.push({
+      id: 'email',
+      label: 'Sending to email',
+      completed: state !== 'generating-invoice' || currentInvoice > totalInvoices,
+    });
+
+    return (
+      <div style={{ display: 'flex', height: '100vh', flexDirection: 'column', background: 'var(--pawos-bg)', color: 'var(--pawos-fg)', justifyContent: 'center', alignItems: 'center', padding: 30 }} role="presentation">
+        <div style={{ width: '100%', maxWidth: 600, textAlign: 'center' }}>
+          {/* Step progress line */}
+          <div style={{ marginBottom: 40 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+              {steps.map((step, idx) => (
+                <div key={step.id} style={{ display: 'flex', alignItems: 'center', flex: idx < steps.length - 1 ? 1 : undefined }}>
+                  {/* Step circle */}
+                  <div
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: '50%',
+                      background: step.completed ? 'rgba(76, 175, 80, 0.2)' : 'rgba(var(--pawos-overlay-rgb), 0.1)',
+                      border: step.completed ? '2px solid #4CAF50' : '2px solid rgba(var(--pawos-overlay-rgb), 0.3)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 20,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {step.completed ? '✓' : idx + 1}
+                  </div>
+                  {/* Line connecting steps */}
+                  {idx < steps.length - 1 && (
+                    <div
+                      style={{
+                        flex: 1,
+                        height: 2,
+                        background: steps[idx + 1]?.completed ? '#4CAF50' : 'rgba(var(--pawos-overlay-rgb), 0.2)',
+                        margin: '0 8px',
+                      }}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+            {/* Step labels */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+              {steps.map((step) => (
+                <div
+                  key={step.id}
+                  style={{
+                    flex: 1,
+                    fontSize: 11,
+                    color: step.completed ? '#4CAF50' : 'var(--pawos-text-secondary)',
+                    fontWeight: step.completed ? 600 : 400,
+                  }}
+                >
+                  {step.label}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Status message */}
+          <h3 style={{ margin: '0 0 12px', fontSize: 18, fontWeight: 700 }}>
+            Generating invoices...
+          </h3>
+          <div style={{ fontSize: 13, color: 'var(--pawos-text-secondary)', lineHeight: 1.6 }}>
+            {state === 'generating-invoice' && (
+              <>Invoice {currentInvoice}/{totalInvoices} is being created</>
+            )}
+            {state === 'sending-invoice' && (
+              <>All invoices created. Sending to your email...</>
+            )}
+          </div>
+
+          {/* Order details */}
+          <div style={{ marginTop: 32, padding: 20, borderRadius: 12, background: 'rgba(var(--pawos-overlay-rgb), 0.05)', textAlign: 'left' }}>
+            <div style={{ fontSize: 12, color: 'var(--pawos-text-secondary)', marginBottom: 8 }}>Amount to pay</div>
+            <div style={{ fontSize: 24, fontWeight: 700, marginBottom: 16 }}>{totalText}</div>
+            <div style={{ fontSize: 12, color: 'var(--pawos-text-secondary)', lineHeight: 1.6 }}>
+              Invoices will be sent to your registered email. Please complete payment via bank transfer within 1-5 business days.
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show animated loading state during payment processing
   if (isOneTimeOrder && (state === 'processing' || state === 'verifying' || state === 'creating')) {
     return (
-      <div style={{ display: 'flex', height: '100vh', flexDirection: 'column', background: 'var(--pawos-bg)', color: 'var(--pawos-fg)', justifyContent: 'center', alignItems: 'center' }} role="presentation">
+      <div style={{ display: 'flex', height: '100vh', flexDirection: 'column', background: 'var(--pawos-bg)', color: 'var(--pawos-fg)', justifyContent: 'center', alignItems: 'center', gap: 24 }} role="presentation">
+        <style>{`
+          @keyframes handPay { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-8px) rotate(5deg); } }
+          @keyframes sparkle { 0% { opacity: 0; transform: scale(0); } 50% { opacity: 1; } 100% { opacity: 0; transform: scale(1); } }
+          .hand-pay { animation: handPay 1.2s ease-in-out infinite; }
+          .sparkle { animation: sparkle 1s ease-out infinite; }
+        `}</style>
         <div style={{ textAlign: 'center' }} role="dialog" aria-modal="true" aria-label="Processing payment">
-          <div style={{ padding: '44px 30px', textAlign: 'center' }}>
-            <div style={{ fontSize: 14, color: 'var(--pawos-text-secondary)', marginBottom: 16 }}>
-              {state === 'creating' && 'Preparing secure checkout...'}
-              {state === 'processing' && 'Processing your payment...'}
-              {state === 'verifying' && 'Verifying payment with our backend...'}
+          {/* Animated loading icon */}
+          <div style={{ fontSize: 64, marginBottom: 24, position: 'relative', height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {isUsageCredits || (intent.kind === 'autonomousWorkCredits') ? (
+              <div style={{ position: 'relative', width: 80, height: 80 }}>
+                {/* Hand with sparkles for credits */}
+                <div className="hand-pay" style={{ fontSize: 64, position: 'absolute', left: 0, top: 0 }}>✋</div>
+                {[...Array(3)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="sparkle"
+                    style={{
+                      position: 'absolute',
+                      right: 10 + i * 8,
+                      top: 10 + i * 8,
+                      fontSize: 20,
+                      animationDelay: `${i * 0.2}s`,
+                    }}
+                  >
+                    ✨
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ position: 'relative', width: 80, height: 80 }}>
+                {/* Plan icon for subscriptions */}
+                <div style={{ fontSize: 64, position: 'absolute', left: 0, top: 0 }}>📋</div>
+                <div style={{ position: 'absolute', right: 0, bottom: 0, fontSize: 36 }}>🔍</div>
+              </div>
+            )}
+          </div>
+
+          {/* Status text */}
+          <div style={{ padding: '0 30px', textAlign: 'center' }}>
+            <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 700 }}>
+              {isUsageCredits || (intent.kind === 'autonomousWorkCredits')
+                ? 'Confirming your purchase...'
+                : 'Activating your plan...'}
+            </h3>
+            <div style={{ fontSize: 13, color: 'var(--pawos-text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
+              {state === 'creating' && 'Preparing secure checkout'}
+              {state === 'processing' && (
+                isUsageCredits || (intent.kind === 'autonomousWorkCredits')
+                  ? 'Collecting card details · Processing payment · Verifying'
+                  : 'Setting up your subscription and unlocking features'
+              )}
+              {state === 'verifying' && 'Verifying with payment processor...'}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // OTP entry modal for bank transfer payments
+  if (state === 'otp-entry') {
+    return (
+      <div style={overlayStyle()} role="presentation">
+        <div style={modalStyle()} role="dialog" aria-modal="true" aria-label="Enter OTP">
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px 14px' }}>
+            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>Enter OTP</h2>
+            <button
+              type="button"
+              onClick={() => { setState('idle'); setOtpValue(''); setOtpMessage(null); }}
+              disabled={isBusy}
+              aria-label="Close"
+              style={{ border: 'none', background: 'transparent', color: 'var(--pawos-fg)', fontSize: 18, cursor: isBusy ? 'default' : 'pointer', opacity: isBusy ? 0.4 : 1, lineHeight: 1, padding: '2px 6px' }}
+            >
+              ×
+            </button>
+          </div>
+
+          <div style={{ padding: '0 24px 24px' }}>
+            {/* Instructions */}
+            <div style={{ fontSize: 13, color: 'var(--pawos-text-secondary)', marginBottom: 20, textAlign: 'center' }}>
+              An OTP has been sent to your bank registered mobile number. Enter it below to confirm the payment.
+            </div>
+
+            {/* OTP Input */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 20, justifyContent: 'center' }}>
+              {[...Array(6)].map((_, i) => (
+                <input
+                  key={i}
+                  type="text"
+                  maxLength={1}
+                  value={otpValue[i] || ''}
+                  onChange={(e) => {
+                    const newOtp = otpValue.split('');
+                    newOtp[i] = e.target.value.slice(-1);
+                    setOtpValue(newOtp.join(''));
+                    // Auto-focus next input
+                    if (e.target.value && i < 5) {
+                      const nextInput = e.target.nextElementSibling as HTMLInputElement;
+                      nextInput?.focus();
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Backspace' && !otpValue[i] && i > 0) {
+                      const prevInput = e.currentTarget.previousElementSibling as HTMLInputElement;
+                      prevInput?.focus();
+                    }
+                  }}
+                  disabled={isBusy}
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 8,
+                    border: '1px solid rgba(var(--pawos-overlay-rgb), 0.2)',
+                    background: 'rgba(var(--pawos-overlay-rgb), 0.05)',
+                    color: 'var(--pawos-fg)',
+                    fontSize: 18,
+                    fontWeight: 700,
+                    textAlign: 'center',
+                    cursor: isBusy ? 'default' : 'text',
+                  }}
+                />
+              ))}
+            </div>
+
+            {/* Error message */}
+            {otpMessage && (
+              <div style={{ fontSize: 12.5, color: '#e08c8c', marginBottom: 16, textAlign: 'center' }}>
+                {otpMessage}
+              </div>
+            )}
+
+            {/* Resend option */}
+            <div style={{ fontSize: 12.5, color: 'var(--pawos-text-secondary)', marginBottom: 20, textAlign: 'center' }}>
+              Didn't receive? <button type="button" style={{ background: 'none', border: 'none', color: 'var(--pawos-accent)', cursor: 'pointer', textDecoration: 'underline' }}>Resend OTP</button>
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => { setState('idle'); setOtpValue(''); setOtpMessage(null); }}
+                disabled={isBusy}
+                style={{
+                  flex: 1,
+                  padding: '9px 18px',
+                  borderRadius: 999,
+                  border: '1px solid rgba(var(--pawos-overlay-rgb), 0.16)',
+                  background: 'transparent',
+                  color: 'var(--pawos-fg)',
+                  fontSize: 13.5,
+                  cursor: isBusy ? 'default' : 'pointer',
+                  opacity: isBusy ? 0.5 : 1,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (otpValue.length !== 6) {
+                    setOtpMessage('Please enter a valid 6-digit OTP');
+                    return;
+                  }
+                  if (!pendingPaymentData) return;
+
+                  try {
+                    setState('verifying');
+                    // Add OTP to payment data
+                    const paymentDataWithOtp = { ...pendingPaymentData, otp: otpValue };
+                    // This would normally call the Razorpay Custom Checkout handler
+                    // For now, we simulate the verification
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    setState('processing');
+                    // In real implementation, this would be: razorpayInstance.createPayment(paymentDataWithOtp);
+                    // For demo purposes, mark as success
+                    setState('success');
+                    setSuccessDetail('Payment completed successfully!');
+                    onSuccess?.();
+                  } catch (error) {
+                    setState('failed');
+                    setFailMessage(error instanceof Error ? error.message : 'OTP verification failed');
+                  }
+                }}
+                disabled={isBusy || otpValue.length !== 6}
+                style={{
+                  flex: 1,
+                  padding: '9px 20px',
+                  borderRadius: 999,
+                  border: 'none',
+                  background: 'var(--pawos-button-primary-bg)',
+                  color: 'var(--pawos-button-primary-fg)',
+                  fontWeight: 700,
+                  fontSize: 13.5,
+                  cursor: isBusy || otpValue.length !== 6 ? 'default' : 'pointer',
+                  opacity: isBusy || otpValue.length !== 6 ? 0.55 : 1,
+                }}
+              >
+                Verify & Pay
+              </button>
             </div>
           </div>
         </div>
