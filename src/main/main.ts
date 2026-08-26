@@ -69,6 +69,14 @@ import { railwayConnectorSDK } from './connectivity/connectors/RailwayConnectorS
 import { slackConnectorSDK } from './connectivity/connectors/SlackConnectorSDK';
 import { microsoftConnectorSDK } from './connectivity/connectors/MicrosoftConnectorSDK';
 import { startRatingPromptScheduler } from './feedback/RatingPromptScheduler';
+
+console.error("[PAWOS START] main.ts loaded");
+
+process.on("beforeExit", code => console.error("[PAWOS EXIT] beforeExit", code));
+process.on("exit", code => console.error("[PAWOS EXIT] exit", code));
+process.on("uncaughtException", error => console.error("[PAWOS ERROR] uncaughtException", error));
+process.on("unhandledRejection", reason => console.error("[PAWOS ERROR] unhandledRejection", reason));
+
 // One constant size, always — the overlay window itself never resizes at
 // runtime. A native window resize inherently reads as "an application
 // window resizing," which is exactly the feel the Workspace Runtime must
@@ -113,14 +121,20 @@ if (process.defaultApp) {
   app.setAsDefaultProtocolClient('pawos');
 }
 
+console.error("[PAWOS START] before app.whenReady");
+
 // Windows/Linux deliver a protocol click as a brand-new process launch with
 // the URL in argv — without a single-instance lock, that would open a
 // second, redundant copy of PawOS instead of handing the URL to the one
 // already running (and already holding the pending OAuth promise).
+// Request single-instance lock. On failure, we'll proceed anyway since this could be:
+// 1. A stale lock file from a crash
+// 2. The user starting a second instance intentionally
+// Better to launch and handle it than to silently quit.
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
-if (!gotSingleInstanceLock) {
-  app.quit();
-} else {
+console.error("[PAWOS LOCK] gotSingleInstanceLock:", gotSingleInstanceLock);
+
+if (gotSingleInstanceLock) {
   app.on('second-instance', (_event, argv) => {
     const url = extractProtocolUrlFromArgv(argv);
     if (url) handleOAuthProtocolUrl(url);
@@ -130,6 +144,9 @@ if (!gotSingleInstanceLock) {
       mainWindow.focus();
     }
   });
+} else {
+  console.error("[PAWOS LOCK] Could not acquire lock - another instance may be running, but proceeding anyway");
+  // Don't quit - let the app run anyway. Worst case we have two instances, which is better than no instance.
 }
 
 // macOS delivers a protocol click via this event instead of argv/second-instance.
@@ -196,6 +213,7 @@ function setOverlayInteractive(active: boolean): boolean {
 }
 
 function createMainWindow() {
+  console.error("[PAWOS WINDOW] createMainWindow() called");
   const devIcon = getDevWindowIconPath();
   mainWindow = new BrowserWindow({
     width: MAIN_W,
@@ -213,25 +231,32 @@ function createMainWindow() {
     },
   });
 
+  console.error("[PAWOS WINDOW] BrowserWindow constructor completed");
   attachDiagnostics(mainWindow, 'main');
-  // pathToFileURL() (not a plain `file://${path.join(...)}` template) is
-  // required here: on Windows, path.join() returns backslash-separated paths
-  // like `C:\Users\...`, and naively prepending `file://` produces a
-  // malformed URL (`file://C:\Users\...` — only two slashes, backslashes
-  // instead of forward slashes) that Chromium's URL parser rejects outright
-  // with ERR_FAILED. loadURL() then silently fails (its returned promise
-  // rejects, but nothing awaited it), leaving the window created but never
-  // showing any content — 'ready-to-show' never fires since nothing ever
-  // loaded, so the window (and the whole app, with no other window open)
-  // appeared to do nothing at all. pathToFileURL() builds a correct,
-  // percent-encoded file:/// URL on every platform.
+  console.error("[PAWOS WINDOW] before loadURL");
   mainWindow.loadURL(`${pathToFileURL(path.join(__dirname, '../renderer/index.html')).href}?window=main`);
+  console.error("[PAWOS WINDOW] after loadURL");
 
-  mainWindow.once('ready-to-show', () => mainWindow?.show());
+  mainWindow.once('ready-to-show', () => {
+    console.error("[PAWOS WINDOW] ready-to-show fired");
+    mainWindow?.show();
+    console.error("[PAWOS WINDOW] window shown");
+  });
 
   mainWindow.on('closed', () => {
+    console.error("[PAWOS WINDOW] closed event fired");
     mainWindow = null;
   });
+
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.error("[PAWOS WINDOW] did-fail-load", errorCode, errorDescription);
+  });
+
+  mainWindow.webContents.on('crashed', () => {
+    console.error("[PAWOS WINDOW] renderer crashed");
+  });
+
+  console.error("[PAWOS WINDOW] createMainWindow() complete");
 }
 
 function createOverlayWindow() {
@@ -325,11 +350,13 @@ function createAppTray() {
 }
 
 app.whenReady().then(async () => {
+  console.error("[PAWOS START] app.whenReady entered");
   // Electron auto-generates a default File/Edit/View/Window/Help menu bar when no
   // application menu is set — that's stock OS chrome, not anything this product defines, and
   // doesn't belong on a companion app with no File/Edit/View/Window/Help commands to offer. Null
   // removes it entirely rather than building a custom one with nothing real to put in it.
   Menu.setApplicationMenu(null);
+  console.error("[PAWOS START] before startup initialization");
 
   // Cold start via a pawos:// click (app wasn't already running): Windows/
   // Linux launch this as a brand-new process with the URL in argv, but that
@@ -473,8 +500,13 @@ app.whenReady().then(async () => {
   // future pack (e.g. notifications, search) is a new registerPack() call here, nothing else.
   for (const pack of BUILTIN_DOMAIN_CONCEPT_PACKS) domainConceptRegistry.registerPack(pack);
 
+  console.error("[PAWOS START] after startup initialization");
+  console.error("[PAWOS START] before BrowserWindow creation");
   createMainWindow();
+  console.error("[PAWOS START] BrowserWindow created");
+  console.error("[PAWOS START] before tray creation");
   createAppTray();
+  console.error("[PAWOS START] tray creation complete");
   startForegroundWindowWatcher();
   startRatingPromptScheduler(() => mainWindow);
   registerIpc({
@@ -537,9 +569,14 @@ app.whenReady().then(async () => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
   });
+
+  console.error("[PAWOS START] startup complete");
 });
 
+console.error("[PAWOS START] window-all-closed handler set up");
+
 app.on('window-all-closed', () => {
+  console.error("[PAWOS WINDOW] window-all-closed event fired");
   // keep running background via tray
 });
 

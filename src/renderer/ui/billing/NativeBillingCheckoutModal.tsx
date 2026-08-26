@@ -1459,6 +1459,98 @@ export function NativeBillingCheckoutModal({
   const isSubscriptionIntent = intent.kind === 'subscription';
   const isOneTimeOrder = !isSubscriptionIntent; // Usage Credits, Ticket Balance, Additional Seat
 
+  // For subscriptions, render FULL PAGE (not modal)
+  if (isSubscriptionIntent && !['success', 'onboarding-welcome', 'onboarding-tools', 'onboarding-role', 'failed'].includes(state)) {
+    return (
+      <div style={{ display: 'flex', height: '100vh', background: 'var(--pawos-bg)', color: 'var(--pawos-fg)', flexDirection: 'column' }} role="presentation">
+        {/* Header */}
+        <div style={{ height: 60, borderBottom: '1px solid rgba(var(--pawos-overlay-rgb), 0.1)', display: 'flex', alignItems: 'center', paddingLeft: 24, paddingRight: 24, flexShrink: 0 }}>
+          <button type="button" onClick={onClose} disabled={isBusy} style={{ border: 'none', background: 'transparent', color: 'var(--pawos-fg)', fontSize: 20, cursor: isBusy ? 'default' : 'pointer', padding: 0, marginRight: 12 }}>←</button>
+          <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{label.replace('PawOS ', '')}</h1>
+        </div>
+
+        {/* Two-column layout */}
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }} role="dialog" aria-modal="true" aria-label="PawOS checkout">
+          {/* Left column */}
+          <div style={{ flex: 1, overflow: 'auto', padding: '40px 60px', borderRight: '1px solid rgba(var(--pawos-overlay-rgb), 0.1)' }}>
+            <div style={{ maxWidth: 400 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 20 }}>{label}</div>
+              <div style={{ fontSize: 14, color: 'var(--pawos-text-secondary)', marginBottom: 24 }}>{billingFrequency}</div>
+
+              {/* Pro Max variant selector */}
+              {isSubscription && (intent as any).tier === 'proMax' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
+                  <label style={{ fontSize: 13, fontWeight: 600 }}>Paw Compute multiplier</label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {(['5x', '20x'] as const).map((variant) => (
+                      <button
+                        key={variant}
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => setProMaxVariant(variant)}
+                        style={{
+                          flex: 1,
+                          padding: '12px 14px',
+                          borderRadius: 10,
+                          border: proMaxVariant === variant ? '1.5px solid rgba(var(--pawos-accent-rgb), 0.6)' : '1px solid rgba(var(--pawos-overlay-rgb), 0.13)',
+                          background: proMaxVariant === variant ? 'rgba(var(--pawos-accent-rgb), 0.09)' : 'rgba(var(--pawos-overlay-rgb), 0.03)',
+                          color: 'var(--pawos-fg)',
+                          fontSize: 13,
+                          fontWeight: proMaxVariant === variant ? 700 : 500,
+                          cursor: isBusy ? 'default' : 'pointer',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}
+                      >
+                        <span>{variant}</span>
+                        <span style={{ fontSize: 11, color: 'var(--pawos-text-secondary)', fontWeight: 500 }}>{variant === '5x' ? '$100/mo' : '$250/mo'}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right column - Order Summary */}
+          <div style={{ flex: 1, overflow: 'auto', padding: '40px 60px', background: 'rgba(var(--pawos-overlay-rgb), 0.02)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <div>
+              <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16, marginTop: 0 }}>Order summary</h3>
+
+              <div style={{ backgroundColor: 'rgba(var(--pawos-overlay-rgb), 0.05)', borderRadius: 10, padding: 16, border: '1px solid rgba(var(--pawos-overlay-rgb), 0.1)', marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 14, marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid rgba(var(--pawos-overlay-rgb), 0.1)' }}>
+                  <div style={{ color: 'var(--pawos-text-secondary)' }}>{label}</div>
+                  <div style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>${intent.kind === 'subscription' && intent.tier === 'proMax' && proMaxVariant === '5x' ? '100.00/mo' : intent.kind === 'subscription' && intent.tier === 'proMax' && proMaxVariant === '20x' ? '250.00/mo' : '20.00/mo'}</div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 16, fontWeight: 700 }}>
+                  <div>Total due today</div>
+                  <div style={{ fontVariantNumeric: 'tabular-nums' }}>{totalText}</div>
+                </div>
+              </div>
+
+              <div style={{ fontSize: 12, color: 'var(--pawos-text-secondary)', lineHeight: 1.5 }}>ℹ️ Your subscription will auto-renew each month. Cancel anytime from Settings → Billing.</div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 12 }}>Payment method</div>
+              <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+                <button type="button" onClick={() => setPaymentMethod('card')} style={{ flex: 1, padding: '12px 14px', borderRadius: 10, border: paymentMethod === 'card' ? '1.5px solid rgba(var(--pawos-accent-rgb), 0.6)' : '1px solid rgba(var(--pawos-overlay-rgb), 0.13)', background: paymentMethod === 'card' ? 'rgba(var(--pawos-accent-rgb), 0.09)' : 'rgba(var(--pawos-overlay-rgb), 0.03)', color: 'var(--pawos-fg)', fontSize: 13, fontWeight: paymentMethod === 'card' ? 700 : 500, cursor: 'pointer' }} disabled={isBusy}>💳 Card</button>
+                <button type="button" onClick={() => setPaymentMethod('netbanking')} style={{ flex: 1, padding: '12px 14px', borderRadius: 10, border: paymentMethod === 'netbanking' ? '1.5px solid rgba(var(--pawos-accent-rgb), 0.6)' : '1px solid rgba(var(--pawos-overlay-rgb), 0.13)', background: paymentMethod === 'netbanking' ? 'rgba(var(--pawos-accent-rgb), 0.09)' : 'rgba(var(--pawos-overlay-rgb), 0.03)', color: 'var(--pawos-fg)', fontSize: 13, fontWeight: paymentMethod === 'netbanking' ? 700 : 500, cursor: 'pointer' }} disabled={isBusy}>🏦 Net Banking</button>
+              </div>
+
+              <button type="button" onClick={() => void pay()} disabled={payDisabled || needsProMaxVariantSelection} style={{ width: '100%', padding: '12px 16px', borderRadius: 10, border: 'none', background: 'var(--pawos-button-primary-bg)', color: 'var(--pawos-button-primary-fg)', fontWeight: 700, fontSize: 14, cursor: payDisabled || needsProMaxVariantSelection ? 'default' : 'pointer', opacity: payDisabled || needsProMaxVariantSelection ? 0.55 : 1, marginBottom: 8 }}>
+                {isBusy ? 'Processing...' : needsProMaxVariantSelection ? 'Select a variant to continue' : 'Subscribe'}
+              </button>
+              <div style={{ fontSize: 11, color: 'var(--pawos-text-secondary)', textAlign: 'center' }}>By subscribing, you agree to our terms.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // For one-time orders with Custom Checkout, render as full-page (not modal)
   if (isOneTimeOrder && !needsAmountSelection && !['success', 'onboarding-welcome', 'onboarding-tools', 'onboarding-role', 'failed'].includes(state)) {
     return (
