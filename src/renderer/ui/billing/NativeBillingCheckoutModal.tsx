@@ -879,6 +879,14 @@ export function NativeBillingCheckoutModal({
       ? subscriptionCheckoutLabel(intent.tier, intent.seatTier, proMaxVariant ?? undefined)
       : (intent as { title?: string }).title ?? (isUsageCredits ? 'PawOS Usage Credits' : 'PawOS Autonomous Work Credits');
 
+  const billingFrequency = isAdditionalSeat
+    ? `One-time seat purchase · $${additionalSeatPriceUsd}/seat`
+    : isSubscription
+      ? subscriptionFrequencyText(intent)
+      : isUsageCredits
+        ? 'One-time Usage Credits top-up'
+        : 'One-time Autonomous Work Credits top-up';
+
   const quantity = effectiveSeatCount;
 
   const subscriptionInr = isSubscription
@@ -2123,14 +2131,6 @@ export function NativeBillingCheckoutModal({
       </div>
     );
   }
-
-  const billingFrequency = isAdditionalSeat
-    ? `One-time seat purchase · $${additionalSeatPriceUsd}/seat`
-    : isSubscriptionIntent
-      ? subscriptionFrequencyText(intent)
-      : isUsageCredits
-        ? 'One-time Usage Credits top-up'
-        : 'One-time Autonomous Work Credits top-up';
 
   return (
     <div style={overlayStyle()} role="presentation">
