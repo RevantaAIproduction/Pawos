@@ -1,4 +1,4 @@
-import type { SeatTier, SubscriptionTierId } from '../../shared/billing/BillingTypes';
+import type { SeatTier, SubscriptionTierId, ProMaxVariant } from '../../shared/billing/BillingTypes';
 import type { NativePaymentMethodId } from '../../shared/billing/BillingTypes';
 
 export type NativePaymentMethod = NativePaymentMethodId;
@@ -28,6 +28,11 @@ const USD_PRICES: Record<SubscriptionTierId, number> = {
   enterprise: 20,
 };
 
+const PROMAX_VARIANT_USD_PRICES: Record<ProMaxVariant, number> = {
+  '5x': 100,
+  '20x': 250,
+};
+
 const TEAM_SEAT_USD_PRICES: Record<SeatTier, number> = {
   standard: 20,
   premium: 100,
@@ -35,7 +40,7 @@ const TEAM_SEAT_USD_PRICES: Record<SeatTier, number> = {
 
 export const TICKET_BALANCE_USD_INR_RATE = 95.65;
 
-export function subscriptionAmountInr(tier: SubscriptionTierId, seatTier?: SeatTier, seatCount = 1): number | null {
+export function subscriptionAmountInr(tier: SubscriptionTierId, seatTier?: SeatTier, seatCount = 1, proMaxVariant?: ProMaxVariant): number | null {
   const rate = TICKET_BALANCE_USD_INR_RATE;
   if (tier === 'team') {
     const seatPrice = TEAM_SEAT_USD_PRICES[seatTier ?? 'standard'];
@@ -44,14 +49,22 @@ export function subscriptionAmountInr(tier: SubscriptionTierId, seatTier?: SeatT
   if (tier === 'enterprise') {
     return Math.round(USD_PRICES.enterprise * rate) * Math.max(1, seatCount);
   }
+  if (tier === 'proMax' && proMaxVariant) {
+    const usd = PROMAX_VARIANT_USD_PRICES[proMaxVariant];
+    return Math.round(usd * rate);
+  }
   const usd = USD_PRICES[tier];
   if (usd === undefined || usd === 0) return null;
   return Math.round(usd * rate);
 }
 
-export function subscriptionCheckoutLabel(tier: SubscriptionTierId, seatTier?: SeatTier): string {
+export function subscriptionCheckoutLabel(tier: SubscriptionTierId, seatTier?: SeatTier, proMaxVariant?: ProMaxVariant): string {
   if (tier === 'pro') return 'PawOS Pro';
-  if (tier === 'proMax') return 'PawOS Pro Max';
+  if (tier === 'proMax') {
+    if (proMaxVariant === '5x') return 'PawOS Pro Max 5x';
+    if (proMaxVariant === '20x') return 'PawOS Pro Max 20x';
+    return 'PawOS Pro Max';
+  }
   if (tier === 'team') return `PawOS Team ${seatTier === 'premium' ? 'Premium' : 'Standard'}`;
   if (tier === 'enterprise') return 'PawOS Enterprise';
   return 'PawOS Go';

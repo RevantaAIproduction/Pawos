@@ -72,6 +72,7 @@ export async function POST(request: Request) {
     ok: true,
     tier: resolved.tier,
     seatTier: resolved.seatTier,
+    proMaxVariant: resolved.proMaxVariant,
     subscriptionId: subscription.id,
     runtimeIds,
   });

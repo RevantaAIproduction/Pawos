@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getRazorpayCredentials, getRazorpayPlanId, razorpayAuthHeader, type SeatTier, type SubscriptionTierId } from "@/lib/billing/razorpay";
+import { getRazorpayCredentials, getRazorpayPlanId, razorpayAuthHeader, type SeatTier, type SubscriptionTierId, type ProMaxVariant } from "@/lib/billing/razorpay";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
 const VALID_TIERS: SubscriptionTierId[] = ["go", "pro", "proMax", "team", "enterprise"];
@@ -43,6 +43,7 @@ export async function POST(request: Request) {
   const seatTier = body?.seatTier as SeatTier | undefined;
   const seatCount = typeof body?.seatCount === "number" && Number.isInteger(body.seatCount) ? body.seatCount : undefined;
   const runtimeIds = Array.isArray(body?.runtimeIds) ? body.runtimeIds : [];
+  const proMaxVariant = body?.proMaxVariant as ProMaxVariant | undefined;
   const accessToken = typeof body?.accessToken === "string" ? body.accessToken : undefined;
 
   // ---- Authentication ----
@@ -76,6 +77,9 @@ export async function POST(request: Request) {
   if (plan === "go") {
     return NextResponse.json({ ok: false, reason: "Paw Go is free and has no checkout." }, { status: 400 });
   }
+  if (plan === "proMax" && !proMaxVariant) {
+    return NextResponse.json({ ok: false, reason: "Paw Pro Max requires a variant: 5x or 20x." }, { status: 400 });
+  }
   if (plan === "team") {
     if (!seatTier || !VALID_SEAT_TIERS.includes(seatTier)) {
       return NextResponse.json({ ok: false, reason: "Paw Team requires a seat tier: standard or premium." }, { status: 400 });
@@ -100,7 +104,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const planId = getRazorpayPlanId(plan, seatTier);
+  const planId = getRazorpayPlanId(plan, seatTier, proMaxVariant);
   if (!planId) {
     return NextResponse.json(
       {
@@ -108,7 +112,9 @@ export async function POST(request: Request) {
         reason:
           plan === "team"
             ? `No payment plan is configured for Paw Team's ${seatTier} seat. Business Configuration Required.`
-            : `No payment plan is configured for Paw ${plan}. Business Configuration Required.`,
+            : plan === "proMax"
+              ? `No payment plan is configured for Paw Pro Max ${proMaxVariant}. Business Configuration Required.`
+              : `No payment plan is configured for Paw ${plan}. Business Configuration Required.`,
       },
       { status: 503 }
     );
@@ -128,8 +134,8 @@ export async function POST(request: Request) {
       // P0-3 security fix: runtimeIds round-trips through Razorpay's own notes field so
       // /api/billing/verify-subscription can read it back as real, Razorpay-attested data instead of
       // trusting whatever a forged local callback claims. userId is also included so the verification
-      // endpoint can identify the user for one-time benefit grants.
-      notes: { runtimeIds: runtimeIds.length > 0 ? runtimeIds.join(",") : "", userId },
+      // endpoint can identify the user for one-time benefit grants. proMaxVariant is also stored for proper entitlement application.
+      notes: { runtimeIds: runtimeIds.length > 0 ? runtimeIds.join(",") : "", userId, ...(proMaxVariant ? { proMaxVariant } : {}) },
     }),
   });
 

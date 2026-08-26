@@ -168,6 +168,8 @@ export const PLAN_DERIVED_RUNTIME_ENTITLEMENTS: Record<SubscriptionTierId, Runti
   go: [],
   pro: ['coding'],
   proMax: ['coding'],
+  proMax5x: ['coding'],
+  proMax20x: ['coding'],
   team: LEGACY_PLAN_RUNTIME_ENTITLEMENTS,
   enterprise: LEGACY_PLAN_RUNTIME_ENTITLEMENTS,
 };
@@ -189,6 +191,8 @@ const TIER_ENTITLEMENTS: Record<SubscriptionTierId, Omit<TierEntitlements, 'mont
   go: { tier: 'go', models: ['paw-flash'], features: GO_FEATURES },
   pro: { tier: 'pro', models: AI_MODELS, features: PRO_FEATURES },
   proMax: { tier: 'proMax', models: AI_MODELS, features: PRO_MAX_FEATURES },
+  proMax5x: { tier: 'proMax5x', models: AI_MODELS, features: PRO_MAX_FEATURES },
+  proMax20x: { tier: 'proMax20x', models: AI_MODELS, features: PRO_MAX_FEATURES },
   team: { tier: 'team', models: AI_MODELS, features: TEAM_FEATURES },
   enterprise: { tier: 'enterprise', models: AI_MODELS, features: ENTERPRISE_FEATURES },
 };

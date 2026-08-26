@@ -14,6 +14,9 @@ import type { PawModelId } from '../ai/PawModelTypes';
  */
 export type SubscriptionTierId = 'go' | 'pro' | 'proMax' | 'team' | 'enterprise';
 
+/** Paw Compute usage multiplier for Pro Max: 5x ($100/month) or 20x ($250/month). Only meaningful when tier === 'proMax'. */
+export type ProMaxVariant = '5x' | '20x';
+
 /**
  * Only meaningful within a 'team' organization: a member's seat determines
  * their usage limits (see EntitlementService). Enterprise seats are
@@ -54,6 +57,8 @@ export type SubscriptionState = {
   renewsAt?: number;
   /** Only meaningful when tier === 'team' — which seat rate this account was invited/assigned at. */
   seatTier?: SeatTier;
+  /** Only meaningful when tier === 'proMax' — which Paw Compute usage multiplier (5x or 20x). */
+  proMaxVariant?: ProMaxVariant;
   runtimeEntitlements?: RuntimeEntitlementGrant[];
   /**
    * Runtime entitlement productization marker. Missing means this local
@@ -163,7 +168,7 @@ export type NativePaymentMethodsResult =
   | { ok: false; reason: string };
 
 export type NativeSubscriptionCheckoutResult =
-  | { ok: true; keyId: string; subscriptionId: string; tier: SubscriptionTierId; seatTier?: SeatTier; runtimeIds?: RuntimeEntitlementId[] }
+  | { ok: true; keyId: string; subscriptionId: string; tier: SubscriptionTierId; seatTier?: SeatTier; runtimeIds?: RuntimeEntitlementId[]; proMaxVariant?: ProMaxVariant }
   | { ok: false; reason: string };
 
 export type NativeCreditsCheckoutResult =
@@ -185,6 +190,8 @@ export type CheckoutOptions = {
   seatTier?: SeatTier;
   seatCount?: number;
   runtimeIds?: RuntimeEntitlementId[];
+  /** Only meaningful when tier === 'proMax' — which Paw Compute usage multiplier variant. */
+  proMaxVariant?: ProMaxVariant;
 };
 
 /**

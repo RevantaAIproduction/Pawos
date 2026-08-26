@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import type { CheckoutOptions, SeatTier, SubscriptionTierId, NativePaymentMethodId } from '../../../shared/billing/BillingTypes';
+import type { CheckoutOptions, SeatTier, SubscriptionTierId, NativePaymentMethodId, ProMaxVariant } from '../../../shared/billing/BillingTypes';
 import { getSupabaseClient } from '../../auth/supabaseClient';
 import { ipc } from '../../services/ipc/ipcBridgeImplementation';
 import { organizationService } from '../../organization/OrganizationService';
@@ -47,6 +47,8 @@ export type NativeBillingCheckoutIntent =
       seatTier?: SeatTier;
       seatCount?: number;
       runtimeIds?: CheckoutOptions['runtimeIds'];
+      /** Only meaningful when tier === 'proMax' — which Paw Compute usage multiplier variant. */
+      proMaxVariant?: ProMaxVariant;
     }
   | {
       /** Autonomous Work Credits — ticket balance top-up, $30 minimum. Ledger: add_ticket_balance_service. */
@@ -150,7 +152,11 @@ function formatPaymentInr(amount: number): string {
 
 function subscriptionFrequencyText(intent: Extract<NativeBillingCheckoutIntent, { kind: 'subscription' }>): string {
   if (intent.tier === 'pro') return '$20.00 / month';
-  if (intent.tier === 'proMax') return '$100.00 / month';
+  if (intent.tier === 'proMax') {
+    if (intent.proMaxVariant === '5x') return '$100.00 / month';
+    if (intent.proMaxVariant === '20x') return '$250.00 / month';
+    return 'Select variant to continue';
+  }
   if (intent.tier === 'team') return intent.seatTier === 'premium' ? '$100.00 / seat / month' : '$20.00 / seat / month';
   if (intent.tier === 'enterprise') return '$20.00 / seat / month (base)';
   return 'Billed monthly';
@@ -545,8 +551,6 @@ function CustomCheckoutPaymentForm({
         <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6, padding: '12px 0', borderTop: '1px solid rgba(var(--pawos-overlay-rgb), 0.1)', borderBottom: '1px solid rgba(var(--pawos-overlay-rgb), 0.1)' }}>
           {lineItem('Amount', formatUsd(amountPaise / 100 / 95.65))}
           {lineItem('Exchange rate', '1 USD = ₹95.65 INR')}
-          {lineItem('Charged today', totalInr)}
-          {lineItem('Tax', '₹0.00 INR')}
           {lineItem('Total', totalInr, true)}
         </div>
       </div>
@@ -765,6 +769,13 @@ export function NativeBillingCheckoutModal({
   const preSetAmount = isSubscription ? null : (intent as { amountUsd?: number }).amountUsd ?? null;
   const [selectedAmountUsd, setSelectedAmountUsd] = useState<number | null>(preSetAmount);
 
+  // Pro Max variant selector
+  const [proMaxVariant, setProMaxVariant] = useState<ProMaxVariant | null>(
+    intent.kind === 'subscription' && intent.tier === 'proMax'
+      ? (intent.proMaxVariant ?? null)
+      : null
+  );
+
   // Seat count picker — for team/enterprise when plans page passes seatCount: undefined.
   const isTeamOrEnterprise =
     intent.kind === 'subscription' && (intent.tier === 'team' || intent.tier === 'enterprise');
@@ -854,13 +865,13 @@ export function NativeBillingCheckoutModal({
   const label = isAdditionalSeat
     ? `Add 1 ${intent.seatTier === 'premium' ? 'Premium' : 'Standard'} Team Seat`
     : isSubscription
-      ? subscriptionCheckoutLabel(intent.tier, intent.seatTier)
+      ? subscriptionCheckoutLabel(intent.tier, intent.seatTier, proMaxVariant ?? undefined)
       : (intent as { title?: string }).title ?? (isUsageCredits ? 'PawOS Usage Credits' : 'PawOS Autonomous Work Credits');
 
   const quantity = effectiveSeatCount;
 
   const subscriptionInr = isSubscription
-    ? subscriptionAmountInr(intent.tier, intent.seatTier, quantity)
+    ? subscriptionAmountInr(intent.tier, intent.seatTier, quantity, proMaxVariant ?? undefined)
     : null;
 
   const effectiveAmountUsd = isAdditionalSeat ? additionalSeatPriceUsd : (selectedAmountUsd ?? 0);
@@ -872,6 +883,7 @@ export function NativeBillingCheckoutModal({
   const minAmount = isUsageCredits ? USAGE_CREDITS_MIN_USD : AUTONOMOUS_WORK_CREDITS_MIN_USD;
   const maxAmount = isUsageCredits ? USAGE_CREDITS_MAX_USD : AUTONOMOUS_WORK_CREDITS_MAX_USD;
 
+  const needsProMaxVariantSelection = isSubscription && (intent as any).tier === 'proMax' && !proMaxVariant;
   const needsAmountSelection = !isSubscription && !isAdditionalSeat && selectedAmountUsd === null;
   const isLargePurchase = !isSubscription && !isAdditionalSeat && effectiveAmountUsd >= 10_000;
 
@@ -892,6 +904,7 @@ export function NativeBillingCheckoutModal({
     state === 'success' ||
     methodsLoading ||
     !paymentMethod ||
+    needsProMaxVariantSelection ||
     needsAmountSelection ||
     (!isSubscription && effectiveAmountUsd < minAmount);
 
@@ -915,21 +928,13 @@ export function NativeBillingCheckoutModal({
 
         let methodsToUse: NativePaymentMethodId[] = [];
         if (!result.ok) {
-          // Use sensible defaults if API fails
-          methodsToUse = isSubscription ? ['card'] : ['card', 'netbanking', 'wallet'];
+          // Use sensible defaults if API fails - CARDS ONLY
+          methodsToUse = ['card'];
           console.log('[Payment Methods] Fallback to defaults:', methodsToUse);
           setMethodsMessage(result.reason);
         } else {
-          // Apply product-specific filtering
-          methodsToUse = (result.methods.filter((id) => {
-            if (isSubscription) {
-              // Subscriptions: only UPI or Card
-              return id === 'upi' || id === 'card';
-            } else {
-              // Order-based products (Credits, Seat): Card, Netbanking, Wallet only (UPI disabled)
-              return id === 'card' || id === 'netbanking' || id === 'wallet';
-            }
-          }) as unknown as NativePaymentMethodId[]);
+          // Show CARDS ONLY for all products
+          methodsToUse = (result.methods.filter((id) => id === 'card') as unknown as NativePaymentMethodId[]);
         }
 
         setAvailableMethods(methodsToUse);
@@ -1015,6 +1020,7 @@ export function NativeBillingCheckoutModal({
           seatTier: intent.seatTier,
           seatCount: isTeamOrEnterprise ? effectiveSeatCount : intent.seatCount,
           runtimeIds: intent.runtimeIds,
+          proMaxVariant,
         }, accessToken);
         if (!checkout.ok) {
           setState('failed');
@@ -1453,11 +1459,12 @@ export function NativeBillingCheckoutModal({
   const isSubscriptionIntent = intent.kind === 'subscription';
   const isOneTimeOrder = !isSubscriptionIntent; // Usage Credits, Ticket Balance, Additional Seat
 
-  // For one-time orders with Custom Checkout, render after amount selection
+  // For one-time orders with Custom Checkout, render as full-page (not modal)
   if (isOneTimeOrder && !needsAmountSelection && !['success', 'onboarding-welcome', 'onboarding-tools', 'onboarding-role', 'failed'].includes(state)) {
     return (
-      <div style={overlayStyle()} role="presentation">
-        <div style={modalStyle()} role="dialog" aria-modal="true" aria-label="PawOS checkout">
+      <div style={{ display: 'flex', height: '100vh', flexDirection: 'column', background: 'var(--pawos-bg)', color: 'var(--pawos-fg)' }} role="presentation">
+        <div style={{ flex: 1, overflow: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', paddingTop: 40 }} role="dialog" aria-modal="true" aria-label="PawOS checkout">
+          <div style={{ width: '100%', maxWidth: 520 }}>
           {/* Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px 14px' }}>
             <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>
@@ -1494,16 +1501,17 @@ export function NativeBillingCheckoutModal({
             onCancel={onClose}
             onPay={() => void pay()}
           />
+          </div>
         </div>
       </div>
     );
   }
 
-  // Show loading state during payment processing
+  // Show loading state during payment processing for orders
   if (isOneTimeOrder && (state === 'processing' || state === 'verifying' || state === 'creating')) {
     return (
-      <div style={overlayStyle()} role="presentation">
-        <div style={modalStyle()} role="dialog" aria-modal="true" aria-label="Processing payment">
+      <div style={{ display: 'flex', height: '100vh', flexDirection: 'column', background: 'var(--pawos-bg)', color: 'var(--pawos-fg)', justifyContent: 'center', alignItems: 'center' }} role="presentation">
+        <div style={{ textAlign: 'center' }} role="dialog" aria-modal="true" aria-label="Processing payment">
           <div style={{ padding: '44px 30px', textAlign: 'center' }}>
             <div style={{ fontSize: 14, color: 'var(--pawos-text-secondary)', marginBottom: 16 }}>
               {state === 'creating' && 'Preparing secure checkout...'}
@@ -1710,6 +1718,47 @@ export function NativeBillingCheckoutModal({
             </div>
           )}
 
+          {/* Pro Max variant selector */}
+          {isSubscription && (intent as any).tier === 'proMax' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <label style={{ fontSize: 13, fontWeight: 600 }}>Paw Compute multiplier</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {(['5x', '20x'] as const).map((variant) => (
+                  <button
+                    key={variant}
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => setProMaxVariant(variant)}
+                    style={{
+                      flex: 1,
+                      padding: '12px 14px',
+                      borderRadius: 10,
+                      border: proMaxVariant === variant
+                        ? '1.5px solid rgba(var(--pawos-accent-rgb), 0.6)'
+                        : '1px solid rgba(var(--pawos-overlay-rgb), 0.13)',
+                      background: proMaxVariant === variant
+                        ? 'rgba(var(--pawos-accent-rgb), 0.09)'
+                        : 'rgba(var(--pawos-overlay-rgb), 0.03)',
+                      color: 'var(--pawos-fg)',
+                      fontSize: 13,
+                      fontWeight: proMaxVariant === variant ? 700 : 500,
+                      cursor: isBusy ? 'default' : 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    <span>{variant}</span>
+                    <span style={{ fontSize: 11, color: 'var(--pawos-text-secondary)', fontWeight: 500 }}>
+                      {variant === '5x' ? '$100/mo' : '$250/mo'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Amount picker — only for credit kinds without a pre-set amount */}
           {!isSubscription && selectedAmountUsd === null && (
             <div>
@@ -1867,9 +1916,11 @@ export function NativeBillingCheckoutModal({
             >
               {isBusy
                 ? 'Processing...'
-                : needsAmountSelection
-                  ? 'Select an amount to continue'
-                  : `Pay ${totalText}`}
+                : needsProMaxVariantSelection
+                  ? 'Select a variant to continue'
+                  : needsAmountSelection
+                    ? 'Select an amount to continue'
+                    : `Pay ${totalText}`}
             </button>
           </div>
 

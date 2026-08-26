@@ -9,6 +9,7 @@ import crypto from "crypto";
  * fabricating a working checkout.
  */
 export type SubscriptionTierId = "go" | "pro" | "proMax" | "team" | "enterprise";
+export type ProMaxVariant = "5x" | "20x";
 
 /** Only meaningful for Team — Standard/Premium seat rate. Enterprise seats are uniform. */
 export type SeatTier = "standard" | "premium";
@@ -48,10 +49,15 @@ export function getConfiguredPaymentMethods(): PaymentMethodId[] {
     .filter((method, index, list): method is PaymentMethodId => valid.has(method) && list.indexOf(method) === index);
 }
 
-/** `seatTier` is required for tier === "team" (no ambiguous default plan); ignored for every other tier. */
-export function getRazorpayPlanId(tier: SubscriptionTierId, seatTier?: SeatTier): string | null {
+/** `seatTier` is required for tier === "team" (no ambiguous default plan); `proMaxVariant` required for tier === "proMax" */
+export function getRazorpayPlanId(tier: SubscriptionTierId, seatTier?: SeatTier, proMaxVariant?: ProMaxVariant): string | null {
   if (tier === "go") return null; // Paw Go is free — never goes through checkout.
-  if (tier === "pro" || tier === "proMax") return process.env[FLAT_PLAN_ENV_VAR[tier]] ?? null;
+  if (tier === "pro") return process.env[FLAT_PLAN_ENV_VAR.pro] ?? null;
+  if (tier === "proMax") {
+    if (!proMaxVariant) return null; // proMaxVariant is required for Pro Max
+    const variantPlanEnv = proMaxVariant === "5x" ? "RAZORPAY_PLAN_ID_PROMAX_5X" : "RAZORPAY_PLAN_ID_PROMAX_20X";
+    return process.env[variantPlanEnv] ?? null;
+  }
   if (tier === "team") {
     if (!seatTier) return null;
     return process.env[TEAM_SEAT_PLAN_ENV_VAR[seatTier]] ?? null;
@@ -378,11 +384,11 @@ export async function fetchRazorpaySubscription(
   return response.json();
 }
 
-/** Reverses getRazorpayPlanId() — given a real plan_id read back from Razorpay, finds which (tier, seatTier) it actually corresponds to. Returns null for a plan_id that matches no configured plan (never guesses). */
-export function resolveTierFromRazorpayPlanId(planId: string): { tier: SubscriptionTierId; seatTier?: SeatTier } | null {
-  for (const tier of ["pro", "proMax"] as const) {
-    if (process.env[FLAT_PLAN_ENV_VAR[tier]] === planId) return { tier };
-  }
+/** Reverses getRazorpayPlanId() — given a real plan_id read back from Razorpay, finds which (tier, seatTier, proMaxVariant) it actually corresponds to. Returns null for a plan_id that matches no configured plan (never guesses). */
+export function resolveTierFromRazorpayPlanId(planId: string): { tier: SubscriptionTierId; seatTier?: SeatTier; proMaxVariant?: ProMaxVariant } | null {
+  if (process.env[FLAT_PLAN_ENV_VAR.pro] === planId) return { tier: "pro" };
+  if (process.env["RAZORPAY_PLAN_ID_PROMAX_5X"] === planId) return { tier: "proMax", proMaxVariant: "5x" };
+  if (process.env["RAZORPAY_PLAN_ID_PROMAX_20X"] === planId) return { tier: "proMax", proMaxVariant: "20x" };
   for (const seatTier of ["standard", "premium"] as const) {
     if (process.env[TEAM_SEAT_PLAN_ENV_VAR[seatTier]] === planId) return { tier: "team", seatTier };
   }

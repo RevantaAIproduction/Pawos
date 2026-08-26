@@ -557,6 +557,7 @@ export function registerIpc(opts: {
             ...(options?.seatTier ? { seatTier: options.seatTier } : {}),
             ...(options?.seatCount ? { seatCount: options.seatCount } : {}),
             ...(options?.runtimeIds?.length ? { runtimeIds: options.runtimeIds } : {}),
+            ...(options?.proMaxVariant ? { proMaxVariant: options.proMaxVariant } : {}),
             ...(accessToken ? { accessToken } : {}),
           }),
         });
@@ -574,6 +575,7 @@ export function registerIpc(opts: {
           tier,
           seatTier: options?.seatTier,
           runtimeIds: options?.runtimeIds,
+          proMaxVariant: options?.proMaxVariant,
         };
       } catch (error) {
         return { ok: false, reason: error instanceof Error ? error.message : 'Could not create checkout.' };
@@ -595,6 +597,7 @@ export function registerIpc(opts: {
       subscriptionStore.confirmPurchase(verified.tier, {
         runtimeIds: parseVerifiedRuntimeIds(verified.runtimeIds),
         orderId: verified.subscriptionId,
+        proMaxVariant: verified.proMaxVariant,
       });
       for (const win of BrowserWindow.getAllWindows()) win.webContents.send('billing:subscriptionUpdated');
       return { ok: true, subscription: subscriptionStore.getEffective() };

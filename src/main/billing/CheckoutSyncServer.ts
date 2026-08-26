@@ -34,7 +34,7 @@ export async function verifySubscriptionWithBackend(
   subscriptionId: string,
   signature: string,
   accessToken?: string
-): Promise<{ ok: true; tier: SubscriptionTierId; seatTier?: SeatTier; subscriptionId: string; runtimeIds: string[] } | { ok: false }> {
+): Promise<{ ok: true; tier: SubscriptionTierId; seatTier?: SeatTier; proMaxVariant?: string; subscriptionId: string; runtimeIds: string[] } | { ok: false }> {
   try {
     const response = await fetch(VERIFY_SUBSCRIPTION_ENDPOINT, {
       method: 'POST',
@@ -46,6 +46,7 @@ export async function verifySubscriptionWithBackend(
       ok?: boolean;
       tier?: string;
       seatTier?: SeatTier;
+      proMaxVariant?: string;
       subscriptionId?: string;
       runtimeIds?: unknown;
     };
@@ -54,6 +55,7 @@ export async function verifySubscriptionWithBackend(
       ok: true,
       tier: result.tier as SubscriptionTierId,
       seatTier: result.seatTier,
+      proMaxVariant: result.proMaxVariant,
       subscriptionId: result.subscriptionId ?? subscriptionId,
       runtimeIds: Array.isArray(result.runtimeIds) ? (result.runtimeIds as string[]) : [],
     };
@@ -131,6 +133,7 @@ export function startCheckoutCallbackServer(): Promise<string> {
           subscriptionStore.confirmPurchase(verified.tier, {
             runtimeIds: parseRuntimeIds(verified.runtimeIds),
             orderId: verified.subscriptionId,
+            proMaxVariant: verified.proMaxVariant,
           });
           for (const win of BrowserWindow.getAllWindows()) win.webContents.send('billing:subscriptionUpdated');
         });

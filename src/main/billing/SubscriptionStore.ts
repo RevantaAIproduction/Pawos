@@ -194,7 +194,7 @@ class SubscriptionStore {
   }
 
   /** Called only from CheckoutSyncServer's verified local callback after a real Razorpay payment completed — the one path where status legitimately becomes 'active'. */
-  confirmPurchase(tier: SubscriptionTierId, options: { runtimeIds?: RuntimeEntitlementId[]; orderId?: string } = {}): SubscriptionState {
+  confirmPurchase(tier: SubscriptionTierId, options: { runtimeIds?: RuntimeEntitlementId[]; orderId?: string; proMaxVariant?: string } = {}): SubscriptionState {
     this.state = {
       ...this.state,
       tier,
@@ -202,6 +202,7 @@ class SubscriptionStore {
       accountId: this.state.accountId,
       renewsAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
       runtimeEntitlementPolicyVersion: RUNTIME_ENTITLEMENT_POLICY_VERSION,
+      ...(tier === 'proMax' && options.proMaxVariant ? { proMaxVariant: options.proMaxVariant as import('../../shared/billing/BillingTypes').ProMaxVariant } : {}),
     };
     if (options.runtimeIds?.length) {
       this.state = {
