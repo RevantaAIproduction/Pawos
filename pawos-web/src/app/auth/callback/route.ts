@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { createClient } from "../../../lib/supabase/server";
 
 /**
@@ -87,6 +88,15 @@ export async function GET(request: Request) {
     console.log('[OAuth Callback] Session created successfully', {
       userId: data.session?.user?.id,
       email: data.session?.user?.email,
+      provider: data.session?.user?.app_metadata?.provider,
+    });
+
+    const cookieStore = await cookies();
+    const allCookies = cookieStore.getAll();
+    const sessionCookies = allCookies.filter(c => c.name.includes('sb-') || c.name.includes('auth'));
+    console.log('[OAuth Callback] Cookies set after exchange:', {
+      total: allCookies.length,
+      sessionCookies: sessionCookies.map(c => ({ name: c.name, valueLength: c.value.length })),
     });
 
     const redirectUrl = `${origin}${next}`;

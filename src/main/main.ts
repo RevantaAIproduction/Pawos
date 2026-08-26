@@ -9,6 +9,7 @@ import { PUBLIC_ENV_DEFAULTS } from './env/publicEnvDefaults';
 import { startForegroundWindowWatcher, getForegroundWindowInfo } from './system/ForegroundWindowWatcher';
 import { startGoogleSignIn } from './auth/GoogleOAuthFlow';
 import { waitForGitHubOAuthCallback } from './auth/GitHubOAuthFlow';
+import { startMicrosoftSignIn, type MicrosoftOAuthConfig } from './auth/MicrosoftOAuthFlow';
 import { handleOAuthProtocolUrl, extractProtocolUrlFromArgv } from './auth/OAuthProtocolBridge';
 import { emailService } from './mail/EmailService';
 import { getDevWindowIconPath } from './assets/AssetPathResolver';
@@ -522,10 +523,14 @@ app.whenReady().then(async () => {
     },
     isMicrosoftSignInConfigured: () => Boolean(envVars.MICROSOFT_CLIENT_ID && envVars.MICROSOFT_CLIENT_SECRET && envVars.MICROSOFT_TENANT_ID),
     startMicrosoftSignIn: () => {
-      if (!envVars.MICROSOFT_CLIENT_ID || !envVars.MICROSOFT_CLIENT_SECRET || !envVars.MICROSOFT_TENANT_ID) {
+      if (!envVars.MICROSOFT_CLIENT_ID || !envVars.MICROSOFT_CLIENT_SECRET || !envVars.MICROSOFT_TENANT_ID || !envVars.MICROSOFT_REDIRECT_URI) {
         return Promise.reject(new Error("Microsoft sign-in not configured"));
       }
-      return startMicrosoftOAuthFlow(envVars.MICROSOFT_CLIENT_ID, envVars.MICROSOFT_CLIENT_SECRET, envVars.MICROSOFT_TENANT_ID);
+      return startMicrosoftSignIn({
+        clientId: envVars.MICROSOFT_CLIENT_ID,
+        redirectUri: envVars.MICROSOFT_REDIRECT_URI,
+        tenantId: envVars.MICROSOFT_TENANT_ID,
+      });
     },
   });
 

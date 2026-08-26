@@ -31,6 +31,7 @@ export function installRendererCrashGuard(): void {
   installed = true;
 
   window.addEventListener('error', (event) => {
+    console.error('CRASH_STACK_DUMP:', event.error?.stack ?? '(no stack)', 'colno=', event.colno, 'lineno=', event.lineno, 'filename=', event.filename);
     report(event.error?.message ?? event.message, event.error?.stack);
   });
 

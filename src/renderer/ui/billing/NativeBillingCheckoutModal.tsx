@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import type { CheckoutOptions, SeatTier, SubscriptionTierId } from '../../../shared/billing/BillingTypes';
+import type { CheckoutOptions, SeatTier, SubscriptionTierId, NativePaymentMethodId } from '../../../shared/billing/BillingTypes';
 import { getSupabaseClient } from '../../auth/supabaseClient';
 import { ipc } from '../../services/ipc/ipcBridgeImplementation';
 import { organizationService } from '../../organization/OrganizationService';

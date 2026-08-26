@@ -187,6 +187,10 @@ export class AuthenticationProvider implements AuthService {
   async isGithubSignInAvailable(): Promise<boolean> {
     return this.githubProvider.isAvailable();
   }
+
+  async isMicrosoftSignInAvailable(): Promise<boolean> {
+    return this.microsoftProvider.isAvailable();
+  }
 }
 
 export const authService = new AuthenticationProvider();

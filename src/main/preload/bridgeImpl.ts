@@ -270,6 +270,12 @@ export function contextBridge() {
       ipcRenderer.invoke("billing:createNativeCreditsCheckout", amountUsd, organizationId, accessToken) as Promise<NativeCreditsCheckoutResult>,
     billingVerifyNativeCreditsPayment: (params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string; organizationId?: string }) =>
       ipcRenderer.invoke("billing:verifyNativeCreditsPayment", params) as Promise<NativeCreditsVerificationResult>,
+    billingCreateNativeUsageCreditsCheckout: (amountUsd: number, organizationId?: string, accessToken?: string) =>
+      ipcRenderer.invoke("billing:createNativeUsageCreditsCheckout", amountUsd, organizationId, accessToken) as Promise<NativeCreditsCheckoutResult>,
+    billingVerifyNativeUsageCreditsPayment: (params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string; organizationId?: string }) =>
+      ipcRenderer.invoke("billing:verifyNativeUsageCreditsPayment", params) as Promise<NativeCreditsVerificationResult>,
+    billingCreateHighValueInvoices: (params: { plan: string; seatTier?: string; seatCount: number; customerName: string; organizationName: string; gstNumber?: string; accessToken?: string }) =>
+      ipcRenderer.invoke("billing:createHighValueInvoices", params) as Promise<{ ok: boolean; reason?: string; plan?: string; seatTier?: string | null; seatCount?: number; monthlyAmountUsd?: number; monthlyAmountInr?: number; invoiceCount?: number; invoices?: Array<{ number: number; amountInr: number; amountUsd: number; invoiceId: string; invoiceUrl: string }>; customerName?: string; organizationName?: string; gstNumber?: string | null; keyId?: string }>,
     onSubscriptionUpdated: (cb: () => void) => {
       ipcRenderer.on("billing:subscriptionUpdated", () => cb());
     },

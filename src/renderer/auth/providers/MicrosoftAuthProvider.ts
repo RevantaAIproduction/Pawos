@@ -14,7 +14,7 @@ interface MicrosoftProfile {
 function toAuthUser(profile: MicrosoftProfile, supabaseUserId: string | null): AuthUser {
   return {
     id: supabaseUserId ?? `microsoft:${profile.id}`,
-    name: profile.displayName || profile.givenName || profile.userPrincipalName.split('@')[0],
+    name: profile.displayName || profile.givenName || profile.userPrincipalName.split('@')[0] || profile.userPrincipalName,
     email: profile.mail || profile.userPrincipalName,
     pictureUrl: undefined,
     provider: 'microsoft',

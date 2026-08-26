@@ -22,6 +22,7 @@ export const PUBLIC_ENV_DEFAULTS: Record<string, string> = {
   GOOGLE_CLIENT_ID: '1047116528874-q7uh6289u1h56nogu7pv1mf1eh67q7k5.apps.googleusercontent.com',
   GOOGLE_REDIRECT_URI: 'https://pawos.revantaai.com/auth/google/callback',
   GITHUB_REDIRECT_URI: 'https://pawos.revantaai.com/auth/github/callback',
+  MICROSOFT_REDIRECT_URI: 'https://pawos.revantaai.com/auth/microsoft/callback',
   SUPABASE_URL: 'https://krqdxdguqaoehrxhmggz.supabase.co',
   SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_E3vh2q3V3Sj-h7TY341D6Q_EmEneDwQ',
   // Connectivity Runtime connector callback URLs — same non-secret nature as

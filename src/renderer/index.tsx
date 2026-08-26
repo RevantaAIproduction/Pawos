@@ -7,20 +7,15 @@ import { installOrganizationUsageBridge } from './billing/OrganizationUsageBridg
 import { installConnectivityCredentialBridge } from './connectivity/ConnectivityCredentialBridge';
 import { seedManagedGeminiKey } from './ai/seedManagedGeminiKey';
 
-installRendererCrashGuard();
-installOrganizationUsageBridge();
-installConnectivityCredentialBridge();
-
 async function init() {
-  // Seed the managed GEMINI_API_KEY before the React tree mounts so that
-  // aiProviderConfigStore.getApiKey('gemini') is never undefined during the
-  // first render or any immediately-dispatched action (image analysis, STT,
-  // session classification). seedManagedGeminiKey never throws — IPC failure
-  // is treated as a missing key and the app mounts with the local provider.
-  await seedManagedGeminiKey();
+  installRendererCrashGuard();
+  installOrganizationUsageBridge();
+  installConnectivityCredentialBridge();
 
   const container = document.getElementById('root');
   if (!container) throw new Error('Missing #root');
+
+  await seedManagedGeminiKey();
 
   createRoot(container).render(
     <React.StrictMode>
@@ -29,5 +24,11 @@ async function init() {
   );
 }
 
-init().catch(console.error);
+init().catch(e => {
+  console.error('[Renderer] Fatal error:', e);
+  const container = document.getElementById('root');
+  if (container) {
+    container.innerHTML = `<div style="color: #ff6b6b; padding: 40px; font-family: monospace; white-space: pre-wrap; word-break: break-all;">FATAL ERROR\n\n${String(e)}\n\n${(e as any)?.stack || ''}</div>`;
+  }
+});
 

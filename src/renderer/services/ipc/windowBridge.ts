@@ -187,6 +187,9 @@ export function contextBridge() {
     authIsGithubSignInConfigured: async (): Promise<boolean> => ipcApi.invoke('auth:isGithubSignInConfigured'),
     authStartGithubSignIn: async (authorizeUrl: string): Promise<{ code: string }> =>
       ipcApi.invoke('auth:startGithubSignIn', authorizeUrl),
+    authIsMicrosoftSignInConfigured: async (): Promise<boolean> => ipcApi.invoke('auth:isMicrosoftSignInConfigured'),
+    authStartMicrosoftSignIn: async (): Promise<{ profile: any; idToken: string; accessToken: string }> =>
+      ipcApi.invoke('auth:startMicrosoftSignIn'),
     authSendOtp: async (email: string): Promise<{ expiresInMinutes: number }> => ipcApi.invoke('auth:sendOtp', email),
     authVerifyOtp: async (email: string, code: string): Promise<{ valid: boolean; reason?: string }> =>
       ipcApi.invoke('auth:verifyOtp', email, code),
@@ -250,8 +253,8 @@ export function contextBridge() {
       ipcApi.invoke('billing:getNativePaymentMethods', accessToken),
     billingCreateNativeSubscriptionCheckout: async (tier: SubscriptionTierId, options?: CheckoutOptions, accessToken?: string): Promise<NativeSubscriptionCheckoutResult> =>
       ipcApi.invoke('billing:createNativeSubscriptionCheckout', tier, options, accessToken),
-    billingConfirmNativeSubscriptionPayment: async (paymentId: string, subscriptionId: string, signature: string): Promise<{ ok: true; subscription: SubscriptionState } | { ok: false; reason: string }> =>
-      ipcApi.invoke('billing:confirmNativeSubscriptionPayment', paymentId, subscriptionId, signature),
+    billingConfirmNativeSubscriptionPayment: async (paymentId: string, subscriptionId: string, signature: string, accessToken?: string): Promise<{ ok: true; subscription: SubscriptionState } | { ok: false; reason: string }> =>
+      ipcApi.invoke('billing:confirmNativeSubscriptionPayment', paymentId, subscriptionId, signature, accessToken),
     billingStartCheckoutSync: async (): Promise<string> => ipcApi.invoke('billing:startCheckoutSync'),
     billingCreateCreditsCheckoutSession: async (amountUsd: number, organizationId?: string, callbackUrl?: string, accessToken?: string): Promise<BillingCheckoutResult> =>
       ipcApi.invoke('billing:createCreditsCheckoutSession', amountUsd, organizationId, callbackUrl, accessToken),

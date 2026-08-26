@@ -1,4 +1,5 @@
 import { stashGoogleAuthPayload } from "./googleAuthRelayStore";
+import { stashMicrosoftAuthPayload } from "./microsoftAuthRelayStore";
 
 /**
  * auth/github/callback's relay — receives Supabase's redirect when a PawOS desktop GitHub
@@ -128,6 +129,73 @@ export async function relayGoogleToDesktop(code: string | null, error: string | 
     const profile = (await profileResponse.json()) as { sub: string; email: string; name?: string; picture?: string };
 
     const ref = stashGoogleAuthPayload({
+      idToken: tokens.id_token,
+      accessToken: tokens.access_token,
+      profile,
+    });
+    return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ ref }).toString()}`, null);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "unknown_error";
+    return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error: message }).toString()}`, message);
+  }
+}
+
+/**
+ * Microsoft OAuth relay — identical pattern to relayGoogleToDesktop. Exchanges the authorization
+ * code for tokens server-side (this server holds MICROSOFT_CLIENT_SECRET), fetches the user profile
+ * from Microsoft Graph, stashes the payload with a temporary ref, and redirects the browser to the
+ * desktop's loopback listener with just the ref. Desktop then fetches the actual tokens via
+ * /api/auth/microsoft/consume?ref=...
+ */
+export async function relayMicrosoftToDesktop(code: string | null, error: string | null): Promise<Response> {
+  if (error) return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error }).toString()}`, error);
+  if (!code) {
+    const missing = "missing_code";
+    return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error: missing }).toString()}`, missing);
+  }
+
+  const clientId = process.env.MICROSOFT_CLIENT_ID;
+  const clientSecret = process.env.MICROSOFT_CLIENT_SECRET;
+  const tenantId = process.env.MICROSOFT_TENANT_ID ?? 'common';
+  const redirectUri = process.env.MICROSOFT_REDIRECT_URI ?? 'https://pawos.revantaai.com/auth/microsoft/callback';
+  if (!clientId || !clientSecret) {
+    const notConfigured = "server_not_configured";
+    return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error: notConfigured }).toString()}`, notConfigured);
+  }
+
+  try {
+    const tokenResponse = await fetch(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code,
+        grant_type: "authorization_code",
+        redirect_uri: redirectUri,
+        scope: "openid email profile",
+      }),
+    });
+    if (!tokenResponse.ok) {
+      const failed = `token_exchange_failed_${tokenResponse.status}`;
+      return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error: failed }).toString()}`, failed);
+    }
+    const tokens = (await tokenResponse.json()) as { access_token: string; id_token?: string };
+    if (!tokens.id_token) {
+      const missing = "no_id_token";
+      return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error: missing }).toString()}`, missing);
+    }
+
+    const profileResponse = await fetch("https://graph.microsoft.com/v1.0/me", {
+      headers: { Authorization: `Bearer ${tokens.access_token}` },
+    });
+    if (!profileResponse.ok) {
+      const failed = "profile_fetch_failed";
+      return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error: failed }).toString()}`, failed);
+    }
+    const profile = (await profileResponse.json()) as { id: string; mail: string; displayName?: string };
+
+    const ref = stashMicrosoftAuthPayload({
       idToken: tokens.id_token,
       accessToken: tokens.access_token,
       profile,

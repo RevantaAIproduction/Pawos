@@ -71,21 +71,32 @@ export class MicrosoftConnectorSDK implements ConnectorSDK {
       const { code, codeVerifier, redirectUri } = await handle.result;
       const token = await oauthManager.exchangeCodeForToken(this.definition.id, code, codeVerifier, redirectUri);
 
-      // Extract user info from token (Microsoft includes id_token with user claims)
+      // OAuthTokenResult never carries an id_token (the shared backend exchange
+      // path only surfaces access_token/refresh_token/expires_in/scope), so user
+      // identity is fetched from Microsoft Graph with the access token itself —
+      // the same pattern SlackConnectorSDK.connect() uses via whoAmI().
       let displayName = 'Microsoft Account';
       let userPrincipalName = 'user@microsoft.com';
       let userId = '';
 
       try {
-        // Try to extract from id_token claims if available
-        if (token.idToken) {
-          const payload = JSON.parse(Buffer.from(token.idToken.split('.')[1], 'base64').toString());
-          displayName = payload.name || payload.email || displayName;
-          userPrincipalName = payload.email || payload.preferred_username || userPrincipalName;
-          userId = payload.oid || '';
+        const profileResponse = await fetch('https://graph.microsoft.com/v1.0/me', {
+          headers: { Authorization: `Bearer ${token.accessToken}` },
+        });
+        if (profileResponse.ok) {
+          const profile = (await profileResponse.json()) as {
+            displayName?: string;
+            mail?: string;
+            userPrincipalName?: string;
+            id?: string;
+          };
+          displayName = profile.displayName || displayName;
+          userPrincipalName = profile.mail || profile.userPrincipalName || userPrincipalName;
+          userId = profile.id || '';
         }
       } catch {
-        // If parsing fails, fall back to defaults
+        // If the Graph call fails, fall back to defaults — the connection
+        // itself still succeeded since the token exchange already completed.
       }
 
       this.credential = {
@@ -99,7 +110,6 @@ export class MicrosoftConnectorSDK implements ConnectorSDK {
       await credentialVaultBridge.store(this.definition.id, scope, token.accessToken, 'oauth2', {
         grantedScopes: token.grantedScopes,
         refreshToken: token.refreshToken,
-        metadata: { userPrincipalName, displayName, userId },
       });
 
       this.currentStatus = {
