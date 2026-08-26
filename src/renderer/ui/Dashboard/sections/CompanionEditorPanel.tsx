@@ -133,6 +133,15 @@ function PersonalityTab({
   profile: CompanionProfile;
   onUpdate: (patch: Partial<CompanionProfile['personality']>) => void;
 }) {
+  const [promptOverride, setPromptOverride] = useState(profile.personality.systemPromptOverride ?? '');
+  const [promptSaved, setPromptSaved] = useState(false);
+
+  const applyPromptOverride = () => {
+    onUpdate({ systemPromptOverride: promptOverride || undefined });
+    setPromptSaved(true);
+    setTimeout(() => setPromptSaved(false), 2000);
+  };
+
   return (
     <div>
       <p className={styles.cardBody}>Choose a starting point, or write your own custom instructions below.</p>
@@ -164,11 +173,17 @@ function PersonalityTab({
         Additional instructions (always applied on top of the preset above)
       </label>
       <textarea
-        defaultValue={profile.personality.systemPromptOverride ?? ''}
-        onBlur={(e) => onUpdate({ systemPromptOverride: e.target.value })}
+        value={promptOverride}
+        onChange={(e) => setPromptOverride(e.target.value)}
         rows={3}
         style={{ width: '100%', marginTop: 4, fontFamily: 'inherit' }}
       />
+      <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
+        <button type="button" className={styles.chip} onClick={applyPromptOverride}>
+          Apply
+        </button>
+        {promptSaved && <span style={{ fontSize: 12, color: '#4ade80' }}>✓ Saved</span>}
+      </div>
     </div>
   );
 }
@@ -197,6 +212,14 @@ function VoiceTab({
 }) {
   const browserVoices = useBrowserVoices();
   const provider = profile.voice.ttsProvider;
+  const [elevenLabsVoiceId, setElevenLabsVoiceId] = useState(profile.voice.voiceId ?? '');
+  const [elevenLabsSaved, setElevenLabsSaved] = useState(false);
+
+  const applyElevenLabsVoiceId = () => {
+    onUpdate({ voiceId: elevenLabsVoiceId || undefined });
+    setElevenLabsSaved(true);
+    setTimeout(() => setElevenLabsSaved(false), 2000);
+  };
 
   return (
     <div>
@@ -315,10 +338,16 @@ function VoiceTab({
           </label>
           <input
             type="text"
-            defaultValue={profile.voice.voiceId ?? ''}
-            onBlur={(e) => onUpdate({ voiceId: e.target.value || undefined })}
+            value={elevenLabsVoiceId}
+            onChange={(e) => setElevenLabsVoiceId(e.target.value)}
             style={{ marginTop: 4 }}
           />
+          <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
+            <button type="button" className={styles.chip} onClick={applyElevenLabsVoiceId}>
+              Apply
+            </button>
+            {elevenLabsSaved && <span style={{ fontSize: 12, color: '#4ade80' }}>✓ Saved</span>}
+          </div>
 
           <label className={styles.cardBody} style={{ display: 'block', marginTop: 12 }}>
             Speaking style: {(profile.voice.style ?? 0).toFixed(2)}
@@ -436,6 +465,23 @@ function BehaviorTab({
   profile: CompanionProfile;
   onUpdate: (patch: Partial<CompanionProfile['behavior']>) => void;
 }) {
+  const [interactionStyleValue, setInteractionStyleValue] = useState(profile.behavior.interactionStyle);
+  const [wakeWordValue, setWakeWordValue] = useState(profile.behavior.wakeWord ?? '');
+  const [interactionStyleSaved, setInteractionStyleSaved] = useState(false);
+  const [wakeWordSaved, setWakeWordSaved] = useState(false);
+
+  const applyInteractionStyle = () => {
+    onUpdate({ interactionStyle: interactionStyleValue });
+    setInteractionStyleSaved(true);
+    setTimeout(() => setInteractionStyleSaved(false), 2000);
+  };
+
+  const applyWakeWord = () => {
+    onUpdate({ wakeWord: wakeWordValue.trim() || undefined });
+    setWakeWordSaved(true);
+    setTimeout(() => setWakeWordSaved(false), 2000);
+  };
+
   return (
     <div>
       <label className={styles.cardBody} style={{ display: 'block' }}>
@@ -482,22 +528,34 @@ function BehaviorTab({
         Interaction style (free-form instructions layered onto every conversation)
       </label>
       <textarea
-        defaultValue={profile.behavior.interactionStyle}
-        onBlur={(e) => onUpdate({ interactionStyle: e.target.value })}
+        value={interactionStyleValue}
+        onChange={(e) => setInteractionStyleValue(e.target.value)}
         rows={2}
         style={{ width: '100%', marginTop: 4, fontFamily: 'inherit' }}
       />
+      <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
+        <button type="button" className={styles.chip} onClick={applyInteractionStyle}>
+          Apply
+        </button>
+        {interactionStyleSaved && <span style={{ fontSize: 12, color: '#4ade80' }}>✓ Saved</span>}
+      </div>
 
       <label className={styles.cardBody} style={{ display: 'block', marginTop: 16 }}>
         Wake word
       </label>
       <input
         type="text"
-        defaultValue={profile.behavior.wakeWord ?? ''}
-        onBlur={(e) => onUpdate({ wakeWord: e.target.value.trim() || undefined })}
+        value={wakeWordValue}
+        onChange={(e) => setWakeWordValue(e.target.value)}
         placeholder={`e.g. "Hey ${profile.name}"`}
         style={{ marginTop: 4, width: '100%' }}
       />
+      <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
+        <button type="button" className={styles.chip} onClick={applyWakeWord}>
+          Apply
+        </button>
+        {wakeWordSaved && <span style={{ fontSize: 12, color: '#4ade80' }}>✓ Saved</span>}
+      </div>
       <p className={styles.cardBody} style={{ marginTop: 4, fontSize: 12 }}>
         Saved, but honest limitation: PawOS has no always-on/background voice-listening engine yet, so
         this wake word is not currently detected automatically — it's saved for when that capability

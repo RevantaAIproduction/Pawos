@@ -96,9 +96,7 @@ function loadPaymentScript(type: 'standard' | 'custom' = 'custom'): Promise<bool
       return;
     }
     const script = document.createElement('script');
-    // razorpay.js works for both Standard Checkout and Custom Checkout
-    // Use the same script URL for all flows
-    script.src = CUSTOM_CHECKOUT_SCRIPT_URL; // Always use razorpay.js
+    script.src = type === 'standard' ? STANDARD_CHECKOUT_SCRIPT_URL : CUSTOM_CHECKOUT_SCRIPT_URL;
     script.onload = () => resolve(true);
     script.onerror = () => resolve(false);
     document.body.appendChild(script);
