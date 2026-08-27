@@ -48,6 +48,8 @@ import type {
   NativeSubscriptionCheckoutResult,
   NativeCreditsCheckoutResult,
   NativeCreditsVerificationResult,
+  NativeTierCheckoutResult,
+  NativeTierVerificationResult,
   CheckoutOptions,
   FeatureId,
   EntitlementSnapshot,
@@ -274,6 +276,10 @@ export function contextBridge() {
       ipcRenderer.invoke("billing:createNativeUsageCreditsCheckout", amountUsd, organizationId, accessToken) as Promise<NativeCreditsCheckoutResult>,
     billingVerifyNativeUsageCreditsPayment: (params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string; organizationId?: string }) =>
       ipcRenderer.invoke("billing:verifyNativeUsageCreditsPayment", params) as Promise<NativeCreditsVerificationResult>,
+    billingCreateNativeTierCheckout: (tier: SubscriptionTierId, options?: CheckoutOptions, organizationId?: string, accessToken?: string) =>
+      ipcRenderer.invoke("billing:createNativeTierCheckout", tier, options, organizationId, accessToken) as Promise<NativeTierCheckoutResult>,
+    billingVerifyNativeTierPayment: (params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string; organizationId?: string; tier: SubscriptionTierId; seatCount?: number; seatTier?: SeatTier }) =>
+      ipcRenderer.invoke("billing:verifyNativeTierPayment", params) as Promise<NativeTierVerificationResult>,
     billingCreateHighValueInvoices: (params: { plan: string; seatTier?: string; seatCount: number; customerName: string; organizationName: string; gstNumber?: string; accessToken?: string }) =>
       ipcRenderer.invoke("billing:createHighValueInvoices", params) as Promise<{ ok: boolean; reason?: string; plan?: string; seatTier?: string | null; seatCount?: number; monthlyAmountUsd?: number; monthlyAmountInr?: number; invoiceCount?: number; invoices?: Array<{ number: number; amountInr: number; amountUsd: number; invoiceId: string; invoiceUrl: string }>; customerName?: string; organizationName?: string; gstNumber?: string | null; keyId?: string }>,
     onSubscriptionUpdated: (cb: () => void) => {

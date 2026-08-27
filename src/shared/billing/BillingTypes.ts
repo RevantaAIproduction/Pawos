@@ -179,6 +179,14 @@ export type NativeCreditsVerificationResult =
   | { ok: true; amountUsd: number; topupId?: string }
   | { ok: false; reason: string };
 
+export type NativeTierCheckoutResult =
+  | { ok: true; keyId: string; orderId: string; amountUsd: number; amountInr: number; amountPaise: number; usdInrRate: number; currency: 'INR' }
+  | { ok: false; reason: string };
+
+export type NativeTierVerificationResult =
+  | { ok: true; amountUsd: number }
+  | { ok: false; reason: string };
+
 /**
  * Extra parameters only meaningful for seat-based tiers. `seatTier` selects
  * Team's Standard/Premium rate for the seats being purchased; `seatCount`
@@ -192,6 +200,8 @@ export type CheckoutOptions = {
   runtimeIds?: RuntimeEntitlementId[];
   /** Only meaningful when tier === 'proMax' — which Paw Compute usage multiplier variant. */
   proMaxVariant?: ProMaxVariant;
+  /** Only meaningful when tier === 'pro' — one-time payment duration (per month or per year). */
+  proBillingFrequency?: 'monthly' | 'yearly';
 };
 
 /**

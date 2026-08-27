@@ -33,6 +33,7 @@ import { createCreditsCheckoutUrl } from '../billing/providers/RazorpayBillingPr
 import { verifyRealOrganizationTier } from '../billing/OrganizationTierVerification';
 import { entitlementService } from '../billing/EntitlementService';
 import { createRendererOrganizationUsageRecorder } from '../billing/RendererOrganizationUsageBridge';
+import { applyTestTier, clearTestTierOverride, getTestTierOverride, hydrateTestTier } from './handlers/adminTestTierHandler';
 import { startCheckoutCallbackServer, verifySubscriptionWithBackend } from '../billing/CheckoutSyncServer';
 import type {
   SubscriptionTierId,
@@ -45,6 +46,8 @@ import type {
   NativeSubscriptionCheckoutResult,
   NativeCreditsCheckoutResult,
   NativeCreditsVerificationResult,
+  NativeTierCheckoutResult,
+  NativeTierVerificationResult,
 } from '../../shared/billing/BillingTypes';
 import { ALL_RUNTIME_ENTITLEMENT_IDS } from '../../shared/billing/RuntimeCatalog';
 import type { AiUsageCategory } from '../../shared/billing/AiUsageCategories';
@@ -783,6 +786,78 @@ export function registerIpc(opts: {
       }
     }
   );
+  // Tier purchase (Pro/Pro Max/Team/Enterprise) — one-time payment
+  ipcMain.handle(
+    'billing:createNativeTierCheckout',
+    async (_evt, tier: SubscriptionTierId, options?: CheckoutOptions, organizationId?: string, accessToken?: string): Promise<NativeTierCheckoutResult> => {
+      if (!accessToken) return { ok: false, reason: 'Missing PawOS session. Sign in again before upgrading.' };
+      try {
+        const response = await fetch(`${PAWOS_BILLING_API_BASE_URL}/api/billing/checkout-tier`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tier, options, organizationId, accessToken }),
+        });
+        const result = (await response.json().catch(() => null)) as
+          | { ok?: boolean; reason?: string; keyId?: string; orderId?: string; amountUsd?: number; amountInr?: number; amountPaise?: number; usdInrRate?: number; currency?: string }
+          | null;
+        if (!response.ok || !result?.ok || !result?.keyId || !result?.orderId) {
+          return { ok: false, reason: cleanReason(result, `Checkout failed: ${response.statusText}`) };
+        }
+        return {
+          ok: true,
+          keyId: result.keyId,
+          orderId: result.orderId,
+          amountUsd: result.amountUsd ?? 0,
+          amountInr: result.amountInr ?? 0,
+          amountPaise: result.amountPaise ?? 0,
+          usdInrRate: result.usdInrRate ?? 0,
+          currency: (result.currency as 'INR') ?? 'INR',
+        };
+      } catch (error) {
+        return { ok: false, reason: error instanceof Error ? error.message : 'Checkout failed.' };
+      }
+    }
+  );
+  // Verify tier purchase payment
+  ipcMain.handle(
+    'billing:verifyNativeTierPayment',
+    async (
+      _evt,
+      params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string; organizationId?: string; tier: SubscriptionTierId; seatCount?: number; seatTier?: string }
+    ): Promise<NativeTierVerificationResult> => {
+      if (!params.accessToken || !params.orderId || !params.paymentId || !params.signature) {
+        return { ok: false, reason: 'Missing payment verification fields.' };
+      }
+      try {
+        const response = await fetch(`${PAWOS_BILLING_API_BASE_URL}/api/billing/verify-tier-payment`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            accessToken: params.accessToken,
+            orderId: params.orderId,
+            paymentId: params.paymentId,
+            signature: params.signature,
+            organizationId: params.organizationId,
+            tier: params.tier,
+            seatCount: params.seatCount,
+            seatTier: params.seatTier,
+          }),
+        });
+        const result = (await response.json().catch(() => null)) as
+          | { ok?: boolean; reason?: string; amountUsd?: number }
+          | null;
+        if (!response.ok || !result?.ok || typeof result.amountUsd !== 'number') {
+          return { ok: false, reason: cleanReason(result, `Payment could not be verified: ${response.statusText}`) };
+        }
+        for (const win of BrowserWindow.getAllWindows()) {
+          win.webContents.send('billing:tierPurchased', { tier: params.tier, amountUsd: result.amountUsd, organizationId: params.organizationId });
+        }
+        return { ok: true, amountUsd: result.amountUsd };
+      } catch (error) {
+        return { ok: false, reason: error instanceof Error ? error.message : 'Payment verification failed.' };
+      }
+    }
+  );
   // High-value Team/Enterprise invoices (>$500)
   ipcMain.handle(
     'billing:createHighValueInvoices',
@@ -997,6 +1072,35 @@ export function registerIpc(opts: {
   ipcMain.handle('communication:listLocalCompanies', () => communicationRuntime.listLocalCompanies());
   ipcMain.handle('communication:listLocalSummaries', () => communicationRuntime.listLocalSummaries());
   ipcMain.handle('communication:listLocalFollowUps', () => communicationRuntime.listLocalFollowUps());
+
+  // Autonomous Task Verification — approve/reject human verification of autonomous work
+  ipcMain.handle('autonomous:verifyRun', async (_evt, input: { runId: string; approved: boolean; verifierNotes?: string }) => {
+    const { verifyAutonomousRun } = await import('../ipc/handlers/autonomousVerificationHandler');
+    return verifyAutonomousRun(input);
+  });
+
+  // INTERNAL ADMIN/TEST — Tier Switcher for authorized test accounts only
+  // Authorization is enforced server-side; client cannot bypass it
+  ipcMain.handle('admin:initializeUser', (_evt, userId: string) => {
+    entitlementService.setCurrentUserId(userId);
+    return { ok: true };
+  });
+
+  ipcMain.handle('admin:applyTestTier', async (_evt, input: { tier: SubscriptionTierId; userEmail: string; userId: string }) => {
+    return applyTestTier(input);
+  });
+
+  ipcMain.handle('admin:clearTestTier', async (_evt, input: { userId: string; userEmail: string }) => {
+    return clearTestTierOverride(input);
+  });
+
+  ipcMain.handle('admin:getTestTier', async (_evt, userId: string, userEmail: string) => {
+    return getTestTierOverride(userId, userEmail);
+  });
+
+  ipcMain.handle('admin:hydrateTestTier', async (_evt, input: { userId: string; realTier: SubscriptionTierId; testTier: SubscriptionTierId }) => {
+    return hydrateTestTier(input);
+  });
 
   // Connectivity Runtime — see connectivityIpc.ts. Kept in its own
   // registration function (rather than inlined here like every feature

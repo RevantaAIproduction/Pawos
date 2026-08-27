@@ -4,6 +4,7 @@ import { JiraConnector } from '../../infrastructure/connectors/projectManagement
 import { infrastructureConnectorRegistry } from '../../infrastructure/InfrastructureConnectorRegistry';
 import { oauthManager } from '../OAuthManager';
 import { credentialVaultBridge } from '../CredentialVaultBridge';
+import { jiraMetadataStore } from '../JiraMetadataStore';
 
 interface JiraCredential {
   accessToken: string;
@@ -96,10 +97,19 @@ export class JiraConnectorSDK implements ConnectorSDK {
       const token = await oauthManager.exchangeCodeForToken(this.definition.id, code, codeVerifier, redirectUri);
       const resource = await fetchAccessibleResource(token.accessToken);
       this.credential = { accessToken: token.accessToken, refreshToken: token.refreshToken, expiresAt: token.expiresAt, ...resource };
+
+      // Store token in vault
       await credentialVaultBridge.store(this.definition.id, scope, token.accessToken, 'oauth2', {
         refreshToken: token.refreshToken,
         expiresAt: token.expiresAt,
         grantedScopes: token.grantedScopes,
+      });
+
+      // Store Jira-specific metadata (cloudId, siteUrl) for later retrieval by write-back operations
+      await jiraMetadataStore.store(scope, {
+        cloudId: resource.cloudId,
+        siteUrl: resource.siteUrl,
+        siteName: resource.siteName,
       });
       this.registerLiveConnector();
       this.currentStatus = { state: 'connected', capabilities: this.capabilities(), connectedAt: new Date().toISOString(), detail: resource.siteName };
@@ -124,6 +134,7 @@ export class JiraConnectorSDK implements ConnectorSDK {
     }
     this.credential = undefined;
     await credentialVaultBridge.revoke(this.definition.id, scope);
+    await jiraMetadataStore.clear(scope);
     // No unregister() exists on InfrastructureConnectorRegistry (deliberately not added this
     // pass) — replacing the live connector with an unconfigured instance is an honest, equivalent
     // way to report "not connected" without widening that registry's API.

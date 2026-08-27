@@ -3,6 +3,8 @@ import { connectivityRuntime } from '../connectivity/ConnectivityRuntime';
 import { isConnectorEntitled } from '../connectivity/ConnectorEntitlementGate';
 import { verifyPullRequestExists, type PullRequestVerificationResult } from '../connectivity/PullRequestVerification';
 import { postAutonomousCompletionComment, type PullRequestEvidenceCommentResult } from '../connectivity/PullRequestEvidenceComment';
+import { credentialVaultBridge, type StoredCredential } from '../connectivity/CredentialVaultBridge';
+import { jiraMetadataStore, type JiraMetadata } from '../connectivity/JiraMetadataStore';
 import type {
   ConnectivityScope,
   ConnectorDefinition,
@@ -316,5 +318,27 @@ export function registerConnectivityIpc(): void {
       throw new Error("connectivity:deploymentProfiles:hydrate requires a config object with a 'kind' field.");
     }
     return connectivityRuntime.deploymentProfiles.hydrateProfile(profile as DeploymentProfile);
+  });
+
+  // Autonomous Work credential resolution — gets stored OAuth/API credentials for external write-back
+  // (GitHub PR creation, Jira/Linear ticket updates). Validates scope and returns the raw credential
+  // or undefined if not connected. Used by AutonomousOrchestrator to perform external updates.
+  safeHandle<StoredCredential | undefined>('connectivity:getStoredCredential', (connectorId: unknown, scope: unknown) => {
+    if (!isNonEmptyString(connectorId)) {
+      throw new Error('connectivity:getStoredCredential requires a non-empty connectorId string.');
+    }
+    if (!isConnectivityScope(scope)) {
+      throw new Error("connectivity:getStoredCredential requires a valid scope ({ userId, organizationId? }).");
+    }
+    return credentialVaultBridge.read(connectorId, scope);
+  });
+
+  // Jira-specific metadata (cloudId, siteUrl) — needed for API calls since these are derived from token
+  // Not stored in main vault to keep credential storage generic; stored separately by JiraConnectorSDK
+  safeHandle<JiraMetadata | undefined>('connectivity:getJiraMetadata', (scope: unknown) => {
+    if (!isConnectivityScope(scope)) {
+      throw new Error("connectivity:getJiraMetadata requires a valid scope ({ userId, organizationId? }).");
+    }
+    return jiraMetadataStore.read(scope);
   });
 }

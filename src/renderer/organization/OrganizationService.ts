@@ -168,6 +168,37 @@ export const organizationService = {
   /** `seatTier` only makes sense for a 'team' org invite — pass undefined/omit for Enterprise (uniform seats). */
   async inviteMember(organizationId: string, email: string, role: OrgRole, seatTier?: SeatTier): Promise<OrganizationMember> {
     const supabase = await getSupabaseClient();
+
+    // Enforce seat count limit
+    const { data: orgData, error: orgError } = await supabase
+      .from('organizations')
+      .select('tier, seat_count')
+      .eq('id', organizationId)
+      .single<{ tier: OrgTier; seat_count: number | null }>();
+
+    if (orgError) throw orgError;
+    if (!orgData) throw new Error('Organization not found');
+
+    // If organization has a seat limit, check it
+    if (orgData.seat_count !== null && orgData.seat_count > 0) {
+      // Count active members
+      const { data: members, error: memberError } = await supabase
+        .from('organization_members')
+        .select('id')
+        .eq('organization_id', organizationId)
+        .in('status', ['active', 'invited']);
+
+      if (memberError) throw memberError;
+
+      const activeAndPendingCount = members?.length ?? 0;
+      if (activeAndPendingCount >= orgData.seat_count) {
+        throw new Error(
+          `Your organization has reached its seat limit (${orgData.seat_count} seats). ` +
+          `Ask your billing administrator to add more seats before inviting additional members.`
+        );
+      }
+    }
+
     const { data, error } = await supabase
       .from('organization_members')
       .insert({ organization_id: organizationId, email, role, status: 'invited', seat_tier: seatTier ?? null })

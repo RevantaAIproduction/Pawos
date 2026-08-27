@@ -32,7 +32,11 @@ export function OrganizationLogo({
         const data = await res.json();
         if (data.logo?.storage_path) {
           // Construct Supabase public URL
-          const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || '';
+          const supabaseUrl = (window as any).__SUPABASE_URL__ || '';
+          if (!supabaseUrl) {
+            console.warn('Supabase URL not configured');
+            return;
+          }
           const url = `${supabaseUrl}/storage/v1/object/public/org-logos/${data.logo.storage_path}`;
           setLogoUrl(url);
         }

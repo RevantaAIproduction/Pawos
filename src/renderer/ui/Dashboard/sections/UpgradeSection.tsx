@@ -11,6 +11,8 @@ import {
   type SubscriptionTierId,
 } from '../../../../shared/billing/BillingTypes';
 import { NativeBillingCheckoutModal, type NativeBillingCheckoutIntent } from '../../billing/NativeBillingCheckoutModal';
+import { TierCheckoutPage } from '../../billing/TierCheckoutPage';
+import { TeamCheckoutPage } from '../../billing/TeamCheckoutPage';
 
 const TIER_LABELS: Record<SubscriptionTierId, string> = {
   go: 'Go',
@@ -51,6 +53,9 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
   const [tab, setTab] = useState<'individual' | 'team'>('individual');
   const [message, setMessage] = useState<string | null>(null);
   const [checkoutIntent, setCheckoutIntent] = useState<NativeBillingCheckoutIntent | null>(null);
+  const [tierCheckoutTier, setTierCheckoutTier] = useState<SubscriptionTierId | null>(null);
+  const [tierCheckoutOptions, setTierCheckoutOptions] = useState<any>(null);
+  const [teamCheckoutSeatTier, setTeamCheckoutSeatTier] = useState<'standard' | 'premium' | null>(null);
   useEffect(() => {
     ipc.billingGetPricing().then(setPricing).catch(() => {});
     ipc.billingGetSubscription().then(setSubscription).catch(() => {});
@@ -61,12 +66,47 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
 
   const startCheckout = (tier: SubscriptionTierId, seatTier?: SeatTier, seatCount?: number) => {
     setMessage(null);
-    setCheckoutIntent({ kind: 'subscription', tier: tier as Exclude<SubscriptionTierId, 'go'>, seatTier, seatCount });
+    setTierCheckoutTier(tier as Exclude<SubscriptionTierId, 'go'>);
+    setTierCheckoutOptions({ seatTier, seatCount });
   };
 
   const individualPlans = (pricing?.plans ?? []).filter((p) => !p.seatBased && p.id !== 'go');
   const teamPlans = (pricing?.plans ?? []).filter((p) => p.seatBased);
   const plans = tab === 'individual' ? individualPlans : teamPlans;
+
+  // Show Team checkout page when seat tier is selected
+  if (teamCheckoutSeatTier) {
+    return (
+      <TeamCheckoutPage
+        seatTier={teamCheckoutSeatTier}
+        onClose={() => {
+          setTeamCheckoutSeatTier(null);
+        }}
+        onSuccess={() => {
+          setMessage('Payment verified. Your team plan will refresh automatically.');
+          ipc.billingGetSubscription().then(setSubscription).catch(() => {});
+        }}
+      />
+    );
+  }
+
+  // Show checkout page instead of plan list when tier is selected
+  if (tierCheckoutTier) {
+    return (
+      <TierCheckoutPage
+        tier={tierCheckoutTier}
+        options={tierCheckoutOptions}
+        onClose={() => {
+          setTierCheckoutTier(null);
+          setTierCheckoutOptions(null);
+        }}
+        onSuccess={() => {
+          setMessage('Payment verified. Your plan will refresh automatically.');
+          ipc.billingGetSubscription().then(setSubscription).catch(() => {});
+        }}
+      />
+    );
+  }
 
   return (
     <div>
@@ -133,7 +173,7 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
                         </span>
                       </div>
                       <p className={styles.cardBody} style={{ fontSize: 11.5, marginTop: 2 }}>{seat.description}</p>
-                      {!isCurrent && !isDowngrade && (
+                      {!isCurrent && !isDowngrade && plan.id !== 'team' && (
                         <button
                           type="button"
                           className={styles.primaryButton}
@@ -194,6 +234,10 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
                   <button type="button" className={styles.chip} disabled>
                     Included in your plan
                   </button>
+                ) : plan.id === 'team' && !isCurrent && !isDowngrade ? (
+                  <button type="button" className={styles.primaryButton} onClick={() => setTeamCheckoutSeatTier('standard')}>
+                    Get Team plan
+                  </button>
                 ) : plan.seatOptions ? null : (
                   <button type="button" className={styles.primaryButton} onClick={() => startCheckout(plan.id, undefined, undefined)}>
                     Get {plan.label}
@@ -206,6 +250,7 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
       </div>
 
       {message && <p className={styles.cardBody} style={{ marginTop: 16, textAlign: 'center' }}>{message}</p>}
+
       {checkoutIntent && (
         <NativeBillingCheckoutModal
           intent={checkoutIntent}

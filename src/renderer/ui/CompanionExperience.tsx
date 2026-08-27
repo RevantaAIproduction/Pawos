@@ -16,6 +16,8 @@ import { aiProviderConfigStore } from '../ai/AIProviderConfigStore';
 import type { VisemeFrame } from '../conversation/LipSyncTypes';
 // [DEBUG-TEMP] remove this import and its usage below once real-mic verification is done.
 import { VoiceDebugPanel } from './VoiceDebugPanel';
+import { RecentWorkPage } from '../conversation/RecentWorkPage';
+import { InitialPage } from '../conversation/InitialPage';
 
 export default function CompanionExperience() {
   const ipc = useIpcBridge();
@@ -87,7 +89,15 @@ export default function CompanionExperience() {
   }, [conversationSnapshot.messages]);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [showRecentWork, setShowRecentWork] = useState(false);
   const notifyOnTaskCompleteRef = useRef(true);
+
+  // Show RecentWorkPage when work starts
+  useEffect(() => {
+    if (activeTask) {
+      setShowRecentWork(true);
+    }
+  }, [activeTask?.id]);
 
   const FIRST_LAUNCH_KEY = 'pawos:firstLaunchCompleted';
 
@@ -279,7 +289,79 @@ export default function CompanionExperience() {
       </div>
       {conversationSnapshot.panelOpen && (
         <div className={styles.conversationPanelSlot} data-interactive="true">
-          <ConversationPanel
+          {/* Initial Page - Shows when no messages yet (FULL SCREEN) */}
+          {conversationSnapshot.messages.length === 0 && !activeTask ? (
+            <InitialPage
+              activePawModel={conversation.activePawModel}
+              onSelectModel={(id) => conversation.selectModel(id)}
+              entitlement={conversation.entitlement}
+              pawCreditsBalanceUsd={conversation.pawCreditsBalanceUsd}
+              onBuyCredits={() => setSettingsOpen(true)}
+              onStartListening={() => conversation.startListening()}
+              onStopListening={() => conversation.stopListening()}
+              speechPlaybackState={conversationSnapshot.state}
+              usageCompute={conversation.usageCompute}
+              usageTimestamp={conversation.usageTimestamp}
+              setShowDetailedBreakdown={() => {}}
+              modelTierRequirements={conversation.modelTierRequirements}
+            />
+          ) : (
+            <>
+              {/* Recent Work Page Header with New Chat & Close buttons */}
+              {activeTask && showRecentWork && (
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(var(--pawos-overlay-rgb), 0.1)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      conversation.reset?.();
+                      setShowRecentWork(false);
+                    }}
+                    style={{
+                      padding: '6px 12px',
+                      backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                      border: '1px solid rgba(59, 130, 246, 0.3)',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: 11,
+                      fontWeight: 500,
+                      color: '#3b82f6',
+                    }}
+                  >
+                    + New Chat
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowRecentWork(false)}
+                    style={{
+                      padding: '6px 10px',
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: 14,
+                      color: 'rgba(var(--pawos-overlay-rgb), 0.6)',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(var(--pawos-overlay-rgb), 0.1)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+              {/* Recent Work Page */}
+              {activeTask && (
+                <RecentWorkPage
+                  onNewChat={() => {
+                    conversation.reset?.();
+                    setShowRecentWork(false);
+                  }}
+                  entitlement={conversation.entitlement}
+                  activePawModel={conversation.activePawModel}
+                  usageCompute={0}
+                  usageTimestamp={Date.now()}
+                />
+              )}
+              <ConversationPanel
             snapshot={conversationSnapshot}
             onClose={() => conversation.close()}
             onStartListening={() => conversation.startListening()}
@@ -314,7 +396,10 @@ export default function CompanionExperience() {
             activePawModel={conversation.activePawModel}
             modelTierRequirements={conversation.modelTierRequirements}
             onSelectModel={(id) => conversation.selectModel(id)}
+            currentWorkingFile={activeTask ? 'Working...' : undefined}
           />
+            </>
+          )}
         </div>
       )}
       {isWorkspaceActive && activeTask && (

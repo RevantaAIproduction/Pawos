@@ -25,6 +25,8 @@ import type {
   NativeSubscriptionCheckoutResult,
   NativeCreditsCheckoutResult,
   NativeCreditsVerificationResult,
+  NativeTierCheckoutResult,
+  NativeTierVerificationResult,
   CheckoutOptions,
   FeatureId,
   EntitlementSnapshot,
@@ -266,6 +268,10 @@ export function contextBridge() {
       ipcApi.invoke('billing:createNativeUsageCreditsCheckout', amountUsd, organizationId, accessToken),
     billingVerifyNativeUsageCreditsPayment: async (params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string; organizationId?: string }): Promise<NativeCreditsVerificationResult> =>
       ipcApi.invoke('billing:verifyNativeUsageCreditsPayment', params),
+    billingCreateNativeTierCheckout: async (tier: SubscriptionTierId, options?: CheckoutOptions, organizationId?: string, accessToken?: string): Promise<NativeTierCheckoutResult> =>
+      ipcApi.invoke('billing:createNativeTierCheckout', tier, options, organizationId, accessToken),
+    billingVerifyNativeTierPayment: async (params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string; organizationId?: string; tier: SubscriptionTierId; seatCount?: number; seatTier?: SeatTier }): Promise<NativeTierVerificationResult> =>
+      ipcApi.invoke('billing:verifyNativeTierPayment', params),
     billingCreateHighValueInvoices: async (params: { plan: string; seatTier?: string; seatCount: number; customerName: string; organizationName: string; gstNumber?: string; accessToken?: string }): Promise<any> =>
       ipcApi.invoke('billing:createHighValueInvoices', params),
     onSubscriptionUpdated: (cb: () => void) => on('billing:subscriptionUpdated', cb),
@@ -397,5 +403,19 @@ export function contextBridge() {
       ipcApi.invoke('connectivity:oauth:cancel', requestId),
     connectivityDeploymentProfilesHydrate: async (profile: DeploymentProfile): Promise<ConnectivityIpcResult<void>> =>
       ipcApi.invoke('connectivity:deploymentProfiles:hydrate', profile),
+    connectivityGetStoredCredential: async (connectorId: string, scope: ConnectivityScope): Promise<ConnectivityIpcResult<{ secret: string; authMethod: string } | undefined>> =>
+      ipcApi.invoke('connectivity:getStoredCredential', connectorId, scope),
+    connectivityGetJiraMetadata: async (scope: ConnectivityScope): Promise<ConnectivityIpcResult<{ cloudId: string; siteUrl: string; siteName: string } | undefined>> =>
+      ipcApi.invoke('connectivity:getJiraMetadata', scope),
+    autonomousVerifyRun: async (input: { runId: string; approved: boolean; verifierNotes?: string }): Promise<{ ok: boolean; reason?: string; billingEventId?: string }> =>
+      ipcApi.invoke('autonomous:verifyRun', input),
+    adminApplyTestTier: async (input: { tier: string; userEmail: string; userId: string }): Promise<{ ok: boolean; reason?: string; override?: { realTier: string; testTier: string; appliedAt: number } }> =>
+      ipcApi.invoke('admin:applyTestTier', input),
+    adminClearTestTier: async (input: { userId: string; userEmail: string }): Promise<{ ok: boolean; reason?: string }> =>
+      ipcApi.invoke('admin:clearTestTier', input),
+    adminGetTestTier: async (userId: string, userEmail: string): Promise<{ ok: boolean; reason?: string; override?: { realTier: string; testTier: string; appliedAt: number } }> =>
+      ipcApi.invoke('admin:getTestTier', userId, userEmail),
+    adminHydrateTestTier: async (input: { userId: string; realTier: string; testTier: string }): Promise<{ ok: boolean; reason?: string }> =>
+      ipcApi.invoke('admin:hydrateTestTier', input),
   };
 }

@@ -3,6 +3,8 @@ import { getRazorpayWebhookSecret, verifyRazorpayWebhookSignature, getRazorpayPl
 import { creditVerifiedTicketBalancePayment } from "@/lib/billing/ticketBalanceCrediting";
 import { creditVerifiedUsageCreditsPayment } from "@/lib/billing/usageCreditsCrediting";
 
+import { createServiceClient } from "@/lib/supabase/serviceClient";
+
 type RazorpayWebhookEvent = {
   event: string;
   payload: Record<string, { entity: Record<string, unknown> }>;
@@ -23,6 +25,134 @@ function applySubscriptionEvent(event: RazorpayWebhookEvent): void {
     subscriptionId: event.payload.subscription?.entity?.id,
     paymentId: event.payload.payment?.entity?.id,
   });
+}
+
+/**
+ * Handles tier_purchase webhook events (backup path if client-side verify fails).
+ * Activates Team/Enterprise tier by creating organization if needed.
+ * This is a fire-and-forget async operation — errors are logged but don't block webhook response.
+ */
+async function handleTierPurchaseWebhookAsync(
+  paymentEntity: { id?: string; order_id?: string | null; notes?: Record<string, string> } | undefined,
+  paymentId: string,
+  orderId: string
+): Promise<void> {
+  if (!paymentEntity?.notes) {
+    console.warn("[razorpay-webhook] Tier purchase event missing payment notes");
+    return;
+  }
+
+  const userId = paymentEntity.notes.userId;
+  const tier = paymentEntity.notes.tier as "team" | "enterprise" | undefined;
+  const seatCountStr = paymentEntity.notes.seatCount;
+  const seatCount = seatCountStr ? Number(seatCountStr) : undefined;
+
+  if (!userId) {
+    console.warn("[razorpay-webhook] Tier purchase event missing userId");
+    return;
+  }
+
+  if (!tier || !["team", "enterprise"].includes(tier)) {
+    console.warn("[razorpay-webhook] Tier purchase event has invalid tier:", tier);
+    return;
+  }
+
+  try {
+    const serviceClient = createServiceClient();
+
+    // Fetch user email from Supabase Auth
+    const { data: { user: authUser }, error: authError } = await serviceClient.auth.admin.getUserById(userId);
+    if (authError || !authUser?.email) {
+      console.warn("[razorpay-webhook] Failed to fetch user for tier activation:", authError);
+      return;
+    }
+
+    const domain = authUser.email.split("@")[1]?.toLowerCase() || "";
+    if (!domain) {
+      console.warn("[razorpay-webhook] User has no valid email domain");
+      return;
+    }
+
+    // Check if organization exists
+    const { data: existingOrgs, error: queryError } = await serviceClient
+      .from("organizations")
+      .select("id")
+      .eq("owner_user_id", userId)
+      .eq("domain", domain)
+      .limit(1);
+
+    if (queryError) {
+      console.warn("[razorpay-webhook] Failed to query existing organizations:", queryError);
+      return;
+    }
+
+    if (existingOrgs && existingOrgs.length > 0) {
+      // Update existing org
+      const { error: updateError } = await serviceClient
+        .from("organizations")
+        .update({
+          tier,
+          seat_count: tier === "enterprise" ? (seatCount || 20) : (seatCount || 2),
+        })
+        .eq("id", existingOrgs[0].id);
+
+      if (updateError) {
+        console.warn("[razorpay-webhook] Failed to update organization tier:", updateError);
+        return;
+      }
+
+      console.log("[razorpay-webhook] Organization tier updated for tier purchase:", existingOrgs[0].id);
+    } else {
+      // Create new org
+      const { data: slugData, error: slugError } = await serviceClient.rpc("generate_org_slug", {
+        org_name: domain.split(".")[0] || "Organization",
+      });
+
+      if (slugError || !slugData) {
+        console.warn("[razorpay-webhook] Failed to generate org slug:", slugError);
+        return;
+      }
+
+      const { data: newOrg, error: createError } = await serviceClient
+        .from("organizations")
+        .insert({
+          name: domain,
+          slug: slugData,
+          tier,
+          owner_user_id: userId,
+          domain,
+          seat_count: tier === "enterprise" ? (seatCount || 20) : (seatCount || 2),
+        })
+        .select("id")
+        .single();
+
+      if (createError) {
+        console.warn("[razorpay-webhook] Failed to create organization:", createError);
+        return;
+      }
+
+      // Add owner as member
+      const ownerRole = tier === "enterprise" ? "organizationOwner" : "owner";
+      const { error: memberError } = await serviceClient.from("organization_members").insert({
+        organization_id: newOrg.id,
+        user_id: userId,
+        email: authUser.email,
+        display_name: authUser.user_metadata?.full_name || null,
+        role: ownerRole,
+        status: "active",
+        joined_at: new Date().toISOString(),
+      });
+
+      if (memberError) {
+        console.warn("[razorpay-webhook] Failed to add owner to organization:", memberError);
+        return;
+      }
+
+      console.log("[razorpay-webhook] Organization created for tier purchase:", newOrg.id);
+    }
+  } catch (error) {
+    console.warn("[razorpay-webhook] Tier purchase webhook exception:", error);
+  }
 }
 
 /**
@@ -49,17 +179,26 @@ async function applyPaymentCapturedEvent(event: RazorpayWebhookEvent): Promise<v
     return;
   }
 
-  // Dispatch to the correct crediting function based on the server-stamped productType in the
+  // Dispatch to the correct handler based on the server-stamped productType in the
   // payment entity's notes. Razorpay includes the order's notes in the payment entity in webhook
   // payloads, making this field available without an extra Razorpay API call.
   //
   // The productType was stamped at order-creation time in:
   //   - /api/billing/checkout-credits     → "ticket_balance"  (Autonomous Work Credits)
   //   - /api/billing/checkout-usage-credits → "usage_credits" (Usage Credits)
+  //   - /api/billing/checkout-tier         → "tier_purchase"  (Team/Enterprise tier purchase)
   //
   // Neither crediting function ever trusts the webhook payload's amount — both independently
   // re-fetch the payment and order from Razorpay's own API for authoritative amount verification.
   const productType = paymentEntity?.notes?.productType;
+
+  // Handle tier purchases via webhook (backup path if client-side verify fails)
+  if (productType === "tier_purchase") {
+    await handleTierPurchaseWebhookAsync(paymentEntity, paymentId, orderId).catch((error) => {
+      console.warn(`[razorpay-webhook] Tier purchase webhook handling failed for ${paymentId}:`, error);
+    });
+    return;
+  }
 
   const baseParams = {
     orderId,

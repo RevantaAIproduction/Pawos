@@ -6,6 +6,7 @@ import { getIpcBridge } from '../services/ipc/ipcBridge';
 import { autonomousTaskBillingService } from './AutonomousTaskBillingService';
 import { CONNECTOR_ID_BY_TICKET_SOURCE, connectorDisplayName } from './AutonomousTaskBillingGate';
 import { getSupabaseClient } from '../auth/supabaseClient';
+import { resolveCredentialsForOrganization } from './CredentialResolver';
 import type { ActionRequest, ActionResult } from '../../shared/actions/ActionTypes';
 import type { ExecutionRecord } from '../../shared/actions/ExecutionRecordTypes';
 import type {
@@ -515,43 +516,181 @@ async function finishAutonomousRun(
     };
   }
 
-  const externalUpdate = await attemptExternalUpdate(input, deps);
+  // ===== NEW: Work completed successfully — now handle PR creation & verification lifecycle =====
 
-  let prVerified = false;
-  if (input.prUrl) {
-    const verifyResult = await deps.verifyPullRequestExists(input.prUrl);
-    prVerified = verifyResult.ok && verifyResult.data.verified;
+  // Mark implementation as complete (before attempting external updates)
+  await deps.billingService.transitionRun(input.runId, 'implementation_complete', 'Engineering work completed successfully. Awaiting verification.');
+
+  let prUrl = input.prUrl;
+  const prCreation = await attemptPRCreation(input, executionRecord);
+  if (prCreation.ok && prCreation.prUrl) {
+    prUrl = prCreation.prUrl;
   }
 
-  const billingEventId = await deps.billingService.completeRun(input.runId, {
-    prUrl: input.prUrl,
-    clientReplySent: false,
-    deployCompleted: false,
-    prVerified,
-    ticketVerified: false,
-  });
+  // Attempt external ticket updates (Jira, Linear, GitHub)
+  const externalUpdate = await attemptExternalUpdate(input, deps, prUrl, executionRecord);
 
-  return { runId: input.runId, outcome, billingEventId, externalUpdate };
+  // Transition to awaiting_verification (work is done, now needs human review)
+  await deps.billingService.transitionRun(input.runId, 'awaiting_verification', 'Implementation complete. Awaiting human verification before final completion.');
+
+  // Return the result indicating verification is required
+  // Note: billingEventId remains null until verification approves — do NOT charge until verified
+  return {
+    runId: input.runId,
+    outcome,
+    billingEventId: null, // Will be charged when verification succeeds
+    externalUpdate,
+  };
 }
 
 /**
- * The ONE genuinely real "external update" this codebase can perform — a completion comment on an
- * already-existing GitHub/GitLab pull/merge request. Never attempted for Jira/Linear (no write-back
- * capability exists — see this file's own doc comment) and never attempted when no real `prUrl` was
- * supplied (there is no createPullRequest capability, so a successful run with no pre-existing PR
- * genuinely has nothing to update — honestly NOT_EXECUTED, never a fabricated success).
+ * Attempt to create a pull request for the autonomous work.
+ * Uses GitHubPRPlugin if GitHub integration is available.
+ * Returns the created PR URL or null if not created.
  */
-async function attemptExternalUpdate(input: AutonomousOrchestrationInput, deps: AutonomousOrchestrationDeps): Promise<AutonomousEvidenceCheck> {
-  if (!input.prUrl) {
-    return { label: 'External update', status: 'NOT_EXECUTED', detail: 'No pull/merge request URL was available — this codebase has no capability to create one autonomously.' };
+async function attemptPRCreation(
+  input: AutonomousOrchestrationInput,
+  executionRecord: ExecutionRecord | null
+): Promise<{ ok: boolean; prUrl?: string; reason?: string }> {
+  // Only attempt PR creation if repository is configured
+  if (!input.repository || !input.repository.includes('github')) {
+    return { ok: true, reason: 'PR creation only supported for GitHub repositories' };
   }
-  const commentBody = `PawOS Autonomous Work completed this ticket${input.ticketId ? ` (${input.ticketId})` : ''}. See the linked Work Record for full evidence (commands run, files changed, validation results).`;
-  const result = await deps.postCompletionComment(input.prUrl, commentBody);
-  if (!result.ok) {
-    return { label: 'External update', status: 'FAILED', detail: `Could not post the completion comment: ${result.error}` };
+
+  try {
+    // Resolve GitHub credentials from credential vault
+    const credentials = await resolveCredentialsForOrganization(input.organizationId);
+    if (!credentials.github) {
+      return { ok: false, reason: 'GitHub credentials not configured for this organization' };
+    }
+
+    // Dynamically import GitHub PR plugin
+    const { createGitHubPR, parseGitHubRepo } = await import('../../../main/execution/plugins/infrastructure/GitHubPRPlugin');
+
+    const parsed = parseGitHubRepo(input.repository);
+    if (!parsed) {
+      return { ok: false, reason: 'Invalid repository format — expected owner/repo' };
+    }
+
+    // Extract work summary from execution record
+    const filesChanged = executionRecord?.fileOperations?.length ?? 0;
+    const summary = executionRecord?.summary ?? 'Autonomous engineering work completed';
+
+    const prTitle = `[PawOS] ${input.ticketId || 'Autonomous'}: ${summary.substring(0, 50)}`;
+    const prBody = `Autonomous Engineering Task\n\nTicket: ${input.ticketId || 'N/A'}\nFiles Changed: ${filesChanged}\n\nThis PR was created by PawOS Autonomous Engineering. Review and merge if validation passes.`;
+
+    // Create the PR using the resolved GitHub token
+    const result = await createGitHubPR({
+      githubToken: credentials.github.token,
+      owner: parsed.owner,
+      repo: parsed.repo,
+      title: prTitle,
+      body: prBody,
+      baseBranch: 'main',
+      headBranch: input.runId, // Use run ID as branch name
+    });
+
+    if (!result.ok) {
+      return { ok: false, reason: result.reason || 'PR creation failed' };
+    }
+
+    return { ok: true, prUrl: result.prUrl };
+  } catch (error) {
+    return { ok: false, reason: error instanceof Error ? error.message : 'PR creation failed' };
   }
-  if (!result.data.posted) {
-    return { label: 'External update', status: 'BLOCKED', detail: result.data.reason };
+}
+
+/**
+ * Attempt external updates: GitHub PR comments, Jira comments, Linear comments.
+ * NEW: Also attempts PR creation for GitHub repositories.
+ * Tries all available channels; reports aggregate status.
+ */
+async function attemptExternalUpdate(
+  input: AutonomousOrchestrationInput,
+  deps: AutonomousOrchestrationDeps,
+  prUrl?: string,
+  executionRecord?: ExecutionRecord | null
+): Promise<AutonomousEvidenceCheck> {
+  const updates: string[] = [];
+  let hasFailures = false;
+
+  // 1. Update GitHub PR (existing/newly created)
+  if (prUrl) {
+    const commentBody = `PawOS Autonomous Work completed this ticket${input.ticketId ? ` (${input.ticketId})` : ''}. See the linked Work Record for full evidence (commands run, files changed, validation results).`;
+    const result = await deps.postCompletionComment(prUrl, commentBody);
+    if (result.ok && result.data.posted) {
+      updates.push(`GitHub PR ${prUrl} commented`);
+    } else {
+      updates.push(`GitHub PR comment failed: ${result.data?.reason || result.error}`);
+      hasFailures = true;
+    }
   }
-  return { label: 'External update', status: 'CAPTURED', detail: result.data.reason };
+
+  // 2. Update Jira (if ticket is from Jira and credentials available)
+  if (input.ticketSource === 'jira' && input.ticketId) {
+    try {
+      const credentials = await resolveCredentialsForOrganization(input.organizationId);
+      if (credentials.jira) {
+        const { postJiraComment } = await import('../../../main/execution/plugins/infrastructure/JiraWriteBackPlugin');
+
+        const jiraComment = `Implemented the requested changes and completed validation. Changes are available in PR ${prUrl || 'N/A'} for review.`;
+
+        const result = await postJiraComment({
+          jiraUrl: credentials.jira.url,
+          apiEmail: credentials.jira.email,
+          apiToken: credentials.jira.apiToken,
+          issueKey: input.ticketId,
+          comment: jiraComment,
+        });
+
+        if (result.ok) {
+          updates.push(`Jira ${input.ticketId} commented successfully`);
+        } else {
+          updates.push(`Jira ${input.ticketId} comment failed: ${result.reason}`);
+          hasFailures = true;
+        }
+      } else {
+        updates.push(`Jira ${input.ticketId}: credentials not configured`);
+      }
+    } catch (error) {
+      updates.push(`Jira write-back: ${error instanceof Error ? error.message : 'failed'}`);
+    }
+  }
+
+  // 3. Update Linear (if ticket is from Linear and API key available)
+  if (input.ticketSource === 'linear' && input.ticketId) {
+    try {
+      const credentials = await resolveCredentialsForOrganization(input.organizationId);
+      if (credentials.linear) {
+        const { postLinearComment } = await import('../../../main/execution/plugins/infrastructure/LinearWriteBackPlugin');
+
+        const linearComment = `Autonomous engineering work completed. Changes available for review in PR: ${prUrl || 'N/A'}. Implementation passed validation.`;
+
+        const result = await postLinearComment({
+          linearApiKey: credentials.linear.apiKey,
+          issueId: input.ticketId,
+          comment: linearComment,
+        });
+
+        if (result.ok) {
+          updates.push(`Linear ${input.ticketId} commented successfully`);
+        } else {
+          updates.push(`Linear ${input.ticketId} comment failed: ${result.reason}`);
+          hasFailures = true;
+        }
+      } else {
+        updates.push(`Linear ${input.ticketId}: credentials not configured`);
+      }
+    } catch (error) {
+      updates.push(`Linear write-back: ${error instanceof Error ? error.message : 'failed'}`);
+    }
+  }
+
+  const detail = updates.length > 0 ? updates.join('; ') : 'No external updates configured for this ticket source.';
+
+  return {
+    label: 'External update',
+    status: hasFailures ? 'FAILED' : updates.length > 0 ? 'CAPTURED' : 'NOT_EXECUTED',
+    detail,
+  };
 }

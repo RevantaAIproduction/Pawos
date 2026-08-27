@@ -20,6 +20,7 @@ import {
   type PawModelId,
 } from '../../shared/ai/PawModelTypes';
 import { formatTierLabel } from '../billing/EntitlementDisplay';
+import { CompanionCard } from './CompanionCard';
 
 /** Reasoning models are genuinely selectable (they change which model actually answers); the rest
  *  of the catalog are automatic, specialized routers Paw invokes per-need — shown for transparency
@@ -93,6 +94,7 @@ export function ConversationPanel({
   activePawModel,
   modelTierRequirements,
   onSelectModel,
+  currentWorkingFile = undefined,
 }: {
   snapshot: ConversationSnapshot;
   onClose: () => void;
@@ -152,6 +154,7 @@ export function ConversationPanel({
   activePawModel?: PawModelId;
   modelTierRequirements?: Partial<Record<PawModelId, SubscriptionTierId>>;
   onSelectModel?: (id: PawModelId) => void;
+  currentWorkingFile?: string;
 }) {
   const [draft, setDraft] = useState('');
   const [wasPasted, setWasPasted] = useState(false);
@@ -160,6 +163,7 @@ export function ConversationPanel({
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [supportPersona, setSupportPersona] = useState<string | null>(null);
   const [showPersonaButton, setShowPersonaButton] = useState(true);
+  const [showDetailedBreakdown, setShowDetailedBreakdown] = useState(false);
   const conversationIdRef = useRef(snapshot.messages.length > 0 ? 'conv-' + Date.now() : null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -411,28 +415,6 @@ export function ConversationPanel({
         {snapshot.messages.length === 0 && (
           <div className={styles.emptyState}>No conversation yet. Activate listening or type a message.</div>
         )}
-        {showPersonaButton && !supportPersona && (
-          <div style={{ marginBottom: '16px' }}>
-            <button
-              onClick={() => {
-                setSupportPersona('Support Specialist');
-                setShowPersonaButton(false);
-              }}
-              style={{
-                padding: '8px 12px',
-                fontSize: 12,
-                backgroundColor: '#f0f0f0',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontWeight: 500,
-                color: '#333',
-              }}
-            >
-              Connect with support specialist
-            </button>
-          </div>
-        )}
         {supportPersona && (
           <div
             style={{
@@ -527,6 +509,23 @@ export function ConversationPanel({
       {snapshot.errorMessage && <div className={styles.error}>{snapshot.errorMessage}</div>}
       {attachError && <div className={styles.error}>{attachError}</div>}
 
+      {/* Companion Card */}
+      <CompanionCard
+        activePawModel={activePawModel}
+        onSelectModel={onSelectModel}
+        entitlement={entitlement}
+        pawCreditsBalanceUsd={pawCreditsBalanceUsd}
+        onBuyCredits={onBuyCompute}
+        onSpeech={onStartListening}
+        onStopSpeech={onStopListening}
+        isSpeaking={snapshot.speechPlaybackState === 'speaking'}
+        usageCompute={entitlement?.usage5hPc ?? 0}
+        usageTimestamp={Date.now()}
+        onShowDetailedBreakdown={() => setShowDetailedBreakdown(true)}
+        currentWorkingFile={currentWorkingFile}
+        modelTierRequirements={modelTierRequirements}
+      />
+
       <div className={styles.composer}>
         <input
           ref={fileInputRef}
@@ -539,198 +538,120 @@ export function ConversationPanel({
             event.target.value = '';
           }}
         />
-        <button
-          type="button"
-          className={styles.attachBtn}
-          onClick={handleAttachClick}
-          title="Attach a text file or reference image for Paw to read"
-          aria-label="Attach a file or image"
-        >
-          📎
-        </button>
-        <div className={styles.modePickerWrap} ref={modeMenuRef}>
+
+        {/* Top row: Attach, Mode Picker, Execute Mode */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button
             type="button"
-            className={styles.modePickerBtn}
-            onClick={() => setModeMenuOpen((open) => !open)}
-            aria-haspopup="listbox"
-            aria-expanded={modeMenuOpen}
-            title="Execution mode — controls when Paw asks before acting"
+            className={styles.attachBtn}
+            onClick={handleAttachClick}
+            title="Attach a text file or reference image for Paw to read"
+            aria-label="Attach a file or image"
           >
-            <span>{activeModeDescriptor.label}</span>
-            <span className={styles.modePickerChevron}>{modeMenuOpen ? '▴' : '▾'}</span>
+            📎
           </button>
-          {modeMenuOpen && (
-            <div className={styles.modePickerMenu} role="listbox">
-              {EXECUTION_MODE_CATALOG.map((mode) => {
-                const disabled = mode.id === 'bypass' && !bypassPermissionsEnabled;
-                const selected = mode.id === activeExecutionMode;
-                return (
-                  <button
-                    key={mode.id}
-                    type="button"
-                    role="option"
-                    aria-selected={selected}
-                    disabled={disabled}
-                    className={`${styles.modePickerOption} ${selected ? styles.modePickerOptionSelected : ''}`}
-                    onClick={() => {
-                      if (disabled) return;
-                      onSetExecutionMode?.(mode.id);
-                      setModeMenuOpen(false);
-                    }}
-                  >
-                    <span className={styles.modePickerOptionCheck}>{selected ? '✓' : ''}</span>
-                    <span className={styles.modePickerOptionText}>
-                      <span className={styles.modePickerOptionLabel}>{mode.label}</span>
-                      <span className={styles.modePickerOptionDesc}>
-                        {disabled ? 'Enable in Settings → Advanced' : mode.description}
-                      </span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-        <div className={styles.modelPickerWrap} ref={modelMenuRef}>
-          <button
-            type="button"
-            className={styles.modelPickerBtn}
-            onClick={() => setModelMenuOpen((open) => !open)}
-            aria-haspopup="listbox"
-            aria-expanded={modelMenuOpen}
-            title="Model — which Paw model answers this conversation"
-          >
-            <span>{activePawModelDescriptor.label}</span>
-            <span className={styles.modelPickerChevron}>{modelMenuOpen ? '▴' : '▾'}</span>
-          </button>
-          {modelMenuOpen && (() => {
-            const exhaustionAction = entitlement
-              ? getExhaustionPrimaryActions(entitlement.tier, entitlement.seatTier, entitlement.pooled, enterpriseContactAvailable ?? false)[0]
-              : undefined;
-            const exhaustionActionHandlers: Record<string, (() => void) | undefined> = {
-              upgrade: onUpgrade,
-              buyCompute: onBuyCompute,
-              contactSales: onContactSales,
-              contactAdmin: onContactAdmin,
-              requestMoreCompute: onRequestMoreCompute,
-            };
-            const reasoningModels = PAW_MODEL_CATALOG.filter((m) => REASONING_PAW_MODEL_IDS.includes(m.id));
-            const otherModels = PAW_MODEL_CATALOG.filter((m) => !REASONING_PAW_MODEL_IDS.includes(m.id));
-            // One running sequence (1, 2, 3, ...) across both groups, in catalog order — a stable
-            // quick-reference number per model, not per-group numbering that would restart at 1 twice.
-            const modelNumber = new Map(PAW_MODEL_CATALOG.map((m, i) => [m.id, i + 1]));
-            return (
-              <div className={styles.modelPickerMenu} role="listbox">
-                <div className={styles.modelPickerGroupLabel}>Reasoning models</div>
-                {reasoningModels.map((model) => {
-                  const state = getModelUiState(model, entitlement);
-                  const selected = model.id === activePawModel;
-                  const requiredTier = modelTierRequirements?.[model.id];
+          <div className={styles.modePickerWrap} ref={modeMenuRef}>
+            <button
+              type="button"
+              className={styles.modePickerBtn}
+              onClick={() => setModeMenuOpen((open) => !open)}
+              aria-haspopup="listbox"
+              aria-expanded={modeMenuOpen}
+              title="Execution mode — controls when Paw asks before acting"
+            >
+              <span>{activeModeDescriptor.label}</span>
+              <span className={styles.modePickerChevron}>{modeMenuOpen ? '▴' : '▾'}</span>
+            </button>
+            {modeMenuOpen && (
+              <div className={styles.modePickerMenu} role="listbox">
+                {EXECUTION_MODE_CATALOG.map((mode) => {
+                  const disabled = mode.id === 'bypass' && !bypassPermissionsEnabled;
+                  const selected = mode.id === activeExecutionMode;
                   return (
-                    <div key={model.id} className={styles.modelPickerOption}>
-                      <button
-                        type="button"
-                        role="option"
-                        aria-selected={selected}
-                        disabled={state !== 'available'}
-                        className={`${styles.modelPickerOptionMain} ${selected ? styles.modelPickerOptionSelected : ''} ${
-                          state !== 'available' ? styles.modelPickerOptionLocked : ''
-                        }`}
-                        onClick={() => {
-                          if (state !== 'available') return;
-                          onSelectModel?.(model.id);
-                          setModelMenuOpen(false);
-                        }}
-                      >
-                        <span className={styles.modelPickerOptionCheck}>{selected ? '✓' : ''}</span>
-                        <span className={styles.modelPickerOptionText}>
-                          <span className={styles.modelPickerOptionLabel}>{model.label}</span>
-                          <span className={styles.modelPickerOptionDesc}>
-                            {state === 'locked' && `🔒 ${formatTierLabel(requiredTier ?? 'pro')} required`}
-                            {state === 'exhausted' && 'Usage limit reached'}
-                            {state === 'available' && model.description}
-                          </span>
+                    <button
+                      key={mode.id}
+                      type="button"
+                      role="option"
+                      aria-selected={selected}
+                      disabled={disabled}
+                      className={`${styles.modePickerOption} ${selected ? styles.modePickerOptionSelected : ''}`}
+                      onClick={() => {
+                        if (disabled) return;
+                        onSetExecutionMode?.(mode.id);
+                        setModeMenuOpen(false);
+                      }}
+                    >
+                      <span className={styles.modePickerOptionCheck}>{selected ? '✓' : ''}</span>
+                      <span className={styles.modePickerOptionText}>
+                        <span className={styles.modePickerOptionLabel}>{mode.label}</span>
+                        <span className={styles.modePickerOptionDesc}>
+                          {disabled ? 'Enable in Settings → Advanced' : mode.description}
                         </span>
-                        <span className={styles.modelPickerOptionNumber}>{modelNumber.get(model.id)}</span>
-                      </button>
-                      {state === 'locked' && (
-                        <button
-                          type="button"
-                          className={styles.modelPickerOptionAction}
-                          onClick={() => {
-                            onUpgrade?.();
-                            setModelMenuOpen(false);
-                          }}
-                        >
-                          Upgrade
-                        </button>
-                      )}
-                      {state === 'exhausted' && exhaustionAction && (
-                        <button
-                          type="button"
-                          className={styles.modelPickerOptionAction}
-                          onClick={() => {
-                            exhaustionActionHandlers[exhaustionAction.id]?.();
-                            setModelMenuOpen(false);
-                          }}
-                        >
-                          {exhaustionAction.label}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-                <div className={styles.modelPickerGroupLabel}>Other Paw models</div>
-                {otherModels.map((model) => {
-                  const state = getModelUiState(model, entitlement);
-                  const requiredTier = modelTierRequirements?.[model.id];
-                  return (
-                    <div key={model.id} className={`${styles.modelPickerOption} ${styles.modelPickerOptionStatic}`}>
-                      <span className={styles.modelPickerOptionText}>
-                        <span className={styles.modelPickerOptionLabel}>{model.label}</span>
-                        <span className={styles.modelPickerOptionDesc}>{model.description}</span>
                       </span>
-                      <span
-                        className={`${styles.modelPickerBadge} ${
-                          state === 'available' ? styles.modelPickerBadgeAvailable : styles.modelPickerBadgeMuted
-                        }`}
-                      >
-                        {state === 'locked' && `🔒 ${formatTierLabel(requiredTier ?? 'pro')} required`}
-                        {state === 'exhausted' && 'Usage limit reached'}
-                        {state === 'available' && 'Available'}
-                      </span>
-                      <span className={styles.modelPickerOptionNumber}>{modelNumber.get(model.id)}</span>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
-            );
-          })()}
+            )}
+          </div>
         </div>
-        <textarea
-          ref={textareaRef}
-          className={styles.input}
-          rows={1}
-          autoFocus
-          value={draft}
-          onChange={(event) => {
-            setDraft(event.target.value);
-            if (!event.target.value) setWasPasted(false);
-            resizeTextarea();
-          }}
-          onPaste={handlePaste}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-              event.preventDefault();
-              send();
-            }
-          }}
-          placeholder="Type, or record speech then review before sending"
-        />
-        <button className={styles.sendBtn} onClick={send} type="button">
-          Send
-        </button>
+
+        {/* Chat bar with Input + Controls */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+          {/* Microphone button */}
+          <button
+            type="button"
+            className={snapshot.state === 'listening' ? styles.stopRecordBtn : styles.listenBtn}
+            onClick={snapshot.state === 'listening' ? onStopListening : onStartListening}
+            title={snapshot.state === 'listening' ? 'Stop recording' : 'Start recording'}
+          >
+            🎤
+          </button>
+
+          {/* Resume button (Speech output) */}
+          {snapshot.speechPlaybackState === 'paused' && (
+            <button
+              type="button"
+              className={styles.listenBtn}
+              onClick={() => {
+                const msg = latestMessage;
+                if (msg && msg.role === 'assistant') {
+                  onSpeakMessage(msg.content);
+                }
+              }}
+              title="Resume speech output"
+            >
+              ▶️
+            </button>
+          )}
+
+          {/* Text input */}
+          <textarea
+            ref={textareaRef}
+            className={styles.input}
+            rows={1}
+            autoFocus
+            value={draft}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              if (!event.target.value) setWasPasted(false);
+              resizeTextarea();
+            }}
+            onPaste={handlePaste}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                send();
+              }
+            }}
+            placeholder="Type or describe what you need"
+          />
+
+          {/* Send button */}
+          <button className={styles.sendBtn} onClick={send} type="button">
+            Send
+          </button>
+        </div>
       </div>
     </section>
   );

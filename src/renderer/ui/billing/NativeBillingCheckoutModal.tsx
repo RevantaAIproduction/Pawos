@@ -11,7 +11,6 @@ import {
   estimateTicketBalancePaymentInr,
   NATIVE_PAYMENT_METHOD_DETAILS,
   subscriptionAmountInr,
-  subscriptionCheckoutLabel,
   USAGE_CREDITS_PRESETS_USD,
   USAGE_CREDITS_MIN_USD,
   USAGE_CREDITS_MAX_USD,
@@ -21,8 +20,34 @@ import {
   type NativePaymentMethod,
 } from '../../billing/nativeCheckoutModel';
 
-// Internal: payment processor scripts — not shown to users
-const STANDARD_CHECKOUT_SCRIPT_URL = 'https://checkout.razorpay.com/v1/checkout.js'; // For subscriptions only (unchanged)
+const COUNTRIES = [
+  'Afghanistan', 'Albania', 'Algeria', 'Andorra', 'Angola', 'Argentina', 'Armenia', 'Australia', 'Austria', 'Azerbaijan',
+  'Bahamas', 'Bahrain', 'Bangladesh', 'Barbados', 'Belarus', 'Belgium', 'Belize', 'Benin', 'Bhutan', 'Bolivia', 'Bosnia and Herzegovina', 'Botswana', 'Brazil', 'Brunei', 'Bulgaria', 'Burkina Faso', 'Burundi',
+  'Cambodia', 'Cameroon', 'Canada', 'Cape Verde', 'Central African Republic', 'Chad', 'Chile', 'China', 'Colombia', 'Comoros', 'Congo', 'Costa Rica', 'Croatia', 'Cuba', 'Cyprus', 'Czech Republic',
+  'Côte d\'Ivoire', 'Denmark', 'Djibouti', 'Dominica', 'Dominican Republic',
+  'Ecuador', 'Egypt', 'El Salvador', 'Equatorial Guinea', 'Eritrea', 'Estonia', 'Eswatini', 'Ethiopia',
+  'Fiji', 'Finland', 'France',
+  'Gabon', 'Gambia', 'Georgia', 'Germany', 'Ghana', 'Greece', 'Grenada', 'Guatemala', 'Guinea', 'Guinea-Bissau', 'Guyana',
+  'Haiti', 'Honduras', 'Hungary',
+  'Iceland', 'India', 'Indonesia', 'Iran', 'Iraq', 'Ireland', 'Israel', 'Italy',
+  'Jamaica', 'Japan', 'Jordan',
+  'Kazakhstan', 'Kenya', 'Kiribati', 'Kuwait', 'Kyrgyzstan',
+  'Laos', 'Latvia', 'Lebanon', 'Lesotho', 'Liberia', 'Libya', 'Liechtenstein', 'Lithuania', 'Luxembourg',
+  'Madagascar', 'Malawi', 'Malaysia', 'Maldives', 'Mali', 'Malta', 'Marshall Islands', 'Mauritania', 'Mauritius', 'Mexico', 'Micronesia', 'Moldova', 'Monaco', 'Mongolia', 'Montenegro', 'Morocco', 'Mozambique', 'Myanmar',
+  'Namibia', 'Nauru', 'Nepal', 'Netherlands', 'New Zealand', 'Nicaragua', 'Niger', 'Nigeria', 'North Korea', 'North Macedonia', 'Norway',
+  'Oman',
+  'Pakistan', 'Palau', 'Palestine', 'Panama', 'Papua New Guinea', 'Paraguay', 'Peru', 'Philippines', 'Poland', 'Portugal',
+  'Qatar',
+  'Romania', 'Russia', 'Rwanda',
+  'Saint Kitts and Nevis', 'Saint Lucia', 'Saint Vincent and the Grenadines', 'Samoa', 'San Marino', 'Sao Tome and Principe', 'Saudi Arabia', 'Senegal', 'Serbia', 'Seychelles', 'Sierra Leone', 'Singapore', 'Slovakia', 'Slovenia', 'Solomon Islands', 'Somalia', 'South Africa', 'South Korea', 'South Sudan', 'Spain', 'Sri Lanka', 'Sudan', 'Suriname', 'Sweden', 'Switzerland', 'Syria',
+  'Taiwan', 'Tajikistan', 'Tanzania', 'Thailand', 'Timor-Leste', 'Togo', 'Tonga', 'Trinidad and Tobago', 'Tunisia', 'Turkey', 'Turkmenistan', 'Tuvalu',
+  'Uganda', 'Ukraine', 'United Arab Emirates', 'United Kingdom', 'United States', 'Uruguay', 'Uzbekistan',
+  'Vanuatu', 'Vatican City', 'Venezuela', 'Vietnam',
+  'Yemen',
+  'Zambia', 'Zimbabwe'
+];
+
+// Internal: payment processor script — not shown to users
 const CUSTOM_CHECKOUT_SCRIPT_URL = 'https://checkout.razorpay.com/v1/razorpay.js'; // For Custom Checkout (one-time orders)
 
 type RazorpayCheckoutInstance = { open: () => void };
@@ -42,13 +67,13 @@ declare global {
 
 export type NativeBillingCheckoutIntent =
   | {
-      kind: 'subscription';
+      kind: 'tierPurchase';
       tier: Exclude<SubscriptionTierId, 'go'>;
       seatTier?: SeatTier;
       seatCount?: number;
-      runtimeIds?: CheckoutOptions['runtimeIds'];
-      /** Only meaningful when tier === 'proMax' — which Paw Compute usage multiplier variant. */
       proMaxVariant?: ProMaxVariant;
+      runtimeIds?: CheckoutOptions['runtimeIds'];
+      organizationId?: string;
     }
   | {
       /** Autonomous Work Credits — ticket balance top-up, $30 minimum. Ledger: add_ticket_balance_service. */
@@ -96,14 +121,14 @@ type CheckoutState =
 
 type PaymentStep = 'collecting' | 'processing' | 'verifying' | 'invoice' | 'email' | 'complete';
 
-function loadPaymentScript(type: 'standard' | 'custom' = 'custom'): Promise<boolean> {
+function loadPaymentScript(): Promise<boolean> {
   return new Promise((resolve) => {
     if (window.Razorpay) {
       resolve(true);
       return;
     }
     const script = document.createElement('script');
-    script.src = type === 'standard' ? STANDARD_CHECKOUT_SCRIPT_URL : CUSTOM_CHECKOUT_SCRIPT_URL;
+    script.src = CUSTOM_CHECKOUT_SCRIPT_URL;
     script.onload = () => resolve(true);
     script.onerror = () => resolve(false);
     document.body.appendChild(script);
@@ -153,18 +178,6 @@ function lineItem(label: string, value: string, strong = false) {
 
 function formatPaymentInr(amount: number): string {
   return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} INR`;
-}
-
-function subscriptionFrequencyText(intent: Extract<NativeBillingCheckoutIntent, { kind: 'subscription' }>): string {
-  if (intent.tier === 'pro') return '$20.00 / month';
-  if (intent.tier === 'proMax') {
-    if (intent.proMaxVariant === '5x') return '$100.00 / month';
-    if (intent.proMaxVariant === '20x') return '$250.00 / month';
-    return 'Select variant to continue';
-  }
-  if (intent.tier === 'team') return intent.seatTier === 'premium' ? '$100.00 / seat / month' : '$20.00 / seat / month';
-  if (intent.tier === 'enterprise') return '$20.00 / seat / month (base)';
-  return 'Billed monthly';
 }
 
 // ─── Preset amount picker ──────────────────────────────────────────────────────
@@ -761,10 +774,12 @@ export function NativeBillingCheckoutModal({
   onClose: () => void;
   onSuccess?: () => void;
 }) {
-  const isSubscription = intent.kind === 'subscription';
+  const isTierPurchase = intent.kind === 'tierPurchase';
+  const isSubscription = isTierPurchase;
   const isCredits = intent.kind === 'autonomousWorkCredits';
   const isUsageCredits = intent.kind === 'usageCredits';
   const isAdditionalSeat = intent.kind === 'additionalSeat';
+  const isOneTimeOrder = isCredits || isUsageCredits || isAdditionalSeat;
   // Price per additional seat: Standard = $20/mo, Premium = $100/mo
   const additionalSeatPriceUsd = isAdditionalSeat
     ? (intent.seatTier === 'premium' ? 100 : 20)
@@ -776,26 +791,26 @@ export function NativeBillingCheckoutModal({
 
   // Pro Max variant selector
   const [proMaxVariant, setProMaxVariant] = useState<ProMaxVariant | null>(
-    intent.kind === 'subscription' && intent.tier === 'proMax'
-      ? (intent.proMaxVariant ?? null)
+    isTierPurchase && (intent as any).tier === 'proMax'
+      ? ((intent as any).proMaxVariant ?? null)
       : null
   );
 
   // Seat count picker — for team/enterprise when plans page passes seatCount: undefined.
   const isTeamOrEnterprise =
-    intent.kind === 'subscription' && (intent.tier === 'team' || intent.tier === 'enterprise');
+    isTierPurchase && ((intent as any).tier === 'team' || (intent as any).tier === 'enterprise');
   const minSeats =
-    intent.kind === 'subscription' && intent.tier === 'enterprise' ? 20 : 1;
+    isTierPurchase && (intent as any).tier === 'enterprise' ? 20 : 1;
   const maxSeats: number | undefined =
-    intent.kind === 'subscription' && intent.tier === 'team' ? 150 : undefined;
+    isTierPurchase && (intent as any).tier === 'team' ? 150 : undefined;
   const [seatCountInput, setSeatCountInput] = useState<number>(
-    intent.kind === 'subscription' && (intent.tier === 'team' || intent.tier === 'enterprise')
-      ? (intent.seatCount ?? minSeats)
+    isTierPurchase && ((intent as any).tier === 'team' || (intent as any).tier === 'enterprise')
+      ? ((intent as any).seatCount ?? minSeats)
       : 1
   );
   const effectiveSeatCount = isTeamOrEnterprise
     ? Math.max(minSeats, maxSeats !== undefined ? Math.min(maxSeats, seatCountInput) : seatCountInput)
-    : (intent.kind === 'subscription' ? Math.max(1, intent.seatCount ?? 1) : 1);
+    : (isTierPurchase ? Math.max(1, (intent as any).seatCount ?? 1) : 1);
 
   const [state, setState] = useState<CheckoutState>('idle');
   const [failMessage, setFailMessage] = useState<string | null>(null);
@@ -813,21 +828,59 @@ export function NativeBillingCheckoutModal({
   const [invoiceCount, setInvoiceCount] = useState(1);
   const [currentInvoice, setCurrentInvoice] = useState(1);
 
+  // Billing form fields
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [mobileNumber, setMobileNumber] = useState('');
+  const [country, setCountry] = useState('India');
+  const [address, setAddress] = useState('');
+  const [taxId, setTaxId] = useState('');
+  const [organizationName, setOrganizationName] = useState('');
+
+  // Load user data on mount
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        const session = await ipc.authGetSession?.();
+        if (session?.user?.email) {
+          setEmail(session.user.email);
+
+          // Extract organization from email domain
+          const emailDomain = session.user.email.split('@')[1];
+          if (emailDomain) {
+            const domainName = emailDomain.split('.')[0];
+            const orgName = domainName
+              .split(/[-_]/)
+              .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
+              .join('');
+            setOrganizationName(orgName);
+          }
+        }
+        if (session?.user?.name) {
+          setFullName(session.user.name);
+        }
+      } catch {
+        // Continue without pre-fill
+      }
+    };
+    loadUserData();
+  }, []);
+
   // High-value Team/Enterprise order handling (>₹40,000 / $500 USD)
   const isHighValue = useMemo(() => {
-    // Team/Enterprise subscriptions >$500
-    if (isSubscription && intent.kind === 'subscription') {
-      const intentSub = intent as Extract<typeof intent, { kind: 'subscription' }>;
-      if (intentSub.tier === 'team' || intentSub.tier === 'enterprise') {
-        const basePriceUsd = intentSub.tier === 'team' && intentSub.seatTier === 'premium' ? 100 : 20;
+    // Team/Enterprise tier purchases ≥$500 → Invoice required
+    if (isSubscription) {
+      const intentTier = intent as Extract<typeof intent, { kind: 'tierPurchase' }>;
+      if (intentTier.tier === 'team' || intentTier.tier === 'enterprise') {
+        const basePriceUsd = intentTier.tier === 'team' && intentTier.seatTier === 'premium' ? 100 : 20;
         const totalUsd = basePriceUsd * effectiveSeatCount;
-        return totalUsd > 500;
+        return totalUsd >= 500;
       }
     }
-    // Credit purchases (autonomous/usage) >$500 USD
+    // Credit purchases (autonomous/usage) ≥$500 USD
     if (!isSubscription && (intent.kind === 'autonomousWorkCredits' || intent.kind === 'usageCredits')) {
       const selectedUsd = selectedAmountUsd ?? 0;
-      return selectedUsd > 500;
+      return selectedUsd >= 500;
     }
     return false;
   }, [isSubscription, intent, effectiveSeatCount, selectedAmountUsd]);
@@ -843,7 +896,7 @@ export function NativeBillingCheckoutModal({
   // Early email validation for Team/Enterprise tiers
   useEffect(() => {
     if (!isSubscription || (intent.tier !== 'team' && intent.tier !== 'enterprise')) {
-      return; // Not a Team/Enterprise subscription
+      return; // Not a Team/Enterprise tier purchase
     }
 
     const validateEmail = async () => {
@@ -875,27 +928,14 @@ export function NativeBillingCheckoutModal({
 
   const label = isAdditionalSeat
     ? `Add 1 ${intent.seatTier === 'premium' ? 'Premium' : 'Standard'} Team Seat`
-    : isSubscription
-      ? subscriptionCheckoutLabel(intent.tier, intent.seatTier, proMaxVariant ?? undefined)
-      : (intent as { title?: string }).title ?? (isUsageCredits ? 'PawOS Usage Credits' : 'PawOS Autonomous Work Credits');
-
-  const billingFrequency = isAdditionalSeat
-    ? `One-time seat purchase · $${additionalSeatPriceUsd}/seat`
-    : isSubscription
-      ? subscriptionFrequencyText(intent)
-      : isUsageCredits
-        ? 'One-time Usage Credits top-up'
-        : 'One-time Autonomous Work Credits top-up';
+    : (intent as { title?: string }).title ?? (isUsageCredits ? 'PawOS Usage Credits' : 'PawOS Autonomous Work Credits');
 
   const quantity = effectiveSeatCount;
 
-  const subscriptionInr = isSubscription
-    ? subscriptionAmountInr(intent.tier, intent.seatTier, quantity, proMaxVariant ?? undefined)
-    : null;
-
   const effectiveAmountUsd = isAdditionalSeat ? additionalSeatPriceUsd : (selectedAmountUsd ?? 0);
-  const creditsInr = !isSubscription ? estimateTicketBalancePaymentInr(effectiveAmountUsd) : null;
-  const totalInr = isSubscription ? (subscriptionInr ?? 0) : (creditsInr ?? 0);
+  const totalInr = isSubscription
+    ? subscriptionAmountInr(intent.tier, intent.seatTier, quantity, proMaxVariant ?? undefined)
+    : estimateTicketBalancePaymentInr(effectiveAmountUsd);
   const totalText = formatPaymentInr(totalInr);
 
   const presets = isUsageCredits ? USAGE_CREDITS_PRESETS_USD : AUTONOMOUS_WORK_CREDITS_PRESETS_USD;
@@ -910,16 +950,24 @@ export function NativeBillingCheckoutModal({
     () =>
       availableMethods
         .filter((id) => {
-          // For subscriptions: only card and upi
-          if (isSubscription) return id === 'upi' || id === 'card';
-          // For high-value orders (>₹50,000): only netbanking (invoices)
+          // Tier purchases (Pro/Pro Max/Team/Enterprise): restricted payment methods
+          if (isSubscription) {
+            const intentTier = intent as Extract<typeof intent, { kind: 'tierPurchase' }>;
+            // Pro/Pro Max: card only
+            if (intentTier.tier === 'pro' || intentTier.tier === 'proMax') return id === 'card';
+            // Team/Enterprise: card if <₹50k, invoice (netbanking) if ≥₹50k
+            if (intentTier.tier === 'team' || intentTier.tier === 'enterprise') {
+              if (isHighValue) return id === 'netbanking';
+              return id === 'card';
+            }
+          }
+          // Credits (one-time): invoice if ≥₹50k, otherwise card+upi+wallet
           if (isHighValue) return id === 'netbanking';
-          // For normal orders (<₹50,000): only card and upi (no netbanking)
           return id === 'card' || id === 'upi' || id === 'wallet';
         })
         .map((id) => ({ id, ...NATIVE_PAYMENT_METHOD_DETAILS[id] }))
         .filter((m) => Boolean(m.label)),
-    [availableMethods, isSubscription, isHighValue]
+    [availableMethods, isSubscription, isHighValue, intent]
   );
 
   const payDisabled =
@@ -985,7 +1033,7 @@ export function NativeBillingCheckoutModal({
       setFailMessage('Select a payment method before continuing.');
       return;
     }
-    if (!isSubscription && effectiveAmountUsd < minAmount) {
+    if (!isSubscription && !isAdditionalSeat && effectiveAmountUsd < minAmount) {
       setState('failed');
       setFailMessage(`The minimum purchase amount is ${formatUsd(minAmount)}.`);
       return;
@@ -993,15 +1041,16 @@ export function NativeBillingCheckoutModal({
     setState('creating');
     setFailMessage(null);
     try {
-      // ── Subscription checkout ────────────────────
+      // ── Tier purchase checkout (Pro/Pro Max/Team/Enterprise) ────────────────────
+      // One-time purchase using Razorpay Order + Custom Checkout createPayment()
       if (isSubscription) {
-        const scriptLoaded = await loadPaymentScript('standard');
+        const scriptLoaded = await loadPaymentScript();
         if (!scriptLoaded || !window.Razorpay) {
           setState('failed');
           setFailMessage('Could not connect to the secure payment service. Check your internet connection and try again.');
           return;
         }
-        // Get access token for verification
+
         const supabase = await getSupabaseClient();
         const { data: sessionData } = await supabase.auth.getSession();
         let accessToken = sessionData.session?.access_token;
@@ -1039,57 +1088,166 @@ export function NativeBillingCheckoutModal({
           }
         }
 
-        const checkout = await ipc.billingCreateNativeSubscriptionCheckout(intent.tier, {
+        const organizationId = (intent as { organizationId?: string }).organizationId;
+
+        // Create one-time Order for tier purchase
+        const checkout = await ipc.billingCreateNativeTierCheckout(intent.tier, {
           seatTier: intent.seatTier,
           seatCount: isTeamOrEnterprise ? effectiveSeatCount : intent.seatCount,
           runtimeIds: intent.runtimeIds,
-          proMaxVariant,
-        }, accessToken);
+          ...(proMaxVariant ? { proMaxVariant } : {}),
+        }, organizationId, accessToken);
+
         if (!checkout.ok) {
           setState('failed');
           setFailMessage(checkout.reason);
           return;
         }
+
         setState('processing');
-        const razorpay = new window.Razorpay({
+
+        // Handle payment result from Custom Checkout
+        const handlePaymentResult = async (response: {
+          razorpay_payment_id?: string;
+          razorpay_order_id?: string;
+          razorpay_signature?: string;
+        }) => {
+          if (!response.razorpay_payment_id || !response.razorpay_order_id || !response.razorpay_signature) {
+            setState('failed');
+            setFailMessage('The payment processor returned an incomplete response. Contact support if your payment was charged.');
+            return;
+          }
+
+          setState('verifying');
+
+          // Verify tier purchase payment
+          const verified = await ipc.billingVerifyNativeTierPayment({
+            accessToken,
+            orderId: response.razorpay_order_id,
+            paymentId: response.razorpay_payment_id,
+            signature: response.razorpay_signature,
+            organizationId,
+            tier: intent.tier,
+            seatCount: isTeamOrEnterprise ? effectiveSeatCount : intent.seatCount,
+            seatTier: intent.seatTier,
+          });
+
+          if (!verified.ok) {
+            setState('failed');
+            setFailMessage(verified.reason);
+            return;
+          }
+
+          setSuccessDetail(`${label} activated. PawOS is refreshing your account.`);
+          setState('success');
+          onSuccess?.();
+        };
+
+        // Initialize Razorpay Custom Checkout instance
+        const razorpayInstance = new window.Razorpay({
           key: checkout.keyId,
-          subscription_id: checkout.subscriptionId,
-          name: 'PawOS',
-          description: `${label} subscription`,
-          handler: async (payment: {
-            razorpay_subscription_id?: string;
+        }) as RazorpayCustomCheckoutInstance;
+
+        // Listen for ready event to verify available methods
+        razorpayInstance.on('ready', (readyResponse: unknown) => {
+          const response = readyResponse as { methods?: string[] };
+          console.log('[Razorpay Ready] Available methods:', response.methods);
+          if (response.methods && !response.methods.includes(paymentMethod)) {
+            setState('failed');
+            setFailMessage(`${paymentMethod} is not available for this payment.`);
+          }
+        });
+
+        // Register success/error handlers for Custom Checkout
+        razorpayInstance.on('payment.success', (response: unknown) => {
+          handlePaymentResult(response as {
             razorpay_payment_id?: string;
+            razorpay_order_id?: string;
             razorpay_signature?: string;
-          }) => {
-            if (!payment.razorpay_payment_id || !payment.razorpay_subscription_id || !payment.razorpay_signature) {
-              setState('failed');
-              setFailMessage('The payment processor returned an incomplete response. Contact support if your payment was charged.');
-              return;
-            }
-            setState('verifying');
-            const verified = await ipc.billingConfirmNativeSubscriptionPayment(
-              payment.razorpay_payment_id,
-              payment.razorpay_subscription_id,
-              payment.razorpay_signature,
-              accessToken
-            );
-            if (!verified.ok) {
-              setState('failed');
-              setFailMessage(verified.reason);
-              return;
-            }
-            setSuccessDetail('Your plan is now active. PawOS is refreshing your account.');
-            setState('success');
-            onSuccess?.();
-          },
-          modal: {
-            ondismiss: () => {
-              setState('cancelled');
-              setFailMessage('Payment was cancelled. No changes were made to your plan.');
-            },
-          },
-        }) as RazorpayCheckoutInstance;
-        razorpay.open();
+          });
+        });
+
+        razorpayInstance.on('payment.error', (error: unknown) => {
+          setState('cancelled');
+          setFailMessage(
+            error instanceof Error
+              ? error.message
+              : 'Payment was cancelled or failed. Please try again.'
+          );
+        });
+
+        // Build intelligent invoice data based on payment type
+        const today = new Date();
+        const expiryDate = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+        const intentDescriptions: Record<NativeBillingCheckoutIntent['kind'], string> = {
+          tierPurchase: `${intent.tier.charAt(0).toUpperCase() + intent.tier.slice(1)} Tier Purchase`,
+          usageCredits: `Usage Credits Top-up`,
+          autonomousWorkCredits: `Autonomous Work Credits Top-up`,
+          additionalSeat: `Additional Seat Purchase`,
+        };
+
+        const invoiceNotes = {
+          // Invoice Details
+          invoice_type: intentDescriptions[intent.kind],
+          invoice_description: intent.title || intentDescriptions[intent.kind],
+
+          // Payment Details
+          payment_method: paymentMethod,
+          amount_inr: (checkout.amountPaise / 100).toString(),
+
+          // Tier-specific data
+          ...(intent.kind === 'tierPurchase' && {
+            tier: intent.tier,
+            ...(intent.proMaxVariant && { variant: intent.proMaxVariant }),
+            ...(intent.seatTier && { seat_tier: intent.seatTier, seat_count: intent.seatCount?.toString() }),
+          }),
+
+          // Credits-specific data
+          ...(intent.kind === 'usageCredits' && { amount_usd: intent.amountUsd?.toString() }),
+          ...(intent.kind === 'autonomousWorkCredits' && { amount_usd: intent.amountUsd.toString() }),
+
+          // Seat purchase data
+          ...(intent.kind === 'additionalSeat' && {
+            seat_tier: intent.seatTier,
+            invite_email: intent.inviteEmail,
+            invite_role: intent.inviteRole,
+          }),
+
+          // Dates
+          issue_date: today.toISOString().split('T')[0],
+          expiry_date: expiryDate.toISOString().split('T')[0],
+        };
+
+        // Build payment request for Custom Checkout
+        const paymentData: Record<string, unknown> = {
+          order_id: checkout.orderId,
+          amount: checkout.amountPaise,
+          currency: checkout.currency,
+          method: paymentMethod,
+          description: intentDescriptions[intent.kind],
+          notes: invoiceNotes,
+        };
+
+        // Add method-specific parameters
+        if (paymentMethod === 'netbanking' && selectedBankCode) {
+          paymentData.bank = selectedBankCode;
+        }
+        if (paymentMethod === 'wallet' && selectedWalletCode) {
+          paymentData.wallet = selectedWalletCode;
+        }
+
+        // Execute payment with Custom Checkout API
+        try {
+          razorpayInstance.createPayment(paymentData);
+        } catch (err) {
+          setState('failed');
+          setFailMessage(
+            err instanceof Error
+              ? err.message
+              : 'Payment could not be initiated. Please try again.'
+          );
+        }
         return;
       }
 
@@ -1302,8 +1460,8 @@ export function NativeBillingCheckoutModal({
       let tier = '';
       let organizationId = '';
 
-      if (isSubscription && intent.kind === 'subscription') {
-        const intentSub = intent as Extract<typeof intent, { kind: 'subscription' }>;
+      if (isSubscription && intent.kind === 'tierPurchase') {
+        const intentSub = intent as Extract<typeof intent, { kind: 'tierPurchase' }>;
         const basePriceUsd = intentSub.seatTier === 'premium' ? 100 : 20;
         totalUsd = basePriceUsd * effectiveSeatCount;
         tier = intentSub.tier;
@@ -1332,8 +1490,8 @@ export function NativeBillingCheckoutModal({
       };
 
       // Add subscription-specific fields
-      if (isSubscription && intent.kind === 'subscription') {
-        const intentSub = intent as Extract<typeof intent, { kind: 'subscription' }>;
+      if (isSubscription && intent.kind === 'tierPurchase') {
+        const intentSub = intent as Extract<typeof intent, { kind: 'tierPurchase' }>;
         casePayload.plan = intentSub.seatTier || null;
         casePayload.memberCount = effectiveSeatCount;
       } else {
@@ -1367,8 +1525,8 @@ export function NativeBillingCheckoutModal({
 
       // Step 2: Create invoices (persona "creates" them server-side)
       let invoiceDescription = '';
-      if (isSubscription && intent.kind === 'subscription') {
-        const intentSub = intent as Extract<typeof intent, { kind: 'subscription' }>;
+      if (isSubscription && intent.kind === 'tierPurchase') {
+        const intentSub = intent as Extract<typeof intent, { kind: 'tierPurchase' }>;
         invoiceDescription = `${intentSub.tier === 'team' ? 'Paw Team' : 'Paw Enterprise'} - ${effectiveSeatCount} ${effectiveSeatCount === 1 ? 'seat' : 'seats'}`;
       } else if (intent.kind === 'autonomousWorkCredits') {
         invoiceDescription = `Autonomous Work Credits - $${totalUsd.toFixed(2)}`;
@@ -1480,11 +1638,8 @@ export function NativeBillingCheckoutModal({
     );
   }
 
-  const isSubscriptionIntent = intent.kind === 'subscription';
-  const isOneTimeOrder = !isSubscriptionIntent; // Usage Credits, Ticket Balance, Additional Seat
-
-  // For subscriptions, render FULL PAGE (not modal)
-  if (isSubscriptionIntent && !['success', 'onboarding-welcome', 'onboarding-tools', 'onboarding-role', 'failed'].includes(state)) {
+  // For tier purchases, render FULL PAGE (not modal)
+  if (isTierPurchase && !['success', 'onboarding-welcome', 'onboarding-tools', 'onboarding-role', 'failed'].includes(state)) {
     return (
       <div style={{ display: 'flex', height: '100vh', background: 'var(--pawos-bg)', color: 'var(--pawos-fg)', flexDirection: 'column' }} role="presentation">
         {/* Header */}
@@ -1499,7 +1654,6 @@ export function NativeBillingCheckoutModal({
           <div style={{ flex: 1, overflow: 'auto', padding: '40px 60px', borderRight: '1px solid rgba(var(--pawos-overlay-rgb), 0.1)' }}>
             <div style={{ maxWidth: 400 }}>
               <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 20 }}>{label}</div>
-              <div style={{ fontSize: 14, color: 'var(--pawos-text-secondary)', marginBottom: 24 }}>{billingFrequency}</div>
 
               {/* Pro Max variant selector */}
               {isSubscription && (intent as any).tier === 'proMax' && (
@@ -1546,15 +1700,28 @@ export function NativeBillingCheckoutModal({
               <div style={{ backgroundColor: 'rgba(var(--pawos-overlay-rgb), 0.05)', borderRadius: 10, padding: 16, border: '1px solid rgba(var(--pawos-overlay-rgb), 0.1)', marginBottom: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 14, marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid rgba(var(--pawos-overlay-rgb), 0.1)' }}>
                   <div style={{ color: 'var(--pawos-text-secondary)' }}>{label}</div>
-                  <div style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>${intent.kind === 'subscription' && intent.tier === 'proMax' && proMaxVariant === '5x' ? '100.00/mo' : intent.kind === 'subscription' && intent.tier === 'proMax' && proMaxVariant === '20x' ? '250.00/mo' : '20.00/mo'}</div>
+                  <div style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>${isTierPurchase && (intent as any).tier === 'proMax' && proMaxVariant === '5x' ? '100.00/mo' : isTierPurchase && (intent as any).tier === 'proMax' && proMaxVariant === '20x' ? '250.00/mo' : '20.00/mo'}</div>
                 </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 14, marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid rgba(var(--pawos-overlay-rgb), 0.1)' }}>
+                  <div style={{ color: 'var(--pawos-text-secondary)' }}>Subtotal</div>
+                  <div style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{totalText}</div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 14, marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid rgba(var(--pawos-overlay-rgb), 0.1)' }}>
+                  <div style={{ color: 'var(--pawos-text-secondary)' }}>
+                    GST <span style={{ textDecoration: 'line-through', opacity: 0.6 }}>18%</span> <span style={{ color: '#10b981', fontWeight: 600 }}>0% Free</span>
+                  </div>
+                  <div style={{ fontWeight: 600, color: '#10b981' }}>Free</div>
+                </div>
+
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 16, fontWeight: 700 }}>
                   <div>Total due today</div>
                   <div style={{ fontVariantNumeric: 'tabular-nums' }}>{totalText}</div>
                 </div>
               </div>
 
-              <div style={{ fontSize: 12, color: 'var(--pawos-text-secondary)', lineHeight: 1.5 }}>ℹ️ Your subscription will auto-renew each month. Cancel anytime from Settings → Billing.</div>
+              <div style={{ fontSize: 12, color: 'var(--pawos-text-secondary)', lineHeight: 1.5 }}>ℹ️ One-time payment. No recurring charges. Cancel anytime from Settings → Billing.</div>
             </div>
 
             <div>
@@ -1565,9 +1732,9 @@ export function NativeBillingCheckoutModal({
               </div>
 
               <button type="button" onClick={() => void pay()} disabled={payDisabled || needsProMaxVariantSelection} style={{ width: '100%', padding: '12px 16px', borderRadius: 10, border: 'none', background: 'var(--pawos-button-primary-bg)', color: 'var(--pawos-button-primary-fg)', fontWeight: 700, fontSize: 14, cursor: payDisabled || needsProMaxVariantSelection ? 'default' : 'pointer', opacity: payDisabled || needsProMaxVariantSelection ? 0.55 : 1, marginBottom: 8 }}>
-                {isBusy ? 'Processing...' : needsProMaxVariantSelection ? 'Select a variant to continue' : 'Subscribe'}
+                {isBusy ? 'Processing...' : needsProMaxVariantSelection ? 'Select a variant to continue' : 'Pay now'}
               </button>
-              <div style={{ fontSize: 11, color: 'var(--pawos-text-secondary)', textAlign: 'center' }}>By subscribing, you agree to our terms.</div>
+              <div style={{ fontSize: 11, color: 'var(--pawos-text-secondary)', textAlign: 'center' }}>By completing this purchase, you agree to our terms.</div>
             </div>
           </div>
         </div>
@@ -2030,8 +2197,8 @@ export function NativeBillingCheckoutModal({
     let totalUsd = 0;
     let basePriceUsd = 0;
 
-    if (isSubscription && intent.kind === 'subscription') {
-      const intentSub = intent as Extract<typeof intent, { kind: 'subscription' }>;
+    if (isSubscription && intent.kind === 'tierPurchase') {
+      const intentSub = intent as Extract<typeof intent, { kind: 'tierPurchase' }>;
       tierDisplay = intentSub.tier;
       basePriceUsd = intentSub.seatTier === 'premium' ? 100 : 20;
       totalUsd = basePriceUsd * effectiveSeatCount;
@@ -2161,13 +2328,12 @@ export function NativeBillingCheckoutModal({
           {/* Product label */}
           <div>
             <div style={{ fontSize: 15, fontWeight: 700 }}>{label}</div>
-            <div style={{ marginTop: 3, fontSize: 12.5, color: 'var(--pawos-text-secondary)' }}>{billingFrequency}</div>
             {quantity > 1 && (
               <div style={{ marginTop: 3, fontSize: 12.5, color: 'var(--pawos-text-secondary)' }}>
                 {quantity} {quantity === 1 ? 'seat' : 'seats'}
               </div>
             )}
-            {isSubscription && intent.kind === 'subscription' && (intent.tier === 'pro' || intent.tier === 'proMax' || intent.tier === 'team' || intent.tier === 'enterprise') && (
+            {isSubscription && intent.kind === 'tierPurchase' && ((intent as any).tier === 'pro' || (intent as any).tier === 'proMax' || (intent as any).tier === 'team' || (intent as any).tier === 'enterprise') && (
               <div style={{ marginTop: 8, padding: '8px 12px', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderRadius: '6px', textAlign: 'center' }}>
                 <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#3b82f6' }}>You get $40</p>
               </div>

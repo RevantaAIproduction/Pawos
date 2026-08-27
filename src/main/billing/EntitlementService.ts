@@ -2,6 +2,7 @@ import { subscriptionStore } from './SubscriptionStore';
 import { creditStore } from './CreditStore';
 import { usageQuotaConfigStore } from './UsageQuotaConfigStore';
 import { rollingUsageGate } from './RollingUsageGate';
+import { testTierOverrideStore } from './TestTierOverrideStore';
 import type {
   EntitlementSnapshot,
   FeatureId,
@@ -204,8 +205,22 @@ const TIER_ENTITLEMENTS: Record<SubscriptionTierId, Omit<TierEntitlements, 'mont
  * local tier constant directly.
  */
 class EntitlementService {
+  private userId: string | null = null;
+
+  setCurrentUserId(userId: string): void {
+    this.userId = userId;
+  }
+
   private currentTier(): SubscriptionTierId {
-    return subscriptionStore.getEffective().tier;
+    const realTier = subscriptionStore.getEffective().tier;
+
+    // Check for test tier override (only applies to authorized internal accounts)
+    if (this.userId) {
+      const effectiveTier = testTierOverrideStore.getEffectiveTier(this.userId, realTier);
+      return effectiveTier;
+    }
+
+    return realTier;
   }
 
   /** Only meaningful for 'team' — which seat rate (Standard/Premium) this account was assigned. */

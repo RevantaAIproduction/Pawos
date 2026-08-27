@@ -47,6 +47,8 @@ import type {
   NativeSubscriptionCheckoutResult,
   NativeCreditsCheckoutResult,
   NativeCreditsVerificationResult,
+  NativeTierCheckoutResult,
+  NativeTierVerificationResult,
   CheckoutOptions,
   FeatureId,
   EntitlementSnapshot,
@@ -366,6 +368,12 @@ export const ipc = {
   async billingVerifyNativeUsageCreditsPayment(params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string; organizationId?: string }): Promise<NativeCreditsVerificationResult> {
     return getBridge().billingVerifyNativeUsageCreditsPayment(params);
   },
+  async billingCreateNativeTierCheckout(tier: SubscriptionTierId, options?: CheckoutOptions, organizationId?: string, accessToken?: string): Promise<NativeTierCheckoutResult> {
+    return getBridge().billingCreateNativeTierCheckout(tier, options, organizationId, accessToken);
+  },
+  async billingVerifyNativeTierPayment(params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string; organizationId?: string; tier: SubscriptionTierId; seatCount?: number; seatTier?: SeatTier }): Promise<NativeTierVerificationResult> {
+    return getBridge().billingVerifyNativeTierPayment(params);
+  },
   async billingCreateHighValueInvoices(params: { plan: string; seatTier?: string; seatCount: number; customerName: string; organizationName: string; gstNumber?: string; accessToken?: string }): Promise<{ ok: boolean; reason?: string; plan?: string; seatTier?: string | null; seatCount?: number; monthlyAmountUsd?: number; monthlyAmountInr?: number; invoiceCount?: number; invoices?: Array<{ number: number; amountInr: number; amountUsd: number; invoiceId: string; invoiceUrl: string }>; customerName?: string; organizationName?: string; gstNumber?: string | null; keyId?: string }> {
     return getBridge().billingCreateHighValueInvoices(params);
   },
@@ -577,6 +585,27 @@ export const ipc = {
   },
   async connectivityDeploymentProfilesHydrate(profile: DeploymentProfile): Promise<ConnectivityIpcResult<void>> {
     return getBridge().connectivityDeploymentProfilesHydrate(profile);
+  },
+  async connectivityGetStoredCredential(connectorId: string, scope: ConnectivityScope): Promise<ConnectivityIpcResult<{ secret: string; authMethod: string } | undefined>> {
+    return getBridge().connectivityGetStoredCredential(connectorId, scope);
+  },
+  async connectivityGetJiraMetadata(scope: ConnectivityScope): Promise<ConnectivityIpcResult<{ cloudId: string; siteUrl: string; siteName: string } | undefined>> {
+    return getBridge().connectivityGetJiraMetadata(scope);
+  },
+  async autonomousVerifyRun(input: { runId: string; approved: boolean; verifierNotes?: string }): Promise<{ ok: boolean; reason?: string; billingEventId?: string }> {
+    return getBridge().autonomousVerifyRun(input);
+  },
+  async adminApplyTestTier(input: { tier: string; userEmail: string; userId: string }): Promise<{ ok: boolean; reason?: string; override?: { realTier: string; testTier: string; appliedAt: number } }> {
+    return getBridge().adminApplyTestTier(input);
+  },
+  async adminClearTestTier(input: { userId: string; userEmail: string }): Promise<{ ok: boolean; reason?: string }> {
+    return getBridge().adminClearTestTier(input);
+  },
+  async adminGetTestTier(userId: string, userEmail: string): Promise<{ ok: boolean; reason?: string; override?: { realTier: string; testTier: string; appliedAt: number } }> {
+    return getBridge().adminGetTestTier(userId, userEmail);
+  },
+  async adminHydrateTestTier(input: { userId: string; realTier: string; testTier: string }): Promise<{ ok: boolean; reason?: string }> {
+    return getBridge().adminHydrateTestTier(input);
   },
 };
 
