@@ -103,9 +103,6 @@ export async function POST(request: Request) {
         event_type: "tier_purchase",
         amount: Math.round(amountInr),
         currency: "INR",
-      })
-      .catch((error) => {
-        console.warn("[verify-tier-payment] Failed to log payment event:", error);
       });
   } catch (error) {
     console.warn("[verify-tier-payment] Payment event logging failed:", error);
