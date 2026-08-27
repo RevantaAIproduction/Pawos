@@ -104,7 +104,6 @@ export async function POST(request: Request) {
         amount: Math.round(amountInr),
         currency: "INR",
       })
-      .then()
       .catch((error) => {
         console.warn("[verify-tier-payment] Failed to log payment event:", error);
       });
