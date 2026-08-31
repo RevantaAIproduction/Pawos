@@ -31,15 +31,16 @@ function isPersonalEmail(email: string): boolean {
 const TIER_PRICING_PAISE: Record<SubscriptionTierId, Record<string, number>> = {
   go: {},
   pro: {
-    base: 150000, // ₹1,500
+    monthly: 191300, // ₹1,913
+    yearly: 1905300, // ₹19,053
   },
   proMax: {
-    "5x": 600000, // ₹6,000
-    "20x": 1500000, // ₹15,000
+    "5x": 956500, // ₹9,565
+    "20x": 2391300, // ₹23,913
   },
   team: {
-    standard: 300000, // ₹3,000 per seat
-    premium: 600000, // ₹6,000 per seat
+    standard: 191300, // ₹1,913 per seat
+    premium: 956500, // ₹9,565 per seat
   },
   enterprise: {
     base: 1000000, // ₹10,000 base per seat
@@ -61,6 +62,7 @@ export async function POST(request: Request) {
   const seatCount = typeof (options?.seatCount ?? body?.seatCount) === "number" && Number.isInteger(options?.seatCount ?? body?.seatCount) ? (options?.seatCount ?? body?.seatCount) : undefined;
   const runtimeIds = Array.isArray(options?.runtimeIds) ? options.runtimeIds : (Array.isArray(body?.runtimeIds) ? body.runtimeIds : []);
   const proMaxVariant = (options?.proMaxVariant ?? body?.proMaxVariant) as ProMaxVariant | undefined;
+  const proBillingFrequency = (options?.proBillingFrequency ?? body?.proBillingFrequency) as string | undefined;
   const accessToken = typeof body?.accessToken === "string" ? body.accessToken : undefined;
 
   // ---- Authentication ----
@@ -129,7 +131,8 @@ export async function POST(request: Request) {
   // ---- Calculate order amount in paise ----
   let amountPaise: number | null = null;
   if (tier === "pro") {
-    amountPaise = TIER_PRICING_PAISE.pro.base;
+    const frequency = proBillingFrequency === "yearly" ? "yearly" : "monthly";
+    amountPaise = TIER_PRICING_PAISE.pro[frequency as keyof typeof TIER_PRICING_PAISE.pro] ?? null;
   } else if (tier === "proMax" && proMaxVariant) {
     amountPaise = TIER_PRICING_PAISE.proMax[proMaxVariant] ?? null;
   } else if (tier === "team" && seatTier && seatCount) {

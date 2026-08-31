@@ -242,6 +242,7 @@ function createMainWindow() {
   mainWindow.once('ready-to-show', () => {
     console.error("[PAWOS WINDOW] ready-to-show fired");
     mainWindow?.show();
+    mainWindow?.webContents.openDevTools();
     console.error("[PAWOS WINDOW] window shown");
   });
 

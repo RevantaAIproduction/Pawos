@@ -62,6 +62,7 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
   // Billing form fields
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState(''); // For invoice (from session)
+  const [mobileNumber, setMobileNumber] = useState('');
   const [organizationName, setOrganizationName] = useState('');
   const [country, setCountry] = useState('India');
   const [address1, setAddress1] = useState('');
@@ -200,6 +201,11 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
       return;
     }
 
+    if (!mobileNumber.trim()) {
+      setErrorMessage('Phone number is required for payment.');
+      return;
+    }
+
     if (!accessToken) {
       setErrorMessage('Authentication failed. Please sign in again.');
       return;
@@ -329,8 +335,12 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
 
       (razorpay as any).createPayment({
         order_id: checkout.orderId,
+        amount: checkout.amountPaise,
+        currency: 'INR',
         method: 'card',
         description: tierDescriptions[tier],
+        email: email,
+        contact: mobileNumber,
         prefill: {
           name: fullName || organizationName,
           email: email,
@@ -353,13 +363,13 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
 
   const label = tierLabels[tier];
 
-  // Calculate amount in INR (Pro yearly has 17% discount: 22956 * 0.83 = 19,053.48)
+  // Calculate amount in INR
   const amountInr =
-    tier === 'pro' ? (proBillingFrequency === 'monthly' ? 1913 : 19053.48) :
+    tier === 'pro' ? (proBillingFrequency === 'monthly' ? 1913 : 19053) :
     tier === 'proMax' && proMaxVariant === '5x' ? 9565 :
-    tier === 'proMax' && proMaxVariant === '20x' ? 23912.50 :
-    tier === 'team' && options?.seatTier === 'standard' ? (3000 * (options?.seatCount || 1)) :
-    tier === 'team' && options?.seatTier === 'premium' ? (6000 * (options?.seatCount || 1)) :
+    tier === 'proMax' && proMaxVariant === '20x' ? 23913 :
+    tier === 'team' && options?.seatTier === 'standard' ? (1913 * (options?.seatCount || 1)) :
+    tier === 'team' && options?.seatTier === 'premium' ? (9565 * (options?.seatCount || 1)) :
     tier === 'enterprise' ? (10000 * (options?.seatCount || 1)) :
     0;
 
@@ -434,7 +444,7 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
                   }}
                 >
                   <div>Pro monthly</div>
-                  <div style={{ fontSize: 13, fontWeight: 700, marginTop: 4 }}>₹1,913</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginTop: 4 }}>${(1913 / 95.65).toFixed(2)}</div>
                   <div style={{ fontSize: 11, color: 'var(--pawos-text-secondary)', marginTop: 2 }}>Billed monthly</div>
                 </button>
 
@@ -458,7 +468,7 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
                 >
                   <div style={{ position: 'absolute', top: 8, right: 8, background: '#3b82f6', color: 'white', padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700 }}>Save 17%</div>
                   <div>Pro annual</div>
-                  <div style={{ fontSize: 13, fontWeight: 700, marginTop: 4 }}>₹19,053</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginTop: 4 }}>${(19053 / 95.65).toFixed(2)}</div>
                   <div style={{ fontSize: 11, color: 'var(--pawos-text-secondary)', marginTop: 2 }}>Billed yearly</div>
                 </button>
               </div>
@@ -490,7 +500,7 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
                     {variant === '20x' && <div style={{ position: 'absolute', top: 8, right: 8, background: '#3b82f6', color: 'white', padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700 }}>Best value</div>}
                     <div>Max {variant}</div>
                     <div style={{ fontSize: 11, color: 'var(--pawos-text-secondary)', marginTop: 2 }}>{variant === '5x' ? '5x more usage than Pro' : '20x more usage than Pro'}</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, marginTop: 4 }}>₹{variant === '5x' ? '9,565' : '23,913'}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, marginTop: 4 }}>${variant === '5x' ? (9565 / 95.65).toFixed(2) : (23913 / 95.65).toFixed(2)}</div>
                   </button>
                 ))}
               </div>
@@ -508,6 +518,26 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     placeholder="Your name"
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: 8,
+                      border: '1px solid rgba(var(--pawos-overlay-rgb), 0.2)',
+                      background: 'rgba(var(--pawos-overlay-rgb), 0.03)',
+                      color: 'var(--pawos-fg)',
+                      fontSize: 13,
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Email</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="your@email.com"
                     style={{
                       width: '100%',
                       padding: '10px 12px',
@@ -541,6 +571,31 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
                       <option key={c} value={c}>{c}</option>
                     ))}
                   </select>
+                </div>
+
+                <div style={{ padding: '12px 14px', borderRadius: 8, background: 'rgba(var(--pawos-overlay-rgb), 0.05)', border: '1px solid rgba(var(--pawos-overlay-rgb), 0.1)', marginBottom: 2 }}>
+                  <div style={{ fontSize: 11, color: 'var(--pawos-text-secondary)', marginBottom: 4 }}>Selected country</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--pawos-fg)' }}>{country}</div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Phone number <span style={{ color: '#ef4444' }}>*</span></label>
+                  <input
+                    type="tel"
+                    value={mobileNumber}
+                    onChange={(e) => setMobileNumber(e.target.value)}
+                    placeholder="+1 (555) 123-4567"
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: 8,
+                      border: '1px solid rgba(var(--pawos-overlay-rgb), 0.2)',
+                      background: 'rgba(var(--pawos-overlay-rgb), 0.03)',
+                      color: 'var(--pawos-fg)',
+                      fontSize: 13,
+                      boxSizing: 'border-box',
+                    }}
+                  />
                 </div>
 
                 <div>
@@ -884,22 +939,23 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
               )}
 
               {(() => {
-                const prices = {
+                const priceInr = {
                   pro_monthly: 1913,
                   pro_yearly: 19053,
                   proMax_5x: 9565,
                   proMax_20x: 23913,
                 };
                 const key = tier === 'pro' ? `pro_${proBillingFrequency}` : `proMax_${proMaxVariant}`;
-                const price = prices[key as keyof typeof prices] || 0;
-                const subtotal = Math.max(0, price - proratedCredit);
-                const total = subtotal; // No GST added
+                const inrPrice = priceInr[key as keyof typeof priceInr] || 0;
+                const usdPrice = Math.round((inrPrice / 95.65) * 100) / 100; // Convert to USD
+                const subtotalUsd = Math.max(0, usdPrice);
+                const totalUsd = subtotalUsd; // No GST added
 
                 return (
                   <>
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 14, marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid rgba(var(--pawos-overlay-rgb), 0.1)' }}>
                       <div style={{ color: 'var(--pawos-text-secondary)' }}>Subtotal</div>
-                      <div style={{ fontWeight: 600 }}>₹{subtotal.toLocaleString()}</div>
+                      <div style={{ fontWeight: 600 }}>₹{inrPrice.toLocaleString()}</div>
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 14, marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid rgba(var(--pawos-overlay-rgb), 0.1)' }}>
@@ -911,7 +967,7 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 16, fontWeight: 700 }}>
                       <div>Total due today</div>
-                      <div>₹{total.toLocaleString()}</div>
+                      <div>₹{inrPrice.toLocaleString()}</div>
                     </div>
                   </>
                 );

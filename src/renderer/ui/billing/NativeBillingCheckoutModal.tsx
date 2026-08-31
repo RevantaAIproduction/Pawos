@@ -1033,6 +1033,11 @@ export function NativeBillingCheckoutModal({
       setFailMessage('Select a payment method before continuing.');
       return;
     }
+    if (!mobileNumber.trim()) {
+      setState('failed');
+      setFailMessage('Phone number is required for payment. Please enter your contact number.');
+      return;
+    }
     if (!isSubscription && !isAdditionalSeat && effectiveAmountUsd < minAmount) {
       setState('failed');
       setFailMessage(`The minimum purchase amount is ${formatUsd(minAmount)}.`);
@@ -1228,6 +1233,8 @@ export function NativeBillingCheckoutModal({
           method: paymentMethod,
           description: intentDescriptions[intent.kind],
           notes: invoiceNotes,
+          email: userEmail,
+          contact: mobileNumber,
         };
 
         // Add method-specific parameters
@@ -1265,6 +1272,7 @@ export function NativeBillingCheckoutModal({
       const supabase = await getSupabaseClient();
       const { data: sessionData } = await supabase.auth.getSession();
       let accessToken = sessionData.session?.access_token;
+      const userEmail = sessionData.session?.user?.email || '';
 
       // If session is expired or missing, try to refresh it
       if (!accessToken && sessionData.session?.refresh_token) {
@@ -1420,6 +1428,8 @@ export function NativeBillingCheckoutModal({
         amount: checkout.amountPaise,
         currency: checkout.currency,
         method: paymentMethod,
+        email: userEmail,
+        contact: mobileNumber,
       };
 
       // Add method-specific parameters
@@ -1690,6 +1700,27 @@ export function NativeBillingCheckoutModal({
                   </div>
                 </div>
               )}
+
+              {/* Phone Number Input */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 24 }}>
+                <label style={{ fontSize: 13, fontWeight: 600 }}>Phone number *</label>
+                <input
+                  type="tel"
+                  placeholder="+1 (555) 123-4567"
+                  value={mobileNumber}
+                  onChange={(e) => setMobileNumber(e.target.value)}
+                  disabled={isBusy}
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: 8,
+                    border: '1px solid rgba(var(--pawos-overlay-rgb), 0.14)',
+                    background: 'rgba(var(--pawos-overlay-rgb), 0.04)',
+                    color: 'var(--pawos-fg)',
+                    fontSize: 14,
+                    fontFamily: 'inherit',
+                  }}
+                />
+              </div>
             </div>
           </div>
 
@@ -1767,6 +1798,29 @@ export function NativeBillingCheckoutModal({
             >
               ×
             </button>
+          </div>
+
+          {/* Phone Number Input */}
+          <div style={{ padding: '0px 24px', marginBottom: 16 }}>
+            <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 8 }}>Phone number *</label>
+            <input
+              type="tel"
+              placeholder="+1 (555) 123-4567"
+              value={mobileNumber}
+              onChange={(e) => setMobileNumber(e.target.value)}
+              disabled={isBusy}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                borderRadius: 8,
+                border: '1px solid rgba(var(--pawos-overlay-rgb), 0.14)',
+                background: 'rgba(var(--pawos-overlay-rgb), 0.04)',
+                color: 'var(--pawos-fg)',
+                fontSize: 14,
+                fontFamily: 'inherit',
+                boxSizing: 'border-box',
+              }}
+            />
           </div>
 
           {/* Custom Checkout Form */}
