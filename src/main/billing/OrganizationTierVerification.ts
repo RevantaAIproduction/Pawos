@@ -55,9 +55,9 @@ export async function verifyRealOrganizationTier(
   }
   console.log('[verifyRealOrganizationTier] MEMBERSHIP_VERIFIED');
 
-  // The organization's OWN tier and seat_count, read from Supabase — never trusted from the caller.
+  // The organization's tier, read from Supabase — never trusted from the caller.
   const orgResponse = await fetch(
-    `${supabaseUrl}/rest/v1/organizations?id=eq.${encodeURIComponent(organizationId)}&select=tier,seat_count`,
+    `${supabaseUrl}/rest/v1/organizations?id=eq.${encodeURIComponent(organizationId)}&select=tier`,
     { headers }
   );
   console.log('[verifyRealOrganizationTier] ORGANIZATION_QUERY: HTTP', orgResponse.status);
@@ -66,32 +66,10 @@ export async function verifyRealOrganizationTier(
     console.log('[verifyRealOrganizationTier] ORGANIZATION_ERROR:', errorBody.slice(0, 200));
     return { ok: false, reason: 'Could not verify organization tier.' };
   }
-  const orgRows = (await orgResponse.json()) as Array<{ tier: string; seat_count: number | null }>;
+  const orgRows = (await orgResponse.json()) as Array<{ tier: string }>;
   const tier = orgRows[0]?.tier;
-  if (tier !== 'team' && tier !== 'enterprise') {
+  if (tier !== 'go' && tier !== 'pro' && tier !== 'proMax' && tier !== 'team' && tier !== 'enterprise') {
     return { ok: false, reason: 'Organization has no recognized tier.' };
-  }
-
-  // Seat-limit enforcement: if the org has a configured seat_count, verify that the number of
-  // active members does not exceed it. A null seat_count means no limit has been configured yet
-  // (pre-seat-billing orgs) — skip the check in that case. This uses the caller's OWN token so
-  // the count is RLS-scoped to members of this org (they can only count rows they're allowed to
-  // see — i.e., members of their own org).
-  const seatCount = typeof orgRows[0]?.seat_count === 'number' ? orgRows[0].seat_count : null;
-  if (seatCount !== null && seatCount > 0) {
-    const activeMembersResponse = await fetch(
-      `${supabaseUrl}/rest/v1/organization_members?organization_id=eq.${encodeURIComponent(organizationId)}&status=eq.active&select=id`,
-      { headers }
-    );
-    if (activeMembersResponse.ok) {
-      const activeMemberRows = (await activeMembersResponse.json()) as unknown[];
-      if (Array.isArray(activeMemberRows) && activeMemberRows.length > seatCount) {
-        return {
-          ok: false,
-          reason: `Your organization has used all ${seatCount} purchased seats. Ask your billing admin to add a seat before signing in with this account.`,
-        };
-      }
-    }
   }
 
   return { ok: true, tier };

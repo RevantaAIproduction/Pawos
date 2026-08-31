@@ -87,13 +87,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, reason: "Unknown tier requested." }, { status: 400 });
   }
 
-  // ---- Email validation for Team/Enterprise ----
-  if ((tier === "team" || tier === "enterprise") && isPersonalEmail(userEmail)) {
-    return NextResponse.json(
-      { ok: false, reason: "Team and Enterprise plans require a business or organization email address. Please use your organization email to continue." },
-      { status: 403 }
-    );
-  }
 
   // ---- Tier-specific parameter validation ----
   if (tier === "proMax" && !proMaxVariant) {

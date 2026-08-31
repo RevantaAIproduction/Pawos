@@ -334,11 +334,11 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
   const myRole: OrgRole = myMembership?.role ?? (org?.ownerUserId === user.id ? ownerRole : 'member');
 
   async function createOrganization() {
-    if (!newOrgName.trim() || !tier) return;
+    if (!newOrgName.trim()) return;
     setBusy(true);
     setError(null);
     try {
-      const created = await organizationService.createOrganization(newOrgName.trim(), tier as OrgTier);
+      const created = await organizationService.createOrganization(newOrgName.trim(), 'go');
       setOrg(created);
       setMembers(await organizationService.getMembers(created.id));
     } catch (e) {
@@ -480,38 +480,13 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
     return groups;
   }
 
-  const myDomain = user.email?.split('@')[1]?.toLowerCase() ?? '';
-  const myDomainIsPersonal = !myDomain || isPersonalEmailDomain(myDomain);
-
   if (!org) {
-    if (myDomainIsPersonal) {
-      return (
-        <div className={styles.card}>
-          <h3 className={styles.cardTitle}>Team and Enterprise are designed for organizations</h3>
-          <p className={styles.cardBody} style={{ marginTop: 6 }}>
-            Use your company email address to create or join an organization. Personal email providers
-            (such as Gmail, Outlook, Yahoo, etc.) aren't supported for organization workspaces.
-          </p>
-          <p className={styles.cardBody} style={{ marginTop: 10, fontSize: 12 }}>
-            You're signed in as <strong>{user.email ?? 'this account'}</strong>
-            {myDomain && (
-              <>
-                {' '}(@{myDomain})
-              </>
-            )}
-            . Sign in with a company email to continue.
-          </p>
-        </div>
-      );
-    }
-
     return (
       <div className={styles.card}>
         <h3 className={styles.cardTitle}>Create your organization</h3>
         <p className={styles.cardBody} style={{ marginTop: 6, marginBottom: 12 }}>
-          Your {tier === 'enterprise' ? 'Enterprise' : 'Team'} plan includes one organization with a real,
-          human-readable ID (like ORG-RVT-001) and role-based member management. It will be scoped to your
-          email domain — only teammates with an <strong>@{myDomain}</strong> email will be invitable.
+          Your plan includes one organization with a real,
+          human-readable ID (like ORG-RVT-001) and role-based member management. Invite teammates with any email address.
         </p>
         <div style={{ display: 'flex', gap: 8 }}>
           <input style={{ ...inputStyle, flex: 1 }} placeholder="Organization name" value={newOrgName} onChange={(e) => setNewOrgName(e.target.value)} />

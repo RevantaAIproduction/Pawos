@@ -1,14 +1,16 @@
 import type { SeatTier } from '../billing/BillingTypes';
 
 /**
- * Real Team/Enterprise organization data model. These are CUSTOMER
- * organization roles — completely separate from PawOS's own internal
- * platform administrators (see src/shared/admin/AdminTypes.ts, Phase 3).
- * Backed by Supabase (not local JSON) because an organization is inherently
- * multi-person: a teammate's own device must be able to see an org someone
- * else created, which a local-only store cannot provide.
+ * Organization tiers. These are CUSTOMER organization roles — completely
+ * separate from PawOS's own internal platform administrators (see
+ * src/shared/admin/AdminTypes.ts, Phase 3). Backed by Supabase (not local
+ * JSON) because an organization is inherently multi-person: a teammate's own
+ * device must be able to see an org someone else created, which a local-only
+ * store cannot provide. Organizations are independent of individual account
+ * tiers and can be: go (free), pro/proMax (individual-style), or team/enterprise
+ * (multi-seat with permissions).
  */
-export type OrgTier = 'team' | 'enterprise';
+export type OrgTier = 'go' | 'pro' | 'proMax' | 'team' | 'enterprise';
 
 export type TeamRole = 'owner' | 'billingAdministrator' | 'workspaceAdministrator' | 'member';
 

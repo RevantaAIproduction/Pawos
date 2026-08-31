@@ -1078,20 +1078,6 @@ export function NativeBillingCheckoutModal({
           return;
         }
 
-        // Validate email domain for Team/Enterprise tiers
-        if ((intent.tier === 'team' || intent.tier === 'enterprise') && userEmail) {
-          const isPersonalEmail = userEmail.endsWith('@gmail.com') ||
-                                   userEmail.endsWith('@yahoo.com') ||
-                                   userEmail.endsWith('@outlook.com') ||
-                                   userEmail.endsWith('@hotmail.com') ||
-                                   userEmail.endsWith('@icloud.com') ||
-                                   userEmail.endsWith('@protonmail.com');
-          if (isPersonalEmail) {
-            setState('failed');
-            setFailMessage('Teams and Enterprise tiers require organization email addresses. Gmail, Yahoo, Outlook, and other personal email providers are not supported.');
-            return;
-          }
-        }
 
         const organizationId = (intent as { organizationId?: string }).organizationId;
 

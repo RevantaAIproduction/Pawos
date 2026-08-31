@@ -1,5 +1,4 @@
 import { getSupabaseClient } from '../auth/supabaseClient';
-import { isPersonalEmailDomain } from '../../shared/organization/PersonalEmailDomains';
 import type { OrganizationRecord, OrganizationMember, OrgTier, OrgRole } from '../../shared/organization/OrganizationTypes';
 import type { SeatTier } from '../../shared/billing/BillingTypes';
 import type { OrgJobRole, OrgJobRoleDepartment } from '../../shared/organization/OrgJobRoles';
@@ -79,7 +78,7 @@ function toMember(row: MemberRow): OrganizationMember {
 
 /**
  * Queries/mutates Supabase directly from the renderer, following the exact
- * pattern EmailAuthProvider.ts already uses (getSupabaseClient()) — no new
+ * pattern EmailAuthProvider.ts already uses (getSupabaseClient()) - no new
  * main-process IPC needed since this is inherently cloud-backed, like auth.
  */
 export type PendingInvite = {
@@ -127,20 +126,13 @@ export const organizationService = {
     const { data: userData, error: userError } = await supabase.auth.getUser();
     if (userError || !userData.user) {
       throw new Error(
-        'Your account isn’t linked to a cloud session yet, so organizations can’t recognize it. ' +
-          'Try signing out and back in — if you’re signed in with Google, this can happen if the ' +
-          'Google sign-in couldn’t be linked to a cloud session.'
+        'Your account is not linked to a cloud session yet, so organizations cannot recognize it. ' +
+          'Try signing out and back in - if you are signed in with Google, this can happen if the ' +
+          'Google sign-in could not be linked to a cloud session.'
       );
     }
     const domain = emailDomain(userData.user.email ?? '');
     if (!domain) throw new Error('Your account needs a real email address to create an organization.');
-    if (isPersonalEmailDomain(domain)) {
-      throw new Error(
-        'Team and Enterprise are designed for organizations. Use your company email address to create or ' +
-          'join an organization — personal email providers (like Gmail, Outlook, Yahoo, etc.) aren’t ' +
-          'supported for organization workspaces.'
-      );
-    }
 
     const { data: slugData, error: slugError } = await supabase.rpc('generate_org_slug', { org_name: name });
     if (slugError) throw slugError;
@@ -165,7 +157,7 @@ export const organizationService = {
     return (data ?? []).map(toMember);
   },
 
-  /** `seatTier` only makes sense for a 'team' org invite — pass undefined/omit for Enterprise (uniform seats). */
+  /** `seatTier` only makes sense for a 'team' org invite - pass undefined/omit for Enterprise (uniform seats). */
   async inviteMember(organizationId: string, email: string, role: OrgRole, seatTier?: SeatTier): Promise<OrganizationMember> {
     const supabase = await getSupabaseClient();
 
@@ -214,7 +206,7 @@ export const organizationService = {
     if (error) throw error;
   },
 
-  /** Support-only path — no UI calls this. Seat type is locked once a member is invited; changing
+  /** Support-only path - no UI calls this. Seat type is locked once a member is invited; changing
    *  it happens at renewal or through support, never as a self-serve toggle in Organization
    *  settings (see OrganizationSection.tsx's static seat badge). Kept here so that path has
    *  somewhere real to call, not a dead capability. */
@@ -225,7 +217,7 @@ export const organizationService = {
   },
 
   /** Reassigns an unclaimed pending seat (status still 'invited', user_id still null) to a
-   *  different email — e.g. the assigned person left before ever signing in. Only meaningful while
+   *  different email - e.g. the assigned person left before ever signing in. Only meaningful while
    *  unclaimed; RLS (org_members_* policies) still governs who may call this. */
   async reassignPendingMemberEmail(memberId: string, newEmail: string): Promise<void> {
     const supabase = await getSupabaseClient();
@@ -245,7 +237,7 @@ export const organizationService = {
 
   /** Assigns/clears a member's Organization Role. `jobRoleRef` is the opaque
    *  `builtin:<key>` / `custom:<uuid>` ref from OrgJobRoles.ts, or null to
-   *  clear it. Completely independent of role/seatTier — no other column
+   *  clear it. Completely independent of role/seatTier - no other column
    *  is touched. */
   async assignMemberJobRole(memberId: string, jobRoleRef: string | null): Promise<void> {
     const supabase = await getSupabaseClient();
