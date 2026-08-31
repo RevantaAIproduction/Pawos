@@ -333,9 +333,9 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
         amount_inr: amountInr.toString(),
       };
 
-      (razorpay as any).createPayment({
+      const paymentPayload = {
         order_id: checkout.orderId,
-        amount: checkout.amountInr,
+        amount: checkout.amountPaise,
         currency: 'INR',
         method: 'card',
         description: tierDescriptions[tier],
@@ -346,7 +346,8 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
           email: email,
         },
         notes: invoiceNotes,
-      });
+      };
+      (razorpay as any).createPayment(paymentPayload);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Payment failed.');
       setState('error');

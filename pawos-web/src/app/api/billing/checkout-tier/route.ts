@@ -161,7 +161,7 @@ export async function POST(request: Request) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      amount: amountInr,
+      amount: Math.round(amountInr * 100),
       currency: "INR",
       receipt: `tier-${tier}-${userId.slice(-8)}-${Date.now().toString().slice(-8)}`,
       notes: {
@@ -185,12 +185,14 @@ export async function POST(request: Request) {
   }
 
   const order = await response.json();
+  const amountPaise = Math.round(amountInr * 100);
   return NextResponse.json({
     ok: true,
     orderId: order.id,
     keyId: credentials.keyId,
     amountUsd: Math.round(amountUsd * 100) / 100, // Round to 2 decimals
-    amountInr: Math.round(amountInr * 100) / 100,
+    amountInr: Math.round(amountInr), // Round to whole rupees only
+    amountPaise,
     usdInrRate,
     currency: "INR",
   });
