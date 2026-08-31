@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useIpcBridge } from '../../services/ipc/useIpcBridge';
 
 type AddressResult = {
   address1: string;
@@ -11,10 +12,13 @@ type AddressResult = {
 type Props = {
   onAddressSelect: (address: AddressResult) => void;
   placeholder?: string;
+  value?: string;
+  onChange?: (value: string) => void;
 };
 
-export function AddressAutocomplete({ onAddressSelect, placeholder = 'Enter address' }: Props) {
-  const [input, setInput] = useState('');
+export function AddressAutocomplete({ onAddressSelect, placeholder = 'Enter address', value = '', onChange }: Props) {
+  const ipc = useIpcBridge();
+  const [input, setInput] = useState(value);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -24,33 +28,36 @@ export function AddressAutocomplete({ onAddressSelect, placeholder = 'Enter addr
   useEffect(() => {
     // Load Google Places API
     if (!window.google) {
-      const apiKey = (window as any).__GOOGLE_PLACES_API_KEY__ || '';
-      if (!apiKey) {
-        // Gracefully degrade if no API key - allow manual entry
-        setGooglePlacesAvailable(false);
-        return;
-      }
-      const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
-      script.async = true;
-      script.defer = true;
-      script.onload = () => {
-        scriptLoaded.current = true;
-        setGooglePlacesAvailable(true);
-      };
-      script.onerror = () => {
-        setGooglePlacesAvailable(false);
-      };
-      document.head.appendChild(script);
+      (async () => {
+        const apiKey = await ipc.billingGetGooglePlacesApiKey();
+        if (!apiKey) {
+          // Gracefully degrade if no API key - allow manual entry
+          setGooglePlacesAvailable(false);
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+        script.async = true;
+        script.defer = true;
+        script.onload = () => {
+          scriptLoaded.current = true;
+          setGooglePlacesAvailable(true);
+        };
+        script.onerror = () => {
+          setGooglePlacesAvailable(false);
+        };
+        document.head.appendChild(script);
+      })();
     } else {
       scriptLoaded.current = true;
       setGooglePlacesAvailable(true);
     }
-  }, []);
+  }, [ipc]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setInput(value);
+    onChange?.(value);
 
     if (!value.trim()) {
       setSuggestions([]);
@@ -63,7 +70,7 @@ export function AddressAutocomplete({ onAddressSelect, placeholder = 'Enter addr
       const service = new window.google.maps.places.AutocompleteService();
       service.getPlacePredictions(
         { input: value, componentRestrictions: { country: ['in'] } },
-        (predictions, status) => {
+        (predictions: any, status: any) => {
           if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {
             setSuggestions(predictions);
             setShowSuggestions(true);
@@ -83,7 +90,7 @@ export function AddressAutocomplete({ onAddressSelect, placeholder = 'Enter addr
       );
       service.getDetails(
         { placeId, fields: ['formatted_address', 'address_components'] },
-        (place, status) => {
+        (place: any, status: any) => {
           if (status === window.google.maps.places.PlacesServiceStatus.OK && place?.address_components) {
             // Parse address components
             const components: Record<string, string> = {};

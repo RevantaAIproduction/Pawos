@@ -40,7 +40,7 @@ export function formatPlanAndRuntimeSummary(entitlement: EntitlementSnapshot | n
 }
 
 /** Rolling-window Paw Compute usage summary — shows real 5-hour and 7-day usage/limit from the
- *  authoritative rolling-window counters (usage5hPc / limit5hPc / usage7dPc / limit7dPc on the
+ *  authoritative rolling-window counters (usage5hPc / limit5hPc / usageWeeklyPc / limitWeeklyPc on the
  *  EntitlementSnapshot). Never reads the deprecated creditLimit / weeklyCreditLimit fields, which
  *  are always null since Phase 2 replaced flat monthly limits with rolling windows. Pooled
  *  (Enterprise) has no personal rolling-window limit locally; it retains a plain used-count label. */
@@ -50,14 +50,14 @@ export function formatPawComputeSummary(entitlement: EntitlementSnapshot | null)
     return `Pooled organization allowance · ${formatNumber(entitlement.creditsUsedThisPeriod)} used`;
   }
 
-  const { usage5hPc, limit5hPc, usage7dPc, limit7dPc } = entitlement;
+  const { usage5hPc, limit5hPc, usageWeeklyPc, limitWeeklyPc } = entitlement;
 
   const fmt5h = limit5hPc !== null
     ? `5h: ${formatNumber(usage5hPc)} / ${formatNumber(limit5hPc)} PC`
     : `5h: ${formatNumber(usage5hPc)} PC`;
-  const fmt7d = limit7dPc !== null
-    ? `Week: ${formatNumber(usage7dPc)} / ${formatNumber(limit7dPc)} PC`
-    : `Week: ${formatNumber(usage7dPc)} PC`;
+  const fmt7d = limitWeeklyPc !== null
+    ? `Week: ${formatNumber(usageWeeklyPc)} / ${formatNumber(limitWeeklyPc)} PC`
+    : `Week: ${formatNumber(usageWeeklyPc)} PC`;
 
   return `${fmt5h} · ${fmt7d}`;
 }
@@ -68,13 +68,13 @@ export function formatPawComputePercent(entitlement: EntitlementSnapshot | null)
   if (!entitlement) return null;
   if (entitlement.pooled) return null;
 
-  const { usage5hPc, limit5hPc, usage7dPc, limit7dPc } = entitlement;
-  if (limit5hPc === null && limit7dPc === null) return null;
+  const { usage5hPc, limit5hPc, usageWeeklyPc, limitWeeklyPc } = entitlement;
+  if (limit5hPc === null && limitWeeklyPc === null) return null;
 
   const pct = (used: number, limit: number | null) =>
     limit !== null && limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
 
   const daily = pct(usage5hPc, limit5hPc);
-  const weekly = pct(usage7dPc, limit7dPc);
+  const weekly = pct(usageWeeklyPc, limitWeeklyPc);
   return `Daily: ${daily}% · Weekly: ${weekly}%`;
 }

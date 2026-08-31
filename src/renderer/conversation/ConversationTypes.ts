@@ -65,6 +65,8 @@ export type ConversationMessage = {
   status: 'final' | 'streaming';
   /** Present only on the one system message per turn that represents a Task Card — see ConversationTaskRecord. */
   task?: ConversationTaskRecord;
+  /** Inline message extensions — live interactive cards for permissions, progress, files, previews, etc. */
+  extensions?: import('./extensions/ExtensionTypes').MessageExtension[];
 };
 
 /**
@@ -77,9 +79,25 @@ export type SubmittedInputContext = {
   /** What's actually sent to the reasoning provider, if different from the displayed/stored transcript (e.g. a file's real content vs. its "📎 name.txt" display text). Defaults to the transcript itself. */
   reasoningText?: string;
   /** Provenance — lets the reasoning call react appropriately (e.g. read/summarize pasted or uploaded content instead of treating it as a spoken command) without a separate pipeline. */
-  source?: 'typed' | 'pasted' | 'file' | 'image';
+  source?: 'typed' | 'pasted' | 'file' | 'image' | 'largePrompt';
   /** Present only when source is 'image' — a base64 data: URL of the attached/pasted reference image (screenshot, mockup, logo). Never inlined into the text reasoning call; analyze_reference_image reads this directly. */
   imageDataUrl?: string;
+  /** Present only when source is 'largePrompt' — temporary context attachment for >700 line prompts. */
+  largePromptAttachment?: {
+    filename: string;
+    content: string;
+    lineCount: number;
+  };
+  /** Project ID (org_projects.id) this conversation is associated with, if any. Propagates through ActionRequest for RLS scoping. */
+  projectId?: string;
+};
+
+/** Window Context — PawOS internal state representing the current user context. */
+export type WindowContext = {
+  project?: { id: string; name: string };
+  session?: { id: string; title: string };
+  activeCard?: 'terminal' | 'worktree' | 'browser' | null;
+  browserContext?: { url?: string };
 };
 
 export type ConversationSnapshot = {

@@ -35,6 +35,8 @@ export type ConversationSession = {
   turns: ConversationSessionTurn[];
   filesCreated: string[];
   applicationsOpened: string[];
+  /** Project UUID (org_projects.id) this session is associated with, if any. */
+  projectId?: string;
 };
 
 /** List/search results omit full turn transcripts — the dashboard list view only needs this much. */

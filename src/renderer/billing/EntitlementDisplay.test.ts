@@ -18,8 +18,10 @@ const base: EntitlementSnapshot = {
   fableCreditsRemaining: 0,
   usage5hPc: 180,
   limit5hPc: 400,
-  usage7dPc: 640,
-  limit7dPc: 1_600,
+  usageWeeklyPc: 640,
+  limitWeeklyPc: 1_600,
+  usageMonthlyPc: 1_500,
+  limitMonthlyPc: 4_000,
 };
 
 describe('EntitlementDisplay', () => {
@@ -37,8 +39,8 @@ describe('EntitlementDisplay', () => {
     );
   });
 
-  it('uses usage7dPc and limit7dPc for the weekly window — never the deprecated weeklyCreditLimit', () => {
-    expect(formatPawComputeSummary({ ...base, usage7dPc: 100, limit7dPc: 1_600 })).toBe(
+  it('uses usageWeeklyPc and limitWeeklyPc for the weekly window — never the deprecated weeklyCreditLimit', () => {
+    expect(formatPawComputeSummary({ ...base, usageWeeklyPc: 100, limitWeeklyPc: 1_600 })).toBe(
       '5h: 180 / 400 PC · Week: 100 / 1,600 PC'
     );
   });
@@ -48,7 +50,7 @@ describe('EntitlementDisplay', () => {
   });
 
   it('omits the limit for a window that has no cap (null) without showing "Unlimited"', () => {
-    const result = formatPawComputeSummary({ ...base, limit5hPc: null, limit7dPc: null });
+    const result = formatPawComputeSummary({ ...base, limit5hPc: null, limitWeeklyPc: null });
     expect(result).not.toContain('Unlimited');
     expect(result).toBe('5h: 180 PC · Week: 640 PC');
   });

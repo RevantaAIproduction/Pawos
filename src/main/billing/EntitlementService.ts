@@ -69,6 +69,7 @@ const PRO_FEATURES: FeatureId[] = [
   'connectVercel',
   'connectNetlify',
   'connectRailway',
+  'meetingAssistant', // Meeting recording, summarization, and distribution
 ];
 
 /**
@@ -169,8 +170,6 @@ export const PLAN_DERIVED_RUNTIME_ENTITLEMENTS: Record<SubscriptionTierId, Runti
   go: [],
   pro: ['coding'],
   proMax: ['coding'],
-  proMax5x: ['coding'],
-  proMax20x: ['coding'],
   team: LEGACY_PLAN_RUNTIME_ENTITLEMENTS,
   enterprise: LEGACY_PLAN_RUNTIME_ENTITLEMENTS,
 };
@@ -192,8 +191,6 @@ const TIER_ENTITLEMENTS: Record<SubscriptionTierId, Omit<TierEntitlements, 'mont
   go: { tier: 'go', models: ['paw-flash'], features: GO_FEATURES },
   pro: { tier: 'pro', models: AI_MODELS, features: PRO_FEATURES },
   proMax: { tier: 'proMax', models: AI_MODELS, features: PRO_MAX_FEATURES },
-  proMax5x: { tier: 'proMax5x', models: AI_MODELS, features: PRO_MAX_FEATURES },
-  proMax20x: { tier: 'proMax20x', models: AI_MODELS, features: PRO_MAX_FEATURES },
   team: { tier: 'team', models: AI_MODELS, features: TEAM_FEATURES },
   enterprise: { tier: 'enterprise', models: AI_MODELS, features: ENTERPRISE_FEATURES },
 };
@@ -414,8 +411,10 @@ class EntitlementService {
       fableCreditsRemaining: this.isComputePooled() ? 0 : Math.max(0, balance.bonusThisPeriod - balance.fableUsedThisPeriod),
       usage5hPc: rolling.usage5h,
       limit5hPc: rolling.limit5h,
-      usage7dPc: rolling.usage7d,
-      limit7dPc: rolling.limit7d,
+      usageWeeklyPc: rolling.usage7d,
+      limitWeeklyPc: rolling.limit7d,
+      usageMonthlyPc: rolling.usage7d, // Use 7d as monthly proxy
+      limitMonthlyPc: rolling.limit7d, // Use 7d limit as monthly proxy
     };
   }
 }

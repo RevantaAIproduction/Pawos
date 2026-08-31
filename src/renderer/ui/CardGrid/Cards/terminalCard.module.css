@@ -1,0 +1,116 @@
+.terminalCard {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  background: rgba(5, 5, 10, 0.6);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.outputArea {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.outputArea::-webkit-scrollbar {
+  width: 6px;
+}
+
+.outputArea::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.outputArea::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+}
+
+.outputArea::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.line {
+  font-size: 11px;
+  line-height: 1.4;
+  padding: 0 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.line.input {
+  color: rgba(100, 200, 255, 0.9);
+  font-weight: 500;
+}
+
+.line.output {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.line.error {
+  color: rgba(255, 100, 100, 0.9);
+}
+
+.line.info {
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+}
+
+.inputContainer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(5, 5, 10, 0.8);
+  flex-shrink: 0;
+}
+
+.prompt {
+  color: rgba(100, 200, 255, 0.8);
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.9);
+  font-family: inherit;
+  font-size: 11px;
+  padding: 4px 0;
+  outline: none;
+}
+
+.input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.executeButton {
+  background: rgba(100, 200, 100, 0.15);
+  border: 1px solid rgba(100, 200, 100, 0.3);
+  color: rgba(100, 200, 100, 0.8);
+  width: 22px;
+  height: 22px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.executeButton:hover {
+  background: rgba(100, 200, 100, 0.25);
+  border-color: rgba(100, 200, 100, 0.5);
+  color: rgba(100, 200, 100, 1);
+}

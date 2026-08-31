@@ -81,6 +81,7 @@ import type {
   ApiTokenValidationResult,
   OAuthBeginResult,
 } from '../../../shared/connectivity/ConnectivityTypes';
+import type { SecurityKeyChallenge } from '../../../shared/mobilePresence/MobileAuthTypes';
 
 export function contextBridge() {
   if (typeof window === 'undefined') {
@@ -211,6 +212,7 @@ export function contextBridge() {
 
     billingGetPricing: async (): Promise<PricingConfig> => ipcApi.invoke('billing:getPricing'),
     billingGetTicketPricingConfig: async (): Promise<TicketPricingConfig> => ipcApi.invoke('billing:getTicketPricingConfig'),
+    billingGetGooglePlacesApiKey: async (): Promise<string> => ipcApi.invoke('billing:getGooglePlacesApiKey'),
     billingGetSubscription: async (): Promise<SubscriptionState> => ipcApi.invoke('billing:getSubscription'),
     billingSetSubscriptionTier: async (tier: SubscriptionTierId): Promise<SubscriptionState> =>
       ipcApi.invoke('billing:setSubscriptionTier', tier),
@@ -312,6 +314,8 @@ export function contextBridge() {
 
     executionRecord: async (record: ExecutionRecord): Promise<void> => ipcApi.invoke('execution:record', record),
     executionList: async (): Promise<ExecutionRecord[]> => ipcApi.invoke('execution:list'),
+    executionSetSelected: async (executionId: string | null): Promise<{ ok: boolean }> => ipcApi.invoke('execution:setSelected', executionId),
+    executionGetSelected: async (): Promise<string | null> => ipcApi.invoke('execution:getSelected'),
     browserGetCapabilities: async (): Promise<BrowserCapabilityReport[]> => ipcApi.invoke('browser:getCapabilities'),
     onExecutionUpdated: (cb: () => void) => on('execution:updated', cb),
 
@@ -417,5 +421,33 @@ export function contextBridge() {
       ipcApi.invoke('admin:getTestTier', userId, userEmail),
     adminHydrateTestTier: async (input: { userId: string; realTier: string; testTier: string }): Promise<{ ok: boolean; reason?: string }> =>
       ipcApi.invoke('admin:hydrateTestTier', input),
+
+    // Enterprise Billing — Inquiry & Checkout
+    enterpriseSubmitInquiry: async (request: { name: string; email: string; company: string; phone: string; seatsNeeded: number; message?: string }): Promise<{ ok: boolean; inquiryId?: string; reason?: string }> =>
+      ipcApi.invoke('enterprise:submitInquiry', request),
+    enterpriseCreateOrder: async (request: { inquiryId?: string; seatsCount: number; spendingLimitPerUserCents: number; startingBalanceCents: number }): Promise<{ ok: boolean; orderId?: string; totalDueCents?: number; invoiceNumber?: string; reason?: string }> =>
+      ipcApi.invoke('enterprise:createOrder', request),
+    enterpriseGetInquiry: async (inquiryId: string): Promise<{ ok: boolean; inquiry?: { id: string; name: string; email: string; company: string; seatsNeeded: number; status: string; createdAt: string }; reason?: string }> =>
+      ipcApi.invoke('enterprise:getInquiry', inquiryId),
+
+    // Mobile Authentication & Pairing (Phase 2)
+    mobileAuth__getWebAuthorizationUrl: async (sessionId: string): Promise<string> =>
+      ipcApi.invoke('mobileAuth:getWebAuthorizationUrl', sessionId),
+    mobileAuth__generateSecurityKey: async (sessionId: string): Promise<SecurityKeyChallenge> =>
+      ipcApi.invoke('mobileAuth:generateSecurityKey', sessionId),
+    mobileAuth__verifySecurityKey: async (sessionId: string, keyPlain: string): Promise<{ success: boolean; deviceId?: string; sessionToken?: string; expiresAt?: string; error?: string }> =>
+      ipcApi.invoke('mobileAuth:verifySecurityKey', sessionId, keyPlain),
+
+    // Governance & Approval Handler
+    governanceApprove: async (approvalId: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcApi.invoke('governance:approve', approvalId),
+    governanceDeny: async (approvalId: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcApi.invoke('governance:deny', approvalId),
+    governanceGetPending: async (): Promise<Array<{ approvalId: string; actionType: string; requestedAt: number }>> =>
+      ipcApi.invoke('governance:getPending'),
+    onGovernanceApproved: (cb: (payload: { approvalId: string }) => void) =>
+      on('governance:approved', cb),
+    onGovernanceDenied: (cb: (payload: { approvalId: string }) => void) =>
+      on('governance:denied', cb),
   };
 }

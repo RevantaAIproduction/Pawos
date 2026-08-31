@@ -138,7 +138,7 @@ describe('RollingUsageGate — canStartGeneration', () => {
     const now = Date.now();
     // Spread usage across 7d but keep each 5h slice under the 5h cap
     vi.spyOn(usageEventStore, 'list').mockReturnValue([
-      makeRecord({ normalizedCompute: capacity.window7dPc as number, timestamp: now - WINDOW_5H_MS - 1_000 }),
+      makeRecord({ normalizedCompute: capacity.windowWeeklyPc as number, timestamp: now - WINDOW_5H_MS - 1_000 }),
     ]);
     const result = rollingUsageGate.canStartGeneration('go', undefined, now);
     expect(result.allowed).toBe(false);
@@ -216,7 +216,7 @@ describe('RollingUsageGate — canStartGeneration', () => {
     const now = Date.now();
     // Record outside both windows — should count for neither
     vi.spyOn(usageEventStore, 'list').mockReturnValue([
-      makeRecord({ normalizedCompute: capacity.window7dPc as number, timestamp: now - WINDOW_7D_MS - 1 }),
+      makeRecord({ normalizedCompute: capacity.windowWeeklyPc as number, timestamp: now - WINDOW_7D_MS - 1 }),
     ]);
     const result = rollingUsageGate.canStartGeneration('pro', undefined, now);
     expect(result.allowed).toBe(true);

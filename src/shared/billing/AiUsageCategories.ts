@@ -183,12 +183,12 @@ export function categorizeActionTypes(actionTypes: string[]): AiUsageCategory {
 
 /**
  * Categorizes a completed turn. `inputSource` is the turn's real SubmittedInputContext.source —
- * 'typed'/'pasted'/'file'/'image' all mean the user typed or attached something explicitly;
+ * 'typed'/'pasted'/'file'/'image'/'largePrompt' all mean the user typed or attached something explicitly;
  * undefined means the turn came from the push-to-talk speech pipeline (PawOS's original input
  * mode), which is the one honest signal available for the 'voice' category. Actions taken during
  * a spoken turn still take priority — 'voice' only applies to a turn that was purely conversational.
  */
-export function categorizeTurn(actionTypes: string[], inputSource: 'typed' | 'pasted' | 'file' | 'image' | undefined): AiUsageCategory {
+export function categorizeTurn(actionTypes: string[], inputSource: 'typed' | 'pasted' | 'file' | 'image' | 'largePrompt' | undefined): AiUsageCategory {
   if (actionTypes.length > 0) return categorizeActionTypes(actionTypes);
   return inputSource === undefined ? 'voice' : 'chat';
 }

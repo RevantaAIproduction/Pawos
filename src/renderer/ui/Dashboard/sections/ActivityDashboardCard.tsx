@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import styles from '../dashboard.module.css';
-import { activityDashboardService, type OrganizationActivitySummary } from '../../../organization/ActivityDashboardService';
+import { activityDashboardService, type OrganizationActivitySummary, type AutonomousTaskStatusCounts } from '../../../organization/ActivityDashboardService';
+import { getSupabaseClient } from '../../../auth/supabaseClient';
 import type { OrganizationMember } from '../../../../shared/organization/OrganizationTypes';
 import { CreditUsageDisplay } from '../../components/CreditUsageDisplay';
 
@@ -13,6 +15,31 @@ function getErrorMessage(e: unknown): string {
 const statLabel: React.CSSProperties = { fontSize: 11.5, color: '#96969e' };
 const statValue: React.CSSProperties = { fontSize: 20, fontVariantNumeric: 'tabular-nums' };
 
+function subscribeToAutonomousRuns(organizationId: string, onChange: () => void): () => void {
+  let channel: RealtimeChannel | null = null;
+  let cancelled = false;
+  getSupabaseClient().then((supabase) => {
+    if (cancelled) return;
+    channel = supabase
+      .channel(`autonomous-runs:${organizationId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'autonomous_task_runs',
+          filter: `organization_id=eq.${organizationId}`,
+        },
+        () => onChange()
+      )
+      .subscribe();
+  });
+  return () => {
+    cancelled = true;
+    channel?.unsubscribe();
+  };
+}
+
 /**
  * Phase 2 — Activity Dashboard + reporting foundation. Org-wide,
  * visible to every active member (not gated by audit.view — that stays
@@ -22,6 +49,7 @@ const statValue: React.CSSProperties = { fontSize: 20, fontVariantNumeric: 'tabu
  */
 export function ActivityDashboardCard({ organizationId, orgMembers }: { organizationId: string; orgMembers: OrganizationMember[] }) {
   const [summary, setSummary] = useState<OrganizationActivitySummary | null>(null);
+  const [autonomousTaskCounts, setAutonomousTaskCounts] = useState<AutonomousTaskStatusCounts | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -29,6 +57,34 @@ export function ActivityDashboardCard({ organizationId, orgMembers }: { organiza
       .getSummary(organizationId)
       .then(setSummary)
       .catch((e) => setError(getErrorMessage(e)));
+  }, [organizationId]);
+
+  useEffect(() => {
+    if (!organizationId) return;
+    let cancelled = false;
+
+    const fetchCounts = async () => {
+      try {
+        const counts = await activityDashboardService.getAutonomousTaskStatusCounts(organizationId);
+        if (!cancelled) {
+          setAutonomousTaskCounts(counts);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setError(getErrorMessage(e));
+        }
+      }
+    };
+
+    fetchCounts();
+    const unsubscribe = subscribeToAutonomousRuns(organizationId, () => {
+      fetchCounts();
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, [organizationId]);
 
   function memberLabel(userId: string): string {
@@ -64,6 +120,17 @@ export function ActivityDashboardCard({ organizationId, orgMembers }: { organiza
               </div>
             ))}
           </div>
+
+          {autonomousTaskCounts && (
+            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 16 }}>
+              {(['queued', 'running', 'waiting_for_permission', 'blocked', 'completed', 'failed', 'cancelled'] as const).map((status) => (
+                <div key={status}>
+                  <div style={statLabel}>autonomous {status.replace(/_/g, ' ')}</div>
+                  <div style={statValue}>{autonomousTaskCounts[status]}</div>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div style={{ marginBottom: 16 }}>
             <CreditUsageDisplay

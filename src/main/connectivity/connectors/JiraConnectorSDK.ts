@@ -110,6 +110,7 @@ export class JiraConnectorSDK implements ConnectorSDK {
         cloudId: resource.cloudId,
         siteUrl: resource.siteUrl,
         siteName: resource.siteName,
+        storedAt: Date.now(),
       });
       this.registerLiveConnector();
       this.currentStatus = { state: 'connected', capabilities: this.capabilities(), connectedAt: new Date().toISOString(), detail: resource.siteName };

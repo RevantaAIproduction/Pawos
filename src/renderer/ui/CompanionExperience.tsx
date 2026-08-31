@@ -3,6 +3,8 @@ import styles from './app.module.css';
 import { Avatar3DOverlay } from './CompanionCanvas/Avatar3DOverlay';
 import { SettingsPanel } from './SettingsPanel/SettingsPanel';
 import { ConversationPanel } from '../conversation/ConversationPanel';
+import { WindowContextProvider } from '../conversation/WindowContextProvider';
+import { CardGrid, type CardConfig } from './CardGrid/CardGrid';
 import { WorkspaceRuntime } from '../workspace/WorkspaceRuntime';
 import { CommunicationWorkspaceRuntime } from '../communication/CommunicationWorkspaceRuntime';
 import { useIpcBridge } from '../services/ipc/useIpcBridge';
@@ -15,9 +17,7 @@ import { useApprovalCenterBridge } from '../mobilePresence/ApprovalCenterBridge'
 import { aiProviderConfigStore } from '../ai/AIProviderConfigStore';
 import type { VisemeFrame } from '../conversation/LipSyncTypes';
 // [DEBUG-TEMP] remove this import and its usage below once real-mic verification is done.
-import { VoiceDebugPanel } from './VoiceDebugPanel';
 import { RecentWorkPage } from '../conversation/RecentWorkPage';
-import { InitialPage } from '../conversation/InitialPage';
 
 export default function CompanionExperience() {
   const ipc = useIpcBridge();
@@ -90,6 +90,11 @@ export default function CompanionExperience() {
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showRecentWork, setShowRecentWork] = useState(false);
+  const [showTalkButton, setShowTalkButton] = useState(false);
+  const [openCards, setOpenCards] = useState<CardConfig[]>([
+    { id: 'terminal-1', type: 'terminal', title: 'Terminal' },
+  ]);
+  const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
   const notifyOnTaskCompleteRef = useRef(true);
 
   // Show RecentWorkPage when work starts
@@ -264,6 +269,8 @@ export default function CompanionExperience() {
         data-interactive="true"
         className={`${styles.avatarShell} ${isWorkspaceActive ? styles.avatarShellCompact : ''}`}
         onDoubleClick={() => setSettingsOpen(true)}
+        onMouseEnter={() => setShowTalkButton(true)}
+        onMouseLeave={() => setShowTalkButton(false)}
       >
         <Avatar3DOverlay
           controller={controller.controller}
@@ -277,7 +284,7 @@ export default function CompanionExperience() {
           onUploadLoadResult={(result) => activeProfile && recordUploadLoadResult(activeProfile.id, result)}
           onReady={() => ipc.notifyCompanionReady()}
         />
-        {!conversationSnapshot.panelOpen && (
+        {!conversationSnapshot.panelOpen && showTalkButton && (
           <button
             type="button"
             className={styles.launcher}
@@ -288,119 +295,73 @@ export default function CompanionExperience() {
         )}
       </div>
       {conversationSnapshot.panelOpen && (
-        <div className={styles.conversationPanelSlot} data-interactive="true">
-          {/* Initial Page - Shows when no messages yet (FULL SCREEN) */}
-          {conversationSnapshot.messages.length === 0 && !activeTask ? (
-            <InitialPage
-              activePawModel={conversation.activePawModel}
-              onSelectModel={(id) => conversation.selectModel(id)}
-              entitlement={conversation.entitlement}
-              pawCreditsBalanceUsd={conversation.pawCreditsBalanceUsd}
-              onBuyCredits={() => setSettingsOpen(true)}
+        <WindowContextProvider>
+          <div style={{ display: 'flex', height: '100%', width: '100%', overflow: 'hidden' }}>
+            <div className={styles.conversationPanelSlot} data-interactive="true" style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+              <ConversationPanel
+              snapshot={conversationSnapshot}
+              onClose={() => conversation.close()}
               onStartListening={() => conversation.startListening()}
               onStopListening={() => conversation.stopListening()}
-              speechPlaybackState={conversationSnapshot.state}
-              usageCompute={conversation.usageCompute}
-              usageTimestamp={conversation.usageTimestamp}
-              setShowDetailedBreakdown={() => {}}
+              onSendTranscript={(text, context) => conversation.submitTranscript(text, context)}
+              onSetVoiceOutputEnabled={(enabled) => conversation.setVoiceOutputEnabled(enabled)}
+              onStopSpeechPlayback={() => conversation.stopSpeechPlayback()}
+              onSpeakMessage={(text) => conversation.speak(text)}
+              onRetryAction={(taskId, actionId) => conversation.retryAction(taskId, actionId)}
+              onOpenPath={(path, kind) => conversation.openPath(path, kind)}
+              onConnectCapability={(taskId, actionId, connectorId, fields, opts) => conversation.connectCapability(taskId, actionId, connectorId, fields, opts)}
+              onPlanDecision={(_planId, _decision, message) => conversation.submitTranscript(message)}
+              creditsNoticeTier={conversation.creditsNoticeTier}
+              creditsNoticeSeatTier={conversation.entitlement?.seatTier}
+              creditsNoticePooled={conversation.entitlement?.pooled ?? false}
+              enterpriseContactAvailable
+              onDismissCreditsNotice={() => conversation.dismissCreditsNotice()}
+              onUpgrade={() => ipc.openUpgradeInDashboard()}
+              onBuyCompute={() => setSettingsOpen(true)}
+              onContactSales={() => void ipc.executeAction({ type: 'openUrl', url: 'https://pawos.revantaai.com/enterprise' })}
+              onContactAdmin={() => setSettingsOpen(true)}
+              onRequestMoreCompute={() => setSettingsOpen(true)}
+              onOpenTicketBalance={() => setSettingsOpen(true)}
+              pawCreditsBalanceUsd={conversation.pawCreditsBalanceUsd}
+              onUseCredits={() => conversation.useCreditsForCompute()}
+              redeemingCredits={conversation.redeemingCredits}
+              redeemCreditsError={conversation.redeemCreditsError}
+              executionMode={conversation.executionMode}
+              onSetExecutionMode={(mode) => conversation.setExecutionMode(mode)}
+              bypassPermissionsEnabled={conversation.bypassPermissionsEnabled}
+              entitlement={conversation.entitlement}
+              activePawModel={conversation.activePawModel}
               modelTierRequirements={conversation.modelTierRequirements}
+              onSelectModel={(id) => conversation.selectModel(id)}
+              currentWorkingFile={activeTask ? 'Working...' : undefined}
+              wakeWord={undefined}
+              streamingPawCompute={conversation.streamingPawCompute}
+              streamingElapsedSeconds={conversation.streamingElapsedSeconds}
+              onCancel={() => conversation.cancel()}
+              onOpenSidebar={(cardType) => {
+                const existingCard = openCards.find((c) => c.type === cardType);
+                if (!existingCard) {
+                  const newId = `${cardType}-${Date.now()}`;
+                  setOpenCards((prev) => [...prev, { id: newId, type: cardType, title: cardType.charAt(0).toUpperCase() + cardType.slice(1) }]);
+                }
+              }}
             />
-          ) : (
-            <>
-              {/* Recent Work Page Header with New Chat & Close buttons */}
-              {activeTask && showRecentWork && (
-                <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(var(--pawos-overlay-rgb), 0.1)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      conversation.reset?.();
-                      setShowRecentWork(false);
-                    }}
-                    style={{
-                      padding: '6px 12px',
-                      backgroundColor: 'rgba(59, 130, 246, 0.15)',
-                      border: '1px solid rgba(59, 130, 246, 0.3)',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: 11,
-                      fontWeight: 500,
-                      color: '#3b82f6',
-                    }}
-                  >
-                    + New Chat
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowRecentWork(false)}
-                    style={{
-                      padding: '6px 10px',
-                      backgroundColor: 'transparent',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: 14,
-                      color: 'rgba(var(--pawos-overlay-rgb), 0.6)',
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(var(--pawos-overlay-rgb), 0.1)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                  >
-                    ×
-                  </button>
-                </div>
-              )}
-              {/* Recent Work Page */}
-              {activeTask && (
-                <RecentWorkPage
-                  onNewChat={() => {
-                    conversation.reset?.();
-                    setShowRecentWork(false);
-                  }}
-                  entitlement={conversation.entitlement}
-                  activePawModel={conversation.activePawModel}
-                  usageCompute={0}
-                  usageTimestamp={Date.now()}
-                />
-              )}
-              <ConversationPanel
-            snapshot={conversationSnapshot}
-            onClose={() => conversation.close()}
-            onStartListening={() => conversation.startListening()}
-            onStopListening={() => conversation.stopListening()}
-            onSendTranscript={(text, context) => conversation.submitTranscript(text, context)}
-            onSetVoiceOutputEnabled={(enabled) => conversation.setVoiceOutputEnabled(enabled)}
-            onStopSpeechPlayback={() => conversation.stopSpeechPlayback()}
-            onSpeakMessage={(text) => conversation.speak(text)}
-            onRetryAction={(taskId, actionId) => conversation.retryAction(taskId, actionId)}
-            onOpenPath={(path, kind) => conversation.openPath(path, kind)}
-            onConnectCapability={(taskId, actionId, connectorId, fields, opts) => conversation.connectCapability(taskId, actionId, connectorId, fields, opts)}
-            onPlanDecision={(_planId, _decision, message) => conversation.submitTranscript(message)}
-            creditsNoticeTier={conversation.creditsNoticeTier}
-            creditsNoticeSeatTier={conversation.entitlement?.seatTier}
-            creditsNoticePooled={conversation.entitlement?.pooled ?? false}
-            enterpriseContactAvailable
-            onDismissCreditsNotice={() => conversation.dismissCreditsNotice()}
-            onUpgrade={() => ipc.openUpgradeInDashboard()}
-            onBuyCompute={() => setSettingsOpen(true)}
-            onContactSales={() => void ipc.executeAction({ type: 'openUrl', url: 'https://pawos.revantaai.com/enterprise' })}
-            onContactAdmin={() => setSettingsOpen(true)}
-            onRequestMoreCompute={() => setSettingsOpen(true)}
-            onOpenTicketBalance={() => setSettingsOpen(true)}
-            pawCreditsBalanceUsd={conversation.pawCreditsBalanceUsd}
-            onUseCredits={() => conversation.useCreditsForCompute()}
-            redeemingCredits={conversation.redeemingCredits}
-            redeemCreditsError={conversation.redeemCreditsError}
-            executionMode={conversation.executionMode}
-            onSetExecutionMode={(mode) => conversation.setExecutionMode(mode)}
-            bypassPermissionsEnabled={conversation.bypassPermissionsEnabled}
-            entitlement={conversation.entitlement}
-            activePawModel={conversation.activePawModel}
-            modelTierRequirements={conversation.modelTierRequirements}
-            onSelectModel={(id) => conversation.selectModel(id)}
-            currentWorkingFile={activeTask ? 'Working...' : undefined}
-          />
-            </>
-          )}
-        </div>
+          </div>
+          <div className={styles.cardGridSlot} data-interactive="true" style={{ flex: 0.4, minWidth: 0, overflow: 'hidden' }}>
+            <CardGrid
+              cards={openCards}
+              onRemoveCard={(cardId) => setOpenCards((prev) => prev.filter((c) => c.id !== cardId))}
+              onAddCard={(type) => {
+                const newId = `${type}-${Date.now()}`;
+                setOpenCards((prev) => [...prev, { id: newId, type, title: type.charAt(0).toUpperCase() + type.slice(1) }]);
+              }}
+              expandedCardId={expandedCardId}
+              onExpandCard={(cardId) => setExpandedCardId(cardId)}
+              onCollapseCard={() => setExpandedCardId(null)}
+            />
+          </div>
+          </div>
+        </WindowContextProvider>
       )}
       {isWorkspaceActive && activeTask && (
         <div className={styles.workspaceRuntimeSlot} data-interactive="true">
@@ -424,10 +385,6 @@ export default function CompanionExperience() {
           />
         </div>
       )}
-      {/* [DEBUG-TEMP] remove once real-mic verification is done */}
-      <div data-interactive="true">
-        <VoiceDebugPanel snapshot={conversationSnapshot} />
-      </div>
     </div>
   );
 }

@@ -16,6 +16,7 @@ import type {
   ConversationSessionTurn,
   SessionContinuationHint,
 } from '../../../shared/conversation/ConversationSessionTypes';
+import type { OrgProject, ProjectUserDeviceAttachment } from '../../../shared/projects/ProjectTypes';
 import type { ProcessOutputEvent, ProcessExitEvent } from '../../../shared/actions/ProcessTypes';
 import type { WorkspaceFileChangeEvent } from '../../../shared/actions/WorkspaceFileChangeTypes';
 import type { WorkspaceObservationEvent } from '../../../shared/actions/ExecutionLifecycle';
@@ -24,6 +25,7 @@ import type { BrowserCapabilityReport } from '../../../shared/actions/BrowserCap
 import type { CommunicationRuntimeEvent, ParticipantRecord, CompanyRecord, CommunicationSummary, FollowUp } from '../../../shared/communication/CommunicationTypes';
 import type { LocalDeviceIdentity } from '../../../shared/device/DeviceTypes';
 import type { PushNotificationPayload, PushSendResult } from '../../../shared/mobilePresence/MobilePresenceTypes';
+import type { SecurityKeyChallenge } from '../../../shared/mobilePresence/MobileAuthTypes';
 import type {
   ConnectivityScope,
   ConnectorDefinition,
@@ -275,6 +277,9 @@ export const ipc = {
   async billingGetTicketPricingConfig(): Promise<TicketPricingConfig> {
     return getBridge().billingGetTicketPricingConfig();
   },
+  async billingGetGooglePlacesApiKey(): Promise<string> {
+    return getBridge().billingGetGooglePlacesApiKey();
+  },
   async billingGetSubscription(): Promise<SubscriptionState> {
     return getBridge().billingGetSubscription();
   },
@@ -449,6 +454,12 @@ export const ipc = {
   onSessionsUpdated(cb: () => void) {
     getBridge().onSessionsUpdated(cb);
   },
+  async executionSetSelected(executionId: string | null): Promise<{ ok: boolean }> {
+    return getBridge().executionSetSelected(executionId);
+  },
+  async executionGetSelected(): Promise<string | null> {
+    return getBridge().executionGetSelected();
+  },
   async executionRecord(record: ExecutionRecord): Promise<void> {
     return getBridge().executionRecord(record);
   },
@@ -606,6 +617,138 @@ export const ipc = {
   },
   async adminHydrateTestTier(input: { userId: string; realTier: string; testTier: string }): Promise<{ ok: boolean; reason?: string }> {
     return getBridge().adminHydrateTestTier(input);
+  },
+
+  // Enterprise Billing — Inquiry & Checkout
+  async enterpriseSubmitInquiry(request: { name: string; email: string; company: string; phone: string; seatsNeeded: number; message?: string }): Promise<{ ok: boolean; inquiryId?: string; reason?: string }> {
+    return getBridge().enterpriseSubmitInquiry(request);
+  },
+  async enterpriseCreateOrder(request: { inquiryId?: string; seatsCount: number; spendingLimitPerUserCents: number; startingBalanceCents: number }): Promise<{ ok: boolean; orderId?: string; totalDueCents?: number; invoiceNumber?: string; reason?: string }> {
+    return getBridge().enterpriseCreateOrder(request);
+  },
+  async enterpriseGetInquiry(inquiryId: string): Promise<{ ok: boolean; inquiry?: { id: string; name: string; email: string; company: string; seatsNeeded: number; status: string; createdAt: string }; reason?: string }> {
+    return getBridge().enterpriseGetInquiry(inquiryId);
+  },
+
+  // Mobile Authentication & Pairing (Phase 2)
+  async mobileAuth__getWebAuthorizationUrl(sessionId: string): Promise<string> {
+    return getBridge().mobileAuth__getWebAuthorizationUrl(sessionId);
+  },
+  async mobileAuth__generateSecurityKey(sessionId: string): Promise<SecurityKeyChallenge> {
+    return getBridge().mobileAuth__generateSecurityKey(sessionId);
+  },
+  async mobileAuth__verifySecurityKey(sessionId: string, keyPlain: string): Promise<{ success: boolean; deviceId?: string; sessionToken?: string; expiresAt?: string; error?: string }> {
+    return getBridge().mobileAuth__verifySecurityKey(sessionId, keyPlain);
+  },
+
+  // Workspace Integrations (Mail, Slack, Drive, Calendar)
+  async integrationConnect(userId: string, request: any) {
+    return (getBridge() as any).integrationConnect(userId, request);
+  },
+  async integrationDisconnect(userId: string, service: string) {
+    return (getBridge() as any).integrationDisconnect(userId, service);
+  },
+  async integrationList(userId: string) {
+    return (getBridge() as any).integrationList(userId);
+  },
+  async integrationStatus(userId: string) {
+    return (getBridge() as any).integrationStatus(userId);
+  },
+  async integrationRefreshToken(userId: string, service: string, accessToken: string, options?: any) {
+    return (getBridge() as any).integrationRefreshToken(userId, service, accessToken, options);
+  },
+
+  // Meeting Assistant (Pro+ tier feature)
+  async meetingRecord(userId: string, request: any) {
+    return (getBridge() as any).meetingRecord(userId, request);
+  },
+  async meetingSummarize(userId: string, request: any) {
+    return (getBridge() as any).meetingSummarize(userId, request);
+  },
+  async meetingDistribute(userId: string, request: any) {
+    return (getBridge() as any).meetingDistribute(userId, request);
+  },
+  async meetingList(userId: string, query?: any) {
+    return (getBridge() as any).meetingList(userId, query);
+  },
+  async meetingGet(meetingId: string) {
+    return (getBridge() as any).meetingGet(meetingId);
+  },
+  async meetingUpdateStatus(meetingId: string, status: string) {
+    return (getBridge() as any).meetingUpdateStatus(meetingId, status);
+  },
+  async meetingAddAttendee(meetingId: string, attendee: any) {
+    return (getBridge() as any).meetingAddAttendee(meetingId, attendee);
+  },
+  async meetingJoinAndRecord(userId: string, userEmail: string, meetingLink: string, meetingTitle?: string) {
+    return (getBridge() as any).meetingJoinAndRecord(userId, userEmail, meetingLink, meetingTitle);
+  },
+  async meetingCompleteRecording(meetingId: string, durationSeconds: number) {
+    return (getBridge() as any).meetingCompleteRecording(meetingId, durationSeconds);
+  },
+  async meetingApprovePreNotification(eventId: string, meetingLink: string, userEmail: string) {
+    return (getBridge() as any).meetingApprovePreNotification(eventId, meetingLink, userEmail);
+  },
+  async meetingDenyPreNotification(eventId: string) {
+    return (getBridge() as any).meetingDenyPreNotification(eventId);
+  },
+  async meetingStartCalendarPolling(userId: string) {
+    return (getBridge() as any).meetingStartCalendarPolling(userId);
+  },
+  async meetingStopCalendarPolling() {
+    return (getBridge() as any).meetingStopCalendarPolling();
+  },
+  onPreMeetingNotification(cb: (notification: any) => void) {
+    return (getBridge() as any).onPreMeetingNotification(cb);
+  },
+  onMeetingSummaryGenerated(cb: (summaryData: any) => void) {
+    return (getBridge() as any).onMeetingSummaryGenerated(cb);
+  },
+  onMeetingSummaryRecordedInHistory(cb: (executionRecord: any) => void) {
+    return (getBridge() as any).onMeetingSummaryRecordedInHistory(cb);
+  },
+
+  // Background Tasks
+  async taskStart(type: string, title: string, command: string, metadata?: any) {
+    return (getBridge() as any).taskStart(type, title, command, metadata);
+  },
+  async taskUpdateProgress(taskId: string, progress: number, output?: string) {
+    return (getBridge() as any).taskUpdateProgress(taskId, progress, output);
+  },
+  async taskComplete(taskId: string, error?: string) {
+    return (getBridge() as any).taskComplete(taskId, error);
+  },
+  async taskCancel(taskId: string) {
+    return (getBridge() as any).taskCancel(taskId);
+  },
+  async taskGet(taskId: string) {
+    return (getBridge() as any).taskGet(taskId);
+  },
+  async taskList(query?: any) {
+    return (getBridge() as any).taskList(query);
+  },
+  async taskGetLogs(taskId: string, limit?: number) {
+    return (getBridge() as any).taskGetLogs(taskId, limit);
+  },
+  async taskClearOld(olderThanDays?: number) {
+    return (getBridge() as any).taskClearOld(olderThanDays);
+  },
+
+  // Projects
+  async selectFolder(): Promise<string | null> {
+    return (getBridge() as any).selectFolder();
+  },
+  async projectCreate(name: string, organizationId: string | null) {
+    return (getBridge() as any).projectCreate(name, organizationId);
+  },
+  async projectList(organizationId: string | null) {
+    return (getBridge() as any).projectList(organizationId);
+  },
+  async projectAttach(projectId: string, localPath: string) {
+    return (getBridge() as any).projectAttach(projectId, localPath);
+  },
+  async projectMarkVerified(projectId: string) {
+    return (getBridge() as any).projectMarkVerified(projectId);
   },
 };
 

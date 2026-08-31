@@ -70,6 +70,8 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
 
   // Billing form fields
   const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [mobileNumber, setMobileNumber] = useState('');
   const [country, setCountry] = useState('India'); // Default to India
   const [address, setAddress] = useState('');
   const [taxId, setTaxId] = useState('');
@@ -123,22 +125,24 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
           // e.g., tharun@revantaai.com → RevantaAI
           const emailDomain = session.user.email.split('@')[1];
           if (emailDomain) {
-            const domainName = emailDomain.split('.')[0]; // Get part before .com/.io etc
-            const orgName = domainName
-              .split(/[-_]/)
-              .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-              .join('');
-            setOrganizationName(orgName);
-            setTeamName(orgName); // Prefill team name with organization name (user can change)
+            const domainName = emailDomain?.split('.')[0]; // Get part before .com/.io etc
+            if (domainName) {
+              const orgName = domainName
+                .split(/[-_]/)
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                .join('');
+              setOrganizationName(orgName);
+              setTeamName(orgName); // Prefill team name with organization name (user can change)
+            }
           }
         }
-        if (session?.user?.name) {
-          setFullName(session.user.name);
-        }
+        // if (session?.user?.name) {
+        //   setFullName(session.user.name);
+        // }
 
         // Try to extract organization name from organization or team data (backup)
         try {
-          const orgData = await ipc.organizationGetCurrent?.();
+          const orgData = await (ipc as any).organizationGetCurrent?.();
           if (orgData?.name) {
             setOrganizationName(orgData.name);
             setTeamName(orgData.name);
@@ -157,7 +161,7 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
   useEffect(() => {
     const fetchSavedCards = async () => {
       try {
-        const methods = await ipc.billingGetPaymentMethods?.();
+        const methods = await (ipc as any).billingGetNativePaymentMethods?.();
         if (methods?.ok && Array.isArray(methods.methods)) {
           setSavedCards(methods.methods);
           if (methods.methods.length > 0) {
@@ -275,7 +279,7 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
         order_id: orderId,
         description: invoiceDescription,
         handler: async (response: any) => {
-          const verifyResult = await ipc.billingVerifyNativeTierPayment?.(response.razorpay_payment_id, orderId);
+          const verifyResult = await (ipc as any).billingVerifyNativeTierPayment?.({ paymentId: response.razorpay_payment_id, orderId });
           if (verifyResult?.ok) {
             onSuccess?.();
           } else {

@@ -3,7 +3,7 @@
   width:100%;
   height:100%;
   display:flex;
-  align-items:flex-end;
+  align-items:stretch;
   justify-content:flex-start;
   gap:16px;
   padding:20px;
@@ -14,8 +14,8 @@
 
 .avatarShell{
   position:relative;
-  width:280px;
-  height:280px;
+  width:90px;
+  height:90px;
   pointer-events:auto;
   transition:width 0.2s ease, height 0.2s ease;
   flex-shrink:0;
@@ -23,8 +23,8 @@
 
 /* Companion shrinks automatically to make room for the Workspace Runtime panel instead of the window needing to grow further — "small, sitting on the edge" rather than competing for space. */
 .avatarShellCompact{
-  width:120px;
-  height:120px;
+  width:90px;
+  height:90px;
 }
 
 .launcher{
@@ -49,11 +49,13 @@
 }
 
 .conversationPanelSlot{
-  flex:1 1 520px;
-  min-width:320px;
-  max-width:min(560px, calc(100vw - 180px));
-  max-height:100%;
+  flex:1 1 auto;
+  min-width:300px;
+  height:100%;
+  min-height:0;
+  max-height:none;
   pointer-events:auto;
+  min-width:0;
 }
 
 .workspaceRuntimeSlot{
@@ -61,6 +63,13 @@
   min-width:0;
   max-height:100%;
   pointer-events:auto;
+}
+
+.cardGridSlot{
+  pointer-events:auto;
+  background:rgba(10,10,12,0.3);
+  border-left:1px solid rgba(255,255,255,0.06);
+  border-radius:8px 0 0 8px;
 }
 
 @media (max-width: 760px){

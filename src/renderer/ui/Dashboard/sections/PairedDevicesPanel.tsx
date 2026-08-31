@@ -4,6 +4,7 @@ import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import { trustedDeviceService } from '../../../mobilePresence/TrustedDeviceService';
 import { pairingService } from '../../../mobilePresence/PairingService';
 import { CrossDevicePresenceSession } from '../../../mobilePresence/CrossDevicePresenceSession';
+import { ConnectMobileUI } from './ConnectMobileUI';
 import type { TrustedDevice, PairingSessionStart, DevicePresenceMember } from '../../../../shared/mobilePresence/MobilePresenceTypes';
 
 function formatDate(iso: string): string {
@@ -138,8 +139,12 @@ export function PairedDevicesPanel({ userId }: { userId: string }) {
 
   return (
     <div>
-      <div className={styles.card}>
-        <h3 className={styles.cardTitle}>Pair a device</h3>
+      {/* Connect Mobile — New web auth + Security Key flow */}
+      <ConnectMobileUI userId={userId} onSuccess={() => refresh()} />
+
+      {/* Legacy Pair Device — existing QR-based pairing */}
+      <div className={styles.card} style={{ marginTop: 14 }}>
+        <h3 className={styles.cardTitle}>Pair a device (legacy)</h3>
         <p className={styles.cardBody}>
           Scan this code with your phone's camera to open the PawOS web app and link it as a trusted
           device — notifications, approvals, and a live preview of your conversation follow from there.

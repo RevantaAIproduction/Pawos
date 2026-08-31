@@ -1,0 +1,237 @@
+.tasksCard {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 8px;
+}
+
+.filterBar {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.filterButton {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.6);
+  padding: 4px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.filterButton:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.filterButton.active {
+  background: rgba(100, 150, 255, 0.15);
+  border-color: rgba(100, 150, 255, 0.3);
+  color: rgba(100, 150, 255, 0.9);
+}
+
+.tasksList {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+.tasksList::-webkit-scrollbar {
+  width: 6px;
+}
+
+.tasksList::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tasksList::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+}
+
+.tasksList::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11px;
+  flex: 1;
+}
+
+.taskItem {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.taskItem.running {
+  background: rgba(100, 200, 255, 0.05);
+  border-color: rgba(100, 200, 255, 0.15);
+}
+
+.taskItem.completed {
+  background: rgba(100, 200, 100, 0.05);
+  border-color: rgba(100, 200, 100, 0.15);
+}
+
+.taskItem.failed {
+  background: rgba(255, 100, 100, 0.05);
+  border-color: rgba(255, 100, 100, 0.15);
+}
+
+.taskItem.queued {
+  background: rgba(255, 200, 0, 0.03);
+  border-color: rgba(255, 200, 0, 0.1);
+}
+
+.taskHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.statusIcon {
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.taskItem.running .statusIcon {
+  color: rgba(100, 200, 255, 0.9);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.taskItem.completed .statusIcon {
+  color: rgba(100, 200, 100, 0.9);
+}
+
+.taskItem.failed .statusIcon {
+  color: rgba(255, 100, 100, 0.9);
+}
+
+.taskItem.queued .statusIcon {
+  color: rgba(255, 200, 0, 0.8);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.taskTitle {
+  flex: 1;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+}
+
+.statusLabel {
+  font-size: 9px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 2px 5px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+}
+
+.progressContainer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+}
+
+.progressBar {
+  flex: 1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: rgba(100, 200, 255, 0.8);
+  transition: width 0.3s ease;
+}
+
+.progressText {
+  color: rgba(255, 255, 255, 0.6);
+  min-width: 30px;
+  text-align: right;
+}
+
+.taskMessage {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  font-style: italic;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 3px;
+  border-left: 2px solid rgba(100, 200, 255, 0.3);
+}
+
+.taskMetadata {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.4);
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+.duration {
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 500;
+}
+
+.taskActions {
+  display: flex;
+  gap: 4px;
+  padding-top: 4px;
+}
+
+.actionButton {
+  flex: 1;
+  background: rgba(100, 150, 255, 0.15);
+  border: 1px solid rgba(100, 150, 255, 0.3);
+  color: rgba(100, 150, 255, 0.8);
+  padding: 4px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.actionButton:hover {
+  background: rgba(100, 150, 255, 0.25);
+  border-color: rgba(100, 150, 255, 0.5);
+  color: rgba(100, 150, 255, 1);
+}

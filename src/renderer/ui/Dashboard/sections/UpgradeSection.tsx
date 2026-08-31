@@ -13,6 +13,7 @@ import {
 import { NativeBillingCheckoutModal, type NativeBillingCheckoutIntent } from '../../billing/NativeBillingCheckoutModal';
 import { TierCheckoutPage } from '../../billing/TierCheckoutPage';
 import { TeamCheckoutPage } from '../../billing/TeamCheckoutPage';
+import { EnterpriseCheckoutPage } from '../../billing/EnterpriseCheckoutPage';
 
 const TIER_LABELS: Record<SubscriptionTierId, string> = {
   go: 'Go',
@@ -56,6 +57,7 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
   const [tierCheckoutTier, setTierCheckoutTier] = useState<SubscriptionTierId | null>(null);
   const [tierCheckoutOptions, setTierCheckoutOptions] = useState<any>(null);
   const [teamCheckoutSeatTier, setTeamCheckoutSeatTier] = useState<'standard' | 'premium' | null>(null);
+  const [showEnterpriseCheckout, setShowEnterpriseCheckout] = useState(false);
   useEffect(() => {
     ipc.billingGetPricing().then(setPricing).catch(() => {});
     ipc.billingGetSubscription().then(setSubscription).catch(() => {});
@@ -66,13 +68,32 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
 
   const startCheckout = (tier: SubscriptionTierId, seatTier?: SeatTier, seatCount?: number) => {
     setMessage(null);
-    setTierCheckoutTier(tier as Exclude<SubscriptionTierId, 'go'>);
-    setTierCheckoutOptions({ seatTier, seatCount });
+    if (tier === 'enterprise') {
+      setShowEnterpriseCheckout(true);
+    } else {
+      setTierCheckoutTier(tier as Exclude<SubscriptionTierId, 'go'>);
+      setTierCheckoutOptions({ seatTier, seatCount });
+    }
   };
 
   const individualPlans = (pricing?.plans ?? []).filter((p) => !p.seatBased && p.id !== 'go');
   const teamPlans = (pricing?.plans ?? []).filter((p) => p.seatBased);
   const plans = tab === 'individual' ? individualPlans : teamPlans;
+
+  // Show Enterprise checkout page (inquiry form) when enterprise is selected
+  if (showEnterpriseCheckout) {
+    return (
+      <EnterpriseCheckoutPage
+        onClose={() => {
+          setShowEnterpriseCheckout(false);
+        }}
+        onSuccess={() => {
+          setMessage('Your enterprise order is complete. Our team will be in touch shortly.');
+          ipc.billingGetSubscription().then(setSubscription).catch(() => {});
+        }}
+      />
+    );
+  }
 
   // Show Team checkout page when seat tier is selected
   if (teamCheckoutSeatTier) {

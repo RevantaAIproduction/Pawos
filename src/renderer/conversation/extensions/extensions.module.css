@@ -1,0 +1,360 @@
+/* Message Extensions — compact, inline, native PawOS styling */
+
+.extensionsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0;
+  width: 100%;
+}
+
+.extensionWrapper {
+  width: 100%;
+}
+
+.extensionCard {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  transition: all 0.15s ease;
+}
+
+.extensionCard:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.extensionCardHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.extensionCardContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.extensionCardControls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.statusIcon {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.statusIcon.pending {
+  color: rgba(255, 165, 0, 0.8);
+}
+
+.statusIcon.running {
+  color: rgba(100, 150, 255, 0.8);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.statusIcon.completed {
+  color: rgba(100, 200, 100, 0.8);
+}
+
+.statusIcon.failed {
+  color: rgba(255, 100, 100, 0.8);
+}
+
+.statusIcon.denied {
+  color: rgba(200, 100, 100, 0.8);
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.statusText {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.title {
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.description {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-top: 2px;
+}
+
+.progressBar {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+.progressFill {
+  height: 100%;
+  background: linear-gradient(90deg, rgba(100, 150, 255, 0.8), rgba(100, 150, 255, 0.4));
+  transition: width 0.3s ease;
+  border-radius: 2px;
+}
+
+.progressLabel {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 2px;
+}
+
+.expandButton {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.6);
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.expandButton:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.actionButton {
+  background: rgba(100, 150, 255, 0.2);
+  border: 1px solid rgba(100, 150, 255, 0.3);
+  color: rgba(100, 150, 255, 0.9);
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.actionButton:hover {
+  background: rgba(100, 150, 255, 0.3);
+  border-color: rgba(100, 150, 255, 0.5);
+  color: rgba(100, 150, 255, 1);
+}
+
+.actionButton.danger {
+  background: rgba(255, 100, 100, 0.15);
+  border-color: rgba(255, 100, 100, 0.3);
+  color: rgba(255, 100, 100, 0.9);
+}
+
+.actionButton.danger:hover {
+  background: rgba(255, 100, 100, 0.25);
+  border-color: rgba(255, 100, 100, 0.5);
+  color: rgba(255, 100, 100, 1);
+}
+
+.actionButton.success {
+  background: rgba(100, 200, 100, 0.15);
+  border-color: rgba(100, 200, 100, 0.3);
+  color: rgba(100, 200, 100, 0.9);
+}
+
+.actionButton.success:hover {
+  background: rgba(100, 200, 100, 0.25);
+  border-color: rgba(100, 200, 100, 0.5);
+  color: rgba(100, 200, 100, 1);
+}
+
+.actionButton.focused {
+  outline: 2px solid rgba(100, 150, 255, 0.7);
+  outline-offset: 2px;
+  background: rgba(100, 150, 255, 0.35);
+}
+
+.actionButton.success.focused {
+  outline: 2px solid rgba(100, 200, 100, 0.7);
+  background: rgba(100, 200, 100, 0.3);
+}
+
+.actionButton.danger.focused {
+  outline: 2px solid rgba(255, 100, 100, 0.7);
+  background: rgba(255, 100, 100, 0.3);
+}
+
+.actionButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.filesList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  max-height: 120px;
+  overflow-y: auto;
+  font-size: 11px;
+  font-family: 'Courier New', monospace;
+}
+
+.fileItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 3px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.fileStatus {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.fileStatus.added {
+  background: rgba(100, 200, 100, 0.6);
+}
+
+.fileStatus.modified {
+  background: rgba(255, 165, 0, 0.6);
+}
+
+.fileStatus.deleted {
+  background: rgba(255, 100, 100, 0.6);
+}
+
+.fileStatus.staged {
+  background: rgba(100, 200, 100, 0.8);
+}
+
+.filePath {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.downloadInfo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.speedInfo {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.permissionSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.permissionScope {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  padding-left: 4px;
+  border-left: 2px solid rgba(255, 165, 0, 0.4);
+}
+
+.actionGroup {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.stepsList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  max-height: 100px;
+  overflow-y: auto;
+}
+
+.stepItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 3px;
+}
+
+.stepProgress {
+  flex: 1;
+  min-width: 0;
+}
+
+.stepProgressBar {
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 1px;
+  overflow: hidden;
+  margin-top: 2px;
+}
+
+.stepProgressFill {
+  height: 100%;
+  background: rgba(100, 150, 255, 0.6);
+  border-radius: 1px;
+  transition: width 0.3s ease;
+}
+
+.previewContainer {
+  margin-top: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  overflow: hidden;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.previewContent {
+  padding: 8px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.4;
+}

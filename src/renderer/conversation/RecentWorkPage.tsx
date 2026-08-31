@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import type { EntitlementSnapshot, PawModelId } from '../../shared/billing/BillingTypes';
+import type { EntitlementSnapshot } from '../../shared/billing/BillingTypes';
+import type { PawModelId } from '../../shared/ai/PawModelTypes';
 
 export function RecentWorkPage({
   onNewChat,
@@ -101,7 +102,7 @@ export function RecentWorkPage({
           <div>
             <div style={{ fontSize: 10, color: 'rgba(var(--pawos-overlay-rgb), 0.6)', marginBottom: 4 }}>7-Day Limit</div>
             <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(var(--pawos-overlay-rgb), 0.9)' }}>
-              {entitlement?.usage7dPc ?? 0} / {entitlement?.limit7dPc ?? 0} PC
+              {entitlement?.usageWeeklyPc ?? 0} / {entitlement?.limitWeeklyPc ?? 0} PC
             </div>
             <div
               style={{
@@ -116,7 +117,7 @@ export function RecentWorkPage({
                 style={{
                   height: '100%',
                   backgroundColor: '#10b981',
-                  width: `${Math.min(100, ((entitlement?.usage7dPc ?? 0) / (entitlement?.limit7dPc ?? 1)) * 100)}%`,
+                  width: `${Math.min(100, ((entitlement?.usageWeeklyPc ?? 0) / (entitlement?.limitWeeklyPc ?? 1)) * 100)}%`,
                   transition: 'width 0.3s ease',
                 }}
               />
@@ -199,10 +200,9 @@ export function RecentWorkPage({
                 <span style={{ fontSize: 12, color: 'rgba(var(--pawos-overlay-rgb), 0.8)' }}>{task.title}</span>
 
                 {/* Hover Actions */}
-                <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center', opacity: 0 }}
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center', opacity: 0, transition: 'opacity 0.2s ease' }}
                   onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
                   onMouseLeave={(e) => (e.currentTarget.style.opacity = '0')}
-                  style={{ transition: 'opacity 0.2s ease' } as any}
                 >
                   <button
                     type="button"

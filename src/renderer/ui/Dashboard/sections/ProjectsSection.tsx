@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
 import { useIpcBridge } from '../../../services/ipc/useIpcBridge';
 import type { ExecutionRecord } from '../../../../shared/actions/ExecutionRecordTypes';
+import { CreateProjectModal } from '../../projects/CreateProjectModal';
 
 type ProjectSummary = { path: string; name: string; taskCount: number; lastActivity: number };
 
@@ -50,6 +51,7 @@ function timeAgo(ts: number): string {
 export function ProjectsSection({ onOpenFolder }: { onOpenFolder: (path: string) => void }) {
   const ipc = useIpcBridge();
   const [projects, setProjects] = useState<ProjectSummary[] | null>(null);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
 
   useEffect(() => {
     ipc.listExecutions().then((records) => setProjects(deriveProjects(records))).catch(() => setProjects([]));
@@ -59,27 +61,41 @@ export function ProjectsSection({ onOpenFolder }: { onOpenFolder: (path: string)
 
   if (projects.length === 0) {
     return (
-      <div className={styles.emptyState}>
-        <div className={styles.emptyIcon} />
-        <h3 className={styles.emptyTitle}>No projects yet</h3>
-        <p className={styles.emptyBody}>
-          Projects appear here once Paw creates or edits files somewhere — ask it to open or work on a folder to get started.
-        </p>
-      </div>
+      <>
+        <CreateProjectModal open={createModalOpen} organizationId={null} onClose={() => setCreateModalOpen(false)} />
+        <div className={styles.emptyState}>
+          <div className={styles.emptyIcon} />
+          <h3 className={styles.emptyTitle}>No projects yet</h3>
+          <p className={styles.emptyBody}>
+            Projects appear here once Paw creates or edits files somewhere — ask it to open or work on a folder to get started.
+          </p>
+          <button
+            type="button"
+            className={styles.primaryButton}
+            onClick={() => setCreateModalOpen(true)}
+            style={{ marginTop: 12 }}
+          >
+            + New Project
+          </button>
+        </div>
+      </>
     );
   }
 
   return (
-    <div className={styles.grid}>
-      {projects.map((p) => (
-        <div key={p.path} className={styles.card} style={{ cursor: 'pointer' }} onClick={() => onOpenFolder(p.path)}>
-          <h3 className={styles.cardTitle}>{p.name}</h3>
-          <p className={styles.cardBody} style={{ wordBreak: 'break-all' }}>{p.path}</p>
-          <p className={styles.cardBody} style={{ marginTop: 8 }}>
-            {p.taskCount} task{p.taskCount === 1 ? '' : 's'} · {timeAgo(p.lastActivity)}
-          </p>
-        </div>
-      ))}
-    </div>
+    <>
+      <CreateProjectModal open={createModalOpen} organizationId={null} onClose={() => setCreateModalOpen(false)} />
+      <div className={styles.grid}>
+        {projects.map((p) => (
+          <div key={p.path} className={styles.card} style={{ cursor: 'pointer' }} onClick={() => onOpenFolder(p.path)}>
+            <h3 className={styles.cardTitle}>{p.name}</h3>
+            <p className={styles.cardBody} style={{ wordBreak: 'break-all' }}>{p.path}</p>
+            <p className={styles.cardBody} style={{ marginTop: 8 }}>
+              {p.taskCount} task{p.taskCount === 1 ? '' : 's'} · {timeAgo(p.lastActivity)}
+            </p>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }

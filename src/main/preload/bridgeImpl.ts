@@ -24,6 +24,7 @@ import type { CommunicationRuntimeEvent, ParticipantRecord, CompanyRecord, Commu
 import type { ForegroundWindowInfo } from "../../shared/system/ForegroundWindowInfo";
 import type { GoogleSignInResult } from "../../shared/auth/AccountTypes";
 import type { LocalDeviceIdentity } from "../../shared/device/DeviceTypes";
+import type { OrgProject, ProjectUserDeviceAttachment } from "../../shared/projects/ProjectTypes";
 import type { PushNotificationPayload, PushSendResult } from "../../shared/mobilePresence/MobilePresenceTypes";
 import type {
   ConnectivityScope,
@@ -221,6 +222,7 @@ export function contextBridge() {
 
     billingGetPricing: () => ipcRenderer.invoke("billing:getPricing") as Promise<PricingConfig>,
     billingGetTicketPricingConfig: () => ipcRenderer.invoke("billing:getTicketPricingConfig") as Promise<TicketPricingConfig>,
+    billingGetGooglePlacesApiKey: () => ipcRenderer.invoke("billing:getGooglePlacesApiKey") as Promise<string>,
     billingGetSubscription: () => ipcRenderer.invoke("billing:getSubscription") as Promise<SubscriptionState>,
     billingSetSubscriptionTier: (tier: SubscriptionTierId) =>
       ipcRenderer.invoke("billing:setSubscriptionTier", tier) as Promise<SubscriptionState>,
@@ -330,6 +332,8 @@ export function contextBridge() {
 
     executionRecord: (record: ExecutionRecord) => ipcRenderer.invoke("execution:record", record) as Promise<void>,
     executionList: () => ipcRenderer.invoke("execution:list") as Promise<ExecutionRecord[]>,
+    executionSetSelected: (executionId: string | null) => ipcRenderer.invoke("execution:setSelected", executionId) as Promise<{ ok: boolean }>,
+    executionGetSelected: () => ipcRenderer.invoke("execution:getSelected") as Promise<string | null>,
     onExecutionUpdated: (cb: () => void) => {
       ipcRenderer.on("execution:updated", () => cb());
     },
@@ -420,6 +424,90 @@ export function contextBridge() {
       ipcRenderer.invoke("connectivity:oauth:cancel", requestId) as Promise<ConnectivityIpcResult<void>>,
     connectivityDeploymentProfilesHydrate: (profile: DeploymentProfile) =>
       ipcRenderer.invoke("connectivity:deploymentProfiles:hydrate", profile) as Promise<ConnectivityIpcResult<void>>,
+
+    // Workspace Integrations (Mail, Slack, Drive, Calendar)
+    integrationConnect: (userId: string, request: any) =>
+      ipcRenderer.invoke("integration:connect", userId, request) as Promise<any>,
+    integrationDisconnect: (userId: string, service: string) =>
+      ipcRenderer.invoke("integration:disconnect", userId, service) as Promise<any>,
+    integrationList: (userId: string) =>
+      ipcRenderer.invoke("integration:list", userId) as Promise<any>,
+    integrationStatus: (userId: string) =>
+      ipcRenderer.invoke("integration:status", userId) as Promise<any>,
+    integrationRefreshToken: (userId: string, service: string, accessToken: string, options?: any) =>
+      ipcRenderer.invoke("integration:refreshToken", userId, service, accessToken, options) as Promise<any>,
+
+    // Meeting Assistant (Pro+ tier feature)
+    meetingRecord: (userId: string, request: any) =>
+      ipcRenderer.invoke("meeting:record", userId, request) as Promise<any>,
+    meetingSummarize: (userId: string, request: any) =>
+      ipcRenderer.invoke("meeting:summarize", userId, request) as Promise<any>,
+    meetingDistribute: (userId: string, request: any) =>
+      ipcRenderer.invoke("meeting:distribute", userId, request) as Promise<any>,
+    meetingList: (userId: string, query?: any) =>
+      ipcRenderer.invoke("meeting:list", userId, query) as Promise<any>,
+    meetingGet: (meetingId: string) =>
+      ipcRenderer.invoke("meeting:get", meetingId) as Promise<any>,
+    meetingUpdateStatus: (meetingId: string, status: string) =>
+      ipcRenderer.invoke("meeting:updateStatus", meetingId, status) as Promise<any>,
+    meetingAddAttendee: (meetingId: string, attendee: any) =>
+      ipcRenderer.invoke("meeting:addAttendee", meetingId, attendee) as Promise<any>,
+    meetingJoinAndRecord: (userId: string, userEmail: string, meetingLink: string, meetingTitle?: string) =>
+      ipcRenderer.invoke("meeting:joinAndRecord", userId, userEmail, meetingLink, meetingTitle) as Promise<any>,
+    meetingCompleteRecording: (meetingId: string, durationSeconds: number) =>
+      ipcRenderer.invoke("meeting:completeRecording", meetingId, durationSeconds) as Promise<any>,
+    meetingApprovePreNotification: (eventId: string, meetingLink: string, userEmail: string) =>
+      ipcRenderer.invoke("meeting:approvePreNotification", eventId, meetingLink, userEmail) as Promise<any>,
+    meetingDenyPreNotification: (eventId: string) =>
+      ipcRenderer.invoke("meeting:denyPreNotification", eventId) as Promise<any>,
+    meetingStartCalendarPolling: (userId: string) =>
+      ipcRenderer.invoke("meeting:startCalendarPolling", userId) as Promise<any>,
+    meetingStopCalendarPolling: () =>
+      ipcRenderer.invoke("meeting:stopCalendarPolling") as Promise<any>,
+    onPreMeetingNotification: (cb: (notification: any) => void) => {
+      const handler = (_: Electron.IpcRendererEvent, notification: any) => cb(notification);
+      ipcRenderer.on("meeting:preNotification", handler);
+      return () => ipcRenderer.removeListener("meeting:preNotification", handler);
+    },
+    onMeetingSummaryGenerated: (cb: (summaryData: any) => void) => {
+      const handler = (_: Electron.IpcRendererEvent, summaryData: any) => cb(summaryData);
+      ipcRenderer.on("meeting:summaryGenerated", handler);
+      return () => ipcRenderer.removeListener("meeting:summaryGenerated", handler);
+    },
+    onMeetingSummaryRecordedInHistory: (cb: (executionRecord: any) => void) => {
+      const handler = (_: Electron.IpcRendererEvent, executionRecord: any) => cb(executionRecord);
+      ipcRenderer.on("execution:recordMeetingSummary", handler);
+      return () => ipcRenderer.removeListener("execution:recordMeetingSummary", handler);
+    },
+
+    // Background Tasks
+    taskStart: (type: string, title: string, command: string, metadata?: any) =>
+      ipcRenderer.invoke("task:start", type, title, command, metadata) as Promise<any>,
+    taskUpdateProgress: (taskId: string, progress: number, output?: string) =>
+      ipcRenderer.invoke("task:updateProgress", taskId, progress, output) as Promise<any>,
+    taskComplete: (taskId: string, error?: string) =>
+      ipcRenderer.invoke("task:complete", taskId, error) as Promise<any>,
+    taskCancel: (taskId: string) =>
+      ipcRenderer.invoke("task:cancel", taskId) as Promise<any>,
+    taskGet: (taskId: string) =>
+      ipcRenderer.invoke("task:get", taskId) as Promise<any>,
+    taskList: (query?: any) =>
+      ipcRenderer.invoke("task:list", query) as Promise<any>,
+    taskGetLogs: (taskId: string, limit?: number) =>
+      ipcRenderer.invoke("task:getLogs", taskId, limit) as Promise<any>,
+    taskClearOld: (olderThanDays?: number) =>
+      ipcRenderer.invoke("task:clearOld", olderThanDays) as Promise<any>,
+
+    selectFolder: () =>
+      ipcRenderer.invoke("project:selectFolder") as Promise<string | null>,
+    projectCreate: (name: string, organizationId: string | null) =>
+      ipcRenderer.invoke("project:create", name, organizationId) as Promise<OrgProject>,
+    projectList: (organizationId: string | null) =>
+      ipcRenderer.invoke("project:list", organizationId) as Promise<OrgProject[]>,
+    projectAttach: (projectId: string, localPath: string) =>
+      ipcRenderer.invoke("project:attach", projectId, localPath) as Promise<ProjectUserDeviceAttachment>,
+    projectMarkVerified: (projectId: string) =>
+      ipcRenderer.invoke("project:markVerified", projectId) as Promise<ProjectUserDeviceAttachment>,
   };
 
   electronContextBridge.exposeInMainWorld("__pawos_ipc__", api);

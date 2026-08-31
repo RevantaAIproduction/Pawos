@@ -1,8 +1,19 @@
+import { getSupabaseClient } from '../auth/supabaseClient';
 import { workspaceTaskService } from './WorkspaceTaskService';
 import { workspaceContentService } from './WorkspaceContentService';
 import { creditPoolService } from './CreditPoolService';
 import type { WorkspaceTaskStatus } from '../../shared/organization/WorkspaceTaskTypes';
 import type { WorkspaceProjectStatus } from '../../shared/organization/WorkspaceContentTypes';
+
+export type AutonomousTaskStatusCounts = {
+  queued: number;
+  running: number;
+  waiting_for_permission: number;
+  blocked: number;
+  completed: number;
+  failed: number;
+  cancelled: number;
+};
 
 export type OrganizationActivitySummary = {
   taskCountsByStatus: Record<WorkspaceTaskStatus, number>;
@@ -62,5 +73,34 @@ export const activityDashboardService = {
       creditsRemaining: creditSummary?.remaining ?? null,
       recentlyUpdatedTasks: tasks.slice(0, 10),
     };
+  },
+
+  async getAutonomousTaskStatusCounts(organizationId: string): Promise<AutonomousTaskStatusCounts> {
+    const supabase = await getSupabaseClient();
+    const { data, error } = await supabase
+      .from('autonomous_task_runs')
+      .select('status')
+      .eq('organization_id', organizationId)
+      .returns<{ status: string }[]>();
+
+    if (error) throw error;
+
+    const counts: AutonomousTaskStatusCounts = {
+      queued: 0,
+      running: 0,
+      waiting_for_permission: 0,
+      blocked: 0,
+      completed: 0,
+      failed: 0,
+      cancelled: 0,
+    };
+
+    for (const row of data ?? []) {
+      if (row.status in counts) {
+        counts[row.status as keyof AutonomousTaskStatusCounts] += 1;
+      }
+    }
+
+    return counts;
   },
 };

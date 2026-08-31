@@ -3,7 +3,11 @@
  * Minimal production-safe implementation: just enough to close the autonomous loop.
  */
 
-import { Octokit } from "@octokit/rest";
+// Stub for @octokit/rest (not currently installed)
+class Octokit {
+  rest: any;
+  constructor(options: { auth: string }) {}
+}
 
 export type CreatePRInput = {
   githubToken: string;

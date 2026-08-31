@@ -34,6 +34,7 @@ import { verifyRealOrganizationTier } from '../billing/OrganizationTierVerificat
 import { entitlementService } from '../billing/EntitlementService';
 import { createRendererOrganizationUsageRecorder } from '../billing/RendererOrganizationUsageBridge';
 import { applyTestTier, clearTestTierOverride, getTestTierOverride, hydrateTestTier } from './handlers/adminTestTierHandler';
+import { submitEnterpriseInquiry, createEnterpriseOrder, getEnterpriseInquiry } from './handlers/enterpriseBillingHandler';
 import { startCheckoutCallbackServer, verifySubscriptionWithBackend } from '../billing/CheckoutSyncServer';
 import type {
   SubscriptionTierId,
@@ -81,6 +82,8 @@ import { ratingPromptStore } from '../feedback/RatingPromptStore';
 import { feedbackStore } from '../feedback/FeedbackStore';
 import type { FeedbackSubmission } from '../../renderer/services/ipc/ipcTypes';
 import { registerConnectivityIpc } from './connectivityIpc';
+import { registerMobileAuthHandlers } from './handlers/mobileAuthHandler';
+import { approveGovernanceRequest, denyGovernanceRequest, getPendingApprovals, pruneExpiredApprovals } from './handlers/governanceHandler';
 
 function toFileUrl(dir: string): string {
   return `file://${dir.replace(/\\/g, '/')}/`;
@@ -405,6 +408,8 @@ export function registerIpc(opts: {
   // TicketPricingConfigStore.ts), never a code constant a UI hardcodes, so
   // new preset amounts can be added later without a redeploy.
   ipcMain.handle('billing:getTicketPricingConfig', () => ticketPricingConfigStore.get());
+  // Google Places API key for address autocomplete in billing checkout flow
+  ipcMain.handle('billing:getGooglePlacesApiKey', () => process.env.GOOGLE_PLACES_API_KEY || '');
   ipcMain.handle('billing:getSubscription', () => subscriptionStore.getEffective());
   // P0-3: reject any string that isn't a real tier id — defense in depth (this path was already
   // non-exploitable on its own since status stays 'none' here, but "arbitrary tier strings rejected"
@@ -1102,10 +1107,258 @@ export function registerIpc(opts: {
     return hydrateTestTier(input);
   });
 
+  // Enterprise Billing — Inquiry & Checkout
+  ipcMain.handle('enterprise:submitInquiry', async (_evt, request) => {
+    return submitEnterpriseInquiry(request);
+  });
+
+  ipcMain.handle('enterprise:createOrder', async (_evt, request) => {
+    return createEnterpriseOrder(request);
+  });
+
+  ipcMain.handle('enterprise:getInquiry', async (_evt, inquiryId: string) => {
+    return getEnterpriseInquiry(inquiryId);
+  });
+
+  // Execution/work selection for Recently Worked Companion Card state
+  let selectedExecutionId: string | null = null;
+  ipcMain.handle('execution:setSelected', (_evt, executionId: string | null) => {
+    selectedExecutionId = executionId;
+    return { ok: true };
+  });
+  ipcMain.handle('execution:getSelected', () => selectedExecutionId);
+
+  // Workspace Integrations Runtime — Mail, Slack, Drive, Calendar connections.
+  // Manages OAuth token lifecycle and integration status.
+  ipcMain.handle('integration:connect', (_evt, userId: string, request: any) => {
+    const { connectIntegration } = require('./handlers/integrationHandler');
+    return connectIntegration(userId, request);
+  });
+
+  ipcMain.handle('integration:disconnect', (_evt, userId: string, service: string) => {
+    const { disconnectIntegration } = require('./handlers/integrationHandler');
+    return disconnectIntegration(userId, service);
+  });
+
+  ipcMain.handle('integration:list', (_evt, userId: string) => {
+    const { getIntegrationConnections } = require('./handlers/integrationHandler');
+    return getIntegrationConnections(userId);
+  });
+
+  ipcMain.handle('integration:status', (_evt, userId: string) => {
+    const { getIntegrationStatus } = require('./handlers/integrationHandler');
+    return getIntegrationStatus(userId);
+  });
+
+  ipcMain.handle('integration:refreshToken', (_evt, userId: string, service: string, accessToken: string, options?: any) => {
+    const { refreshIntegrationToken } = require('./handlers/integrationHandler');
+    return refreshIntegrationToken(userId, service, accessToken, options?.refreshToken, options?.expiresAt);
+  });
+
+  // Meeting Assistant Runtime — Pro+ tier only. Recording, summarization, distribution.
+  // TODO: Tier gating via entitlementService when 'meetingAssistant' FeatureId is added
+  ipcMain.handle('meeting:record', (_evt, userId: string, request: any) => {
+    const { recordMeeting } = require('./handlers/meetingHandler');
+    return recordMeeting(userId, request);
+  });
+
+  ipcMain.handle('meeting:summarize', async (_evt, userId: string, request: any) => {
+    const { summarizeMeeting } = require('./handlers/meetingHandler');
+    return await summarizeMeeting(userId, request);
+  });
+
+  ipcMain.handle('meeting:distribute', async (_evt, userId: string, request: any) => {
+    const { distributeMeetingSummary } = require('./handlers/meetingHandler');
+    return await distributeMeetingSummary(userId, request);
+  });
+
+  ipcMain.handle('meeting:list', (_evt, userId: string, query?: any) => {
+    const { listMeetings } = require('./handlers/meetingHandler');
+    const result = listMeetings(userId, query);
+    return result;
+  });
+
+  ipcMain.handle('meeting:get', (_evt, meetingId: string) => {
+    const { getMeeting } = require('./handlers/meetingHandler');
+    const meeting = getMeeting(meetingId);
+    return meeting ? { ok: true, meeting } : { ok: false, reason: 'Meeting not found' };
+  });
+
+  ipcMain.handle('meeting:updateStatus', (_evt, meetingId: string, status: string) => {
+    const { updateMeetingStatus } = require('./handlers/meetingHandler');
+    return updateMeetingStatus(meetingId, status as any);
+  });
+
+  ipcMain.handle('meeting:addAttendee', (_evt, meetingId: string, attendee: any) => {
+    const { addAttendee } = require('./handlers/meetingHandler');
+    return addAttendee(meetingId, attendee);
+  });
+
+  // Join meeting and start recording (Pro+ tier, user-approved flow)
+  // Called after pre-meeting notification approval
+  // TODO: Tier gating via entitlementService when 'meetingAssistant' FeatureId is added
+  ipcMain.handle('meeting:joinAndRecord', async (_evt, userId: string, userEmail: string, meetingLink: string, meetingTitle?: string) => {
+    const { joinAndRecordMeeting } = require('./handlers/meetingHandler');
+    return await joinAndRecordMeeting(userId, userEmail, meetingLink, meetingTitle);
+  });
+
+  // Complete meeting recording after user leaves
+  ipcMain.handle('meeting:completeRecording', (_evt, meetingId: string, durationSeconds: number) => {
+    const { completeMeetingRecording } = require('./handlers/meetingHandler');
+    return completeMeetingRecording(meetingId, durationSeconds);
+  });
+
+  // Handle pre-meeting notification approval
+  ipcMain.handle('meeting:approvePreNotification', (_evt, eventId: string, meetingLink: string, userEmail: string) => {
+    const { handlePreMeetingApproval } = require('./handlers/meetingNotificationHandler');
+    return handlePreMeetingApproval(eventId, meetingLink, userEmail);
+  });
+
+  // Handle pre-meeting notification denial
+  ipcMain.handle('meeting:denyPreNotification', (_evt, eventId: string) => {
+    const { handlePreMeetingDenial } = require('./handlers/meetingNotificationHandler');
+    return handlePreMeetingDenial(eventId);
+  });
+
+  // Start calendar polling for upcoming meetings (2-min pre-notification)
+  // TODO: Tier gating via entitlementService when 'meetingAssistant' FeatureId is added
+  ipcMain.handle('meeting:startCalendarPolling', (_evt, userId: string) => {
+    const { calendarPollingService } = require('../workspace/services/CalendarPollingService');
+    const mainWindow = opts.mainWindowProvider();
+    calendarPollingService.startPolling(userId, () => mainWindow);
+    return { ok: true };
+  });
+
+  // Stop calendar polling
+  ipcMain.handle('meeting:stopCalendarPolling', () => {
+    const { calendarPollingService } = require('../workspace/services/CalendarPollingService');
+    calendarPollingService.stopPolling();
+    return { ok: true };
+  });
+
+  // Generate structured summary (purpose, takeaways, topics, action items)
+  // TODO: Tier gating via entitlementService when 'meetingAssistant' FeatureId is added
+  ipcMain.handle('meeting:generateStructuredSummary', async (_evt, meetingId: string) => {
+    const { generateStructuredSummary } = require('./handlers/meetingHandler');
+    return await generateStructuredSummary(meetingId);
+  });
+
+  // Crop summary to selected topics and action items
+  // TODO: Tier gating via entitlementService when 'meetingAssistant' FeatureId is added
+  ipcMain.handle('meeting:cropSummary', (_evt, request: any) => {
+    const { cropSummary } = require('./handlers/meetingHandler');
+    return cropSummary(request);
+  });
+
+  // Save meeting summary as draft
+  // TODO: Tier gating via entitlementService when 'meetingAssistant' FeatureId is added
+  ipcMain.handle('meeting:saveDraft', (_evt, request: any) => {
+    const { saveDraft } = require('./handlers/meetingHandler');
+    return saveDraft(request);
+  });
+
+  // Get all drafts for a meeting
+  // TODO: Tier gating via entitlementService when 'meetingAssistant' FeatureId is added
+  ipcMain.handle('meeting:getDrafts', (_evt, meetingId: string) => {
+    const { getDrafts } = require('./handlers/meetingHandler');
+    return getDrafts(meetingId);
+  });
+
+  // Schedule meeting summary to be sent later
+  // TODO: Tier gating via entitlementService when 'meetingAssistant' FeatureId is added
+  ipcMain.handle('meeting:scheduleSend', (_evt, request: any) => {
+    const { scheduleSend } = require('./handlers/meetingHandler');
+    return scheduleSend(request);
+  });
+
+  // Get all scheduled sends for a meeting
+  // TODO: Tier gating via entitlementService when 'meetingAssistant' FeatureId is added
+  ipcMain.handle('meeting:getScheduledSends', (_evt, meetingId: string) => {
+    const { getScheduledSends } = require('./handlers/meetingHandler');
+    return getScheduledSends(meetingId);
+  });
+
+  // Meeting Summarization Compute Cost handlers — Pro tier or higher required
+  ipcMain.handle('meeting:getSummarizationCost', (_evt, userId: string, request: any) => {
+    const { getSummarizationCost } = require('./handlers/meetingHandler');
+    return getSummarizationCost(userId, request);
+  });
+
+  ipcMain.handle('meeting:confirmSummarize', async (_evt, userId: string, request: any) => {
+    const { confirmSummarize } = require('./handlers/meetingHandler');
+    return confirmSummarize(userId, request);
+  });
+
+  // Background Tasks Runtime — track running and completed tasks with logs.
+  ipcMain.handle('task:start', (_evt, type: string, title: string, command: string, metadata?: any) => {
+    const { startTask } = require('./handlers/backgroundTasksHandler');
+    return startTask(type as any, title, command, metadata);
+  });
+
+  ipcMain.handle('task:updateProgress', (_evt, taskId: string, progress: number, output?: string) => {
+    const { updateTaskProgress } = require('./handlers/backgroundTasksHandler');
+    return updateTaskProgress(taskId, progress, output);
+  });
+
+  ipcMain.handle('task:complete', (_evt, taskId: string, error?: string) => {
+    const { completeTask } = require('./handlers/backgroundTasksHandler');
+    return completeTask(taskId, error);
+  });
+
+  ipcMain.handle('task:cancel', (_evt, taskId: string) => {
+    const { cancelTask } = require('./handlers/backgroundTasksHandler');
+    return cancelTask(taskId);
+  });
+
+  ipcMain.handle('task:get', (_evt, taskId: string) => {
+    const { getTaskDetail } = require('./handlers/backgroundTasksHandler');
+    return getTaskDetail(taskId);
+  });
+
+  ipcMain.handle('task:list', (_evt, query?: any) => {
+    const { listTasks } = require('./handlers/backgroundTasksHandler');
+    return listTasks(query);
+  });
+
+  ipcMain.handle('task:getLogs', (_evt, taskId: string, limit?: number) => {
+    const { getTaskLogs } = require('./handlers/backgroundTasksHandler');
+    return getTaskLogs(taskId, limit);
+  });
+
+  ipcMain.handle('task:clearOld', (_evt, olderThanDays?: number) => {
+    const { clearOldTasks } = require('./handlers/backgroundTasksHandler');
+    return { cleared: clearOldTasks(olderThanDays) };
+  });
+
+  // Projects — Phase A foundation
+  const { selectFolder } = require('./handlers/selectFolderHandler');
+  ipcMain.handle('project:selectFolder', (evt) => selectFolder(evt));
+
+  const { projectCreate, projectList, projectAttach, projectMarkVerified } = require('./handlers/projectHandler');
+  ipcMain.handle('project:create', (evt, name: string, organizationId: string | null) =>
+    projectCreate(evt, name, organizationId));
+  ipcMain.handle('project:list', (evt, organizationId: string | null) =>
+    projectList(evt, organizationId));
+  ipcMain.handle('project:attach', (evt, projectId: string, localPath: string) =>
+    projectAttach(evt, projectId, localPath));
+  ipcMain.handle('project:markVerified', (evt, projectId: string) =>
+    projectMarkVerified(evt, projectId));
+
+  // Governance & Approval Handler — Allow/Deny permissions for destructive actions
+  ipcMain.handle('governance:approve', (evt, approvalId: string) => approveGovernanceRequest(evt, approvalId));
+  ipcMain.handle('governance:deny', (evt, approvalId: string) => denyGovernanceRequest(evt, approvalId));
+  ipcMain.handle('governance:getPending', () => getPendingApprovals());
+
+  // Prune expired approvals periodically (every 15 minutes)
+  setInterval(() => pruneExpiredApprovals(), 15 * 60 * 1000);
+
   // Connectivity Runtime — see connectivityIpc.ts. Kept in its own
   // registration function (rather than inlined here like every feature
   // above) since every connectivity: handler shares one validation/response
   // wrapper; nothing about that changes how or when it's registered.
   registerConnectivityIpc();
+
+  // Mobile Authentication & Pairing — Security Key verification (Phase 2)
+  registerMobileAuthHandlers();
 }
 

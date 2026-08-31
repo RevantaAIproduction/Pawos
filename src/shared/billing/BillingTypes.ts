@@ -59,6 +59,8 @@ export type SubscriptionState = {
   seatTier?: SeatTier;
   /** Only meaningful when tier === 'proMax' — which Paw Compute usage multiplier (5x or 20x). */
   proMaxVariant?: ProMaxVariant;
+  /** Only meaningful when tier === 'pro' — billing frequency (monthly or yearly). */
+  proBillingFrequency?: 'monthly' | 'yearly';
   runtimeEntitlements?: RuntimeEntitlementGrant[];
   /**
    * Runtime entitlement productization marker. Missing means this local
@@ -248,7 +250,8 @@ export type FeatureId =
   | 'crossDeviceSync'
   | 'mobileNotifications'
   | 'organizationCrossDeviceAlerts'
-  | 'autonomousPlanBypass';
+  | 'autonomousPlanBypass'
+  | 'meetingAssistant';
 
 export type TierEntitlements = {
   tier: SubscriptionTierId;
@@ -311,8 +314,12 @@ export type EntitlementSnapshot = {
   usage5hPc: number;
   /** Maximum Paw Compute allowed in any 5-hour rolling window for this tier. null = no cap. */
   limit5hPc: number | null;
-  /** Paw Compute consumed in the last 7 days (rolling). */
-  usage7dPc: number;
-  /** Maximum Paw Compute allowed in any 7-day rolling window for this tier. null = no cap. */
-  limit7dPc: number | null;
+  /** Paw Compute consumed in the last week (rolling). */
+  usageWeeklyPc: number;
+  /** Maximum Paw Compute allowed in any rolling week for this tier. null = no cap. */
+  limitWeeklyPc: number | null;
+  /** Paw Compute consumed in the last month (rolling). */
+  usageMonthlyPc: number;
+  /** Maximum Paw Compute allowed in any rolling month for this tier. null = no cap. */
+  limitMonthlyPc: number | null;
 };

@@ -40,6 +40,7 @@ import {
   isVoiceOutputOnRequest,
 } from './SpeechPresentation';
 import type { TurnUsageSubmission, UsageRequestType } from '../../shared/billing/UsageMeteringTypes';
+import { createTaskProgressExtension, createFileChangeExtension, createPermissionExtension, updateExtension } from './extensions/ExtensionHelpers';
 
 const MAX_LOG_ENTRIES = 200;
 const MAX_TURN_RECORDS = 50;
@@ -74,6 +75,7 @@ type TurnContext = {
   ttsBuffer: string;
   finalResponse: string;
   assistantMessageId: string | null;
+  startedAtMs: number;
   /** Every real Gemini request's reported usage this turn actually made — the initial runTurn() call
    *  plus every tool-continuation continueTurn() call, in call order. Reported once, in full, right
    *  before the turn is finalized (see drainPendingActionsAndFinalize's onTurnUsage call) — this is
@@ -91,6 +93,23 @@ function buildDefaultResponse(transcript: string) {
   }
 
   return `I heard: ${trimmed}`;
+}
+
+/**
+ * Estimate Paw Compute cost from token usage.
+ * This is a rough estimate — actual cost is calculated server-side.
+ * Approximation: ~0.0001 PC per input token, ~0.0003 PC per output token.
+ */
+function estimatePawComputeFromUsage(usages: TurnUsageSubmission['requests']): number {
+  let totalPc = 0;
+  for (const req of usages) {
+    const usage = req.usage;
+    if (!usage) continue;
+    const inputCost = (usage.inputTokens ?? 0) * 0.0001;
+    const outputCost = (usage.outputTokens ?? 0) * 0.0003;
+    totalPc += inputCost + outputCost;
+  }
+  return totalPc;
 }
 
 /**
@@ -202,6 +221,12 @@ export class ConversationRuntime {
   /** An action that came back needing confirmation — the next plain reply is checked against this before anything else, rather than trusting the model to remember and re-invoke the tool itself. */
   private pendingConfirmation: { request: ActionRequest; toolCall: ReasoningToolCall } | null = null;
 
+  /** Project ID (org_projects.id) for this turn's context — propagated to all ActionRequests created in this turn for RLS scoping. */
+  private currentTurnProjectId: string | undefined = undefined;
+
+  /** Pending approval awaiting user decision — stores action that's blocked on requires-confirmation for later resumption. */
+  private pendingApprovalAction: { approvalId: string; request: ActionRequest; toolCall: ReasoningToolCall } | null = null;
+
   /** Recovery Policy bookkeeping — reset at the start of every new turn (startTurnRecord), NOT per continuation, so the caps apply across the whole chain of tool calls within one user turn. */
   private toolIterationCount = 0;
   private failureSignatureCounts = new Map<string, number>();
@@ -213,6 +238,10 @@ export class ConversationRuntime {
   /** Which in-flight task action a currently-running action's observe() events should update — keyed by action type since that's all workspace:observation carries. */
   private activeActionIdByType = new Map<string, string>();
 
+  /** Track file changes during task execution for inline FileChangeExtension */
+  private modifiedFilesDuringTask = new Map<string, { status: 'added' | 'modified' | 'deleted'; additions?: number; deletions?: number }>();
+  private fileChangeMessageCreated = false;
+
   /** Coordinates action ordering/dedup/Work-History tracking — never reasons, never decides what runs next. See ExecutionSupervisor.ts. */
   private executionSupervisor = new ExecutionSupervisor((record) => {
     void this.args.persistExecution?.(record);
@@ -222,6 +251,38 @@ export class ConversationRuntime {
     const actionId = this.activeActionIdByType.get(event.actionType);
     if (!actionId) return;
     this.updateTaskActionProgress(actionId, event.event.message);
+  };
+
+  /** Track file changes during task execution for FileChangeExtension */
+  private handleWorkspaceFileChanged = (path: string, status: 'added' | 'modified' | 'deleted') => {
+    if (!this.currentTaskRecord) return;
+    this.modifiedFilesDuringTask.set(path, { status });
+
+    // Create/update FileChangeExtension message if files have changed
+    if (!this.fileChangeMessageCreated && this.modifiedFilesDuringTask.size > 0) {
+      this.fileChangeMessageCreated = true;
+      const files = Array.from(this.modifiedFilesDuringTask.entries()).map(([path, info]) => ({
+        path,
+        status: info.status,
+      }));
+
+      this.upsertMessage({
+        id: `filechange-${this.currentTaskRecord.id}`,
+        role: 'assistant',
+        content: 'Files have changed during this operation.',
+        createdAt: Date.now(),
+        status: 'final' as const,
+        extensions: [
+          {
+            type: 'file-change' as const,
+            id: `fc-${this.currentTaskRecord.id}`,
+            state: 'detected' as const,
+            files,
+            timestamp: Date.now(),
+          },
+        ],
+      });
+    }
   };
 
   /**
@@ -325,6 +386,12 @@ export class ConversationRuntime {
        */
       onTurnUsage?: (submission: TurnUsageSubmission) => void;
       /**
+       * Fires live during streaming with partial/cumulative Paw Compute usage
+       * burned so far in the current turn. Used to display real-time consumption
+       * in the chat UI. Called multiple times as each API request completes.
+       */
+      onStreamingUsage?: (pawCompute: number, elapsedSeconds: number) => void;
+      /**
        * Executes an action the AI requested (via IPC to the main-process
        * ActionEngine). The AI only ever names an intent; PawOS decides how
        * — including independently enforcing confirmation for destructive
@@ -394,6 +461,17 @@ export class ConversationRuntime {
        */
       onCommunicationEvent?: (cb: (event: CommunicationRuntimeEvent) => void) => void;
       /**
+       * Subscribes to governance approval events (main process) — when a
+       * user approves a pending destructive action, this resumes execution
+       * with confirmed=true.
+       */
+      onGovernanceApproved?: (cb: (payload: { approvalId: string }) => void) => void;
+      /**
+       * Subscribes to governance denial events (main process) — when a
+       * user denies a pending destructive action, this cancels it.
+       */
+      onGovernanceDenied?: (cb: (payload: { approvalId: string }) => void) => void;
+      /**
        * The composer's current mode (Manual/Accept edits/Plan/Auto/Bypass permissions — see
        * ExecutionModeTypes.ts). Read fresh on every requires-confirmation result, never cached, so
        * a mode change the user makes mid-conversation takes effect on the very next action.
@@ -432,6 +510,8 @@ export class ConversationRuntime {
     args.onProcessExit?.(this.handleProcessExit);
     args.onWorkspaceObservation?.(this.handleWorkspaceObservation);
     args.onCommunicationEvent?.(this.handleCommunicationRuntimeEvent);
+    args.onGovernanceApproved?.((payload) => this.resumeFromApproval(payload.approvalId));
+    args.onGovernanceDenied?.((payload) => this.denyApproval(payload.approvalId));
   }
 
   subscribe(listener: (snapshot: ConversationSnapshot) => void) {
@@ -698,6 +778,7 @@ export class ConversationRuntime {
     this.reasoningTurn = null;
     this.speechQueue = [];
     this.pendingConfirmation = null;
+    this.pendingApprovalAction = null;
     this.args.speechSynthesis.stop();
     this.finalizeCurrentTurn('interrupted', 'cancelled');
     this.updateSnapshot({
@@ -707,6 +788,66 @@ export class ConversationRuntime {
       speechPlaybackState: this.voiceOutputEnabled ? 'on' : 'off',
       pendingConfirmation: false,
     });
+  }
+
+  /**
+   * Resume a pending action after user approval.
+   * Re-submits the action with confirmed=true, continuing execution.
+   */
+  resumeFromApproval(approvalId: string): void {
+    if (!this.pendingApprovalAction || this.pendingApprovalAction.approvalId !== approvalId) {
+      return;
+    }
+    const { request, toolCall } = this.pendingApprovalAction;
+    this.pendingApprovalAction = null;
+
+    // Clear pending confirmation state
+    this.updateSnapshot({ pendingConfirmation: false });
+
+    // Re-execute with confirmed=true
+    const confirmedRequest = { ...request, confirmed: true } as ActionRequest;
+    const currentTurn = this.turnId;
+    void this.executeConfirmedAction(confirmedRequest, toolCall, currentTurn);
+  }
+
+  /**
+   * Deny a pending approval, cancelling the action.
+   * Communicates denial back to reasoning model so it can respond.
+   */
+  denyApproval(approvalId: string): void {
+    if (!this.pendingApprovalAction || this.pendingApprovalAction.approvalId !== approvalId) {
+      return;
+    }
+    const { request, toolCall } = this.pendingApprovalAction;
+    this.pendingApprovalAction = null;
+    this.updateSnapshot({ pendingConfirmation: false });
+
+    // Feed denial as tool result to reasoning model
+    // This proves PawOS talked to the backend agent (reasoning model)
+    // and lets the model respond once in chat
+    const denialResult: ActionResult = {
+      ok: false,
+      reason: 'cancelled',
+      message: 'User denied permission for this action.',
+    };
+
+    const currentTurn = this.turnId;
+    const ctx: TurnContext = { ttsBuffer: '', finalResponse: '', assistantMessageId: null, startedAtMs: Date.now(), usages: [] };
+
+    // Tell reasoning model about the denial
+    this.args.reasoningRuntime.provideToolResult({
+      toolCallId: toolCall.id,
+      name: toolCall.name,
+      content: JSON.stringify(denialResult),
+    });
+
+    this.recordToolOutcomeAndCheckBudget(request, denialResult);
+    this.resumeAfterAction(currentTurn);
+
+    // Continue reasoning so model can respond to the denial
+    if (!this.closed && currentTurn === this.turnId) {
+      void this.continueReasoningTurn(currentTurn, ctx);
+    }
   }
 
   /** Stops whatever's in flight (speech, reasoning, recognition) and starts listening fresh — the one path every barge-in goes through. */
@@ -828,6 +969,7 @@ export class ConversationRuntime {
 
     const currentTurn = ++this.turnId;
     this.stopRecognition();
+    this.currentTurnProjectId = context?.projectId;
     this.startTurnRecord(transcript);
     this.pendingActionPromises = [];
     this.log('turn-start', { turnId: currentTurn, transcript, source: context?.source ?? 'typed' });
@@ -864,7 +1006,7 @@ export class ConversationRuntime {
     let turnHandle: ReasoningTurnHandle;
     // Shared with handleToolCall/continueReasoningTurn — a tool-result
     // continuation streams into the SAME buffers as this initial call.
-    const turnContext: TurnContext = { ttsBuffer: '', finalResponse: '', assistantMessageId: null, usages: [] };
+    const turnContext: TurnContext = { ttsBuffer: '', finalResponse: '', assistantMessageId: null, startedAtMs: Date.now(), usages: [] };
 
     try {
       turnHandle = this.args.reasoningRuntime.runTurn(reasoningInput, this.buildStreamCallbacks(currentTurn, turnContext));
@@ -1100,6 +1242,12 @@ export class ConversationRuntime {
         // makes, including every tool-continuation, is captured exactly once; the full set is
         // reported via onTurnUsage right before the turn is finalized (drainPendingActionsAndFinalize).
         if (result.usage) ctx.usages.push({ usage: result.usage, requestType });
+
+        // Emit live streaming usage for UI display
+        const elapsedSeconds = Math.floor((Date.now() - ctx.startedAtMs) / 1000);
+        const estimatedPawCompute = estimatePawComputeFromUsage(ctx.usages);
+        this.args.onStreamingUsage?.(estimatedPawCompute, elapsedSeconds);
+
         ctx.finalResponse = result.response || result.assistantMessage?.content || ctx.finalResponse;
         if (result.assistantMessage) {
           ctx.assistantMessageId = result.assistantMessage.id;
@@ -1185,6 +1333,11 @@ export class ConversationRuntime {
     if (!request) {
       this.appendMessage('system', "I'm not sure how to do that yet.");
       return;
+    }
+
+    // Propagate projectId to all actions in this turn for RLS scoping
+    if (this.currentTurnProjectId) {
+      request.projectId = this.currentTurnProjectId;
     }
 
     // Vision-backed actions always use Gemini regardless of the active
@@ -1325,6 +1478,33 @@ export class ConversationRuntime {
         return;
       }
       this.pendingConfirmation = { request, toolCall };
+
+      // Store for approval → resume flow (P1-A governance)
+      if (result.approvalRequestId) {
+        this.pendingApprovalAction = { approvalId: result.approvalRequestId, request, toolCall };
+        this.updateSnapshot({ pendingConfirmation: true });
+      }
+
+      // Create inline permission extension for confirmation request
+      const permExt = createPermissionExtension({
+        title: `Confirm ${request.type}`,
+        description: `PawOS needs your approval to ${request.type}.`,
+        allowedActions: ['allow-once', 'deny'],
+        actionId: toolCall.id,
+        taskId: this.currentTaskRecord?.id,
+        approvalId: result.approvalRequestId,
+        state: 'pending',
+      });
+
+      this.upsertMessage({
+        id: `confirm-${toolCall.id}`,
+        role: 'assistant',
+        content: `I need your confirmation to proceed.`,
+        createdAt: Date.now(),
+        status: 'final' as const,
+        extensions: [permExt],
+      });
+
       this.updateSnapshot({ pendingConfirmation: true });
     }
 
@@ -1387,7 +1567,7 @@ export class ConversationRuntime {
     // A fresh turn (started in handleTranscript's confirmation branch), so
     // it gets its own buffers — same shape as the initial runTurn's, and
     // shared with any tool calls this continuation itself triggers.
-    const ctx: TurnContext = { ttsBuffer: '', finalResponse: '', assistantMessageId: null, usages: [] };
+    const ctx: TurnContext = { ttsBuffer: '', finalResponse: '', assistantMessageId: null, startedAtMs: Date.now(), usages: [] };
 
     const actionStartedAt = Date.now();
     const inProgressText = await this.args.describeAction?.(request).catch(() => null) ?? 'Working on that…';
@@ -1482,6 +1662,9 @@ export class ConversationRuntime {
         endedAt: null,
         actions: [],
       };
+      // Reset file tracking for new task
+      this.modifiedFilesDuringTask.clear();
+      this.fileChangeMessageCreated = false;
     }
     return this.currentTaskRecord;
   }
@@ -1490,6 +1673,45 @@ export class ConversationRuntime {
   private upsertTaskMessage(): void {
     const task = this.currentTaskRecord;
     if (!task) return;
+
+    // Build task progress extension for inline preview
+    const completedActions = task.actions.filter((a) => a.endedAt).length;
+    const totalActions = task.actions.length;
+    const progress = totalActions > 0 ? Math.round((completedActions / totalActions) * 100) : 0;
+    const currentAction = task.actions[task.actions.length - 1];
+
+    const taskExt = createTaskProgressExtension({
+      id: `task-ext-${task.id}`,
+      taskId: task.id,
+      goal: task.goal,
+      state:
+        task.status === 'running'
+          ? 'running'
+          : task.status === 'completed'
+            ? 'completed'
+            : task.status === 'failed'
+              ? 'failed'
+              : 'stopped',
+      progress,
+      currentAction: currentAction?.inProgressText || currentAction?.doneText,
+      status:
+        task.status === 'running'
+          ? `${completedActions}/${totalActions} steps complete`
+          : task.finalReport
+            ? task.finalReport.slice(0, 100)
+            : undefined,
+      actions: task.actions.map((a) => ({
+        id: a.id,
+        type: a.type,
+        inProgressText: a.inProgressText,
+        doneText: a.doneText,
+        status: a.endedAt ? (a.result?.ok === false ? 'failed' : 'completed') : 'pending',
+        startedAt: a.startedAt,
+        endedAt: a.endedAt || undefined,
+      })),
+      expandTarget: 'terminal',
+    });
+
     this.upsertMessage({
       id: task.id,
       role: 'system',
@@ -1497,6 +1719,7 @@ export class ConversationRuntime {
       createdAt: task.startedAt,
       status: task.status === 'running' ? 'streaming' : 'final',
       task: { ...task, actions: task.actions.map((a) => ({ ...a })) },
+      extensions: [taskExt],
     });
   }
 
@@ -1563,6 +1786,9 @@ export class ConversationRuntime {
     task.finalReport = finalReport;
     this.upsertTaskMessage();
     this.currentTaskRecord = null;
+    // Reset file tracking after task completes
+    this.modifiedFilesDuringTask.clear();
+    this.fileChangeMessageCreated = false;
     this.recordTaskProvenance(task);
   }
 

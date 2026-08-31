@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
 import { useExecutionHistory } from '../../../conversation/useExecutionHistory';
+import { useIpcBridge } from '../../../services/ipc/useIpcBridge';
 import type { ExecutionRecord } from '../../../../shared/actions/ExecutionRecordTypes';
 import { WorkRecordDetail } from './WorkRecordDetail';
 
@@ -53,11 +54,17 @@ function evidenceCounts(record: ExecutionRecord) {
 
 export function WorkHistorySection({ selectedWorkId }: { selectedWorkId?: string | null }) {
   const { records } = useExecutionHistory();
+  const ipc = useIpcBridge();
   const [activeId, setActiveId] = useState<string | null>(null);
 
   useEffect(() => {
     if (selectedWorkId) setActiveId(selectedWorkId);
   }, [selectedWorkId]);
+
+  const handleSelectExecution = (executionId: string) => {
+    setActiveId(executionId);
+    ipc.executionSetSelected?.(executionId).catch(() => {});
+  };
 
   const detail = records.find((r) => r.id === activeId) ?? null;
 
@@ -85,7 +92,7 @@ export function WorkHistorySection({ selectedWorkId }: { selectedWorkId?: string
                 key={r.id}
                 type="button"
                 className={`${styles.workRecordCard} ${activeId === r.id ? styles.workRecordCardActive : ''}`}
-                onClick={() => setActiveId(r.id)}
+                onClick={() => handleSelectExecution(r.id)}
               >
                 <div className={styles.workRecordCardTop}>
                   <div style={{ minWidth: 0 }}>

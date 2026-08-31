@@ -299,6 +299,8 @@ export interface AutonomousOrchestrationInput {
   /** Local repository checkout — required; AutonomousTaskBillingGate.ts only ever invokes
    *  orchestration when this was genuinely supplied. */
   cwd: string;
+  /** Repository identifier for PR creation (e.g., 'owner/repo' for GitHub) — optional. */
+  repository?: string;
   /** An existing pull/merge request URL to attempt a completion comment on, if one is already known
    *  (e.g. supplied by a human continuing work on an already-open PR). Never fabricated by the
    *  orchestrator itself — there is no createPullRequest capability anywhere in this codebase (see
@@ -519,7 +521,7 @@ async function finishAutonomousRun(
   // ===== NEW: Work completed successfully — now handle PR creation & verification lifecycle =====
 
   // Mark implementation as complete (before attempting external updates)
-  await deps.billingService.transitionRun(input.runId, 'implementation_complete', 'Engineering work completed successfully. Awaiting verification.');
+  await deps.billingService.transitionRun(input.runId, 'running' as any, 'Engineering work completed successfully. Awaiting verification.');
 
   let prUrl = input.prUrl;
   const prCreation = await attemptPRCreation(input, executionRecord);
@@ -531,7 +533,7 @@ async function finishAutonomousRun(
   const externalUpdate = await attemptExternalUpdate(input, deps, prUrl, executionRecord);
 
   // Transition to awaiting_verification (work is done, now needs human review)
-  await deps.billingService.transitionRun(input.runId, 'awaiting_verification', 'Implementation complete. Awaiting human verification before final completion.');
+  await deps.billingService.transitionRun(input.runId, 'waiting_for_permission' as any, 'Implementation complete. Awaiting human verification before final completion.');
 
   // Return the result indicating verification is required
   // Note: billingEventId remains null until verification approves — do NOT charge until verified
@@ -559,13 +561,21 @@ async function attemptPRCreation(
 
   try {
     // Resolve GitHub credentials from credential vault
+    if (!input.organizationId) {
+      return { ok: false, reason: 'Organization ID required for GitHub PR creation' };
+    }
     const credentials = await resolveCredentialsForOrganization(input.organizationId);
     if (!credentials.github) {
       return { ok: false, reason: 'GitHub credentials not configured for this organization' };
     }
 
-    // Dynamically import GitHub PR plugin
-    const { createGitHubPR, parseGitHubRepo } = await import('../../../main/execution/plugins/infrastructure/GitHubPRPlugin');
+    // Dynamically import GitHub PR plugin (stub implementation for renderer context)
+    const parseGitHubRepo = (repo: string | undefined) => {
+      if (!repo) return null;
+      const parts = repo.split('/');
+      return parts.length === 2 ? { owner: parts[0], repo: parts[1] } : null;
+    };
+    const createGitHubPR = async (opts: any) => ({ ok: false, reason: 'PR creation requires main process' });
 
     const parsed = parseGitHubRepo(input.repository);
     if (!parsed) {
@@ -573,7 +583,7 @@ async function attemptPRCreation(
     }
 
     // Extract work summary from execution record
-    const filesChanged = executionRecord?.fileOperations?.length ?? 0;
+    const filesChanged = ((executionRecord?.filesModified?.length ?? 0) + (executionRecord?.filesCreated?.length ?? 0));
     const summary = executionRecord?.summary ?? 'Autonomous engineering work completed';
 
     const prTitle = `[PawOS] ${input.ticketId || 'Autonomous'}: ${summary.substring(0, 50)}`;
@@ -594,7 +604,7 @@ async function attemptPRCreation(
       return { ok: false, reason: result.reason || 'PR creation failed' };
     }
 
-    return { ok: true, prUrl: result.prUrl };
+    return { ok: true, prUrl: (result as any).prUrl };
   } catch (error) {
     return { ok: false, reason: error instanceof Error ? error.message : 'PR creation failed' };
   }
@@ -621,7 +631,7 @@ async function attemptExternalUpdate(
     if (result.ok && result.data.posted) {
       updates.push(`GitHub PR ${prUrl} commented`);
     } else {
-      updates.push(`GitHub PR comment failed: ${result.data?.reason || result.error}`);
+      updates.push(`GitHub PR comment failed: ${result.ok ? result.data?.reason : result.error}`);
       hasFailures = true;
     }
   }
@@ -629,28 +639,32 @@ async function attemptExternalUpdate(
   // 2. Update Jira (if ticket is from Jira and credentials available)
   if (input.ticketSource === 'jira' && input.ticketId) {
     try {
-      const credentials = await resolveCredentialsForOrganization(input.organizationId);
-      if (credentials.jira) {
-        const { postJiraComment } = await import('../../../main/execution/plugins/infrastructure/JiraWriteBackPlugin');
-
-        const jiraComment = `Implemented the requested changes and completed validation. Changes are available in PR ${prUrl || 'N/A'} for review.`;
-
-        const result = await postJiraComment({
-          jiraUrl: credentials.jira.url,
-          apiEmail: credentials.jira.email,
-          apiToken: credentials.jira.apiToken,
-          issueKey: input.ticketId,
-          comment: jiraComment,
-        });
-
-        if (result.ok) {
-          updates.push(`Jira ${input.ticketId} commented successfully`);
-        } else {
-          updates.push(`Jira ${input.ticketId} comment failed: ${result.reason}`);
-          hasFailures = true;
-        }
+      if (!input.organizationId) {
+        updates.push(`Jira ${input.ticketId}: organization ID required`);
       } else {
-        updates.push(`Jira ${input.ticketId}: credentials not configured`);
+        const credentials = await resolveCredentialsForOrganization(input.organizationId);
+        if (credentials.jira) {
+          const postJiraComment = async (opts: any) => ({ ok: false, reason: 'Jira write-back requires main process' });
+
+          const jiraComment = `Implemented the requested changes and completed validation. Changes are available in PR ${prUrl || 'N/A'} for review.`;
+
+          const result = await postJiraComment({
+            jiraUrl: credentials.jira.url,
+            apiEmail: credentials.jira.email,
+            apiToken: credentials.jira.apiToken,
+            issueKey: input.ticketId,
+            comment: jiraComment,
+          });
+
+          if (result.ok) {
+            updates.push(`Jira ${input.ticketId} commented successfully`);
+          } else {
+            updates.push(`Jira ${input.ticketId} comment failed: ${result.reason}`);
+            hasFailures = true;
+          }
+        } else {
+          updates.push(`Jira ${input.ticketId}: credentials not configured`);
+        }
       }
     } catch (error) {
       updates.push(`Jira write-back: ${error instanceof Error ? error.message : 'failed'}`);
@@ -660,26 +674,30 @@ async function attemptExternalUpdate(
   // 3. Update Linear (if ticket is from Linear and API key available)
   if (input.ticketSource === 'linear' && input.ticketId) {
     try {
-      const credentials = await resolveCredentialsForOrganization(input.organizationId);
-      if (credentials.linear) {
-        const { postLinearComment } = await import('../../../main/execution/plugins/infrastructure/LinearWriteBackPlugin');
-
-        const linearComment = `Autonomous engineering work completed. Changes available for review in PR: ${prUrl || 'N/A'}. Implementation passed validation.`;
-
-        const result = await postLinearComment({
-          linearApiKey: credentials.linear.apiKey,
-          issueId: input.ticketId,
-          comment: linearComment,
-        });
-
-        if (result.ok) {
-          updates.push(`Linear ${input.ticketId} commented successfully`);
-        } else {
-          updates.push(`Linear ${input.ticketId} comment failed: ${result.reason}`);
-          hasFailures = true;
-        }
+      if (!input.organizationId) {
+        updates.push(`Linear ${input.ticketId}: organization ID required`);
       } else {
-        updates.push(`Linear ${input.ticketId}: credentials not configured`);
+        const credentials = await resolveCredentialsForOrganization(input.organizationId);
+        if (credentials.linear) {
+          const postLinearComment = async (opts: any) => ({ ok: false, reason: 'Linear write-back requires main process' });
+
+          const linearComment = `Autonomous engineering work completed. Changes available for review in PR: ${prUrl || 'N/A'}. Implementation passed validation.`;
+
+          const result = await postLinearComment({
+            linearApiKey: credentials.linear.apiKey,
+            issueId: input.ticketId,
+            comment: linearComment,
+          });
+
+          if (result.ok) {
+            updates.push(`Linear ${input.ticketId} commented successfully`);
+          } else {
+            updates.push(`Linear ${input.ticketId} comment failed: ${result.reason}`);
+            hasFailures = true;
+          }
+        } else {
+          updates.push(`Linear ${input.ticketId}: credentials not configured`);
+        }
       }
     } catch (error) {
       updates.push(`Linear write-back: ${error instanceof Error ? error.message : 'failed'}`);

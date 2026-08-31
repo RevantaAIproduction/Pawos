@@ -70,6 +70,7 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
   const [pin, setPin] = useState('');
   const [billingState, setBillingState] = useState(''); // Renamed from state to avoid shadowing
   const [taxId, setTaxId] = useState('');
+  const [hasSelectedAddress, setHasSelectedAddress] = useState(false);
 
   // Card form fields
   const [cardNumber, setCardNumber] = useState('');
@@ -93,7 +94,21 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
     return null;
   };
 
+  const isUnsupportedCard = () => {
+    const cleaned = cardNumber.replace(/\s/g, '');
+    if (cleaned.length < 4) return false; // Not enough digits to determine
+    if (detectCardBrand(cleaned)) return false; // Supported card
+
+    // Check if it looks like a valid card number start (not just random digits)
+    // American Express starts with 3, Discover with 6, Diners with 3, etc.
+    if (/^[3-6]/.test(cleaned)) return true;
+
+    return false;
+  };
+
   const cardBrand = detectCardBrand(cardNumber);
+  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
+
 
   useEffect(() => {
     const fetchAuth = async () => {
@@ -111,17 +126,19 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
             // Extract organization name from email domain
             const emailDomain = session.user.email.split('@')[1];
             if (emailDomain) {
-              const domainName = emailDomain.split('.')[0];
-              const orgName = domainName
-                .split(/[-_]/)
-                .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
-                .join('');
-              setOrganizationName(orgName);
+              const domainName = emailDomain?.split('.')[0];
+              if (domainName) {
+                const orgName = domainName
+                  .split(/[-_]/)
+                  .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
+                  .join('');
+                setOrganizationName(orgName);
+              }
             }
           }
-          if (session?.user?.name) {
-            setFullName(session.user.name);
-          }
+          // if (session?.user?.name) {
+          //   setFullName(session.user.name);
+          // }
 
           // Fetch current subscription (non-blocking)
           try {
@@ -132,7 +149,7 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
               ]);
               if (subscription) {
                 setCurrentSubscription(subscription);
-                if (subscription.tier === tier) {
+                if ((subscription as any).tier === tier) {
                   const estimatedCredit = Math.floor(Math.random() * 2000) + 1000;
                   setProratedCredit(estimatedCredit);
                 }
@@ -144,9 +161,9 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
 
           // Fetch saved cards (non-blocking)
           try {
-            if (ipc.billingGetPaymentMethods) {
+            if ((ipc as any).billingGetNativePaymentMethods) {
               const methods = await Promise.race([
-                ipc.billingGetPaymentMethods(),
+                (ipc as any).billingGetNativePaymentMethods(),
                 new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
               ]);
               if (methods?.ok && methods?.methods?.length > 0) {
@@ -178,7 +195,7 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
 
   const handlePay = async () => {
     // Validate all mandatory billing fields
-    if (!fullName.trim() || !address1.trim() || !city.trim() || !pin.trim() || !state.trim() || !country.trim()) {
+    if (!fullName.trim() || !address1.trim() || !city.trim() || !pin.trim() || !billingState.trim() || !country.trim()) {
       setErrorMessage('Please fill in all required billing fields (Name, Email, Phone, Country, Address).');
       return;
     }
@@ -206,7 +223,7 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
         {
           seatTier: options?.seatTier,
           seatCount: options?.seatCount,
-          proMaxVariant,
+          proMaxVariant: proMaxVariant ?? undefined,
           proBillingFrequency: tier === 'pro' ? proBillingFrequency : undefined,
           runtimeIds: options?.runtimeIds,
         },
@@ -227,11 +244,11 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
         await new Promise((resolve) => (script.onload = resolve));
       }
 
-      const razorpay = new window.Razorpay({
+      const razorpay = new (window as any).Razorpay({
         key: checkout.keyId,
       });
 
-      razorpay.on('payment.success', async (response: any) => {
+      (razorpay as any).on('payment.success', async (response: any) => {
         setState('processing');
         try {
           const verified = await ipc.billingVerifyNativeTierPayment({
@@ -260,7 +277,7 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
         }
       });
 
-      razorpay.on('payment.error', (error: any) => {
+      (razorpay as any).on('payment.error', (error: any) => {
         setErrorMessage(error.description || 'Payment failed.');
         setState('error');
       });
@@ -310,7 +327,7 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
         amount_inr: amountInr.toString(),
       };
 
-      razorpay.createPayment({
+      (razorpay as any).createPayment({
         order_id: checkout.orderId,
         method: 'card',
         description: tierDescriptions[tier],
@@ -336,22 +353,18 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
 
   const label = tierLabels[tier];
 
-  const amountPaise =
-    tier === 'pro' ? (proBillingFrequency === 'monthly' ? 191300 : 2295600) :
-    tier === 'proMax' && proMaxVariant === '5x' ? 600000 :
-    tier === 'proMax' && proMaxVariant === '20x' ? 1500000 :
-    tier === 'team' && options?.seatTier === 'standard' ? (300000 * (options?.seatCount || 1)) :
-    tier === 'team' && options?.seatTier === 'premium' ? (600000 * (options?.seatCount || 1)) :
-    tier === 'enterprise' ? (1000000 * (options?.seatCount || 1)) :
+  // Calculate amount in INR (Pro yearly has 17% discount: 22956 * 0.83 = 19,053.48)
+  const amountInr =
+    tier === 'pro' ? (proBillingFrequency === 'monthly' ? 1913 : 19053.48) :
+    tier === 'proMax' && proMaxVariant === '5x' ? 9565 :
+    tier === 'proMax' && proMaxVariant === '20x' ? 23912.50 :
+    tier === 'team' && options?.seatTier === 'standard' ? (3000 * (options?.seatCount || 1)) :
+    tier === 'team' && options?.seatTier === 'premium' ? (6000 * (options?.seatCount || 1)) :
+    tier === 'enterprise' ? (10000 * (options?.seatCount || 1)) :
     0;
 
-  // Update Pro Max prices to match calculated values
-  const proMaxPrices = {
-    '5x': 600000,  // ₹6,000
-    '20x': 1500000, // ₹15,000
-  };
-
-  const amountInr = amountPaise / 100;
+  // Convert to paise for payment
+  const amountPaise = amountInr * 100;
 
   if (state === 'success') {
     return (
@@ -538,92 +551,97 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
                       setAddress2(addr.address2);
                       setCity(addr.city);
                       setPin(addr.postalCode);
-                      setState(addr.state);
+                      setBillingState(addr.state);
+                      setHasSelectedAddress(true);
                     }}
                     placeholder="Start typing your address"
                   />
                 </div>
 
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Address line 2</label>
-                  <input
-                    type="text"
-                    value={address2}
-                    onChange={(e) => setAddress2(e.target.value)}
-                    placeholder="Apartment, suite, etc. (optional)"
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      borderRadius: 8,
-                      border: '1px solid rgba(var(--pawos-overlay-rgb), 0.2)',
-                      background: 'rgba(var(--pawos-overlay-rgb), 0.03)',
-                      color: 'var(--pawos-fg)',
-                      fontSize: 13,
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
+                {hasSelectedAddress && (
+                  <>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Address line 2</label>
+                      <input
+                        type="text"
+                        value={address2}
+                        onChange={(e) => setAddress2(e.target.value)}
+                        placeholder="Apartment, suite, etc. (optional)"
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          borderRadius: 8,
+                          border: '1px solid rgba(var(--pawos-overlay-rgb), 0.2)',
+                          background: 'rgba(var(--pawos-overlay-rgb), 0.03)',
+                          color: 'var(--pawos-fg)',
+                          fontSize: 13,
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                  <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>City <span style={{ color: '#ef4444' }}>*</span></label>
-                    <input
-                      type="text"
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                      placeholder="City"
-                      style={{
-                        width: '100%',
-                        padding: '10px 12px',
-                        borderRadius: 8,
-                        border: '1px solid rgba(var(--pawos-overlay-rgb), 0.2)',
-                        background: 'rgba(var(--pawos-overlay-rgb), 0.03)',
-                        color: 'var(--pawos-fg)',
-                        fontSize: 13,
-                        boxSizing: 'border-box',
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>PIN <span style={{ color: '#ef4444' }}>*</span></label>
-                    <input
-                      type="text"
-                      value={pin}
-                      onChange={(e) => setPin(e.target.value)}
-                      placeholder="Postal code"
-                      style={{
-                        width: '100%',
-                        padding: '10px 12px',
-                        borderRadius: 8,
-                        border: '1px solid rgba(var(--pawos-overlay-rgb), 0.2)',
-                        background: 'rgba(var(--pawos-overlay-rgb), 0.03)',
-                        color: 'var(--pawos-fg)',
-                        fontSize: 13,
-                        boxSizing: 'border-box',
-                      }}
-                    />
-                  </div>
-                </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                      <div>
+                        <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>City <span style={{ color: '#ef4444' }}>*</span></label>
+                        <input
+                          type="text"
+                          value={city}
+                          onChange={(e) => setCity(e.target.value)}
+                          placeholder="City"
+                          style={{
+                            width: '100%',
+                            padding: '10px 12px',
+                            borderRadius: 8,
+                            border: '1px solid rgba(var(--pawos-overlay-rgb), 0.2)',
+                            background: 'rgba(var(--pawos-overlay-rgb), 0.03)',
+                            color: 'var(--pawos-fg)',
+                            fontSize: 13,
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>PIN <span style={{ color: '#ef4444' }}>*</span></label>
+                        <input
+                          type="text"
+                          value={pin}
+                          onChange={(e) => setPin(e.target.value)}
+                          placeholder="Postal code"
+                          style={{
+                            width: '100%',
+                            padding: '10px 12px',
+                            borderRadius: 8,
+                            border: '1px solid rgba(var(--pawos-overlay-rgb), 0.2)',
+                            background: 'rgba(var(--pawos-overlay-rgb), 0.03)',
+                            color: 'var(--pawos-fg)',
+                            fontSize: 13,
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                      </div>
+                    </div>
 
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>State <span style={{ color: '#ef4444' }}>*</span></label>
-                  <input
-                    type="text"
-                    value={state}
-                    onChange={(e) => setState(e.target.value)}
-                    placeholder="State/Province"
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      borderRadius: 8,
-                      border: '1px solid rgba(var(--pawos-overlay-rgb), 0.2)',
-                      background: 'rgba(var(--pawos-overlay-rgb), 0.03)',
-                      color: 'var(--pawos-fg)',
-                      fontSize: 13,
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>State <span style={{ color: '#ef4444' }}>*</span></label>
+                      <input
+                        type="text"
+                        value={billingState}
+                        onChange={(e) => setBillingState(e.target.value)}
+                        placeholder="State/Province"
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          borderRadius: 8,
+                          border: '1px solid rgba(var(--pawos-overlay-rgb), 0.2)',
+                          background: 'rgba(var(--pawos-overlay-rgb), 0.03)',
+                          color: 'var(--pawos-fg)',
+                          fontSize: 13,
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    </div>
+                  </>
+                )}
 
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Business tax ID (Optional)</label>
@@ -712,7 +730,7 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
                         placeholder="1234 1234 1234 1234"
                         style={{
                           width: '100%',
-                          padding: '10px 12px 10px 40px',
+                          padding: '10px 12px 10px 110px',
                           borderRadius: 8,
                           border: '1px solid rgba(var(--pawos-overlay-rgb), 0.2)',
                           background: 'rgba(var(--pawos-overlay-rgb), 0.03)',
@@ -721,31 +739,54 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
                           boxSizing: 'border-box',
                         }}
                       />
-                      {cardBrand && (
-                        <div style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', fontSize: 11, fontWeight: 600, color: '#666' }}>
-                          {cardBrand === 'visa' && (
-                            <svg width="24" height="16" viewBox="0 0 48 32" style={{ marginRight: 4 }}>
-                              <rect width="48" height="32" fill="#1434CB" rx="2"/>
-                              <text x="24" y="20" textAnchor="middle" fill="white" fontSize="10" fontWeight="bold">VISA</text>
-                            </svg>
+                      <div style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        {/* Visa */}
+                        <div style={{ position: 'relative', cursor: 'pointer', opacity: cardBrand === 'visa' || !cardBrand ? 1 : 0.4 }} onMouseEnter={() => setHoveredCard('visa')} onMouseLeave={() => setHoveredCard(null)}>
+                          <svg width="28" height="18" viewBox="0 0 48 32">
+                            <rect width="48" height="32" fill="#1434CB" rx="2"/>
+                            <text x="24" y="20" textAnchor="middle" fill="white" fontSize="9" fontWeight="bold">VISA</text>
+                          </svg>
+                          {hoveredCard === 'visa' && (
+                            <div style={{ position: 'absolute', bottom: '-28px', left: '-10px', backgroundColor: 'rgba(0,0,0,0.8)', color: 'white', padding: '4px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', zIndex: 100 }}>
+                              Visa Card
+                            </div>
                           )}
-                          {cardBrand === 'mastercard' && (
-                            <svg width="24" height="16" viewBox="0 0 48 32" style={{ marginRight: 4 }}>
-                              <rect width="48" height="32" fill="#EB001B" rx="2"/>
-                              <circle cx="16" cy="16" r="8" fill="#FF5F00"/>
-                              <circle cx="32" cy="16" r="8" fill="#FFB81C"/>
-                            </svg>
-                          )}
-                          {cardBrand === 'rupay' && (
-                            <svg width="24" height="16" viewBox="0 0 48 32" style={{ marginRight: 4 }}>
-                              <rect width="48" height="32" fill="#FFFFFF" stroke="#CCCCCC" rx="2"/>
-                              <text x="24" y="20" textAnchor="middle" fill="#0066CC" fontSize="9" fontWeight="bold">RuPay</text>
-                            </svg>
-                          )}
-                          <span style={{ textTransform: 'uppercase' }}>{cardBrand}</span>
                         </div>
-                      )}
+
+                        {/* Mastercard */}
+                        <div style={{ position: 'relative', cursor: 'pointer', opacity: cardBrand === 'mastercard' || !cardBrand ? 1 : 0.4 }} onMouseEnter={() => setHoveredCard('mastercard')} onMouseLeave={() => setHoveredCard(null)}>
+                          <svg width="28" height="18" viewBox="0 0 48 32">
+                            <rect width="48" height="32" fill="#EB001B" rx="2"/>
+                            <circle cx="16" cy="16" r="8" fill="#FF5F00"/>
+                            <circle cx="32" cy="16" r="8" fill="#FFB81C"/>
+                          </svg>
+                          {hoveredCard === 'mastercard' && (
+                            <div style={{ position: 'absolute', bottom: '-28px', left: '-15px', backgroundColor: 'rgba(0,0,0,0.8)', color: 'white', padding: '4px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', zIndex: 100 }}>
+                              Mastercard
+                            </div>
+                          )}
+                        </div>
+
+                        {/* RuPay */}
+                        <div style={{ position: 'relative', cursor: 'pointer', opacity: cardBrand === 'rupay' || !cardBrand ? 1 : 0.4 }} onMouseEnter={() => setHoveredCard('rupay')} onMouseLeave={() => setHoveredCard(null)}>
+                          <svg width="28" height="18" viewBox="0 0 48 32">
+                            <rect width="48" height="32" fill="#FFFFFF" stroke="#999999" strokeWidth="1" rx="2"/>
+                            <text x="24" y="20" textAnchor="middle" fill="#0066CC" fontSize="8" fontWeight="bold">RuPay</text>
+                          </svg>
+                          {hoveredCard === 'rupay' && (
+                            <div style={{ position: 'absolute', bottom: '-28px', left: '-12px', backgroundColor: 'rgba(0,0,0,0.8)', color: 'white', padding: '4px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', zIndex: 100 }}>
+                              RuPay Card
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
+                    {isUnsupportedCard() && (
+                      <div style={{ marginTop: 8, padding: '8px 12px', backgroundColor: 'rgba(239, 68, 68, 0.1)', borderRadius: 6, border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                        <div style={{ fontSize: 12, color: '#ef4444', fontWeight: 500 }}>Card not supported</div>
+                        <div style={{ fontSize: 11, color: 'rgba(239, 68, 68, 0.8)', marginTop: 4 }}>We only accept Visa, Mastercard, and RuPay cards</div>
+                      </div>
+                    )}
                   </div>
 
                   <div style={{ display: 'flex', gap: 12 }}>
@@ -895,8 +936,8 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
             <button
               type="button"
               onClick={handlePay}
-              disabled={state === 'processing' || (tier === 'proMax' && !proMaxVariant) || state === 'loading'}
-              style={{ width: '100%', padding: '14px 16px', borderRadius: 10, border: 'none', background: 'var(--pawos-button-primary-bg)', color: 'var(--pawos-button-primary-fg)', fontWeight: 700, fontSize: 14, cursor: (state === 'processing' || (tier === 'proMax' && !proMaxVariant) || state === 'loading') ? 'default' : 'pointer', opacity: (state === 'processing' || (tier === 'proMax' && !proMaxVariant) || state === 'loading') ? 0.5 : 1, marginBottom: 12 }}
+              disabled={state === 'processing' || (tier === 'proMax' && !proMaxVariant) || state === 'loading' || isUnsupportedCard()}
+              style={{ width: '100%', padding: '14px 16px', borderRadius: 10, border: 'none', background: 'var(--pawos-button-primary-bg)', color: 'var(--pawos-button-primary-fg)', fontWeight: 700, fontSize: 14, cursor: (state === 'processing' || (tier === 'proMax' && !proMaxVariant) || state === 'loading' || isUnsupportedCard()) ? 'default' : 'pointer', opacity: (state === 'processing' || (tier === 'proMax' && !proMaxVariant) || state === 'loading' || isUnsupportedCard()) ? 0.5 : 1, marginBottom: 12 }}
             >
               {state === 'loading' ? 'Loading...' : state === 'processing' ? 'Processing...' : state === 'error' ? 'Retry' : 'Subscribe'}
             </button>

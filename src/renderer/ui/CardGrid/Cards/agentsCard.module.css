@@ -1,0 +1,190 @@
+.agentsCard {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.agentsCard::-webkit-scrollbar {
+  width: 6px;
+}
+
+.agentsCard::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.agentsCard::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+}
+
+.agentsCard::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.empty {
+  padding: 20px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11px;
+}
+
+.agentsList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agentItem {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.agentItem.running {
+  background: rgba(100, 200, 255, 0.05);
+  border-color: rgba(100, 200, 255, 0.15);
+}
+
+.agentItem.idle {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.agentItem.completed {
+  background: rgba(100, 200, 100, 0.05);
+  border-color: rgba(100, 200, 100, 0.15);
+}
+
+.agentItem.error {
+  background: rgba(255, 100, 100, 0.05);
+  border-color: rgba(255, 100, 100, 0.15);
+}
+
+.agentHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.statusDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.statusDot.running {
+  background: rgba(100, 200, 255, 0.9);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.statusDot.idle {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.statusDot.completed {
+  background: rgba(100, 200, 100, 0.9);
+}
+
+.statusDot.error {
+  background: rgba(255, 100, 100, 0.9);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.agentName {
+  flex: 1;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+}
+
+.statusLabel {
+  font-size: 9px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+}
+
+.progressContainer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+}
+
+.progressBar {
+  flex: 1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: rgba(100, 200, 255, 0.8);
+  transition: width 0.3s ease;
+}
+
+.progressText {
+  color: rgba(255, 255, 255, 0.6);
+  min-width: 30px;
+  text-align: right;
+}
+
+.agentMessage {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  font-style: italic;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 3px;
+  border-left: 2px solid rgba(100, 200, 255, 0.3);
+}
+
+.timestamp {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.agentActions {
+  display: flex;
+  gap: 4px;
+  padding-top: 4px;
+}
+
+.actionButton {
+  flex: 1;
+  background: rgba(100, 150, 255, 0.15);
+  border: 1px solid rgba(100, 150, 255, 0.3);
+  color: rgba(100, 150, 255, 0.8);
+  padding: 4px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.actionButton:hover {
+  background: rgba(100, 150, 255, 0.25);
+  border-color: rgba(100, 150, 255, 0.5);
+  color: rgba(100, 150, 255, 1);
+}

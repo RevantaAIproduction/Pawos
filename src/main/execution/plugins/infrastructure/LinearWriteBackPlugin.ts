@@ -61,8 +61,9 @@ export async function postLinearComment(input: LinearCommentInput): Promise<Line
       errors?: Array<{ message: string }>;
     };
 
-    if (data.errors?.length) {
-      return { ok: false, reason: `GraphQL error: ${data.errors[0].message}` };
+    if (data.errors && data.errors.length > 0) {
+      const errorMsg = data.errors[0]?.message || "Unknown error";
+      return { ok: false, reason: `GraphQL error: ${errorMsg}` };
     }
 
     if (!data.data?.commentCreate?.success) {
@@ -126,8 +127,9 @@ export async function transitionLinearIssue(
       errors?: Array<{ message: string }>;
     };
 
-    if (fetchData.errors?.length) {
-      return { ok: false, reason: `GraphQL error: ${fetchData.errors[0].message}` };
+    if (fetchData.errors && fetchData.errors.length > 0) {
+      const errorMsg = fetchData.errors[0]?.message || "Unknown error";
+      return { ok: false, reason: `GraphQL error: ${errorMsg}` };
     }
 
     const states = fetchData.data?.issue?.team?.states || [];
@@ -170,8 +172,9 @@ export async function transitionLinearIssue(
       errors?: Array<{ message: string }>;
     };
 
-    if (updateData.errors?.length) {
-      return { ok: false, reason: `GraphQL error: ${updateData.errors[0].message}` };
+    if (updateData.errors && updateData.errors.length > 0) {
+      const errorMsg = updateData.errors[0]?.message || "Unknown error";
+      return { ok: false, reason: `GraphQL error: ${errorMsg}` };
     }
 
     if (!updateData.data?.issueUpdate?.success) {

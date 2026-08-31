@@ -1,0 +1,165 @@
+.migrationsCard {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.migrationsCard::-webkit-scrollbar {
+  width: 6px;
+}
+
+.migrationsCard::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.migrationsCard::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+}
+
+.migrationsCard::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.empty {
+  padding: 20px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11px;
+}
+
+.migrationsList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.migrationItem {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.migrationItem.pending {
+  background: rgba(255, 255, 255, 0.01);
+  border-color: rgba(255, 255, 255, 0.04);
+}
+
+.migrationItem.running {
+  background: rgba(100, 200, 255, 0.05);
+  border-color: rgba(100, 200, 255, 0.15);
+}
+
+.migrationItem.completed {
+  background: rgba(100, 200, 100, 0.05);
+  border-color: rgba(100, 200, 100, 0.15);
+}
+
+.migrationItem.failed {
+  background: rgba(255, 100, 100, 0.05);
+  border-color: rgba(255, 100, 100, 0.15);
+}
+
+.migrationItem.rolled-back {
+  background: rgba(255, 200, 0, 0.05);
+  border-color: rgba(255, 200, 0, 0.15);
+}
+
+.migrationHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.statusIcon {
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 12px;
+  text-align: center;
+}
+
+.migrationItem.pending .statusIcon {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.migrationItem.running .statusIcon {
+  color: rgba(100, 200, 255, 0.9);
+  animation: spin 2s linear infinite;
+}
+
+.migrationItem.completed .statusIcon {
+  color: rgba(100, 200, 100, 0.9);
+}
+
+.migrationItem.failed .statusIcon {
+  color: rgba(255, 100, 100, 0.9);
+}
+
+.migrationItem.rolled-back .statusIcon {
+  color: rgba(255, 200, 0, 0.9);
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.migrationName {
+  flex: 1;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+}
+
+.metadata {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.4);
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+.details {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 3px;
+  border-left: 2px solid rgba(255, 200, 0, 0.3);
+}
+
+.migrationActions {
+  display: flex;
+  gap: 4px;
+  padding-top: 4px;
+}
+
+.actionButton {
+  flex: 1;
+  background: rgba(100, 150, 255, 0.15);
+  border: 1px solid rgba(100, 150, 255, 0.3);
+  color: rgba(100, 150, 255, 0.8);
+  padding: 4px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.actionButton:hover {
+  background: rgba(100, 150, 255, 0.25);
+  border-color: rgba(100, 150, 255, 0.5);
+  color: rgba(100, 150, 255, 1);
+}

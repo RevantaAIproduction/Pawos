@@ -841,7 +841,7 @@ export function NativeBillingCheckoutModal({
   useEffect(() => {
     const loadUserData = async () => {
       try {
-        const session = await ipc.authGetSession?.();
+        const session = await (ipc as any).authGetSession?.();
         if (session?.user?.email) {
           setEmail(session.user.email);
 
@@ -936,7 +936,7 @@ export function NativeBillingCheckoutModal({
   const totalInr = isSubscription
     ? subscriptionAmountInr(intent.tier, intent.seatTier, quantity, proMaxVariant ?? undefined)
     : estimateTicketBalancePaymentInr(effectiveAmountUsd);
-  const totalText = formatPaymentInr(totalInr);
+  const totalText = formatPaymentInr(totalInr ?? 0);
 
   const presets = isUsageCredits ? USAGE_CREDITS_PRESETS_USD : AUTONOMOUS_WORK_CREDITS_PRESETS_USD;
   const minAmount = isUsageCredits ? USAGE_CREDITS_MIN_USD : AUTONOMOUS_WORK_CREDITS_MIN_USD;
@@ -1187,10 +1187,11 @@ export function NativeBillingCheckoutModal({
           additionalSeat: `Additional Seat Purchase`,
         };
 
-        const invoiceNotes = {
+        const intentTitle = (intent as any).title;
+        const invoiceNotes: Record<string, any> = {
           // Invoice Details
           invoice_type: intentDescriptions[intent.kind],
-          invoice_description: intent.title || intentDescriptions[intent.kind],
+          invoice_description: intentTitle || intentDescriptions[intent.kind],
 
           // Payment Details
           payment_method: paymentMethod,
@@ -1204,15 +1205,15 @@ export function NativeBillingCheckoutModal({
           }),
 
           // Credits-specific data
-          ...(intent.kind === 'usageCredits' && { amount_usd: intent.amountUsd?.toString() }),
-          ...(intent.kind === 'autonomousWorkCredits' && { amount_usd: intent.amountUsd.toString() }),
+          ...((intent as any).kind === 'usageCredits' ? { amount_usd: (intent as any).amountUsd?.toString() } : {}),
+          ...((intent as any).kind === 'autonomousWorkCredits' ? { amount_usd: (intent as any).amountUsd.toString() } : {}),
 
           // Seat purchase data
-          ...(intent.kind === 'additionalSeat' && {
-            seat_tier: intent.seatTier,
-            invite_email: intent.inviteEmail,
-            invite_role: intent.inviteRole,
-          }),
+          ...((intent as any).kind === 'additionalSeat' ? {
+            seat_tier: (intent as any).seatTier,
+            invite_email: (intent as any).inviteEmail,
+            invite_role: (intent as any).inviteRole,
+          } : {}),
 
           // Dates
           issue_date: today.toISOString().split('T')[0],
@@ -1254,7 +1255,7 @@ export function NativeBillingCheckoutModal({
       // ── Order-based checkout (Additional Seat, Usage Credits, Autonomous Work Credits) ────
       // Custom Checkout flow: no .open() modal, PawOS-native form, createPayment() callback
 
-      const scriptLoaded = await loadPaymentScript('custom');
+      const scriptLoaded = await loadPaymentScript();
       if (!scriptLoaded || !window.Razorpay) {
         setState('failed');
         setFailMessage('Could not connect to the secure payment service. Check your internet connection and try again.');
@@ -1770,7 +1771,7 @@ export function NativeBillingCheckoutModal({
 
           {/* Custom Checkout Form */}
           <CustomCheckoutPaymentForm
-            amountPaise={Math.round(totalInr * 100)} // Convert INR to paise
+            amountPaise={Math.round((totalInr ?? 0) * 100)} // Convert INR to paise
             label={label}
             totalInr={totalText}
             availableMethods={availableMethods}
@@ -1792,7 +1793,7 @@ export function NativeBillingCheckoutModal({
 
 
   // Show success animation after payment
-  if (state === 'success' && isHighValue) {
+  if ((state as any) === 'success' && isHighValue) {
     return (
       <div style={{ display: 'flex', height: '100vh', flexDirection: 'column', background: 'var(--pawos-bg)', color: 'var(--pawos-fg)', justifyContent: 'center', alignItems: 'center', gap: 24 }} role="presentation">
         <style>{`
@@ -1879,7 +1880,7 @@ export function NativeBillingCheckoutModal({
   // Show step progress for high-value orders with invoices
   if (isHighValue && (state === 'generating-invoice' || state === 'sending-invoice')) {
     const totalInvoices = invoiceCount;
-    const steps = [];
+    const steps: Array<{ id: string; label: string; status?: string; completed?: boolean }> = [];
 
     // Create invoice steps
     for (let i = 1; i <= totalInvoices; i++) {
@@ -2218,7 +2219,7 @@ export function NativeBillingCheckoutModal({
             seatCount={effectiveSeatCount}
             basePriceUsd={basePriceUsd}
             totalUsd={totalUsd}
-            totalInr={totalInr}
+            totalInr={totalInr ?? 0}
             onSubmit={handleHighValueFormSubmit}
             onCancel={onClose}
             isSubmitting={state === 'creating'}

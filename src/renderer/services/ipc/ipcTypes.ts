@@ -1,3 +1,16 @@
+import type {
+  IntegrationConnection,
+  IntegrationStatusInfo,
+} from '../../../shared/workspace/IntegrationTypes';
+import type {
+  Meeting,
+  MeetingSummary,
+} from '../../../shared/workspace/MeetingTypes';
+import type {
+  BackgroundTask,
+  TaskLogEntry,
+} from '../../../shared/workspace/BackgroundTaskTypes';
+
 export type ThemeMode = 'dark' | 'light' | 'system';
 
 export type SettingsState = {

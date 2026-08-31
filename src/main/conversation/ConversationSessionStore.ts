@@ -120,9 +120,10 @@ class ConversationSessionStore {
    * session (if it still exists), 'new' always starts fresh, and 'auto'
    * (no decision made upstream) falls back to the still-warm-session
    * heuristic. Voice and text turns call this identically — the session
-   * doesn't know or care which input mode produced the turn.
+   * doesn't know or care which input mode produced the turn. Optional projectId
+   * associates the session with a project (org_projects.id).
    */
-  appendTurn(turn: ConversationSessionTurn, hint: SessionContinuationHint = { type: 'auto' }): ConversationSession {
+  appendTurn(turn: ConversationSessionTurn, hint: SessionContinuationHint = { type: 'auto' }, projectId?: string): ConversationSession {
     let session: ConversationSession | undefined;
     if (hint.type === 'continue') session = this.get(hint.sessionId);
     else if (hint.type === 'auto') session = this.findContinuableSession();
@@ -142,6 +143,7 @@ class ConversationSessionStore {
         turns: [turn],
         filesCreated: files,
         applicationsOpened: apps,
+        projectId,
       };
       this.sessions.push(session);
     } else {
@@ -149,6 +151,7 @@ class ConversationSessionStore {
       session.updatedAt = turn.endedAt ?? turn.startedAt;
       for (const f of files) if (!session.filesCreated.includes(f)) session.filesCreated.push(f);
       for (const a of apps) if (!session.applicationsOpened.includes(a)) session.applicationsOpened.push(a);
+      if (projectId) session.projectId = projectId;
     }
 
     this.save();

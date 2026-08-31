@@ -26,13 +26,14 @@ export type UsageCheckResult =
  */
 class UsageEngine {
   canConsume(capability: Exclude<UsageCapability, 'aiReasoning'>, amount = 1): UsageCheckResult {
-    const tier = entitlementService.getEntitlements().tier;
+    const entitlements = entitlementService.getEntitlements();
+    const tier = entitlements.tier;
     if (usageQuotaConfigStore.isPooled(tier)) {
       return { allowed: true, pooled: true, deferTo: 'organizationUsageService' };
     }
 
     const seatTier = entitlementService.getSeatTier();
-    const limit = usageQuotaConfigStore.getEffectiveQuota(tier, seatTier, capability);
+    const limit = usageQuotaConfigStore.getEffectiveQuota(tier, seatTier, capability, 'monthly');
     if (limit === null) return { allowed: true, pooled: false };
 
     const { usedThisPeriod } = usageStore.getUsage(capability);
@@ -51,7 +52,8 @@ class UsageEngine {
 
   /** One combined view across all 8 capabilities — merges CreditStore's real aiReasoning numbers with this engine's own 7 tracked capabilities, so a future usage dashboard has a single source to read instead of stitching two APIs together itself. */
   getUnifiedUsageSummary(): CapabilityUsageSummary[] {
-    const tier = entitlementService.getEntitlements().tier;
+    const entitlements = entitlementService.getEntitlements();
+    const tier = entitlements.tier;
     const seatTier = entitlementService.getSeatTier();
     const pooled = usageQuotaConfigStore.isPooled(tier);
 
@@ -67,7 +69,7 @@ class UsageEngine {
     })();
 
     const trackedSummaries: CapabilityUsageSummary[] = TRACKED_USAGE_CAPABILITIES.map((capability) => {
-      const limit = pooled ? usageQuotaConfigStore.getEffectiveQuota(tier, seatTier, capability) : usageQuotaConfigStore.getEffectiveQuota(tier, seatTier, capability);
+      const limit = usageQuotaConfigStore.getEffectiveQuota(tier, seatTier, capability, 'monthly');
       const { usedThisPeriod, periodResetsAt } = usageStore.getUsage(capability);
       // Pooled tiers' real `used` figure lives in Supabase (organization_usage_counters), not this
       // local store — reporting the local (always-zero-for-pooled-tiers-in-practice) counter here

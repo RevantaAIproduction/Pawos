@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events';
+import { v4 as uuidv4 } from 'uuid';
 import type { ActionRequest, ActionRequirement, ActionResult } from '../../shared/actions/ActionTypes';
 import { DESTRUCTIVE_ACTION_TYPES } from '../../shared/actions/ActionTypes';
 import { codingModeStore } from './CodingModeStore';
@@ -9,6 +10,7 @@ import { codingRuntimeSecurityRequirements, enforceCodingRuntimeSecurity } from 
 import { enforceCodingRuntimeUsage, type PooledCodingRuntimeUsageRecorder } from './CodingRuntimeUsageBoundary';
 import { authorizeRuntimeAction } from './RuntimeActionAuthorization';
 import { pendingApprovalStore, deriveApprovalKey } from '../infrastructure/PendingApprovalStore';
+import { recordApprovalRequest } from '../ipc/handlers/governanceHandler';
 import { requirementGate } from '../runtime/RequirementGate';
 import type { ExecutionTrail, ObservationEvent } from '../../shared/actions/ExecutionLifecycle';
 import { NOT_AUTO_RECOVERABLE, classifyFailure, recoveryNarrationFor, RECOVERY_SUCCESS_NARRATION } from '../../shared/execution/RecoveryNarration';
@@ -505,9 +507,11 @@ export class DesktopExecutionEngine extends EventEmitter {
     if (runtimeBlocked) return runtimeBlocked;
 
     if (DESTRUCTIVE_ACTION_TYPES.includes(request.type) && !('confirmed' in request && request.confirmed)) {
+      const approvalId = uuidv4();
       const approval = deriveApprovalKey(request);
       if (approval) pendingApprovalStore.record({ ...approval, requestedAt: Date.now() });
-      return { ok: false, reason: 'requires-confirmation' };
+      recordApprovalRequest(approvalId, request.type, { request });
+      return { ok: false, reason: 'requires-confirmation', approvalRequestId: approvalId };
     }
 
     const infraApproval = deriveApprovalKey(request);

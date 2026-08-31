@@ -105,8 +105,8 @@ export function AdminTestTierPanel() {
           if (result.ok) {
             setState((prev) => ({
               ...prev,
-              realTier: result.override?.realTier || null,
-              testTier: result.override?.testTier || null,
+              realTier: (result.override?.realTier as SubscriptionTierId) || null,
+              testTier: (result.override?.testTier as SubscriptionTierId) || null,
               appliedAt: result.override?.appliedAt || null,
               loading: false,
             }));
@@ -183,8 +183,8 @@ export function AdminTestTierPanel() {
 
       setState((prev) => ({
         ...prev,
-        realTier: result.override?.realTier || null,
-        testTier: result.override?.testTier || null,
+        realTier: (result.override?.realTier as SubscriptionTierId) || null,
+        testTier: (result.override?.testTier as SubscriptionTierId) || null,
         appliedAt: result.override?.appliedAt || null,
         loading: false,
       }));

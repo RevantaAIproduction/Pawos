@@ -97,6 +97,8 @@ export function useIpcBridge() {
 
       recordExecution: async (record: ExecutionRecord): Promise<void> => ipc.executionRecord(record),
       listExecutions: async (): Promise<ExecutionRecord[]> => ipc.executionList(),
+      executionSetSelected: async (executionId: string | null): Promise<{ ok: boolean }> => ipc.executionSetSelected(executionId),
+      executionGetSelected: async (): Promise<string | null> => ipc.executionGetSelected(),
       onExecutionUpdated: (cb: () => void) => ipc.onExecutionUpdated(cb),
       getBrowserCapabilities: async (): Promise<BrowserCapabilityReport[]> => ipc.browserGetCapabilities(),
 
@@ -112,6 +114,7 @@ export function useIpcBridge() {
       entitlementGetFeatureTierRequirements: async (): Promise<Partial<Record<FeatureId, SubscriptionTierId>>> =>
         ipc.entitlementGetFeatureTierRequirements(),
       billingGetSubscription: async (): Promise<SubscriptionState> => ipc.billingGetSubscription(),
+      billingGetGooglePlacesApiKey: async (): Promise<string> => ipc.billingGetGooglePlacesApiKey(),
       billingCanStartGeneration: async (pawModelId?: PawModelId): Promise<{ allowed: boolean; reason?: string; pooled?: boolean }> =>
         ipc.billingCanStartGeneration(pawModelId),
       billingConsumeCredit: async (amount: number, reason: string, category?: AiUsageCategory, pawModelId?: PawModelId): Promise<CreditBalance> =>
@@ -130,6 +133,17 @@ export function useIpcBridge() {
       ): Promise<NormalizedUsageRecord> => ipc.billingReportUsageEvent(usage, requestType, context),
       billingGetUsageEvents: async (limit?: number): Promise<NormalizedUsageRecord[]> => ipc.billingGetUsageEvents(limit),
       billingGrantComputeBonus: async (units: number): Promise<EntitlementSnapshot> => ipc.billingGrantComputeBonus(units),
+
+      governanceApprove: async (approvalId: string): Promise<{ ok: boolean; error?: string }> =>
+        ipc.governanceApprove(approvalId),
+      governanceDeny: async (approvalId: string): Promise<{ ok: boolean; error?: string }> =>
+        ipc.governanceDeny(approvalId),
+      governanceGetPending: async (): Promise<Array<{ approvalId: string; actionType: string; requestedAt: number }>> =>
+        ipc.governanceGetPending(),
+      onGovernanceApproved: (cb: (payload: { approvalId: string }) => void) =>
+        ipc.onGovernanceApproved(cb),
+      onGovernanceDenied: (cb: (payload: { approvalId: string }) => void) =>
+        ipc.onGovernanceDenied(cb),
     }),
     [ipc]
   );

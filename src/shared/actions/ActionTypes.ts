@@ -41,8 +41,10 @@ export type CodeEditHunk = {
  */
 /** `scope` is optional and additive — populated by the renderer from the signed-in session (same
  *  convention already used by every `connectivity:*` IPC call) only when a plugin actually needs
- *  it (via RequirementGate); every existing call site that never sets it is unaffected. */
-export type ActionRequest = { scope?: ConnectivityScope; codingRuntimeSession?: CodingRuntimeSession } & (
+ *  it (via RequirementGate); every existing call site that never sets it is unaffected.
+ *  `projectId` is optional — when present, constrains execution to that project (org_projects.id).
+ *  `approvalId` is optional — when destructive action requires approval, ties resume flow to this ID. */
+export type ActionRequest = { scope?: ConnectivityScope; codingRuntimeSession?: CodingRuntimeSession; projectId?: string; approvalId?: string } & (
   | { type: 'openUrl'; url: string }
   | { type: 'openApp'; appId: KnownAppId; path?: string }
   | { type: 'openFolder'; path: string }
@@ -775,6 +777,8 @@ export type ActionResult =
        *  confirmation prompt, unchanged. Present with kind: 'connectCapability' = render a
        *  connect action (RequirementGate's capability resolver) instead of a yes/no prompt. */
       confirmation?: { kind: 'yesNo' | 'connectCapability'; capabilities?: CapabilityConfirmation[] };
+      /** Approval ID for tracking this specific requires-confirmation request through the approval → resume flow. */
+      approvalRequestId?: string;
     };
 
 /**

@@ -83,11 +83,12 @@ class RollingUsageGate {
 
   getRollingUsage(tier: SubscriptionTierId, seatTier?: SeatTier, now = Date.now()): RollingUsageSummary {
     const capacity = pawComputeCapacityStore.resolve(tier, seatTier);
+
     return {
       usage5h:  this.sumInWindow(WINDOW_5H_MS, now),
       limit5h:  capacity.window5hPc,
       usage7d:  this.sumInWindow(WINDOW_7D_MS, now),
-      limit7d:  capacity.window7dPc,
+      limit7d:  capacity.windowWeeklyPc,
     };
   }
 
@@ -128,11 +129,11 @@ class RollingUsageGate {
       };
     }
 
-    if (capacity.window7dPc !== null && usage.usage7d >= capacity.window7dPc) {
+    if (capacity.windowWeeklyPc !== null && usage.usage7d >= capacity.windowWeeklyPc) {
       return {
         allowed: false,
         pooled: false,
-        reason: `Weekly Paw Compute limit reached (${usage.usage7d.toFixed(2)} / ${capacity.window7dPc} PC in the last 7 days)`,
+        reason: `Weekly Paw Compute limit reached (${usage.usage7d.toFixed(2)} / ${capacity.windowWeeklyPc} PC in the last 7 days)`,
         usage,
       };
     }

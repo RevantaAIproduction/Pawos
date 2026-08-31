@@ -87,8 +87,6 @@ process.on("unhandledRejection", reason => console.error("[PAWOS ERROR] unhandle
 // the user actually perceives happens entirely via CSS on content inside
 // this unchanging canvas (app.module.css), never via setBounds(). Still
 // primary-display-only — multi-monitor targeting is a future concern.
-const OVERLAY_W = 820;
-const OVERLAY_H = 520;
 const MAIN_W = 1280;
 const MAIN_H = 820;
 
@@ -192,9 +190,13 @@ function attachDiagnostics(win: BrowserWindow, label: string) {
 
 function getOverlayBoundsCentered() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
-  const x = Math.round((width - OVERLAY_W) / 2);
-  const y = Math.round((height - OVERLAY_H) / 2);
-  return { x, y, width: OVERLAY_W, height: OVERLAY_H };
+  // Window size: 75% width × full height, centered horizontally
+  const windowWidth = Math.round(width * 0.75);
+  const windowHeight = height;
+  const x = Math.round((width - windowWidth) / 2);
+  const y = 0;
+  console.error('[OVERLAY] Creating window at:', { x, y, width: windowWidth, height: windowHeight });
+  return { x, y, width: windowWidth, height: windowHeight };
 }
 
 /**
@@ -252,7 +254,7 @@ function createMainWindow() {
     console.error("[PAWOS WINDOW] did-fail-load", errorCode, errorDescription);
   });
 
-  mainWindow.webContents.on('crashed', () => {
+  mainWindow.webContents.on('render-process-gone', () => {
     console.error("[PAWOS WINDOW] renderer crashed");
   });
 
@@ -270,7 +272,7 @@ function createOverlayWindow() {
     transparent: true,
     alwaysOnTop: true,
     skipTaskbar: true,
-    resizable: false,
+    resizable: true,
     focusable: true,
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),

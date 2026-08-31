@@ -6,8 +6,8 @@ import type { SeatTier, SubscriptionTierId } from '../../shared/billing/BillingT
 export type TierRollingCapacity = {
   /** Max Paw Compute allowed in any rolling 5-hour window. null = no 5-hour cap. */
   window5hPc: number | null;
-  /** Max Paw Compute allowed in any rolling 7-day window. null = no 7-day cap. */
-  window7dPc: number | null;
+  /** Max Paw Compute allowed in any rolling week (7-day window). null = no weekly cap. */
+  windowWeeklyPc: number | null;
   /** True only for Enterprise — enforcement deferred to the organization pool in Supabase. */
   pooled: boolean;
 };
@@ -41,12 +41,12 @@ const FILE_NAME = 'paw-compute-capacity.json';
 function defaultConfig(): RollingCapacityConfig {
   return {
     tiers: {
-      go:          { window5hPc: 132,   window7dPc: 528,    pooled: false },
-      pro:         { window5hPc: 400,   window7dPc: 1_600,  pooled: false },
-      proMax:      { window5hPc: 2_000, window7dPc: 8_000,  pooled: false },
-      team:        { window5hPc: 800,   window7dPc: 3_200,  pooled: false },
-      teamPremium: { window5hPc: 2_000, window7dPc: 8_000,  pooled: false },
-      enterprise:  { window5hPc: 4_000, window7dPc: 16_000, pooled: true  },
+      go:          { window5hPc: 10,    windowWeeklyPc: 50,     pooled: false },
+      pro:         { window5hPc: 200,   windowWeeklyPc: 500,    pooled: false },
+      proMax:      { window5hPc: 2_000, windowWeeklyPc: 10_000, pooled: false }, // 20x variant; 5x uses 1000/2500
+      team:        { window5hPc: 200,   windowWeeklyPc: 500,    pooled: false },
+      teamPremium: { window5hPc: 625,   windowWeeklyPc: 2_500,  pooled: false }, // Same as Pro Max 5x
+      enterprise:  { window5hPc: 4_000, windowWeeklyPc: 16_000, pooled: true  },
     },
   };
 }
@@ -83,7 +83,7 @@ class PawComputeCapacityStore {
     return (
       this.config.tiers[key] ??
       defaultConfig().tiers[key as CapacityTierKey] ??
-      { window5hPc: null, window7dPc: null, pooled: false }
+      { window5hPc: null, windowWeeklyPc: null, pooled: false }
     );
   }
 

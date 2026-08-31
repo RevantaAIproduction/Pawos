@@ -164,11 +164,11 @@ export function SubscriptionSection({
                 </p>
                 <p className={styles.cardBody} style={{ marginTop: 4 }}>
                   <strong>Last 7 days:</strong>{' '}
-                  {entitlement.usage7dPc.toFixed(2)} PC used
-                  {entitlement.limit7dPc !== null ? ` / ${entitlement.limit7dPc} PC` : ' — no cap'}
-                  {entitlement.limit7dPc !== null && (
+                  {entitlement.usageWeeklyPc.toFixed(2)} PC used
+                  {entitlement.limitWeeklyPc !== null ? ` / ${entitlement.limitWeeklyPc} PC` : ' — no cap'}
+                  {entitlement.limitWeeklyPc !== null && (
                     <span style={{ marginLeft: 6, opacity: 0.7 }}>
-                      ({Math.max(0, entitlement.limit7dPc - entitlement.usage7dPc).toFixed(2)} remaining)
+                      ({Math.max(0, entitlement.limitWeeklyPc - entitlement.usageWeeklyPc).toFixed(2)} remaining)
                     </span>
                   )}
                 </p>

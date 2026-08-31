@@ -194,15 +194,19 @@ class SubscriptionStore {
   }
 
   /** Called only from CheckoutSyncServer's verified local callback after a real Razorpay payment completed — the one path where status legitimately becomes 'active'. */
-  confirmPurchase(tier: SubscriptionTierId, options: { runtimeIds?: RuntimeEntitlementId[]; orderId?: string; proMaxVariant?: string } = {}): SubscriptionState {
+  confirmPurchase(tier: SubscriptionTierId, options: { runtimeIds?: RuntimeEntitlementId[]; orderId?: string; proMaxVariant?: string; proBillingFrequency?: 'monthly' | 'yearly' } = {}): SubscriptionState {
+    // Pro yearly renews in 365 days; everything else in 30 days
+    const renewDays = tier === 'pro' && options.proBillingFrequency === 'yearly' ? 365 : 30;
+
     this.state = {
       ...this.state,
       tier,
       status: 'active',
       accountId: this.state.accountId,
-      renewsAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+      renewsAt: Date.now() + renewDays * 24 * 60 * 60 * 1000,
       runtimeEntitlementPolicyVersion: RUNTIME_ENTITLEMENT_POLICY_VERSION,
       ...(tier === 'proMax' && options.proMaxVariant ? { proMaxVariant: options.proMaxVariant as import('../../shared/billing/BillingTypes').ProMaxVariant } : {}),
+      ...(tier === 'pro' && options.proBillingFrequency ? { proBillingFrequency: options.proBillingFrequency } : {}),
     };
     if (options.runtimeIds?.length) {
       this.state = {

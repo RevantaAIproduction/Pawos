@@ -686,7 +686,7 @@ export function CompanionCard({
               </div>
               <div style={{ fontSize: 10, fontWeight: 600, color: 'rgba(var(--pawos-overlay-rgb), 0.6)', marginBottom: 8, marginTop: 8 }}>7-Day Limit</div>
               <div style={{ fontSize: 11, color: 'rgba(var(--pawos-overlay-rgb), 0.8)' }}>
-                {entitlement?.usage7dPc ?? 0} / {entitlement?.limit7dPc ?? 0} PC ({Math.round(((entitlement?.usage7dPc ?? 0) / (entitlement?.limit7dPc ?? 1)) * 100)}%)
+                {entitlement?.usageWeeklyPc ?? 0} / {entitlement?.limitWeeklyPc ?? 0} PC ({Math.round(((entitlement?.usageWeeklyPc ?? 0) / (entitlement?.limitWeeklyPc ?? 1)) * 100)}%)
               </div>
             </div>
           )}

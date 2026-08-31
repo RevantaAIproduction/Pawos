@@ -42,13 +42,13 @@ function flatQuota(limit: number | null): Record<Exclude<UsageCapability, 'aiRea
 function defaultConfig(): UsageQuotaConfig {
   return {
     tiers: {
-      go: { tier: 'go', perUserQuotas: { ...flatQuota(0), aiReasoning: { monthlyLimit: 20, weeklyLimit: null } }, pooled: false },
+      go: { tier: 'go', perUserQuotas: { ...flatQuota(0), aiReasoning: { monthlyLimit: 200, weeklyLimit: 50 } }, pooled: false },
       pro: {
         tier: 'pro',
         perUserQuotas: {
           // Weekly cap alongside the existing monthly one — both enforced independently, whichever
-          // binds first blocks further usage. 1,000/week is real, user-specified (not a placeholder).
-          aiReasoning: { monthlyLimit: 2000, weeklyLimit: 1000 },
+          // binds first blocks further usage. 500/week is real, user-specified (not a placeholder).
+          aiReasoning: { monthlyLimit: 2000, weeklyLimit: 500 },
           repositoryAnalysis: { monthlyLimit: 200, weeklyLimit: null },
           websiteAnalysis: { monthlyLimit: 200, weeklyLimit: null },
           codeExecution: { monthlyLimit: 500, weeklyLimit: null },
@@ -71,28 +71,28 @@ function defaultConfig(): UsageQuotaConfig {
       team: {
         tier: 'team',
         perUserQuotas: {
-          aiReasoning: { monthlyLimit: 1500, weeklyLimit: null },
-          repositoryAnalysis: { monthlyLimit: 150, weeklyLimit: null },
-          websiteAnalysis: { monthlyLimit: 150, weeklyLimit: null },
-          codeExecution: { monthlyLimit: 400, weeklyLimit: null },
-          browserAutomation: { monthlyLimit: 250, weeklyLimit: null },
-          desktopAutomation: { monthlyLimit: 250, weeklyLimit: null },
-          longRunningWorkflow: { monthlyLimit: 40, weeklyLimit: null },
-          autonomousExecution: { monthlyLimit: 15, weeklyLimit: null },
+          aiReasoning: { monthlyLimit: 2000, weeklyLimit: 500 },
+          repositoryAnalysis: { monthlyLimit: 2000, weeklyLimit: null },
+          websiteAnalysis: { monthlyLimit: 2000, weeklyLimit: null },
+          codeExecution: { monthlyLimit: 2000, weeklyLimit: null },
+          browserAutomation: { monthlyLimit: 2000, weeklyLimit: null },
+          desktopAutomation: { monthlyLimit: 2000, weeklyLimit: null },
+          longRunningWorkflow: { monthlyLimit: 2000, weeklyLimit: null },
+          autonomousExecution: { monthlyLimit: 2000, weeklyLimit: null },
         },
         pooled: false,
       },
       teamPremium: {
         tier: 'teamPremium',
         perUserQuotas: {
-          aiReasoning: { monthlyLimit: 3000, weeklyLimit: null },
-          repositoryAnalysis: { monthlyLimit: 300, weeklyLimit: null },
-          websiteAnalysis: { monthlyLimit: 300, weeklyLimit: null },
-          codeExecution: { monthlyLimit: 800, weeklyLimit: null },
-          browserAutomation: { monthlyLimit: 500, weeklyLimit: null },
-          desktopAutomation: { monthlyLimit: 500, weeklyLimit: null },
-          longRunningWorkflow: { monthlyLimit: 80, weeklyLimit: null },
-          autonomousExecution: { monthlyLimit: 30, weeklyLimit: null },
+          aiReasoning: { monthlyLimit: 10000, weeklyLimit: 2500 },
+          repositoryAnalysis: { monthlyLimit: 10000, weeklyLimit: null },
+          websiteAnalysis: { monthlyLimit: 10000, weeklyLimit: null },
+          codeExecution: { monthlyLimit: 10000, weeklyLimit: null },
+          browserAutomation: { monthlyLimit: 10000, weeklyLimit: null },
+          desktopAutomation: { monthlyLimit: 10000, weeklyLimit: null },
+          longRunningWorkflow: { monthlyLimit: 10000, weeklyLimit: null },
+          autonomousExecution: { monthlyLimit: 10000, weeklyLimit: null },
         },
         pooled: false,
       },
@@ -191,7 +191,8 @@ class UsageQuotaConfigStore {
     tier: SubscriptionTierId,
     seatTier: SeatTier | undefined,
     capability: UsageCapability,
-    cadence: 'monthly' | 'weekly' = 'monthly'
+    cadence: 'monthly' | 'weekly' = 'monthly',
+    proMaxVariant?: '5x' | '20x'
   ): number | null {
     const key = resolveQuotaTierKey(tier, seatTier);
     const tierConfig = this.config.tiers[key];
@@ -201,7 +202,15 @@ class UsageQuotaConfigStore {
       const baseQuota = baseTierConfig?.perUserQuotas[capability];
       const baseLimit = cadence === 'weekly' ? (baseQuota?.weeklyLimit ?? null) : (baseQuota?.monthlyLimit ?? null);
       if (baseLimit === null) return null;
-      const multiplier = cadence === 'weekly' ? (tierConfig.derivedFrom.weeklyMultiplier ?? tierConfig.derivedFrom.multiplier) : tierConfig.derivedFrom.multiplier;
+
+      // For Pro Max, apply 5x or 20x multiplier based on variant
+      let multiplier = tierConfig.derivedFrom.multiplier;
+      if (tier === 'proMax' && proMaxVariant === '5x') {
+        multiplier = cadence === 'weekly' ? 2.5 : 5; // 5x for monthly, 2.5x for weekly (half of 5x weekly multiplier would be ~2.5)
+      } else if (cadence === 'weekly') {
+        multiplier = tierConfig.derivedFrom.weeklyMultiplier ?? tierConfig.derivedFrom.multiplier;
+      }
+
       return baseLimit * multiplier;
     }
     const quota = tierConfig.perUserQuotas[capability];

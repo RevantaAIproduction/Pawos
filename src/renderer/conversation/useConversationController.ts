@@ -39,6 +39,8 @@ export function useConversationController(args?: {
     speechPlaybackState: 'off',
     pendingConfirmation: false,
   });
+  const [streamingPawCompute, setStreamingPawCompute] = useState(0);
+  const [streamingElapsedSeconds, setStreamingElapsedSeconds] = useState(0);
 
   const runtimeRef = useRef<ConversationRuntime | null>(null);
   // The just-completed turn's real, aggregate Gemini usage — set synchronously by
@@ -291,6 +293,10 @@ export function useConversationController(args?: {
       onTurnUsage: (submission) => {
         lastTurnUsageRef.current = submission;
       },
+      onStreamingUsage: (pawCompute, elapsedSeconds) => {
+        setStreamingPawCompute(pawCompute);
+        setStreamingElapsedSeconds(elapsedSeconds);
+      },
       onStateChange: (state) => {
         onStateChangeRef.current?.(state);
         if (state === 'completed' && !entitlementRef.current?.pooled) {
@@ -322,6 +328,8 @@ export function useConversationController(args?: {
       onProcessExit: (cb) => ipc.onProcessExit(cb),
       onWorkspaceObservation: (cb) => ipc.onWorkspaceObservation(cb),
       onCommunicationEvent: (cb) => ipc.onCommunicationEvent(cb),
+      onGovernanceApproved: (cb) => ipc.onGovernanceApproved(cb),
+      onGovernanceDenied: (cb) => ipc.onGovernanceDenied(cb),
       onVisemeFrame: (frame) => onVisemeFrameRef.current?.(frame),
       persistTurn: (turn, hint) => ipc.appendSessionTurn(turn, hint),
       persistExecution: (record) => ipc.recordExecution(record),
@@ -388,6 +396,25 @@ export function useConversationController(args?: {
   const lastInputSourceRef = useRef<SubmittedInputContext['source']>(undefined);
   const submitTranscript = useCallback(
     (text: string, context?: SubmittedInputContext) => {
+      // Large prompt handling: if text has >700 lines, create a temporary attachment
+      let finalContext = context;
+      const lines = text.split('\n');
+      if (lines.length > 700) {
+        // Extract filename from first non-empty line
+        const firstNonEmptyLine = lines.find(line => line.trim()) || '';
+        const filename = firstNonEmptyLine.trim().slice(0, 100) || 'untitled_prompt.txt';
+
+        finalContext = {
+          ...context,
+          source: 'largePrompt',
+          largePromptAttachment: {
+            filename,
+            content: text,
+            lineCount: lines.length,
+          },
+        };
+      }
+
       const current = entitlementRef.current;
       if (current && current.models.length === 0) {
         setCreditsNoticeTier(current.tier);
@@ -414,15 +441,15 @@ export function useConversationController(args?: {
         if (!organizationId) {
           // Org membership hasn't resolved yet this session — fail open rather than block a
           // legitimate Enterprise user on a transient startup race.
-          lastInputSourceRef.current = context?.source;
-          runtimeRef.current?.submitTranscript(text, context);
+          lastInputSourceRef.current = finalContext?.source;
+          runtimeRef.current?.submitTranscript(text, finalContext);
           return;
         }
         organizationUsageService
           .recordUsage(organizationId, 'aiReasoning', 1)
           .then(() => {
-            lastInputSourceRef.current = context?.source;
-            runtimeRef.current?.submitTranscript(text, context);
+            lastInputSourceRef.current = finalContext?.source;
+            runtimeRef.current?.submitTranscript(text, finalContext);
           })
           .catch(() => {
             setCreditsNoticeTier(current.tier);
@@ -443,8 +470,8 @@ export function useConversationController(args?: {
             setCreditsNoticeTier(entitlementRef.current?.tier ?? 'go');
             return;
           }
-          lastInputSourceRef.current = context?.source;
-          runtimeRef.current?.submitTranscript(text, context);
+          lastInputSourceRef.current = finalContext?.source;
+          runtimeRef.current?.submitTranscript(text, finalContext);
         })
         .catch(() => {
           // IPC failure — fail closed: do not start generation through an unverified gate.
@@ -527,5 +554,7 @@ export function useConversationController(args?: {
     activePawModel,
     modelTierRequirements,
     selectModel,
+    streamingPawCompute,
+    streamingElapsedSeconds,
   };
 }
