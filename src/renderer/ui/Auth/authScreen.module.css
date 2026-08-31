@@ -255,6 +255,21 @@
   color: #a89bff;
 }
 
+.termsLink {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #a89bff;
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: inherit;
+  font-family: inherit;
+}
+
+.termsLink:hover {
+  color: #cfc6ff;
+}
+
 .linkButton {
   background: none;
   border: none;

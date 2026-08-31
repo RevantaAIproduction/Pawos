@@ -18,7 +18,21 @@ export const ENTITY_NAME = "Revanta AI";
 export const ENTITY_DESCRIPTOR =
   "Revanta AI, a business registered under India's Udyam (Micro, Small & Medium Enterprises) registration scheme, based in Hyderabad, Telangana, India";
 
-export const LAST_UPDATED = "28 July 2026";
+export const LAST_UPDATED = "31 August 2026";
+
+/**
+ * Legal document version identifiers. These are incremented whenever a document's
+ * terms materially change and users need to re-accept. Non-material updates
+ * (formatting, corrections) should not increment the version.
+ *
+ * Format: "YYYY-MM-DD" (ISO 8601 date when the version became required)
+ */
+export const LEGAL_DOCUMENT_VERSIONS = {
+  "terms": "2026-08-31",
+  "privacy-policy": "2026-08-31",
+} as const;
+
+export type LegalDocumentSlug = keyof typeof LEGAL_DOCUMENT_VERSIONS;
 
 export const DEFINITIONS_SECTION = {
   heading: "Definitions",

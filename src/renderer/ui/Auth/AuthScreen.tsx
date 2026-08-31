@@ -77,6 +77,7 @@ export function AuthScreen({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -163,11 +164,11 @@ export function AuthScreen({
         return;
       }
       if (password !== confirmPassword) {
-        setError('Passwords don’t match.');
+        setError(‘Passwords don’t match.’);
         return;
       }
-      if (!agreedToTerms) {
-        setError('Please agree to the Terms of Service and Privacy Policy.');
+      if (!agreedToTerms || !agreedToPrivacy) {
+        setError(‘Please accept both the Terms of Service and Privacy Policy.’);
         return;
       }
       void requestVerificationCode();
@@ -595,19 +596,40 @@ export function AuthScreen({
                     </button>
                   </div>
                 ) : (
-                  <label className={styles.checkboxLabel}>
-                    <Toggle size="sm" checked={agreedToTerms} onChange={setAgreedToTerms} />
-                    <span>
-                      I agree to the <span className={styles.termsAccent}>Terms of Service</span> and{' '}
-                      <span className={styles.termsAccent}>Privacy Policy</span>
-                    </span>
-                  </label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <label className={styles.checkboxLabel}>
+                      <Toggle size="sm" checked={agreedToTerms} onChange={setAgreedToTerms} />
+                      <span>
+                        I agree to the{' '}
+                        <button
+                          type="button"
+                          style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}
+                          onClick={() => window.open('https://pawos.revantaai.com/terms', '_blank')}
+                        >
+                          Terms of Service
+                        </button>
+                      </span>
+                    </label>
+                    <label className={styles.checkboxLabel}>
+                      <Toggle size="sm" checked={agreedToPrivacy} onChange={setAgreedToPrivacy} />
+                      <span>
+                        I acknowledge the{' '}
+                        <button
+                          type="button"
+                          style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}
+                          onClick={() => window.open('https://pawos.revantaai.com/privacy', '_blank')}
+                        >
+                          Privacy Policy
+                        </button>
+                      </span>
+                    </label>
+                  </div>
                 )}
                 {resetDone && (
                   <p className={styles.hint}>Your password was reset — sign in with your new password.</p>
                 )}
 
-                <button type="submit" className={styles.primaryButton} disabled={busy}>
+                <button type="submit" className={styles.primaryButton} disabled={busy || (mode === 'create' && (!agreedToTerms || !agreedToPrivacy))}>
                   {pending === 'email' ? 'Please wait…' : mode === 'create' ? 'Send Verification Code' : 'Sign In'}
                   {!busy && <ArrowRightIcon />}
                 </button>
