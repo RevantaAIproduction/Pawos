@@ -1228,7 +1228,7 @@ export function NativeBillingCheckoutModal({
         // Build payment request for Custom Checkout
         const paymentData: Record<string, unknown> = {
           order_id: checkout.orderId,
-          amount: checkout.amountPaise,
+          amount: checkout.amountInr,
           currency: checkout.currency,
           method: paymentMethod,
           description: intentDescriptions[intent.kind],
@@ -1425,7 +1425,7 @@ export function NativeBillingCheckoutModal({
       // Build the payment request for Custom Checkout
       const paymentData: Record<string, unknown> = {
         order_id: checkout.orderId,
-        amount: checkout.amountPaise,
+        amount: checkout.amountInr,
         currency: checkout.currency,
         method: paymentMethod,
         email: userEmail,
