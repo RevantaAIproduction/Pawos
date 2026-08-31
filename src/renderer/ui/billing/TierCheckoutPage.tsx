@@ -335,7 +335,7 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
 
       const paymentPayload = {
         order_id: checkout.orderId,
-        amount: checkout.amountInr,
+        amount: checkout.amountPaise,
         currency: 'INR',
         method: 'card',
         description: tierDescriptions[tier],
