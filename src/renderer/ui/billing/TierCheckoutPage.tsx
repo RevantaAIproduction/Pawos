@@ -194,9 +194,9 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
   }, []);
 
   const handlePay = async () => {
-    // Validate all mandatory billing fields
-    if (!fullName.trim() || !address1.trim() || !city.trim() || !pin.trim() || !billingState.trim() || !country.trim()) {
-      setErrorMessage('Please fill in all required billing fields (Name, Email, Phone, Country, Address).');
+    // Validate minimum required billing fields
+    if (!fullName.trim() || !country.trim()) {
+      setErrorMessage('Please fill in Name and Country.');
       return;
     }
 

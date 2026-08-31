@@ -164,11 +164,11 @@ export function AuthScreen({
         return;
       }
       if (password !== confirmPassword) {
-        setError(‘Passwords don’t match.’);
+        setError("Passwords don’t match.");
         return;
       }
       if (!agreedToTerms || !agreedToPrivacy) {
-        setError(‘Please accept both the Terms of Service and Privacy Policy.’);
+        setError("Please accept both the Terms of Service and Privacy Policy.");
         return;
       }
       void requestVerificationCode();

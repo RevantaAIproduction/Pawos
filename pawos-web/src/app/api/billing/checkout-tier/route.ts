@@ -159,7 +159,7 @@ export async function POST(request: Request) {
     body: JSON.stringify({
       amount: amountPaise,
       currency: "INR",
-      receipt: `tier-${tier}-${userId}-${Date.now()}`,
+      receipt: `tier-${tier}-${userId.slice(-8)}-${Date.now().toString().slice(-8)}`,
       notes: {
         productType: "tier_purchase",
         tier,
