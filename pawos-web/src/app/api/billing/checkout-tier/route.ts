@@ -128,27 +128,28 @@ export async function POST(request: Request) {
     );
   }
 
-  // ---- Calculate order amount in paise ----
-  let amountPaise: number | null = null;
+  // ---- Calculate order amount in INR rupees ----
+  let amountInr: number | null = null;
   if (tier === "pro") {
     const frequency = proBillingFrequency === "yearly" ? "yearly" : "monthly";
-    amountPaise = TIER_PRICING_PAISE.pro[frequency as keyof typeof TIER_PRICING_PAISE.pro] ?? null;
+    const paise = TIER_PRICING_PAISE.pro[frequency as keyof typeof TIER_PRICING_PAISE.pro];
+    amountInr = paise ? paise / 100 : null;
   } else if (tier === "proMax" && proMaxVariant) {
-    amountPaise = TIER_PRICING_PAISE.proMax[proMaxVariant] ?? null;
+    const paise = TIER_PRICING_PAISE.proMax[proMaxVariant] ?? null;
+    amountInr = paise ? paise / 100 : null;
   } else if (tier === "team" && seatTier && seatCount) {
     const basePaise = TIER_PRICING_PAISE.team[seatTier] ?? null;
-    amountPaise = basePaise ? basePaise * seatCount : null;
+    amountInr = basePaise ? (basePaise / 100) * seatCount : null;
   } else if (tier === "enterprise" && seatCount) {
     const basePaise = TIER_PRICING_PAISE.enterprise.base;
-    amountPaise = basePaise * seatCount;
+    amountInr = (basePaise / 100) * seatCount;
   }
 
-  if (!amountPaise || amountPaise <= 0) {
+  if (!amountInr || amountInr <= 0) {
     return NextResponse.json({ ok: false, reason: "Could not calculate order amount. Business Configuration Required." }, { status: 503 });
   }
 
   // Calculate amounts in different units for response
-  const amountInr = amountPaise / 100;
   const amountUsd = amountInr / 95.65; // Standard conversion rate (same as ticket balance)
   const usdInrRate = 95.65;
 
@@ -160,7 +161,7 @@ export async function POST(request: Request) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      amount: amountPaise,
+      amount: amountInr,
       currency: "INR",
       receipt: `tier-${tier}-${userId.slice(-8)}-${Date.now().toString().slice(-8)}`,
       notes: {
@@ -190,7 +191,6 @@ export async function POST(request: Request) {
     keyId: credentials.keyId,
     amountUsd: Math.round(amountUsd * 100) / 100, // Round to 2 decimals
     amountInr: Math.round(amountInr * 100) / 100,
-    amountPaise,
     usdInrRate,
     currency: "INR",
   });
