@@ -335,7 +335,7 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
 
       (razorpay as any).createPayment({
         order_id: checkout.orderId,
-        amount: checkout.amountPaise,
+        amount: checkout.amountInr,
         currency: 'INR',
         method: 'card',
         description: tierDescriptions[tier],
