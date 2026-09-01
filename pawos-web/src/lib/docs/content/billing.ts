@@ -98,7 +98,7 @@ export const billingPages: DocPage[] = [
     title: 'Payments',
     description: 'How PawOS processes payments.',
     blocks: [
-      { type: 'paragraph', text: 'Subscription and Autonomous Work Credit top-ups are processed through Razorpay. Checkout happens on PawOS's web backend, never inside the desktop app directly handling card details.' },
+      { type: 'paragraph', text: 'Subscription and Autonomous Work Credit top-ups are processed through Razorpay. Checkout happens on PawOS\'s web backend, never inside the desktop app directly handling card details.' },
     ],
     related: ['billing/subscriptions'],
   },

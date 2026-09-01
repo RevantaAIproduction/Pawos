@@ -133,7 +133,7 @@ export const referencePages: DocPage[] = [
     title: 'Connector Architecture',
     description: 'The ConnectorSDK interface every real integration implements.',
     blocks: [
-      { type: 'paragraph', text: 'Every connector implements one common ConnectorSDK interface (authenticate, connect, getStatus, validate) — OAuth token exchange happens on PawOS's backend, never inside the desktop client.' },
+      { type: 'paragraph', text: 'Every connector implements one common ConnectorSDK interface (authenticate, connect, getStatus, validate) — OAuth token exchange happens on PawOS\'s backend, never inside the desktop client.' },
     ],
     related: ['connectors/overview', 'security/connectors'],
   },
@@ -172,7 +172,7 @@ export const referencePages: DocPage[] = [
     title: 'Changelog',
     description: 'Where release notes live.',
     blocks: [
-      { type: 'paragraph', text: 'See the site's dedicated Changelog page for dated release notes. PawOS follows semantic versioning once public releases begin.' },
+      { type: 'paragraph', text: 'See the site\'s dedicated Changelog page for dated release notes. PawOS follows semantic versioning once public releases begin.' },
     ],
     related: ['reference/architecture'],
   },
