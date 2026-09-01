@@ -110,7 +110,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-2xl font-semibold">7. Children&apos;s Privacy</h2>
             <p className="text-neutral-300">
-              PawOS is not intended for children under 13. We do not knowingly collect personal information from children under 13. If we become aware that we have collected such information, we will take steps to delete it and terminate the child's account.
+              PawOS is not intended for children under 13. We do not knowingly collect personal information from children under 13. If we become aware that we have collected such information, we will take steps to delete it and terminate the child&apos;s account.
             </p>
           </section>
 

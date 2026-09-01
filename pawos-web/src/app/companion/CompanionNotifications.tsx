@@ -26,18 +26,24 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
  * attach a subscription to.
  */
 export function CompanionNotifications() {
-  const [status, setStatus] = useState<Status>("idle");
+  const [status, setStatus] = useState<Status>(() => {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      return "unsupported";
+    }
+    if (!window.localStorage.getItem("pawos_paired_device_id")) {
+      return "unpaired";
+    }
+    return "idle";
+  });
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
 
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-      if (isMounted) setStatus("unsupported");
       return;
     }
     if (!window.localStorage.getItem("pawos_paired_device_id")) {
-      if (isMounted) setStatus("unpaired");
       return;
     }
     navigator.serviceWorker.ready
