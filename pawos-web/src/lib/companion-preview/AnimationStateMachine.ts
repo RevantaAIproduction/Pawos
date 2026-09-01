@@ -23,7 +23,8 @@ export class AnimationStateMachine {
     private manager: AnimationManager,
     private defaultName: AnimationName
   ) {
-    this.manager.mixer.addEventListener('finished', this.handleAnimationFinished as unknown as EventListener);
+    // @ts-ignore THREE.js EventDispatcher type incompatibility
+    this.manager.mixer.addEventListener('finished', this.handleAnimationFinished);
   }
 
   getCurrent(): AnimationName | null {
@@ -67,7 +68,8 @@ export class AnimationStateMachine {
   }
 
   dispose() {
-    this.manager.mixer.removeEventListener('finished', this.handleAnimationFinished as unknown as EventListener);
+    // @ts-ignore THREE.js EventDispatcher type incompatibility
+    this.manager.mixer.removeEventListener('finished', this.handleAnimationFinished);
     this.listeners.clear();
   }
 
