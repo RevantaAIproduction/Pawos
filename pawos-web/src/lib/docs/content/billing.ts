@@ -41,7 +41,7 @@ export const billingPages: DocPage[] = [
     section: 'billing',
     slug: 'usage',
     title: 'Usage',
-    description: 'How PawOS reports what you've used this period.',
+    description: 'How PawOS reports what you\'ve used this period.',
     blocks: [
       { type: 'paragraph', text: 'Your account shows Paw Compute used in rolling windows, not a fixed monthly reset bucket. Normal conversation turns and tool continuations count; background/system usage and Fable are tracked separately from the rolling allowance.' },
       {
@@ -141,7 +141,7 @@ export const billingPages: DocPage[] = [
           'Team Premium: 2,000 PC per seat / 5h and 8,000 PC per seat / 7d.',
           'Enterprise: 4,000 PC per seat baseline / 5h and 16,000 PC per seat baseline / 7d, pooled/configurable.',
           'Everything else keeps working — hitting the limit is never a hard stop for the rest of the app.',
-          'You're offered three real options: upgrade your plan, buy additional Paw Compute directly, or draw down an existing Paw Credits balance if you have one.',
+          'You\'re offered three real options: upgrade your plan, buy additional Paw Compute directly, or draw down an existing Paw Credits balance if you have one.',
         ],
       },
     ],

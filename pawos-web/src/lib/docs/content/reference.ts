@@ -59,7 +59,7 @@ export const referencePages: DocPage[] = [
         text: 'Every renderer-to-main call goes through a typed, explicitly-defined IPC channel — a request shape in, a result shape out — registered once in the preload bridge and once in the main-process handler.',
       },
       { type: 'code', lang: 'ts', filename: 'example (illustrative)', code: `// renderer\nconst result = await window.pawos.executeAction({\n  type: 'installTool',\n  manager: 'winget',\n  packageId: 'Git.Git',\n  confirmed: true,\n});` },
-      { type: 'note', text: 'This is not a public, external API — it's an internal contract between two processes of the same application. See API Reference.' },
+      { type: 'note', text: 'This is not a public, external API — it\'s an internal contract between two processes of the same application. See API Reference.' },
     ],
     related: ['reference/main-preload-renderer', 'reference/api-reference'],
   },
