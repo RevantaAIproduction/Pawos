@@ -290,7 +290,7 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
 
       // Build intelligent invoice data based on tier type
       const today = new Date();
-      const expiryDate = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const invoiceExpiryDate = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
 
       const tierDescriptions: Record<SubscriptionTierId, string> = {
         go: 'Go Plan',
@@ -327,13 +327,13 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
 
         // Dates
         issue_date: today.toISOString().split('T')[0],
-        expiry_date: expiryDate.toISOString().split('T')[0],
+        expiry_date: invoiceExpiryDate.toISOString().split('T')[0],
 
         // Amount
         amount_inr: amountInr.toString(),
       };
 
-      const paymentPayload = {
+      const paymentPayload: any = {
         order_id: checkout.orderId,
         amount: checkout.amountPaise,
         currency: 'INR',
@@ -347,6 +347,17 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
         },
         notes: invoiceNotes,
       };
+
+      if (showCardForm && cardNumber && expiryDate && cvv) {
+        paymentPayload.card = {
+          number: cardNumber.replace(/\s/g, ''),
+          name: fullName || organizationName,
+          expiry_month: expiryDate.split('/')[0],
+          expiry_year: expiryDate.split('/')[1],
+          cvv: cvv,
+        };
+      }
+
       (razorpay as any).createPayment(paymentPayload);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Payment failed.');
@@ -735,8 +746,8 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
                       onClick={() => setSelectedCardId(card.id)}
                       style={{
                         width: '100%',
-                        padding: '14px 16px',
-                        borderRadius: 12,
+                        padding: '12px 16px',
+                        borderRadius: 8,
                         border: selectedCardId === card.id ? '2px solid #3b82f6' : '1px solid rgba(var(--pawos-overlay-rgb), 0.2)',
                         background: selectedCardId === card.id ? 'rgba(59, 130, 246, 0.1)' : 'rgba(var(--pawos-overlay-rgb), 0.03)',
                         display: 'flex',
@@ -746,11 +757,27 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
                         cursor: 'pointer',
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div style={{ fontSize: 20 }}>💳</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{
+                          width: 36,
+                          height: 24,
+                          borderRadius: 4,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 10,
+                          fontWeight: 700,
+                          color: (card.brand || '').toLowerCase() === 'rupay' ? '#0066CC' : 'white',
+                          background: (card.brand || '').toLowerCase() === 'visa' ? '#1434CB' :
+                                      (card.brand || '').toLowerCase() === 'mastercard' ? '#EB001B' :
+                                      (card.brand || '').toLowerCase() === 'rupay' ? '#FFFFFF' :
+                                      '#0066CC',
+                          border: (card.brand || '').toLowerCase() === 'rupay' ? '1px solid #999999' : 'none',
+                        }}>
+                          {(card.brand || 'C').toUpperCase().slice(0, 1)}
+                        </div>
                         <div style={{ textAlign: 'left' }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--pawos-fg)' }}>{card.brand} •••• {card.last4}</div>
-                          <div style={{ fontSize: 11, color: 'var(--pawos-text-secondary)', marginTop: 2 }}>Expires {card.expiry}</div>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--pawos-fg)' }}>{card.brand || 'Card'} •••• {card.last4}</div>
                         </div>
                       </div>
                       <button
@@ -759,20 +786,12 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
                           e.stopPropagation();
                           setShowCardForm(true);
                         }}
-                        style={{ background: 'none', border: 'none', color: 'var(--pawos-fg)', cursor: 'pointer', fontSize: 18, padding: 0 }}
+                        style={{ background: 'none', border: 'none', color: 'var(--pawos-fg)', cursor: 'pointer', fontSize: 16, padding: 0, opacity: 0.6 }}
                       >
                         ✎
                       </button>
                     </button>
                   ))}
-
-                  <button
-                    type="button"
-                    onClick={() => setShowCardForm(true)}
-                    style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid rgba(var(--pawos-overlay-rgb), 0.2)', background: 'transparent', color: 'var(--pawos-fg)', fontSize: 12, fontWeight: 600, cursor: 'pointer', marginBottom: 16 }}
-                  >
-                    + Add new card
-                  </button>
                 </>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

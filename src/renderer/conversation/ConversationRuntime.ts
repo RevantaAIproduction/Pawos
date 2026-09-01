@@ -41,6 +41,7 @@ import {
 } from './SpeechPresentation';
 import type { TurnUsageSubmission, UsageRequestType } from '../../shared/billing/UsageMeteringTypes';
 import { createTaskProgressExtension, createFileChangeExtension, createPermissionExtension, updateExtension } from './extensions/ExtensionHelpers';
+import { approvalRequestService } from '../organization/ApprovalRequestService';
 
 const MAX_LOG_ENTRIES = 200;
 const MAX_TURN_RECORDS = 50;
@@ -792,9 +793,9 @@ export class ConversationRuntime {
 
   /**
    * Resume a pending action after user approval.
-   * Re-submits the action with confirmed=true, continuing execution.
+   * Persists approval decision to Supabase, then re-submits the action with confirmed=true.
    */
-  resumeFromApproval(approvalId: string): void {
+  async resumeFromApproval(approvalId: string): Promise<void> {
     if (!this.pendingApprovalAction || this.pendingApprovalAction.approvalId !== approvalId) {
       return;
     }
@@ -804,6 +805,22 @@ export class ConversationRuntime {
     // Clear pending confirmation state
     this.updateSnapshot({ pendingConfirmation: false });
 
+    // CRITICAL: Persist approval decision to Supabase before executing.
+    // This ensures Supabase state is authoritative and matches local decision.
+    try {
+      await approvalRequestService.decide(approvalId, 'approved');
+    } catch (error) {
+      // Fail-closed: if persistence fails, do NOT execute the protected action
+      this.log('approval-persist-failed', { approvalId, error: error instanceof Error ? error.message : 'Unknown error' });
+      const failureResult: ActionResult = {
+        ok: false,
+        reason: 'requires-confirmation',
+        message: 'Approval decision could not be recorded. Action blocked for safety.',
+      };
+      await this.recordAndMaybeContinueAfterTool(toolCall, request, failureResult, this.turnId, { ttsBuffer: '', finalResponse: '', assistantMessageId: null, startedAtMs: Date.now(), usages: [] });
+      return;
+    }
+
     // Re-execute with confirmed=true
     const confirmedRequest = { ...request, confirmed: true } as ActionRequest;
     const currentTurn = this.turnId;
@@ -812,15 +829,24 @@ export class ConversationRuntime {
 
   /**
    * Deny a pending approval, cancelling the action.
-   * Communicates denial back to reasoning model so it can respond.
+   * Persists denial to Supabase, then communicates denial back to reasoning model.
    */
-  denyApproval(approvalId: string): void {
+  async denyApproval(approvalId: string): Promise<void> {
     if (!this.pendingApprovalAction || this.pendingApprovalAction.approvalId !== approvalId) {
       return;
     }
     const { request, toolCall } = this.pendingApprovalAction;
     this.pendingApprovalAction = null;
     this.updateSnapshot({ pendingConfirmation: false });
+
+    // CRITICAL: Persist denial decision to Supabase.
+    // This ensures Supabase state is authoritative and matches local decision.
+    try {
+      await approvalRequestService.decide(approvalId, 'denied');
+    } catch (error) {
+      // Fail-closed: if persistence fails, still deny locally but log the error
+      this.log('denial-persist-failed', { approvalId, error: error instanceof Error ? error.message : 'Unknown error' });
+    }
 
     // Feed denial as tool result to reasoning model
     // This proves PawOS talked to the backend agent (reasoning model)
@@ -1563,6 +1589,38 @@ export class ConversationRuntime {
 
     if (currentTurn === this.turnId) this.updateSnapshot({ state: 'performingAction' });
     this.log('action-start', { type: request.type, confirmed: true });
+
+    // AUTHORIZATION GATE: If this action requires a persistent organization approval,
+    // verify that the approval is actually approved in Supabase BEFORE executing.
+    // This is the authoritative source of truth — local in-memory state is not sufficient.
+    const approvalId = (request as any).approvalRequestId;
+    if (approvalId) {
+      try {
+        const approvalStatus = await approvalRequestService.getApprovalStatus(approvalId);
+        if (approvalStatus.status !== 'approved') {
+          // Approval was not approved (still pending, denied, or missing)
+          this.log('action-authorization-failed', { approvalId, reason: `approval status is ${approvalStatus.status}` });
+          const failure: ActionResult = {
+            ok: false,
+            reason: 'requires-confirmation',
+            message: `Action requires approval. Current status: ${approvalStatus.status}`,
+          };
+          // Record the failed attempt and notify model
+          await this.recordAndMaybeContinueAfterTool(toolCall, request, failure, currentTurn, { ttsBuffer: '', finalResponse: '', assistantMessageId: null, startedAtMs: Date.now(), usages: [] });
+          return;
+        }
+      } catch (error) {
+        // Supabase query failed — fail closed. Do not execute without verified authorization.
+        this.log('action-authorization-error', { approvalId, error: error instanceof Error ? error.message : 'Unknown error' });
+        const failure: ActionResult = {
+          ok: false,
+          reason: 'requires-confirmation',
+          message: 'Could not verify approval status. Action blocked for safety.',
+        };
+        await this.recordAndMaybeContinueAfterTool(toolCall, request, failure, currentTurn, { ttsBuffer: '', finalResponse: '', assistantMessageId: null, startedAtMs: Date.now(), usages: [] });
+        return;
+      }
+    }
 
     // A fresh turn (started in handleTranscript's confirmation branch), so
     // it gets its own buffers — same shape as the initial runTurn's, and

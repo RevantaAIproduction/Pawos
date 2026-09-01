@@ -110,6 +110,8 @@ export const DOC_NAV: DocNavSection[] = [
     title: 'Billing & Usage',
     items: [
       { slug: 'plans', title: 'Plans' },
+      { slug: 'tier-comparison', title: 'Tier Comparison & Pricing' },
+      { slug: 'team-governance', title: 'Team Governance & Controls' },
       { slug: 'usage', title: 'Usage' },
       { slug: 'paw-compute', title: 'Paw Compute' },
       { slug: 'credits', title: 'Autonomous Work Credits' },

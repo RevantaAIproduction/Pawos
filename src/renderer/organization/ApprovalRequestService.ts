@@ -99,6 +99,22 @@ export const approvalRequestService = {
     if (error) throw error;
   },
 
+  /** Authoritative approval status — execution gate queries this before proceeding.
+   * This is the source of truth: Supabase persistent approval state, not local in-memory. */
+  async getApprovalStatus(requestId: string): Promise<{
+    status: 'pending' | 'approved' | 'denied';
+    decidedAt: string | null;
+  }> {
+    const supabase = await getSupabaseClient();
+    const { data, error } = await supabase
+      .from('organization_approval_requests')
+      .select('status, decided_at')
+      .eq('id', requestId)
+      .single<{ status: 'pending' | 'approved' | 'denied'; decided_at: string | null }>();
+    if (error) throw error;
+    return { status: data.status, decidedAt: data.decided_at };
+  },
+
   /** Live subscription over the whole org's approval-requests table —
    * same proven-reliable filter shape as RemoteAssistanceService's
    * subscribeToOpenRequests (organization_id=eq., event '*'), not the

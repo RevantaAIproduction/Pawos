@@ -1,5 +1,21 @@
 import { getSupabaseClient } from '../auth/supabaseClient';
-import type { WorkspaceTask, WorkspaceProjectMember } from '../../shared/organization/WorkspaceTaskTypes';
+import type { RealtimeChannel } from '@supabase/supabase-js';
+
+export type WorkspaceTask = {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  projectId: string | null;
+  title: string;
+  description: string | null;
+  status: 'todo' | 'in_progress' | 'blocked' | 'done' | 'cancelled';
+  progressPercent: number;
+  assignedTo: string | null;
+  dueAt: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+};
 
 type TaskRow = {
   id: string;
@@ -8,33 +24,13 @@ type TaskRow = {
   project_id: string | null;
   title: string;
   description: string | null;
-  status: WorkspaceTask['status'];
+  status: 'todo' | 'in_progress' | 'blocked' | 'done' | 'cancelled';
   progress_percent: number;
   assigned_to: string | null;
   due_at: string | null;
-  created_by: string | null;
+  created_by: string;
   created_at: string;
   updated_at: string;
-  task_type: WorkspaceTask['taskType'];
-  repository_id: string | null;
-  pr_number: number | null;
-  team_id?: string | null;
-  dependency_task_ids?: string[] | null;
-  required_runtime?: string | null;
-  allocation_mode?: 'manual' | 'pawos_assisted' | null;
-  assignment_reason?: string | null;
-  assigned_by?: string | null;
-  verification_requirements?: { id: string; description: string; required: boolean }[] | null;
-};
-
-type ProjectMemberRow = {
-  id: string;
-  project_id: string;
-  organization_id: string;
-  user_id: string;
-  role: string;
-  added_by: string | null;
-  created_at: string;
 };
 
 function toTask(row: TaskRow): WorkspaceTask {
@@ -52,186 +48,106 @@ function toTask(row: TaskRow): WorkspaceTask {
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    taskType: row.task_type,
-    repositoryId: row.repository_id,
-    prNumber: row.pr_number,
-    teamId: row.team_id ?? null,
-    dependencyTaskIds: row.dependency_task_ids ?? [],
-    requiredRuntime: row.required_runtime ?? null,
-    allocationMode: row.allocation_mode ?? 'manual',
-    assignmentReason: row.assignment_reason ?? null,
-    assignedBy: row.assigned_by ?? null,
-    verificationRequirements: row.verification_requirements ?? [],
   };
 }
 
-function toProjectMember(row: ProjectMemberRow): WorkspaceProjectMember {
-  return {
-    id: row.id,
-    projectId: row.project_id,
-    organizationId: row.organization_id,
-    userId: row.user_id,
-    role: row.role,
-    addedBy: row.added_by,
-    createdAt: row.created_at,
-  };
-}
-
-/**
- * Phase 2 — task lifecycle (status/progress) and project-level member
- * assignment. Direct-Supabase pattern. Org-wide visible; a task's
- * creator/assignee (or a tasks.manage holder) can update it; a project's
- * owner/creator (or a projects.manage holder) can assign members to it.
- */
 export const workspaceTaskService = {
-  async listTasks(workspaceId: string): Promise<WorkspaceTask[]> {
+  async listByOrganization(organizationId: string): Promise<WorkspaceTask[]> {
     const supabase = await getSupabaseClient();
     const { data, error } = await supabase
       .from('workspace_tasks')
-      .select('*')
-      .eq('workspace_id', workspaceId)
-      .order('created_at', { ascending: false })
-      .returns<TaskRow[]>();
-    if (error) throw error;
-    return (data ?? []).map(toTask);
-  },
-
-  /** Org-wide, across every workspace — feeds the Activity Dashboard. */
-  async listTasksForOrganization(organizationId: string): Promise<WorkspaceTask[]> {
-    const supabase = await getSupabaseClient();
-    const { data, error } = await supabase
-      .from('workspace_tasks')
-      .select('*')
+      .select()
       .eq('organization_id', organizationId)
-      .order('updated_at', { ascending: false })
-      .returns<TaskRow[]>();
+      .order('updated_at', { ascending: false });
     if (error) throw error;
-    return (data ?? []).map(toTask);
+    return (data as TaskRow[]).map(toTask);
   },
 
-  async createTask(
+  async create(
     organizationId: string,
     workspaceId: string,
+    projectId: string | null,
     title: string,
-    options: {
-      projectId?: string;
-      description?: string;
-      assignedTo?: string;
-      dueAt?: string;
-      taskType?: WorkspaceTask['taskType'];
-      repositoryId?: string;
-      prNumber?: number;
-      teamId?: string;
-      dependencyTaskIds?: string[];
-      requiredRuntime?: string;
-      allocationMode?: WorkspaceTask['allocationMode'];
-      assignmentReason?: string;
-      verificationRequirements?: NonNullable<WorkspaceTask['verificationRequirements']>;
-    } = {}
+    description: string | null = null,
   ): Promise<WorkspaceTask> {
     const supabase = await getSupabaseClient();
     const { data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id;
+    if (!userId) throw new Error('Not signed in');
+
     const { data, error } = await supabase
       .from('workspace_tasks')
       .insert({
         organization_id: organizationId,
         workspace_id: workspaceId,
-        project_id: options.projectId ?? null,
+        project_id: projectId,
         title,
-        description: options.description ?? null,
-        assigned_to: options.assignedTo ?? null,
-        due_at: options.dueAt ?? null,
-        created_by: userData.user?.id ?? null,
-        task_type: options.taskType ?? 'general',
-        repository_id: options.repositoryId ?? null,
-        pr_number: options.prNumber ?? null,
-        team_id: options.teamId ?? null,
-        dependency_task_ids: options.dependencyTaskIds ?? [],
-        required_runtime: options.requiredRuntime ?? null,
-        allocation_mode: options.allocationMode ?? 'manual',
-        assignment_reason: options.assignmentReason ?? null,
-        verification_requirements: options.verificationRequirements ?? [],
+        description,
+        created_by: userId,
       })
-      .select('*')
+      .select()
       .single<TaskRow>();
     if (error) throw error;
     return toTask(data);
   },
 
-  async setTaskStatus(taskId: string, status: WorkspaceTask['status']): Promise<void> {
-    const supabase = await getSupabaseClient();
-    const { error } = await supabase
-      .from('workspace_tasks')
-      .update({ status, updated_at: new Date().toISOString() })
-      .eq('id', taskId);
-    if (error) throw error;
-  },
-
-  async setTaskProgress(taskId: string, progressPercent: number): Promise<void> {
-    const supabase = await getSupabaseClient();
-    const { error } = await supabase
-      .from('workspace_tasks')
-      .update({ progress_percent: progressPercent, updated_at: new Date().toISOString() })
-      .eq('id', taskId);
-    if (error) throw error;
-  },
-
-  async assignTask(taskId: string, assignedTo: string | null): Promise<void> {
-    const supabase = await getSupabaseClient();
-    const { error } = await supabase
-      .from('workspace_tasks')
-      .update({ assigned_to: assignedTo, updated_at: new Date().toISOString() })
-      .eq('id', taskId);
-    if (error) throw error;
-  },
-
-  async assignTaskWithContext(taskId: string, assignedTo: string | null, assignedBy: string | null, allocationMode: WorkspaceTask['allocationMode'], assignmentReason?: string | null): Promise<void> {
-    const supabase = await getSupabaseClient();
-    const { error } = await supabase
-      .from('workspace_tasks')
-      .update({
-        assigned_to: assignedTo,
-        assigned_by: assignedBy,
-        allocation_mode: allocationMode ?? 'manual',
-        assignment_reason: assignmentReason ?? null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', taskId);
-    if (error) throw error;
-  },
-
-  async deleteTask(taskId: string): Promise<void> {
-    const supabase = await getSupabaseClient();
-    const { error } = await supabase.from('workspace_tasks').delete().eq('id', taskId);
-    if (error) throw error;
-  },
-
-  async listProjectMembers(projectId: string): Promise<WorkspaceProjectMember[]> {
+  async assign(taskId: string, assignedToUserId: string | null): Promise<WorkspaceTask> {
     const supabase = await getSupabaseClient();
     const { data, error } = await supabase
-      .from('workspace_project_members')
-      .select('*')
-      .eq('project_id', projectId)
-      .returns<ProjectMemberRow[]>();
+      .from('workspace_tasks')
+      .update({ assigned_to: assignedToUserId, updated_at: new Date().toISOString() })
+      .eq('id', taskId)
+      .select()
+      .single<TaskRow>();
     if (error) throw error;
-    return (data ?? []).map(toProjectMember);
+    return toTask(data);
   },
 
-  async addProjectMember(projectId: string, organizationId: string, userId: string, role = 'member'): Promise<WorkspaceProjectMember> {
+  async updateStatus(
+    taskId: string,
+    status: 'todo' | 'in_progress' | 'blocked' | 'done' | 'cancelled',
+    progressPercent?: number,
+  ): Promise<WorkspaceTask> {
     const supabase = await getSupabaseClient();
-    const { data: userData } = await supabase.auth.getUser();
+    const update: Record<string, unknown> = { status, updated_at: new Date().toISOString() };
+    if (progressPercent !== undefined) {
+      update.progress_percent = Math.min(100, Math.max(0, progressPercent));
+    }
+
     const { data, error } = await supabase
-      .from('workspace_project_members')
-      .insert({ project_id: projectId, organization_id: organizationId, user_id: userId, role, added_by: userData.user?.id ?? null })
-      .select('*')
-      .single<ProjectMemberRow>();
+      .from('workspace_tasks')
+      .update(update)
+      .eq('id', taskId)
+      .select()
+      .single<TaskRow>();
     if (error) throw error;
-    return toProjectMember(data);
+    return toTask(data);
   },
 
-  async removeProjectMember(memberRowId: string): Promise<void> {
-    const supabase = await getSupabaseClient();
-    const { error } = await supabase.from('workspace_project_members').delete().eq('id', memberRowId);
-    if (error) throw error;
+  subscribeToTasks(organizationId: string, onChange: () => void): () => void {
+    let channel: RealtimeChannel | null = null;
+    let cancelled = false;
+
+    getSupabaseClient().then((supabase) => {
+      if (cancelled) return;
+      channel = supabase
+        .channel(`tasks:${organizationId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'workspace_tasks',
+            filter: `organization_id=eq.${organizationId}`,
+          },
+          () => onChange(),
+        )
+        .subscribe();
+    });
+
+    return () => {
+      cancelled = true;
+      channel?.unsubscribe();
+    };
   },
 };

@@ -167,3 +167,131 @@ export async function projectMarkVerified(evt: IpcMainInvokeEvent, projectId: st
   if (updateError || !updated) throw new Error(`Failed to mark verified: ${updateError?.message}`);
   return toAttachment(updated as AttachmentRow);
 }
+
+// Workspace task management
+
+export type WorkspaceTask = {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  projectId: string | null;
+  title: string;
+  description: string | null;
+  status: 'todo' | 'in_progress' | 'blocked' | 'done' | 'cancelled';
+  progressPercent: number;
+  assignedTo: string | null;
+  dueAt: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type TaskRow = {
+  id: string;
+  organization_id: string;
+  workspace_id: string;
+  project_id: string | null;
+  title: string;
+  description: string | null;
+  status: 'todo' | 'in_progress' | 'blocked' | 'done' | 'cancelled';
+  progress_percent: number;
+  assigned_to: string | null;
+  due_at: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+function toTask(row: TaskRow): WorkspaceTask {
+  return {
+    id: row.id,
+    organizationId: row.organization_id,
+    workspaceId: row.workspace_id,
+    projectId: row.project_id,
+    title: row.title,
+    description: row.description,
+    status: row.status,
+    progressPercent: row.progress_percent,
+    assignedTo: row.assigned_to,
+    dueAt: row.due_at,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function taskListByOrganization(evt: IpcMainInvokeEvent, organizationId: string): Promise<WorkspaceTask[]> {
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from('workspace_tasks')
+    .select()
+    .eq('organization_id', organizationId)
+    .order('updated_at', { ascending: false });
+  if (error) throw new Error(`Failed to list tasks: ${error.message}`);
+  return (data as TaskRow[]).map(toTask);
+}
+
+export async function taskCreate(
+  evt: IpcMainInvokeEvent,
+  organizationId: string,
+  workspaceId: string,
+  projectId: string | null,
+  title: string,
+  description: string | null,
+): Promise<WorkspaceTask> {
+  const client = getSupabaseClient();
+  const user = await client.auth.getUser();
+  if (!user.data.user) throw new Error('Not authenticated');
+
+  const { data, error } = await client
+    .from('workspace_tasks')
+    .insert({
+      organization_id: organizationId,
+      workspace_id: workspaceId,
+      project_id: projectId,
+      title,
+      description,
+      created_by: user.data.user.id,
+    })
+    .select()
+    .single();
+
+  if (error || !data) throw new Error(`Failed to create task: ${error?.message}`);
+  return toTask(data as TaskRow);
+}
+
+export async function taskAssign(evt: IpcMainInvokeEvent, taskId: string, assignedToUserId: string | null): Promise<WorkspaceTask> {
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from('workspace_tasks')
+    .update({ assigned_to: assignedToUserId, updated_at: new Date().toISOString() })
+    .eq('id', taskId)
+    .select()
+    .single();
+
+  if (error || !data) throw new Error(`Failed to assign task: ${error?.message}`);
+  return toTask(data as TaskRow);
+}
+
+export async function taskUpdateStatus(
+  evt: IpcMainInvokeEvent,
+  taskId: string,
+  status: 'todo' | 'in_progress' | 'blocked' | 'done' | 'cancelled',
+  progressPercent?: number,
+): Promise<WorkspaceTask> {
+  const client = getSupabaseClient();
+  const update: Record<string, unknown> = { status, updated_at: new Date().toISOString() };
+  if (progressPercent !== undefined) {
+    update.progress_percent = Math.min(100, Math.max(0, progressPercent));
+  }
+
+  const { data, error } = await client
+    .from('workspace_tasks')
+    .update(update)
+    .eq('id', taskId)
+    .select()
+    .single();
+
+  if (error || !data) throw new Error(`Failed to update task status: ${error?.message}`);
+  return toTask(data as TaskRow);
+}

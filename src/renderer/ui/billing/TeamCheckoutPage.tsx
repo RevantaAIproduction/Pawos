@@ -47,6 +47,16 @@ const COUNTRIES = [
   'Zambia', 'Zimbabwe'
 ];
 
+const MAX_TEAM_SEATS = 150;
+
+const STATES_BY_COUNTRY: { [key: string]: string[] } = {
+  'India': ['Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Delhi', 'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal'],
+  'United States': ['Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware', 'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming'],
+  'United Kingdom': ['England', 'Scotland', 'Wales', 'Northern Ireland'],
+  'Canada': ['Alberta', 'British Columbia', 'Manitoba', 'New Brunswick', 'Newfoundland and Labrador', 'Nova Scotia', 'Ontario', 'Prince Edward Island', 'Quebec', 'Saskatchewan'],
+  'Australia': ['New South Wales', 'Queensland', 'South Australia', 'Tasmania', 'Victoria', 'Western Australia', 'Australian Capital Territory', 'Northern Territory'],
+};
+
 const SEAT_PRICING = {
   standard: {
     label: 'Standard seat',
@@ -73,7 +83,12 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
   const [email, setEmail] = useState('');
   const [mobileNumber, setMobileNumber] = useState('');
   const [country, setCountry] = useState('India'); // Default to India
-  const [address, setAddress] = useState('');
+  const [address1, setAddress1] = useState('');
+  const [address2, setAddress2] = useState('');
+  const [city, setCity] = useState('');
+  const [billingState, setBillingState] = useState('');
+  const [postalCode, setPostalCode] = useState('');
+  const [hasSelectedAddress, setHasSelectedAddress] = useState(false);
   const [taxId, setTaxId] = useState('');
   const [useBusinessName, setUseBusinessName] = useState(false);
 
@@ -88,6 +103,8 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
   const [processing, setProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [validationError, setValidationError] = useState('');
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [paymentStep, setPaymentStep] = useState<'idle' | 'creating-invoice' | 'awaiting-payment' | 'processing' | 'confirming' | 'success'>('idle');
 
   // Calculate amounts
   const standardPriceInr = SEAT_PRICING.standard.priceUsd * USD_TO_INR; // $20 × 95.65 = ₹1,913
@@ -120,7 +137,16 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
         const supabase = await getSupabaseClient();
         const { data: sessionData } = await supabase.auth.getSession();
         const session = sessionData.session;
+
+        // Set access token for API calls
+        if (session?.access_token) {
+          setAccessToken(session.access_token);
+        }
+
         if (session?.user?.email) {
+          // Auto-fill email
+          setEmail(session.user.email);
+
           // Extract organization name from email domain
           // e.g., tharun@revantaai.com → RevantaAI
           const emailDomain = session.user.email.split('@')[1];
@@ -136,6 +162,12 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
             }
           }
         }
+
+        // Auto-fill phone from user metadata if available
+        if (session?.user?.user_metadata?.phone) {
+          setMobileNumber(session.user.user_metadata.phone);
+        }
+
         // if (session?.user?.name) {
         //   setFullName(session.user.name);
         // }
@@ -187,8 +219,8 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
     setErrorMessage('');
 
     try {
-      if (!fullName || !address) {
-        setErrorMessage('Please fill in all required billing information');
+      if (!fullName || !address1 || !city || !billingState || !postalCode) {
+        setErrorMessage('Please fill in all required billing information including address');
         setProcessing(false);
         return;
       }
@@ -198,7 +230,13 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
         seatCount: standardSeatCount + premiumSeatCount,
       };
 
-      const result = await ipc.billingCreateNativeTierCheckout('team', checkoutOptions);
+      if (!accessToken) {
+        setErrorMessage('Session expired. Please sign in again.');
+        setProcessing(false);
+        return;
+      }
+
+      const result = await ipc.billingCreateNativeTierCheckout('team', checkoutOptions, undefined, accessToken);
 
       if (!result.ok) {
         setErrorMessage(result.reason || 'Payment failed');
@@ -208,7 +246,25 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
 
       const { orderId, amountPaise } = result;
 
-      const razorpay = (window as any).Razorpay;
+      // Load Razorpay script if not already loaded
+      let razorpay = (window as any).Razorpay;
+      if (!razorpay) {
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://checkout.razorpay.com/v1/razorpay.js';
+          script.onload = () => {
+            razorpay = (window as any).Razorpay;
+            if (razorpay) {
+              resolve(true);
+            } else {
+              reject(new Error('Razorpay failed to load'));
+            }
+          };
+          script.onerror = () => reject(new Error('Failed to load Razorpay script'));
+          document.body.appendChild(script);
+        });
+      }
+
       if (!razorpay) {
         setErrorMessage('Payment gateway unavailable');
         setProcessing(false);
@@ -218,6 +274,7 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
       // Build intelligent invoice data for Razorpay
       const today = new Date();
       const expiryDate = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days from now
+      const invoiceNumber = `INV-${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
 
       const invoiceDescription = `${organizationName || teamName} - Team Plan (${billingFrequency === 'annually' ? 'Annual' : 'Monthly'})`;
 
@@ -240,13 +297,17 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
 
       const invoiceNotes = {
         // Invoice Details
+        invoice_number: invoiceNumber,
         invoice_type: 'Team Plan Purchase',
         invoice_description: invoiceDescription,
 
         // Billing Information
         organization: organizationName || teamName,
         team_name: teamName,
-        billing_address: address,
+        billing_address: [address1, address2].filter(Boolean).join(', '),
+        billing_city: city,
+        billing_state: billingState,
+        billing_postal_code: postalCode,
         email: email,
         phone: mobileNumber,
 
@@ -272,6 +333,9 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
         line_items: lineItems.map((item: any) => `${item.description}: ₹${(item.amount).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`).join('\n'),
       };
 
+      // Show step: Creating invoice
+      setPaymentStep('creating-invoice');
+
       const options: any = {
         key: 'rzp_test_key',
         amount: amountPaise,
@@ -279,13 +343,33 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
         order_id: orderId,
         description: invoiceDescription,
         handler: async (response: any) => {
-          const verifyResult = await (ipc as any).billingVerifyNativeTierPayment?.({ paymentId: response.razorpay_payment_id, orderId });
-          if (verifyResult?.ok) {
-            onSuccess?.();
-          } else {
-            setErrorMessage('Payment verification failed');
+          try {
+            // Step 2: Awaiting payment confirmation
+            setPaymentStep('awaiting-payment');
+
+            // Step 3: Processing payment
+            setPaymentStep('processing');
+
+            // Step 4: Confirming with backend
+            setPaymentStep('confirming');
+            const verifyResult = await (ipc as any).billingVerifyNativeTierPayment?.({ paymentId: response.razorpay_payment_id, orderId });
+
+            if (verifyResult?.ok) {
+              // Step 5: Success
+              setPaymentStep('success');
+              setTimeout(() => {
+                onSuccess?.();
+              }, 1500);
+            } else {
+              setErrorMessage('Payment verification failed');
+              setPaymentStep('idle');
+            }
+          } catch (error) {
+            setErrorMessage('Payment verification error: ' + (error instanceof Error ? error.message : 'Unknown error'));
+            setPaymentStep('idle');
+          } finally {
+            setProcessing(false);
           }
-          setProcessing(false);
         },
         prefill: {
           name: useBusinessName ? `${organizationName || teamName}` : fullName,
@@ -295,6 +379,7 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
         notes: invoiceNotes,
       };
 
+      setPaymentStep('awaiting-payment');
       razorpay.open(options);
     } catch (error) {
       setErrorMessage('Payment error: ' + (error instanceof Error ? error.message : 'Unknown error'));
@@ -509,15 +594,23 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
                   </button>
                   <span style={{ width: '24px', textAlign: 'center', fontWeight: 600 }}>{standardSeatCount}</span>
                   <button
-                    onClick={() => setStandardSeatCount(standardSeatCount + 1)}
+                    onClick={() => {
+                      if (standardSeatCount + premiumSeatCount < MAX_TEAM_SEATS) {
+                        setStandardSeatCount(standardSeatCount + 1);
+                        setErrorMessage('');
+                      } else {
+                        setErrorMessage(`Maximum ${MAX_TEAM_SEATS} seats allowed. Contact support for higher seat counts.`);
+                      }
+                    }}
+                    disabled={standardSeatCount + premiumSeatCount >= MAX_TEAM_SEATS}
                     style={{
                       width: '32px',
                       height: '32px',
                       borderRadius: '6px',
                       border: '1px solid rgba(var(--pawos-overlay-rgb), 0.2)',
                       background: 'rgba(var(--pawos-overlay-rgb), 0.05)',
-                      color: 'inherit',
-                      cursor: 'pointer',
+                      color: standardSeatCount + premiumSeatCount >= MAX_TEAM_SEATS ? 'rgba(var(--pawos-overlay-rgb), 0.4)' : 'inherit',
+                      cursor: standardSeatCount + premiumSeatCount >= MAX_TEAM_SEATS ? 'not-allowed' : 'pointer',
                     }}
                   >
                     +
@@ -557,15 +650,23 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
                   </button>
                   <span style={{ width: '24px', textAlign: 'center', fontWeight: 600 }}>{premiumSeatCount}</span>
                   <button
-                    onClick={() => setPremiumSeatCount(premiumSeatCount + 1)}
+                    onClick={() => {
+                      if (standardSeatCount + premiumSeatCount < MAX_TEAM_SEATS) {
+                        setPremiumSeatCount(premiumSeatCount + 1);
+                        setErrorMessage('');
+                      } else {
+                        setErrorMessage(`Maximum ${MAX_TEAM_SEATS} seats allowed. Contact support for higher seat counts.`);
+                      }
+                    }}
+                    disabled={standardSeatCount + premiumSeatCount >= MAX_TEAM_SEATS}
                     style={{
                       width: '32px',
                       height: '32px',
                       borderRadius: '6px',
                       border: '1px solid rgba(var(--pawos-overlay-rgb), 0.2)',
                       background: 'rgba(var(--pawos-overlay-rgb), 0.05)',
-                      color: 'inherit',
-                      cursor: 'pointer',
+                      color: standardSeatCount + premiumSeatCount >= MAX_TEAM_SEATS ? 'rgba(var(--pawos-overlay-rgb), 0.4)' : 'inherit',
+                      cursor: standardSeatCount + premiumSeatCount >= MAX_TEAM_SEATS ? 'not-allowed' : 'pointer',
                     }}
                   >
                     +
@@ -610,6 +711,18 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
                 </div>
               </div>
             )}
+
+            <div style={{ marginBottom: '12px', padding: '10px 12px', borderRadius: '8px', background: 'rgba(var(--pawos-overlay-rgb), 0.05)', fontSize: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span>Total seats:</span>
+                <span style={{ fontWeight: 600 }}>{standardSeatCount + premiumSeatCount} / {MAX_TEAM_SEATS}</span>
+              </div>
+              {standardSeatCount + premiumSeatCount >= MAX_TEAM_SEATS && (
+                <div style={{ color: '#ef4444', fontSize: '11px', marginTop: '4px' }}>
+                  Max capacity reached. Contact support for more seats.
+                </div>
+              )}
+            </div>
 
             <div style={{ borderTop: '1px solid rgba(var(--pawos-overlay-rgb), 0.1)', paddingTop: '12px', marginBottom: '12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px' }}>
@@ -684,7 +797,7 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
   }
 
   if (step === 'billing') {
-    const canContinue = fullName.trim() && email.trim() && mobileNumber.trim() && country.trim() && address.trim();
+    const canContinue = fullName.trim() && email.trim() && mobileNumber.trim() && country.trim() && address1.trim() && city.trim() && billingState.trim() && postalCode.trim();
 
     return (
       <div style={{ padding: '32px', maxWidth: '1200px', margin: '0 auto' }}>
@@ -728,6 +841,51 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
               />
             </div>
 
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
+                  Email <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(var(--pawos-overlay-rgb), 0.2)',
+                    background: 'rgba(var(--pawos-overlay-rgb), 0.05)',
+                    color: 'inherit',
+                    fontSize: '14px',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
+                  Phone <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="tel"
+                  value={mobileNumber}
+                  onChange={(e) => setMobileNumber(e.target.value)}
+                  placeholder="+1 (555) 000-0000"
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(var(--pawos-overlay-rgb), 0.2)',
+                    background: 'rgba(var(--pawos-overlay-rgb), 0.05)',
+                    color: 'inherit',
+                    fontSize: '14px',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+            </div>
+
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
                 Country or region <span style={{ color: '#ef4444' }}>*</span>
@@ -754,12 +912,12 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
 
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
-                Address <span style={{ color: '#ef4444' }}>*</span>
+                Address line 1 <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <input
                 type="text"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
+                value={address1}
+                onChange={(e) => setAddress1(e.target.value)}
                 placeholder="Street address"
                 style={{
                   width: '100%',
@@ -772,6 +930,162 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
                   boxSizing: 'border-box',
                 }}
               />
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
+                Address line 2
+              </label>
+                  <input
+                    type="text"
+                    value={address2}
+                    onChange={(e) => setAddress2(e.target.value)}
+                    placeholder="Apartment, suite, etc. (optional)"
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(var(--pawos-overlay-rgb), 0.2)',
+                      background: 'rgba(var(--pawos-overlay-rgb), 0.05)',
+                      color: 'inherit',
+                      fontSize: '14px',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
+                      City <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      placeholder="City"
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(var(--pawos-overlay-rgb), 0.2)',
+                        background: 'rgba(var(--pawos-overlay-rgb), 0.05)',
+                        color: 'inherit',
+                        fontSize: '14px',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
+                      State <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    {STATES_BY_COUNTRY[country] ? (
+                      <select
+                        value={billingState}
+                        onChange={(e) => setBillingState(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          borderRadius: '8px',
+                          border: '1px solid rgba(var(--pawos-overlay-rgb), 0.2)',
+                          background: 'rgba(var(--pawos-overlay-rgb), 0.05)',
+                          color: 'inherit',
+                          fontSize: '14px',
+                          boxSizing: 'border-box',
+                        }}
+                      >
+                        <option value="">Select state</option>
+                        {STATES_BY_COUNTRY[country]?.map((state) => (
+                          <option key={state} value={state}>{state}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={billingState}
+                        onChange={(e) => setBillingState(e.target.value)}
+                        placeholder="State/Province"
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          borderRadius: '8px',
+                          border: '1px solid rgba(var(--pawos-overlay-rgb), 0.2)',
+                          background: 'rgba(var(--pawos-overlay-rgb), 0.05)',
+                          color: 'inherit',
+                          fontSize: '14px',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
+                    Postal Code <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={postalCode}
+                    onChange={(e) => setPostalCode(e.target.value)}
+                    placeholder="Postal code"
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(var(--pawos-overlay-rgb), 0.2)',
+                      background: 'rgba(var(--pawos-overlay-rgb), 0.05)',
+                      color: 'inherit',
+                      fontSize: '14px',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+            <div style={{ marginBottom: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
+                  Invoice Created Date
+                </label>
+                <input
+                  type="text"
+                  value={new Date().toISOString().split('T')[0]}
+                  readOnly
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(var(--pawos-overlay-rgb), 0.2)',
+                    background: 'rgba(var(--pawos-overlay-rgb), 0.1)',
+                    color: 'rgba(var(--pawos-text-rgb), 0.6)',
+                    fontSize: '14px',
+                    boxSizing: 'border-box',
+                    cursor: 'not-allowed',
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
+                  Invoice Expiry Date
+                </label>
+                <input
+                  type="text"
+                  value={new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+                  readOnly
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(var(--pawos-overlay-rgb), 0.2)',
+                    background: 'rgba(var(--pawos-overlay-rgb), 0.1)',
+                    color: 'rgba(var(--pawos-text-rgb), 0.6)',
+                    fontSize: '14px',
+                    boxSizing: 'border-box',
+                    cursor: 'not-allowed',
+                  }}
+                />
+              </div>
             </div>
 
             <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1013,6 +1327,34 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
             </div>
           )}
 
+          {processing && paymentStep !== 'idle' && (
+            <div style={{ marginBottom: '16px', padding: '12px', borderRadius: '8px', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
+              <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: '12px', color: '#3b82f6' }}>Payment Progress</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: paymentStep !== 'idle' ? '#10b981' : '#d1d5db', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '10px', fontWeight: 'bold' }}>✓</div>
+                  <span>Creating invoice...</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: ['awaiting-payment', 'processing', 'confirming', 'success'].includes(paymentStep) ? '#3b82f6' : '#d1d5db', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '10px', fontWeight: 'bold' }}>●</div>
+                  <span>Awaiting payment...</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: ['processing', 'confirming', 'success'].includes(paymentStep) ? '#3b82f6' : '#d1d5db', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '10px', fontWeight: 'bold' }}>●</div>
+                  <span>Processing payment...</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: ['confirming', 'success'].includes(paymentStep) ? '#3b82f6' : '#d1d5db', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '10px', fontWeight: 'bold' }}>●</div>
+                  <span>Confirming payment...</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: paymentStep === 'success' ? '#10b981' : '#d1d5db', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '10px', fontWeight: 'bold' }}>{paymentStep === 'success' ? '✓' : '●'}</div>
+                  <span style={{ color: paymentStep === 'success' ? '#10b981' : 'inherit' }}>Success - Tier Activated</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           <button
             onClick={handlePayment}
             disabled={processing}
@@ -1028,7 +1370,7 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
               fontSize: '14px',
             }}
           >
-            {processing ? 'Processing...' : `Pay ₹${displaySubtotalInr.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`}
+            {processing ? (paymentStep === 'success' ? '✓ Success!' : 'Processing payment...') : `Pay ₹${displaySubtotalInr.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`}
           </button>
         </div>
 

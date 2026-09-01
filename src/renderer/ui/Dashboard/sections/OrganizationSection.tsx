@@ -20,6 +20,7 @@ import { RemoteAssistancePanel } from './RemoteAssistancePanel';
 import { GovernancePolicyCard } from './GovernancePolicyCard';
 import { ApprovalQueueCard } from './ApprovalQueueCard';
 import { CredentialVaultCard } from './CredentialVaultCard';
+import { OrganizationTasksCard } from './OrganizationTasksCard';
 import { SsoSettingsCard } from './SsoSettingsCard';
 import { AutonomousTaskBillingCard } from './AutonomousTaskBillingCard';
 import { OrganizationRolesCard } from './OrganizationRolesCard';
@@ -54,6 +55,7 @@ import {
 
 const ORG_SECTION_TILES: SectionTileDef[] = [
   { id: 'activity', title: 'Activity Dashboard', description: 'Live task and project activity across the organization.', icon: GaugeIcon },
+  { id: 'tasks', title: 'Tasks', description: 'Manage organization tasks, assign to members, track progress.', icon: BarsIcon },
   { id: 'remoteAssistance', title: 'Remote Assistance', description: 'Screen share and remote control sessions between teammates.', icon: DesktopIcon },
   { id: 'roles', title: 'Roles & Capabilities', description: 'What each role can do in this organization.', icon: ShieldIcon },
   { id: 'jobRoles', title: 'Organization Roles', description: 'Job titles and departments for each teammate — independent of billing and permissions.', icon: AccountIcon },
@@ -708,6 +710,7 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
           onBack={() => setSelectedSection(null)}
         >
           {selectedSection === 'activity' && <ActivityDashboardCard organizationId={org.id} orgMembers={members} />}
+          {selectedSection === 'tasks' && <OrganizationTasksCard organizationId={org.id} members={members} />}
           {selectedSection === 'remoteAssistance' && (
             <RemoteAssistancePanel organizationId={org.id} workspaceId={null} currentUser={user} orgMembers={members} />
           )}

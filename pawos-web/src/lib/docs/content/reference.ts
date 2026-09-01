@@ -167,13 +167,13 @@ export const referencePages: DocPage[] = [
     related: ['reference/architecture', 'connectors/overview'],
   },
   {
-    section: 'reference',
-    slug: 'changelog',
-    title: 'Changelog',
-    description: 'Where release notes live.',
+    section: ‘reference’,
+    slug: ‘changelog’,
+    title: ‘Changelog’,
+    description: ‘Where release notes live.’,
     blocks: [
-      { type: 'paragraph', text: 'See the site’s dedicated Changelog page for dated release notes. PawOS follows semantic versioning once public releases begin.' },
+      { type: ‘paragraph’, text: ‘See the site’s dedicated Changelog page for dated release notes. PawOS follows semantic versioning once public releases begin.’ },
     ],
-    related: ['reference/architecture'],
+    related: [‘reference/architecture’],
   },
 ];

@@ -1334,7 +1334,7 @@ export function registerIpc(opts: {
   const { selectFolder } = require('./handlers/selectFolderHandler');
   ipcMain.handle('project:selectFolder', (evt) => selectFolder(evt));
 
-  const { projectCreate, projectList, projectAttach, projectMarkVerified } = require('./handlers/projectHandler');
+  const { projectCreate, projectList, projectAttach, projectMarkVerified, taskListByOrganization, taskCreate, taskAssign, taskUpdateStatus } = require('./handlers/projectHandler');
   ipcMain.handle('project:create', (evt, name: string, organizationId: string | null) =>
     projectCreate(evt, name, organizationId));
   ipcMain.handle('project:list', (evt, organizationId: string | null) =>
@@ -1343,6 +1343,16 @@ export function registerIpc(opts: {
     projectAttach(evt, projectId, localPath));
   ipcMain.handle('project:markVerified', (evt, projectId: string) =>
     projectMarkVerified(evt, projectId));
+
+  // Workspace Task Management
+  ipcMain.handle('task:listByOrganization', (evt, organizationId: string) =>
+    taskListByOrganization(evt, organizationId));
+  ipcMain.handle('task:create', (evt, organizationId: string, workspaceId: string, projectId: string | null, title: string, description: string | null) =>
+    taskCreate(evt, organizationId, workspaceId, projectId, title, description));
+  ipcMain.handle('task:assign', (evt, taskId: string, assignedToUserId: string | null) =>
+    taskAssign(evt, taskId, assignedToUserId));
+  ipcMain.handle('task:updateStatus', (evt, taskId: string, status: string, progressPercent?: number) =>
+    taskUpdateStatus(evt, taskId, status as 'todo' | 'in_progress' | 'blocked' | 'done' | 'cancelled', progressPercent));
 
   // Governance & Approval Handler — Allow/Deny permissions for destructive actions
   ipcMain.handle('governance:approve', (evt, approvalId: string) => approveGovernanceRequest(evt, approvalId));
