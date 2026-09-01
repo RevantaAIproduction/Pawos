@@ -52,7 +52,7 @@ export class AssetManager {
    */
   private stripHorizontalRootMotion(clip: THREE.AnimationClip): void {
     const rootTrack = clip.tracks.find(
-      (t): t is THREE.VectorKeyframeTrack => t instanceof THREE.VectorKeyframeTrack && /hips\.position$/i.test(t.name)
+      (t: THREE.KeyframeTrack): t is THREE.VectorKeyframeTrack => t instanceof THREE.VectorKeyframeTrack && /hips\.position$/i.test(t.name)
     );
     if (!rootTrack) return;
     const values = rootTrack.values;
@@ -70,7 +70,7 @@ export class AssetManager {
       roughness: 0.55,
       metalness: 0,
     });
-    group.traverse((obj) => {
+    group.traverse((obj: THREE.Object3D) => {
       const mesh = obj as THREE.Mesh;
       if (!mesh.isMesh) return;
       mesh.material = material;

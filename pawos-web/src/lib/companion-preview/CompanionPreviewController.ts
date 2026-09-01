@@ -32,7 +32,7 @@ export class CompanionPreviewController {
     this.stateMachine = new AnimationStateMachine(this.animationManager, BASE_MESH_ANIMATION);
 
     let skinnedMesh: THREE.SkinnedMesh | null = null;
-    assets.root.traverse((obj) => {
+    assets.root.traverse((obj: THREE.Object3D) => {
       if (!skinnedMesh && (obj as THREE.SkinnedMesh).isSkinnedMesh) skinnedMesh = obj as THREE.SkinnedMesh;
     });
     if (skinnedMesh) {

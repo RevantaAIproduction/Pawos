@@ -9,7 +9,7 @@ const MAX_HEAD_PITCH_RAD = 0.18;
 const HEAD_TRACK_SPEED = 4;
 
 function findBone(skeleton: THREE.Skeleton, shortName: string): THREE.Bone | null {
-  return skeleton.bones.find((b) => b.name === `mixamorig:${shortName}` || b.name === `mixamorig${shortName}`) ?? null;
+  return skeleton.bones.find((b: THREE.Bone) => b.name === `mixamorig:${shortName}` || b.name === `mixamorig${shortName}`) ?? null;
 }
 
 /**
