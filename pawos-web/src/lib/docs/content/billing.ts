@@ -155,12 +155,15 @@ export const billingPages: DocPage[] = [
     blocks: [
       {
         type: 'heading',
+        level: 2,
         text: 'Individual Accounts',
+        id: 'individual-accounts',
       },
       {
         type: 'heading',
         level: 2,
         text: 'Go Tier (Free)',
+        id: 'go-tier-free',
       },
       {
         type: 'paragraph',
@@ -180,6 +183,7 @@ export const billingPages: DocPage[] = [
         type: 'heading',
         level: 2,
         text: 'Pro Tier ($20 USD/month or ₹1,913 INR/month)',
+        id: 'pro-tier',
       },
       {
         type: 'paragraph',
@@ -201,6 +205,7 @@ export const billingPages: DocPage[] = [
         type: 'heading',
         level: 2,
         text: 'Pro Max Tier ($100 USD/month or ₹9,565 INR/month)',
+        id: 'pro-max-tier',
       },
       {
         type: 'paragraph',
@@ -221,12 +226,15 @@ export const billingPages: DocPage[] = [
       },
       {
         type: 'heading',
+        level: 2,
         text: 'Organization Accounts',
+        id: 'organization-accounts',
       },
       {
         type: 'heading',
         level: 2,
         text: 'Team Tier (₹1,913 per seat/month)',
+        id: 'team-tier',
       },
       {
         type: 'paragraph',
@@ -251,6 +259,7 @@ export const billingPages: DocPage[] = [
         type: 'heading',
         level: 2,
         text: 'Enterprise Tier (Custom Pricing)',
+        id: 'enterprise-tier',
       },
       {
         type: 'paragraph',
@@ -273,7 +282,9 @@ export const billingPages: DocPage[] = [
       },
       {
         type: 'heading',
+        level: 2,
         text: 'Payment Methods',
+        id: 'payment-methods',
       },
       {
         type: 'table',
@@ -295,7 +306,9 @@ export const billingPages: DocPage[] = [
     blocks: [
       {
         type: 'heading',
+        level: 2,
         text: 'Seat Limits',
+        id: 'seat-limits',
       },
       {
         type: 'paragraph',
@@ -303,7 +316,9 @@ export const billingPages: DocPage[] = [
       },
       {
         type: 'heading',
+        level: 2,
         text: 'Billing Address',
+        id: 'billing-address',
       },
       {
         type: 'paragraph',
@@ -311,7 +326,9 @@ export const billingPages: DocPage[] = [
       },
       {
         type: 'heading',
+        level: 2,
         text: 'Payment Methods',
+        id: 'payment-methods-team',
       },
       {
         type: 'list',
@@ -323,7 +340,9 @@ export const billingPages: DocPage[] = [
       },
       {
         type: 'heading',
+        level: 2,
         text: 'Team Management',
+        id: 'team-management',
       },
       {
         type: 'list',
