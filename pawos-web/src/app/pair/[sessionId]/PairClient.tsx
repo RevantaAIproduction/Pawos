@@ -12,7 +12,7 @@ function getErrorMessage(e: unknown): string {
   return String(e);
 }
 
-export function PairClient({ sessionId, token, userEmail }: { sessionId: string; token: string; userEmail: string | null }) {
+export function PairClient({ token, userEmail }: { token: string; userEmail: string | null }) {
   const [status, setStatus] = useState<PairStatus>("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -76,7 +76,7 @@ export function PairClient({ sessionId, token, userEmail }: { sessionId: string;
         )}
         {status === "error" && (
           <>
-            <h2 className="font-semibold text-red-400">Couldn't complete pairing</h2>
+            <h2 className="font-semibold text-red-400">Couldn&apos;t complete pairing</h2>
             <p className="mt-2 text-sm text-neutral-400">{error}</p>
             <p className="mt-2 text-xs text-neutral-500">
               If this code expired or was already used, go back to your desktop app and generate a

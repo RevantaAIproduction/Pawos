@@ -18,7 +18,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-2xl font-semibold">Introduction</h2>
             <p className="text-neutral-300">
-              PawOS by Revanta AI ("we," "us," "our," or "Company") operates the PawOS platform. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our website and use our services.
+              PawOS by Revanta AI (&quot;we,&quot; &quot;us,&quot; &quot;our,&quot; or &quot;Company&quot;) operates the PawOS platform. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our website and use our services.
             </p>
           </section>
 
@@ -108,7 +108,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold">7. Children's Privacy</h2>
+            <h2 className="text-2xl font-semibold">7. Children&apos;s Privacy</h2>
             <p className="text-neutral-300">
               PawOS is not intended for children under 13. We do not knowingly collect personal information from children under 13. If we become aware that we have collected such information, we will take steps to delete it and terminate the child's account.
             </p>
@@ -124,7 +124,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-2xl font-semibold">9. Policy Changes</h2>
             <p className="text-neutral-300">
-              We may update this Privacy Policy from time to time. We will notify you of significant changes by posting the updated policy on this page and updating the "Last updated" date. Your continued use of PawOS constitutes your acceptance of the updated Privacy Policy.
+              We may update this Privacy Policy from time to time. We will notify you of significant changes by posting the updated policy on this page and updating the &quot;Last updated&quot; date. Your continued use of PawOS constitutes your acceptance of the updated Privacy Policy.
             </p>
           </section>
 

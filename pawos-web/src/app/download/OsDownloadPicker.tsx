@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { trackEvent } from "../../components/analytics/Analytics";
 import { NotifyButton } from "./NotifyButton";
 import { getDownloadPlatforms, type DownloadPlatformId } from "../../lib/config/downloadConfig";
@@ -16,13 +16,9 @@ function detectOs(): DownloadPlatformId {
 }
 
 export function OsDownloadPicker() {
-  const [selected, setSelected] = useState<DownloadPlatformId | null>(null);
+  const [selected, setSelected] = useState<DownloadPlatformId>(() => detectOs());
 
-  useEffect(() => {
-    setSelected(detectOs());
-  }, []);
-
-  const active = selected ?? "windows";
+  const active = selected;
   const activePlatform = PLATFORMS.find((p) => p.id === active)!;
 
   return (

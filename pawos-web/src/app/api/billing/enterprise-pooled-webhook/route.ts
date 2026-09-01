@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, reason: "Invalid Razorpay signature." }, { status: 401 });
   }
 
-  const event = JSON.parse(body) as { event: string; payload?: Record<string, any> };
+  const event = JSON.parse(body) as { event: string; payload?: Record<string, unknown> };
   const eventData = event.payload?.payment?.entity || event.payload?.invoice?.entity;
 
   if (!eventData) {

@@ -23,7 +23,7 @@ export class AnimationStateMachine {
     private manager: AnimationManager,
     private defaultName: AnimationName
   ) {
-    this.manager.mixer.addEventListener('finished', this.onFinished as any);
+    this.manager.mixer.addEventListener('finished', this.onFinished as EventListener);
   }
 
   getCurrent(): AnimationName | null {
@@ -67,7 +67,7 @@ export class AnimationStateMachine {
   }
 
   dispose() {
-    this.manager.mixer.removeEventListener('finished', this.onFinished as any);
+    this.manager.mixer.removeEventListener('finished', this.onFinished as EventListener);
     this.listeners.clear();
   }
 

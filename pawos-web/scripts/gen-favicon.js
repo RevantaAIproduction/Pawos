@@ -1,9 +1,12 @@
-const fs = require("fs");
-const path = require("path");
-const sharp = require(path.join(__dirname, "..", "..", "node_modules", "sharp"));
-const pngToIcoModule = require(path.join(__dirname, "..", "..", "node_modules", "png-to-ico"));
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import sharp from "sharp";
+import pngToIcoModule from "png-to-ico";
+
 const pngToIco = pngToIcoModule.default || pngToIcoModule;
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const src = path.join(__dirname, "..", "public", "logo-icon.png");
 const dest = path.join(__dirname, "..", "src", "app", "favicon.ico");
 

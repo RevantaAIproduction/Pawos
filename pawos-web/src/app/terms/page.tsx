@@ -18,7 +18,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-2xl font-semibold">Introduction</h2>
             <p className="text-neutral-300">
-              These Terms of Service ("Terms") constitute a legal agreement between you and Revanta AI ("Company," "we," "us," or "our") governing your use of the PawOS platform, website, and related services. By accessing or using PawOS, you agree to be bound by these Terms.
+              These Terms of Service (&quot;Terms&quot;) constitute a legal agreement between you and Revanta AI (&quot;Company,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) governing your use of the PawOS platform, website, and related services. By accessing or using PawOS, you agree to be bound by these Terms.
             </p>
           </section>
 
@@ -99,7 +99,7 @@ export default function TermsPage() {
               <li>You agree to pay all charges as stated in your subscription plan</li>
               <li>Billing occurs automatically unless you cancel before renewal</li>
               <li>You authorize us to charge your payment method on file</li>
-              <li>We reserve the right to change prices with 30 days' notice</li>
+              <li>We reserve the right to change prices with 30 days&apos; notice</li>
               <li>Refunds are handled in accordance with our refund policy</li>
             </ul>
           </section>
@@ -107,7 +107,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-2xl font-semibold">8. Disclaimer of Warranties</h2>
             <p className="text-neutral-300">
-              PAWOS IS PROVIDED ON AN "AS IS" AND "AS AVAILABLE" BASIS. WE MAKE NO WARRANTIES, EXPRESS OR IMPLIED, REGARDING THE SERVICE. TO THE FULLEST EXTENT PERMITTED BY LAW, WE DISCLAIM ALL WARRANTIES INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
+              PAWOS IS PROVIDED ON AN &quot;AS IS&quot; AND &quot;AS AVAILABLE&quot; BASIS. WE MAKE NO WARRANTIES, EXPRESS OR IMPLIED, REGARDING THE SERVICE. TO THE FULLEST EXTENT PERMITTED BY LAW, WE DISCLAIM ALL WARRANTIES INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
             </p>
             <p className="mt-4 text-neutral-300">
               We do not guarantee that PawOS will be uninterrupted, secure, or error-free. Use of the service is at your own risk.

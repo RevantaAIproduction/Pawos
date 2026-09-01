@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useState } from "react";
 
 const STORAGE_KEY = "pawos-cookie-consent";
 export type ConsentChoice = "accepted" | "declined";
@@ -12,11 +13,7 @@ export function getStoredConsent(): ConsentChoice | null {
 }
 
 export function CookieConsent() {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    setVisible(getStoredConsent() === null);
-  }, []);
+  const [visible, setVisible] = useState(() => getStoredConsent() === null);
 
   function choose(next: ConsentChoice) {
     window.localStorage.setItem(STORAGE_KEY, next);
@@ -34,7 +31,7 @@ export function CookieConsent() {
     >
       <p className="text-sm text-neutral-300">
         We use strictly necessary cookies to run this site, and optional analytics cookies if you consent. See our{" "}
-        <a href="/legal/cookie-policy" className="text-blue-400 hover:underline">Cookie Policy</a>.
+        <Link href="/legal/cookie-policy" className="text-blue-400 hover:underline">Cookie Policy</Link>.
       </p>
       <div className="mt-4 flex justify-end gap-3">
         <button

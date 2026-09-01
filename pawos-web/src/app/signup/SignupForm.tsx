@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { createClient } from "../../lib/supabase/client";
 import { GoogleGlyph, GitHubGlyph } from "../login/GoogleGitHubIcons";
 
 export function SignupForm() {
-  const [intent, setIntent] = useState<string | null>(null);
+  const [intent] = useState<string | null>(() =>
+    typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("intent") : null
+  );
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -16,10 +18,6 @@ export function SignupForm() {
   const [message, setMessage] = useState<string | null>(null);
   const [oauthPending, setOauthPending] = useState<"google" | "github" | "microsoft" | null>(null);
   const isDesktopWaitlist = intent === "pawos-desktop-waitlist";
-
-  useEffect(() => {
-    setIntent(new URLSearchParams(window.location.search).get("intent"));
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

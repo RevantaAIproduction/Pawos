@@ -30,18 +30,28 @@ export function CompanionNotifications() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
+
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-      setStatus("unsupported");
+      if (isMounted) setStatus("unsupported");
       return;
     }
     if (!window.localStorage.getItem("pawos_paired_device_id")) {
-      setStatus("unpaired");
+      if (isMounted) setStatus("unpaired");
       return;
     }
     navigator.serviceWorker.ready
       .then((registration) => registration.pushManager.getSubscription())
-      .then((existing) => setStatus(existing ? "subscribed" : "idle"))
-      .catch(() => setStatus("idle"));
+      .then((existing) => {
+        if (isMounted) setStatus(existing ? "subscribed" : "idle");
+      })
+      .catch(() => {
+        if (isMounted) setStatus("idle");
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const enable = async () => {

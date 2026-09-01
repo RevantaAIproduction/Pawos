@@ -2,7 +2,7 @@
 
 import Fuse from 'fuse.js';
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { SearchableEntry } from '../../lib/docs/registry';
 
 /**
@@ -53,11 +53,10 @@ export function DocsSearch({ index }: { index: SearchableEntry[] }) {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (open) {
       setQuery('');
-      const id = requestAnimationFrame(() => inputRef.current?.focus());
-      return () => cancelAnimationFrame(id);
+      inputRef.current?.focus();
     }
   }, [open]);
 

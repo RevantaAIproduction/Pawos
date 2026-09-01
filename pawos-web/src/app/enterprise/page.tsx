@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Section } from "../../components/ui/Section";
 import { Button } from "../../components/ui/Button";
 import { Badge } from "../../components/ui/Badge";
@@ -71,16 +72,16 @@ export default function EnterprisePage() {
       <Section eyebrow="Deployment" title="Self-hosting & infrastructure" className="border-t border-neutral-900">
         <div className="mx-auto mt-6 max-w-2xl space-y-4 text-neutral-400">
           <p>
-            PawOS deploys through a provider-agnostic Infrastructure Runtime — your organization's own cloud and
-            hosting accounts, connected via each provider's official CLI or API. PawOS never holds your production
-            credentials on its own servers; every connector runs against your machine's own already-authenticated
+            PawOS deploys through a provider-agnostic Infrastructure Runtime — your organization&apos;s own cloud and
+            hosting accounts, connected via each provider&apos;s official CLI or API. PawOS never holds your production
+            credentials on its own servers; every connector runs against your machine&apos;s own already-authenticated
             session.
           </p>
           <p>
             For large-scale automation and CI/CD integration, see our{" "}
-            <a href="/docs/enterprise" className="text-blue-400 hover:underline">
+            <Link href="/docs/enterprise" className="text-blue-400 hover:underline">
               Enterprise documentation
-            </a>{" "}
+            </Link>{" "}
             and{" "}
             <a href="/security" className="text-blue-400 hover:underline">
               security overview
