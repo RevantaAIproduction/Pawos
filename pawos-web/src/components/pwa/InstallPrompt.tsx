@@ -18,8 +18,8 @@ type BeforeInstallPromptEvent = Event & {
  */
 export function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isIOS] = useState(() => /iPad|iPhone|iPod/.test(navigator.userAgent) && !('MSStream' in window));
-  const [isStandalone] = useState(() => window.matchMedia('(display-mode: standalone)').matches);
+  const [isIOS] = useState(() => typeof navigator !== 'undefined' && typeof window !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent) && !('MSStream' in window));
+  const [isStandalone] = useState(() => typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
