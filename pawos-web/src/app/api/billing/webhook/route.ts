@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getRazorpayWebhookSecret, verifyRazorpayWebhookSignature, getRazorpayPlanId } from "@/lib/billing/razorpay";
+import { getRazorpayWebhookSecret, verifyRazorpayWebhookSignature } from "@/lib/billing/razorpay";
 import { creditVerifiedTicketBalancePayment } from "@/lib/billing/ticketBalanceCrediting";
 import { creditVerifiedUsageCreditsPayment } from "@/lib/billing/usageCreditsCrediting";
 
@@ -33,9 +33,7 @@ function applySubscriptionEvent(event: RazorpayWebhookEvent): void {
  * This is a fire-and-forget async operation — errors are logged but don't block webhook response.
  */
 async function handleTierPurchaseWebhookAsync(
-  paymentEntity: { id?: string; order_id?: string | null; notes?: Record<string, string> } | undefined,
-  paymentId: string,
-  orderId: string
+  paymentEntity: { id?: string; order_id?: string | null; notes?: Record<string, string> } | undefined
 ): Promise<void> {
   if (!paymentEntity?.notes) {
     console.warn("[razorpay-webhook] Tier purchase event missing payment notes");
@@ -194,7 +192,7 @@ async function applyPaymentCapturedEvent(event: RazorpayWebhookEvent): Promise<v
 
   // Handle tier purchases via webhook (backup path if client-side verify fails)
   if (productType === "tier_purchase") {
-    await handleTierPurchaseWebhookAsync(paymentEntity, paymentId, orderId).catch((error) => {
+    await handleTierPurchaseWebhookAsync(paymentEntity).catch((error) => {
       console.warn(`[razorpay-webhook] Tier purchase webhook handling failed for ${paymentId}:`, error);
     });
     return;

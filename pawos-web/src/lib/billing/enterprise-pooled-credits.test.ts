@@ -13,10 +13,7 @@ import {
   isPoolExhausted,
   validateSettlementAmount,
   calculateInvoiceRoute,
-  CREDITS_PER_USD,
   USD_INR_RATE,
-  LOW_BALANCE_THRESHOLD,
-  MAX_SUPPORTED_SETTLEMENT_USD,
   MAX_CUSTOM_POOL_CREDITS,
   MAX_ENTERPRISE_SEATS,
 } from './enterprise-pooled-credits';

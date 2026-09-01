@@ -96,7 +96,7 @@ export async function POST(request: Request) {
   const storagePath = `billing-cases/${billingCaseId}/${invoiceId}-${Date.now()}-${file.name}`;
   const buffer = await file.arrayBuffer();
 
-  const { error: uploadError, data: uploadData } = await dbClient.storage
+  const { error: uploadError } = await dbClient.storage
     .from("payment-evidence")
     .upload(storagePath, buffer, {
       contentType: file.type,

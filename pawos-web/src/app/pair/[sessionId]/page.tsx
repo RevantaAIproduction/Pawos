@@ -47,5 +47,5 @@ export default async function PairPage({
     );
   }
 
-  return <PairClient sessionId={sessionId} token={token} userEmail={user.email ?? null} />;
+  return <PairClient token={token} userEmail={user.email ?? null} />;
 }

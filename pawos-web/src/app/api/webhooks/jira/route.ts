@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/serviceClient";
 
 const JIRA_WEBHOOK_SECRET = process.env.JIRA_WEBHOOK_SECRET || "";
 
@@ -24,7 +23,6 @@ export async function POST(request: Request) {
 
   const event = body.webhookEvent as string | undefined;
   const issue = body.issue as Record<string, unknown> | undefined;
-  const changelog = body.changelog as Record<string, unknown> | undefined;
 
   if (!event || !issue) {
     console.log("[jira-webhook] Received event without issue context:", event);
@@ -39,7 +37,7 @@ export async function POST(request: Request) {
 
   // MVP: log the event (future: route to ticket queue, check if assignee is org member, etc.)
   if (event === "jira:issue_created" || event === "jira:issue_updated") {
-    await logJiraEventAsync(issueKey, issueSummary, assignee, event);
+    await logJiraEventAsync(issueKey, issueSummary, assignee);
   }
 
   return NextResponse.json({ ok: true });
@@ -48,11 +46,9 @@ export async function POST(request: Request) {
 async function logJiraEventAsync(
   issueKey: string,
   summary: string,
-  assigneeEmail: string | null,
-  event: string
+  assigneeEmail: string | null
 ): Promise<void> {
   try {
-    const supabase = createServiceClient();
     // Future: insert into ticket_discovery_events or queue based on assignee
     console.log(`[jira-webhook] Would queue ticket ${issueKey} for assignee ${assigneeEmail || "unassigned"}`);
   } catch (error) {

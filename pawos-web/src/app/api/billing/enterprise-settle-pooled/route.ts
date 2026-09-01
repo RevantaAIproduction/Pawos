@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import { CREDITS_PER_USD, calculateOutstandingUsd, calculateInvoiceRoute, MAX_SUPPORTED_SETTLEMENT_USD } from "@/lib/billing/enterprise-pooled-credits";
+import { calculateOutstandingUsd, calculateInvoiceRoute, MAX_SUPPORTED_SETTLEMENT_USD } from "@/lib/billing/enterprise-pooled-credits";
 
 /**
  * POST: Start early settlement of Enterprise pooled usage

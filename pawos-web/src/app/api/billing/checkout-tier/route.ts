@@ -7,21 +7,6 @@ const VALID_SEAT_TIERS: SeatTier[] = ["standard", "premium"];
 const PURCHASABLE_RUNTIME_IDS = ["coding"] as const;
 type PurchasableRuntimeId = (typeof PURCHASABLE_RUNTIME_IDS)[number];
 
-// Personal/free email providers that require organization email for Team/Enterprise tiers
-const PERSONAL_EMAIL_DOMAINS = new Set([
-  "gmail.com",
-  "yahoo.com",
-  "outlook.com",
-  "hotmail.com",
-  "live.com",
-  "icloud.com",
-  "protonmail.com",
-]);
-
-function isPersonalEmail(email: string): boolean {
-  const domain = email.toLowerCase().split("@")[1];
-  return domain ? PERSONAL_EMAIL_DOMAINS.has(domain) : false;
-}
 
 /**
  * Tier pricing in INR paise (1 INR = 100 paise).
@@ -80,7 +65,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, reason: "Invalid or expired session." }, { status: 401 });
   }
   const userId = userData.user.id;
-  const userEmail = userData.user.email || "";
 
   // ---- Tier validation ----
   if (!tier || !VALID_TIERS.includes(tier)) {

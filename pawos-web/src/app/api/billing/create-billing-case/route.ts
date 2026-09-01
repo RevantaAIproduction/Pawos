@@ -88,7 +88,7 @@ export async function POST(request: Request) {
     global: { headers: { Authorization: `Bearer ${accessToken}` } },
   });
 
-  const { data: caseRecord, error: caseError } = await dbClient
+  const { error: caseError } = await dbClient
     .from("billing_cases")
     .insert({
       id: caseId,

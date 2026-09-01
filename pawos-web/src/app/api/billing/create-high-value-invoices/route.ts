@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import { getRazorpayCredentials, getRazorpayPlanId, razorpayAuthHeader, type SeatTier, type SubscriptionTierId } from "@/lib/billing/razorpay";
+import { getRazorpayCredentials, razorpayAuthHeader, type SeatTier, type SubscriptionTierId } from "@/lib/billing/razorpay";
 
 const VALID_TIERS: SubscriptionTierId[] = ["team", "enterprise"];
 const VALID_SEAT_TIERS: SeatTier[] = ["standard", "premium"];

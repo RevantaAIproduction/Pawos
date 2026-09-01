@@ -20,7 +20,7 @@ export type DownloadPlatform = {
  * Public installers are intentionally held until launch. Environment URLs may
  * exist for release preparation, but the website must not expose any build yet.
  */
-function variant(id: string, label: string, _envUrl: string | undefined): DownloadVariant {
+function variant(id: string, label: string): DownloadVariant {
   return { id, label, status: "comingSoon", url: null };
 }
 
@@ -30,25 +30,25 @@ export function getDownloadPlatforms(): DownloadPlatform[] {
       id: "windows",
       label: "Windows",
       variants: [
-        variant("windows-x64", "Windows x64 (.exe)", process.env.NEXT_PUBLIC_DOWNLOAD_WINDOWS_X64_URL),
-        variant("windows-arm64", "Windows ARM64 (.exe)", process.env.NEXT_PUBLIC_DOWNLOAD_WINDOWS_ARM64_URL),
+        variant("windows-x64", "Windows x64 (.exe)"),
+        variant("windows-arm64", "Windows ARM64 (.exe)"),
       ],
     },
     {
       id: "macos",
       label: "macOS",
       variants: [
-        variant("macos-apple-silicon", "Apple Silicon (M-series)", process.env.NEXT_PUBLIC_DOWNLOAD_MACOS_ARM64_URL),
-        variant("macos-intel", "Intel Macs", process.env.NEXT_PUBLIC_DOWNLOAD_MACOS_X64_URL),
+        variant("macos-apple-silicon", "Apple Silicon (M-series)"),
+        variant("macos-intel", "Intel Macs"),
       ],
     },
     {
       id: "linux",
       label: "Linux",
       variants: [
-        variant("linux-appimage", "AppImage", process.env.NEXT_PUBLIC_DOWNLOAD_LINUX_APPIMAGE_URL),
-        variant("linux-deb", "DEB package", process.env.NEXT_PUBLIC_DOWNLOAD_LINUX_DEB_URL),
-        variant("linux-rpm", "RPM package", process.env.NEXT_PUBLIC_DOWNLOAD_LINUX_RPM_URL),
+        variant("linux-appimage", "AppImage"),
+        variant("linux-deb", "DEB package"),
+        variant("linux-rpm", "RPM package"),
       ],
     },
   ];

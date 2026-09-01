@@ -8,8 +8,6 @@ import {
 } from "@/lib/billing/razorpay";
 import { createServiceClient } from "@/lib/supabase/serviceClient";
 
-const ALLOWED_RUNTIME_IDS = new Set(["coding"]);
-
 /**
  * Verifies a tier purchase payment and activates the tier for the user.
  * Mirrors the existing verify-subscription flow but for one-time Orders instead of Subscriptions.
@@ -68,16 +66,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, reason: "Order tier is invalid or missing." }, { status: 400 });
   }
 
-  const seatTier = tier === "team" ? (order.notes?.seatTier as string | undefined) : undefined;
   const seatCount = order.notes?.seatCount ? Number(order.notes.seatCount) : undefined;
-  const proMaxVariant = tier === "proMax" ? (order.notes?.proMaxVariant as "5x" | "20x" | undefined) : undefined;
-
-  // ---- Extract runtime IDs from order notes ----
-  const rawRuntimeIds = order.notes?.runtimeIds ?? "";
-  const runtimeIds = rawRuntimeIds
-    .split(",")
-    .map((id) => id.trim())
-    .filter((id, index, list) => ALLOWED_RUNTIME_IDS.has(id) && list.indexOf(id) === index);
 
   // ---- Extract user ID from order notes ----
   const userId = typeof order.notes?.userId === "string" ? order.notes.userId : null;

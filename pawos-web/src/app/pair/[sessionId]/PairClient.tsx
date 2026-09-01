@@ -12,7 +12,7 @@ function getErrorMessage(e: unknown): string {
   return String(e);
 }
 
-export function PairClient({ sessionId, token, userEmail }: { sessionId: string; token: string; userEmail: string | null }) {
+export function PairClient({ token, userEmail }: { token: string; userEmail: string | null }) {
   const [status, setStatus] = useState<PairStatus>("idle");
   const [error, setError] = useState<string | null>(null);
 
