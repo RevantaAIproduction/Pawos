@@ -1,4 +1,4 @@
-import type { DocPage } from '../types';
+﻿import type { DocPage } from '../types';
 
 export const referencePages: DocPage[] = [
   {
@@ -59,7 +59,7 @@ export const referencePages: DocPage[] = [
         text: 'Every renderer-to-main call goes through a typed, explicitly-defined IPC channel — a request shape in, a result shape out — registered once in the preload bridge and once in the main-process handler.',
       },
       { type: 'code', lang: 'ts', filename: 'example (illustrative)', code: `// renderer\nconst result = await window.pawos.executeAction({\n  type: 'installTool',\n  manager: 'winget',\n  packageId: 'Git.Git',\n  confirmed: true,\n});` },
-      { type: 'note', text: 'This is not a public, external API — it’s an internal contract between two processes of the same application. See API Reference.' },
+      { type: 'note', text: 'This is not a public, external API — it's an internal contract between two processes of the same application. See API Reference.' },
     ],
     related: ['reference/main-preload-renderer', 'reference/api-reference'],
   },
@@ -133,7 +133,7 @@ export const referencePages: DocPage[] = [
     title: 'Connector Architecture',
     description: 'The ConnectorSDK interface every real integration implements.',
     blocks: [
-      { type: 'paragraph', text: 'Every connector implements one common ConnectorSDK interface (authenticate, connect, getStatus, validate) — OAuth token exchange happens on PawOS’s backend, never inside the desktop client.' },
+      { type: 'paragraph', text: 'Every connector implements one common ConnectorSDK interface (authenticate, connect, getStatus, validate) — OAuth token exchange happens on PawOS's backend, never inside the desktop client.' },
     ],
     related: ['connectors/overview', 'security/connectors'],
   },
@@ -167,13 +167,13 @@ export const referencePages: DocPage[] = [
     related: ['reference/architecture', 'connectors/overview'],
   },
   {
-    section: ‘reference’,
-    slug: ‘changelog’,
-    title: ‘Changelog’,
-    description: ‘Where release notes live.’,
+    section: 'reference',
+    slug: 'changelog',
+    title: 'Changelog',
+    description: 'Where release notes live.',
     blocks: [
-      { type: ‘paragraph’, text: ‘See the site’s dedicated Changelog page for dated release notes. PawOS follows semantic versioning once public releases begin.’ },
+      { type: 'paragraph', text: 'See the site's dedicated Changelog page for dated release notes. PawOS follows semantic versioning once public releases begin.' },
     ],
-    related: [‘reference/architecture’],
+    related: ['reference/architecture'],
   },
 ];
