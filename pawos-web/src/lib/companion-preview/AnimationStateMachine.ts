@@ -23,7 +23,7 @@ export class AnimationStateMachine {
     private manager: AnimationManager,
     private defaultName: AnimationName
   ) {
-    this.manager.mixer.addEventListener('finished', this.onFinished as any);
+    this.manager.mixer.addEventListener('finished', this.handleAnimationFinished as unknown as EventListener);
   }
 
   getCurrent(): AnimationName | null {
@@ -67,9 +67,16 @@ export class AnimationStateMachine {
   }
 
   dispose() {
-    this.manager.mixer.removeEventListener('finished', this.onFinished as any);
+    this.manager.mixer.removeEventListener('finished', this.handleAnimationFinished as unknown as EventListener);
     this.listeners.clear();
   }
+
+  private handleAnimationFinished = (event: object) => {
+    const typedEvent = event as { action?: THREE.AnimationAction };
+    if (typedEvent.action) {
+      this.handleFinished(typedEvent.action);
+    }
+  };
 
   private transitionTo(name: AnimationName, durationMs: number) {
     const next = this.manager.getAction(name);
