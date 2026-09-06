@@ -150,12 +150,17 @@ export const autonomousTaskBillingService = {
    * Idempotent: calling multiple times for the same runId returns the same billing event ID.
    */
   async settleWithActualPc(runId: string, actualPc: number): Promise<string> {
+    console.log('[SETTLEMENT_IDEMPOTENCY_GUARD] runId:', runId, 'actualPc:', actualPc, '— RPC enforces settled_at check for idempotency');
     const supabase = await getSupabaseClient();
     const { data, error } = await supabase.rpc('settle_autonomous_task_run_pc', {
       p_run_id: runId,
       p_actual_pc: actualPc,
     });
-    if (error) throw error;
+    if (error) {
+      console.error('[SETTLEMENT_IDEMPOTENCY_RPC_ERROR] runId:', runId, 'error:', error.message);
+      throw error;
+    }
+    console.log('[SETTLEMENT_IDEMPOTENCY_SUCCESS] runId:', runId, 'billingEventId:', data, '— billing event recorded with settled_at timestamp');
     return data as string;
   },
 

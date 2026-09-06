@@ -77,6 +77,8 @@ export function AutonomousTaskBillingCard({ organizationId }: { organizationId: 
   const [amountInput, setAmountInput] = useState(String(TICKET_BALANCE_TOPUP_PRESETS_USD[0]));
   const [busy, setBusy] = useState(false);
   const [checkoutIntent, setCheckoutIntent] = useState<NativeBillingCheckoutIntent | null>(null);
+  const [showCreateTask, setShowCreateTask] = useState(false);
+  const [createTaskInput, setCreateTaskInput] = useState({ ticketSource: 'github' as const, ticketId: '' });
 
   function reload() {
     Promise.all([
@@ -137,6 +139,35 @@ export function AutonomousTaskBillingCard({ organizationId }: { organizationId: 
     }
   }
 
+  async function createNewTask() {
+    setError(null);
+    if (!createTaskInput.ticketId.trim()) {
+      setError('Ticket ID is required');
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await ipc.actionExecute({
+        type: 'startAutonomousEngineeringTask',
+        ticketId: createTaskInput.ticketId,
+        ticketSource: createTaskInput.ticketSource,
+        organizationId,
+      });
+      if (result.ok) {
+        setMessage(`Created autonomous task ${createTaskInput.ticketId}`);
+        setShowCreateTask(false);
+        setCreateTaskInput({ ticketSource: 'github', ticketId: '' });
+        setTimeout(reload, 1000);
+      } else {
+        setError(result.message || getErrorMessage(result.reason));
+      }
+    } catch (e) {
+      setError(getErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function addFunds() {
     const parsed = Number.parseFloat(amountInput);
     if (!Number.isFinite(parsed) || parsed < pricingConfig.minTopupUsd) {
@@ -170,7 +201,46 @@ export function AutonomousTaskBillingCard({ organizationId }: { organizationId: 
   return (
     <>
     <div className={styles.card}>
-      <h3 className={styles.cardTitle}>Autonomous Ticket System</h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <h3 className={styles.cardTitle}>Autonomous Ticket System</h3>
+        <button
+          type="button"
+          onClick={reload}
+          disabled={loading}
+          title="Refresh balance, runs, and billing history"
+          style={{
+            padding: '6px 12px',
+            fontSize: 12,
+            fontWeight: 500,
+            borderRadius: 6,
+            border: '1px solid rgba(124,156,255,0.3)',
+            background: 'rgba(124,156,255,0.08)',
+            color: '#7c9cff',
+            cursor: 'pointer',
+            opacity: loading ? 0.5 : 1,
+          }}
+        >
+          {loading ? 'Refreshing…' : 'Refresh'}
+        </button>
+      </div>
+      {(message || error) && (
+        <div style={{
+          padding: 10,
+          marginBottom: 12,
+          borderRadius: 8,
+          fontSize: 12.5,
+          background: message ? 'rgba(140,224,168,0.1)' : 'rgba(224,140,140,0.1)',
+          border: `1px solid ${message ? 'rgba(140,224,168,0.3)' : 'rgba(224,140,140,0.3)'}`,
+          color: message ? '#8ce0a8' : '#e08c8c',
+        }}>
+          {message || error}
+        </div>
+      )}
+      {(totalCompleted > 0 || pendingPermissionRuns.length > 0) && (
+        <div style={{ marginBottom: 12, fontSize: 12.5, color: '#888888' }}>
+          Status: {totalCompleted} completed tickets • {pendingPermissionRuns.length} awaiting approval
+        </div>
+      )}
       <p className={styles.cardBody} style={{ marginTop: 6, marginBottom: 12 }}>
         Top up any dollar amount into a Ticket Balance — never for chat, research, meetings,
         documents, browser automation, or manual coding help. Funds are deducted only once a ticket
@@ -179,6 +249,91 @@ export function AutonomousTaskBillingCard({ organizationId }: { organizationId: 
         cancelled, hits its retry limit, or is denied approval never consumes balance. Available
         for tickets from Jira, Linear, and GitHub Issues.
       </p>
+
+      <div style={{ marginBottom: 14, display: 'flex', gap: 8 }}>
+        <button
+          type="button"
+          onClick={() => setShowCreateTask(true)}
+          disabled={balanceUsd < nextTicketPrice || loading}
+          style={{
+            padding: '8px 16px',
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: 'pointer',
+            background: balanceUsd < nextTicketPrice ? 'rgba(140,140,140,0.2)' : 'rgba(124,156,255,0.15)',
+            border: balanceUsd < nextTicketPrice ? '1px solid rgba(140,140,140,0.3)' : '1px solid #7c9cff',
+            color: balanceUsd < nextTicketPrice ? '#888888' : '#7c9cff',
+          }}
+        >
+          Start New Autonomous Task
+        </button>
+      </div>
+
+      {showCreateTask && (
+        <div style={{
+          marginBottom: 14,
+          padding: 12,
+          borderRadius: 10,
+          background: 'rgba(124,156,255,0.08)',
+          border: '1px solid rgba(124,156,255,0.3)',
+        }}>
+          <p style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 8 }}>Create New Autonomous Task</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <select
+              value={createTaskInput.ticketSource}
+              onChange={(e) => setCreateTaskInput({ ...createTaskInput, ticketSource: e.target.value as any })}
+              style={inputStyle}
+            >
+              <option value="github">GitHub Issues</option>
+              <option value="jira">Jira</option>
+              <option value="linear">Linear</option>
+            </select>
+            <input
+              type="text"
+              placeholder="Ticket ID (e.g., PROJ-123 or #456)"
+              value={createTaskInput.ticketId}
+              onChange={(e) => setCreateTaskInput({ ...createTaskInput, ticketId: e.target.value })}
+              style={inputStyle}
+            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                disabled={busy || !createTaskInput.ticketId.trim()}
+                onClick={createNewTask}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: 8,
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  background: busy || !createTaskInput.ticketId.trim() ? 'rgba(140,140,140,0.2)' : 'rgba(140,224,168,0.15)',
+                  border: busy || !createTaskInput.ticketId.trim() ? '1px solid rgba(140,140,140,0.3)' : '1px solid #8ce0a8',
+                  color: busy || !createTaskInput.ticketId.trim() ? '#888888' : '#8ce0a8',
+                }}
+              >
+                {busy ? 'Creating...' : 'Create'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCreateTask(false)}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: 8,
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  background: 'rgba(224,140,140,0.1)',
+                  border: '1px solid rgba(224,140,140,0.3)',
+                  color: '#e08c8c',
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {pendingPermissionRuns.length > 0 && (
         <div style={{ marginBottom: 14, padding: 12, borderRadius: 10, background: 'rgba(224,194,140,0.08)', border: '1px solid rgba(224,194,140,0.3)' }}>

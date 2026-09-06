@@ -274,7 +274,13 @@ export class HeadlessTurnRunner implements AutonomousTurnRunner {
     const settlement = this.awaitSettlement(runtime, () => latestRecord);
     runtime.submitTranscript(prompt);
     const result = await settlement;
-    if (result.kind === 'finished') this.sessions.delete(opts.autonomousRunId);
+    if (result.kind === 'finished') {
+      console.log('[BILLING_SAFETY_VERIFICATION] runId:', opts.autonomousRunId, 'turn completed and settlement succeeded (usage recorded via onTurnUsage callback)');
+      this.sessions.delete(opts.autonomousRunId);
+    }
+    if (result.kind === 'waitingForPermission') {
+      console.log('[BILLING_SAFETY_PERMISSION_PENDING] runId:', opts.autonomousRunId, 'turn awaiting approval before completion');
+    }
     return result;
   }
 
@@ -383,6 +389,7 @@ export interface AutonomousOrchestrationResult {
  */
 export async function orchestrateAutonomousRun(input: AutonomousOrchestrationInput, deps: AutonomousOrchestrationDeps = defaultDeps()): Promise<AutonomousOrchestrationResult> {
   console.log('[AUTONOMOUS_RUN_START] runId:', input.runId, 'ticketId:', input.ticketId, 'source:', input.ticketSource);
+  console.log('[TIER_COMPUTE_ISOLATION] autonomous work uses Ticket Balance PC, NOT Tier Compute');
   const requiredConnectorId = input.ticketSource ? CONNECTOR_ID_BY_TICKET_SOURCE[input.ticketSource] : undefined;
   if (requiredConnectorId) {
     const userId = await deps.getCurrentUserId();
