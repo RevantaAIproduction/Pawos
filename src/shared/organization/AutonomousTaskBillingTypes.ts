@@ -39,6 +39,7 @@ export type AutonomousTaskStatus =
   | 'queued'
   | 'running'
   | 'waiting_for_permission'
+  | 'waiting_for_topup'
   | 'blocked'
   | 'completed'
   | 'failed'
