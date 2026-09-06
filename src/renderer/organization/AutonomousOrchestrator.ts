@@ -254,6 +254,17 @@ export class HeadlessTurnRunner implements AutonomousTurnRunner {
       getExecutionMode: () => executionMode,
       isBypassPermissionsEnabled: () => false,
       autonomousRunId: opts.autonomousRunId,
+      onTurnUsage: async (submission) => {
+        const recordPromise = bridge.billingRecordAutonomousTurnUsage?.(submission);
+        if (!recordPromise) {
+          throw new Error('Usage recording bridge unavailable (cannot bill work safely)');
+        }
+        try {
+          await recordPromise;
+        } catch (err) {
+          throw new Error(`Usage recording failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      },
     });
 
     this.sessions.set(opts.autonomousRunId, { runtime });

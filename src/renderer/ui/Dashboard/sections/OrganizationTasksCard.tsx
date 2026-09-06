@@ -99,7 +99,7 @@ export function OrganizationTasksCard({ organizationId, members }: { organizatio
                       <span style={{ fontSize: 13, fontWeight: 500 }}>{task.title}</span>
                       <span style={{ fontSize: 11, color: '#96969e' }}>{task.progressPercent}%</span>
                     </div>
-                    <div style={{ fontSize: 11, color: '#96969e' }}>{memberMap.get(task.assignedTo) ? Assigned to  : 'Unassigned'}</div>
+                    <div style={{ fontSize: 11, color: '#96969e' }}>{memberMap.get(task.assignedTo) ? `Assigned to ${memberMap.get(task.assignedTo)}` : 'Unassigned'}</div>
                     {expandedTaskId === task.id && canManage && (
                       <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                         <label style={{ fontSize: 11, color: '#96969e', display: 'block', marginBottom: 4 }}>Assign to:</label>
