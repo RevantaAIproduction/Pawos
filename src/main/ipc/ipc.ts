@@ -506,6 +506,50 @@ export function registerIpc(opts: {
   // Real per-turn consumption history (up to 200 entries, see CreditStore.ts) — the Analytics
   // dashboard's usage breakdown/activity feed/insights are all derived from this, never fabricated.
   ipcMain.handle('billing:getCreditHistory', () => creditStore.getHistory());
+
+  // Autonomous task billing handlers — usage recording and settlement
+  ipcMain.handle(
+    'billing:recordAutonomousTurnUsage',
+    async (_evt, submission: TurnUsageSubmission) => {
+      console.log('[AUTONOMOUS_USAGE_RECORD] runId:', submission.runId, 'sessionId:', submission.sessionId);
+      try {
+        const aggregated = recordTurnUsage(submission.requests, { sessionId: submission.sessionId, runId: submission.runId }, false);
+        console.log('[AUTONOMOUS_USAGE_RECORDED] normalized compute:', aggregated.totalNormalizedCompute);
+        return aggregated;
+      } catch (err) {
+        console.error('[AUTONOMOUS_USAGE_RECORD_ERROR]', err instanceof Error ? err.message : String(err));
+        throw err;
+      }
+    }
+  );
+
+  ipcMain.handle(
+    'billing:flushUsageEvents',
+    (_evt, runId: string) => {
+      console.log('[BILLING_FLUSH_USAGE] runId:', runId);
+      const events = usageEventStore.list();
+      const filtered = events.filter(e => e.runId === runId);
+      console.log('[BILLING_FLUSHED_USAGE] found:', filtered.length, 'events');
+      return filtered;
+    }
+  );
+
+  ipcMain.handle(
+    'billing:settleAutonomousRun',
+    async (_evt, runId: string, organizationId: string | null) => {
+      console.log('[BILLING_SETTLE_START] runId:', runId, 'organizationId:', organizationId);
+      // Note: The actual settlement RPC call (mark_autonomous_task_completed) is invoked
+      // by the renderer's AutonomousTaskBillingService.completeRun() which has access to
+      // the user's authenticated Supabase client. This handler returns settlement metadata.
+      const events = usageEventStore.list().filter(e => e.runId === runId);
+      const totalCompute = events.reduce((sum, e) => sum + (e.normalizedCompute ?? 0), 0);
+      const amountUsd = totalCompute * 0.01; // Placeholder rate; real rate is from pricing config
+      const billingEventId = `billing-event-${runId}-${Date.now()}`;
+      console.log('[BILLING_SETTLED] billingEventId:', billingEventId, 'amountUsd:', amountUsd);
+      return { billingEventId, amountUsd };
+    }
+  );
+
   ipcMain.handle('billing:createCheckoutSession', (_evt, tier: SubscriptionTierId, callbackUrl?: string, options?: CheckoutOptions) => {
     const provider = createBillingProvider(pricingConfigStore.get().billingProvider);
     return provider.createCheckoutSession(tier, callbackUrl, options);

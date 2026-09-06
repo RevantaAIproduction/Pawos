@@ -46,6 +46,7 @@ class UsageEventStore {
   /** Appends one already-normalized record — normalization itself happens in UsageMeteringEngine.ts,
    *  never here; this store only persists what it's given. */
   append(record: NormalizedUsageRecord): void {
+    console.log('[USAGE_EVENT_APPEND] requestId:', record.requestId, 'runId:', record.runId, 'normalizedCompute:', record.normalizedCompute);
     this.state.records.push(record);
     if (this.state.records.length > MAX_ENTRIES) {
       this.state.records = this.state.records.slice(-MAX_ENTRIES);

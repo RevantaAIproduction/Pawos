@@ -473,6 +473,17 @@ app.whenReady().then(async () => {
   // (PUBLIC_ENV_DEFAULTS < .env file).
   Object.assign(process.env, envVars);
 
+  // Staging environment override — if PAWOS_STAGING_URL is set, use it and the staging
+  // anon key instead of the default prod Supabase credentials. Allows testing against
+  // a staging Supabase project without code changes.
+  if (envVars.PAWOS_STAGING_URL && envVars.PAWOS_STAGING_ANON_KEY) {
+    console.log('[STAGING_ENV_LOADED] using staging Supabase project');
+    envVars.SUPABASE_URL = envVars.PAWOS_STAGING_URL;
+    envVars.SUPABASE_PUBLISHABLE_KEY = envVars.PAWOS_STAGING_ANON_KEY;
+    process.env.SUPABASE_URL = envVars.PAWOS_STAGING_URL;
+    process.env.SUPABASE_PUBLISHABLE_KEY = envVars.PAWOS_STAGING_ANON_KEY;
+  }
+
   if (envVars.SMTP_HOST && envVars.SMTP_USER && envVars.SMTP_PASS && envVars.EMAIL_FROM) {
     emailService.init({
       host: envVars.SMTP_HOST,

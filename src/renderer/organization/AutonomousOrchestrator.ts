@@ -255,13 +255,16 @@ export class HeadlessTurnRunner implements AutonomousTurnRunner {
       isBypassPermissionsEnabled: () => false,
       autonomousRunId: opts.autonomousRunId,
       onTurnUsage: async (submission) => {
+        console.log('[AUTONOMOUS_RUN_USAGE_RECORD_START] runId:', opts.autonomousRunId);
         const recordPromise = bridge.billingRecordAutonomousTurnUsage?.(submission);
         if (!recordPromise) {
           throw new Error('Usage recording bridge unavailable (cannot bill work safely)');
         }
         try {
           await recordPromise;
+          console.log('[AUTONOMOUS_RUN_USAGE_RECORDED] runId:', opts.autonomousRunId);
         } catch (err) {
+          console.error('[AUTONOMOUS_RUN_USAGE_RECORD_FAILED] runId:', opts.autonomousRunId, 'error:', err instanceof Error ? err.message : String(err));
           throw new Error(`Usage recording failed: ${err instanceof Error ? err.message : String(err)}`);
         }
       },
@@ -379,6 +382,7 @@ export interface AutonomousOrchestrationResult {
  * for anything but a genuine 'success' outcome — see the switch below.
  */
 export async function orchestrateAutonomousRun(input: AutonomousOrchestrationInput, deps: AutonomousOrchestrationDeps = defaultDeps()): Promise<AutonomousOrchestrationResult> {
+  console.log('[AUTONOMOUS_RUN_START] runId:', input.runId, 'ticketId:', input.ticketId, 'source:', input.ticketSource);
   const requiredConnectorId = input.ticketSource ? CONNECTOR_ID_BY_TICKET_SOURCE[input.ticketSource] : undefined;
   if (requiredConnectorId) {
     const userId = await deps.getCurrentUserId();

@@ -243,6 +243,12 @@ export function contextBridge() {
       requestType: UsageRequestType,
       context: { sessionId: string | null; runId: string | null }
     ) => ipcRenderer.invoke("billing:reportUsageEvent", usage, requestType, context) as Promise<NormalizedUsageRecord>,
+    billingRecordAutonomousTurnUsage: (submission: TurnUsageSubmission) =>
+      ipcRenderer.invoke("billing:recordAutonomousTurnUsage", submission) as Promise<void>,
+    billingFlushUsageEvents: (runId: string) =>
+      ipcRenderer.invoke("billing:flushUsageEvents", runId) as Promise<NormalizedUsageRecord[]>,
+    billingSettleAutonomousRun: (runId: string, organizationId: string | null) =>
+      ipcRenderer.invoke("billing:settleAutonomousRun", runId, organizationId) as Promise<{ billingEventId: string; amountUsd: number }>,
     billingGetUsageEvents: (limit?: number) => ipcRenderer.invoke("billing:getUsageEvents", limit) as Promise<NormalizedUsageRecord[]>,
     billingGetCreditHistory: () => ipcRenderer.invoke("billing:getCreditHistory") as Promise<CreditConsumptionRecord[]>,
     billingGrantComputeBonus: (units: number) => ipcRenderer.invoke("billing:grantComputeBonus", units) as Promise<EntitlementSnapshot>,
