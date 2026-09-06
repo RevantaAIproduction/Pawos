@@ -139,6 +139,27 @@ export const autonomousTaskBillingService = {
   },
 
   /**
+   * PC-based settlement using authoritative actual PC from main-process UsageEventStore.
+   * Called after main process calculates actual PC from usage events. This method executes
+   * the settlement RPC with the user's authenticated Supabase client, ensuring authorization
+   * and idempotency at the database level.
+   *
+   * Returns billing event ID on success. Throws if settlement fails (insufficient balance,
+   * actual_pc exceeds reserved_pc, run not in terminal state, etc.).
+   *
+   * Idempotent: calling multiple times for the same runId returns the same billing event ID.
+   */
+  async settleWithActualPc(runId: string, actualPc: number): Promise<string> {
+    const supabase = await getSupabaseClient();
+    const { data, error } = await supabase.rpc('settle_autonomous_task_run_pc', {
+      p_run_id: runId,
+      p_actual_pc: actualPc,
+    });
+    if (error) throw error;
+    return data as string;
+  },
+
+  /**
    * The single, explicit entry point for every non-completion state change (queued->running,
    * running->waiting_for_permission/blocked/failed/cancelled, waiting_for_permission->running/
    * cancelled/blocked, blocked->failed/cancelled) — see transition_autonomous_task_run() in

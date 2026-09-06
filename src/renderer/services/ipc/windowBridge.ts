@@ -242,11 +242,8 @@ export function contextBridge() {
       ipcApi.invoke('billing:recordAutonomousTurnUsage', submission),
     billingFlushUsageEvents: async (runId: string): Promise<NormalizedUsageRecord[]> =>
       ipcApi.invoke('billing:flushUsageEvents', runId),
-    billingSettleAutonomousRun: async (
-      runId: string,
-      organizationId: string | null
-    ): Promise<{ billingEventId: string; amountUsd: number }> =>
-      ipcApi.invoke('billing:settleAutonomousRun', runId, organizationId),
+    billingGetAuthoritativeActualPc: async (runId: string): Promise<number> =>
+      ipcApi.invoke('billing:settleAutonomousRun', runId, null),
     billingGetUsageEvents: async (limit?: number): Promise<NormalizedUsageRecord[]> => ipcApi.invoke('billing:getUsageEvents', limit),
     billingGetCreditHistory: async (): Promise<CreditConsumptionRecord[]> => ipcApi.invoke('billing:getCreditHistory'),
     billingGrantComputeBonus: async (units: number): Promise<EntitlementSnapshot> => ipcApi.invoke('billing:grantComputeBonus', units),

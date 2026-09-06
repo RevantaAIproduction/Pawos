@@ -538,15 +538,23 @@ export function registerIpc(opts: {
     'billing:settleAutonomousRun',
     async (_evt, runId: string, organizationId: string | null) => {
       console.log('[BILLING_SETTLE_START] runId:', runId, 'organizationId:', organizationId);
-      // Note: The actual settlement RPC call (mark_autonomous_task_completed) is invoked
-      // by the renderer's AutonomousTaskBillingService.completeRun() which has access to
-      // the user's authenticated Supabase client. This handler returns settlement metadata.
-      const events = usageEventStore.list().filter(e => e.runId === runId);
-      const totalCompute = events.reduce((sum, e) => sum + (e.normalizedCompute ?? 0), 0);
-      const amountUsd = totalCompute * 0.01; // Placeholder rate; real rate is from pricing config
-      const billingEventId = `billing-event-${runId}-${Date.now()}`;
-      console.log('[BILLING_SETTLED] billingEventId:', billingEventId, 'amountUsd:', amountUsd);
-      return { billingEventId, amountUsd };
+      // Main process is authoritative for actual PC — calculated from UsageEventStore, not
+      // accepting renderer-supplied values. The RPC is called by the renderer with this
+      // actual PC, ensuring main process controls the billing calculation while respecting
+      // that authenticated RPC calls (settle_autonomous_task_run_pc) require user context.
+      try {
+        const events = usageEventStore.list().filter(e => e.runId === runId);
+        if (events.length === 0) {
+          console.log('[BILLING_SETTLE_NO_USAGE] runId:', runId, '— no usage events recorded');
+          return 0;
+        }
+        const actualPc = events.reduce((sum, e) => sum + (e.normalizedCompute ?? 0), 0);
+        console.log('[BILLING_ACTUAL_PC_CALCULATED] runId:', runId, 'actualPc:', actualPc, 'eventCount:', events.length);
+        return actualPc;
+      } catch (err) {
+        console.error('[BILLING_SETTLE_ERROR] runId:', runId, 'error:', err instanceof Error ? err.message : String(err));
+        throw err;
+      }
     }
   );
 
