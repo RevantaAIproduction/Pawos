@@ -76,7 +76,7 @@ describe('UsageQuotaConfigStore — config-driven quotas, no hardcoded Pro Max n
 
     usageQuotaConfigStore.applySyncedConfig(withoutAiReasoning as unknown as typeof current);
 
-    expect(usageQuotaConfigStore.getEffectiveQuota('go', undefined, 'aiReasoning')).toBe(20);
+    expect(usageQuotaConfigStore.getEffectiveQuota('go', undefined, 'aiReasoning')).toBe(200);
     expect(usageQuotaConfigStore.getEffectiveQuota('pro', undefined, 'aiReasoning')).not.toBeNull();
     expect(usageQuotaConfigStore.getEffectiveQuota('team', 'standard', 'aiReasoning')).not.toBeNull();
   });

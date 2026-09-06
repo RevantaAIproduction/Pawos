@@ -11,10 +11,11 @@ const MAX_ENTRIES = 2000;
 
 type State = {
   records: NormalizedUsageRecord[];
+  recoveryRequired?: boolean;
 };
 
 function freshState(): State {
-  return { records: [] };
+  return { records: [], recoveryRequired: false };
 }
 
 /**
@@ -69,6 +70,57 @@ class UsageEventStore {
    *  accepted, disclosed edge of the existing eviction policy, not a new gap this method introduces. */
   findByRequestId(requestId: string): NormalizedUsageRecord | undefined {
     return this.state.records.find((r) => r.requestId === requestId);
+  }
+
+  /** Calculate actual PC for a run. CRITICAL SAFETY: Returns 0 only for legitimate zero-usage runs.
+   *  If checkpoint corruption is detected (recoveryRequired flag set), throws an error instead.
+   *  This prevents silent undercharging when usage events are lost due to process crash or IPC failure.
+   *
+   *  Usage:
+   *    Normal 0-usage run → returns 0 (safe)
+   *    Corrupted checkpoint → throws error (requires recovery)
+   *  */
+  calculateActualPcForRun(runId: string): number {
+    // CRITICAL SAFETY CHECK: Do not return zero usage if checkpoint integrity is uncertain
+    if (this.state.recoveryRequired === true) {
+      throw new Error(
+        `[RECOVERY_REQUIRED] Usage data integrity compromised for run ${runId}. ` +
+        `Cannot settle with potentially incomplete records. Manual checkpoint recovery required.`
+      );
+    }
+
+    const records = this.state.records.filter((r) => r.runId === runId);
+    const actualPc = Math.round(records.reduce((sum, r) => sum + (r.normalizedCompute ?? 0), 0));
+
+    console.log(
+      '[USAGE_ACTUAL_PC_CALCULATED]',
+      { runId, actualPc, recordCount: records.length, recoveryRequired: this.state.recoveryRequired }
+    );
+
+    return actualPc;
+  }
+
+  /** Check if checkpoint recovery is required. Used by settlement handlers to block
+   *  settlement when data integrity is uncertain. */
+  isRecoveryRequired(): boolean {
+    return this.state.recoveryRequired === true;
+  }
+
+  /** Mark checkpoint as requiring recovery. Called when checkpoint integrity is
+   *  compromised (e.g., process crash during write, IPC failure, filesystem errors).
+   *  Settlement will be blocked until recovery completes. */
+  setRecoveryRequired(reason: string): void {
+    console.log('[USAGE_RECOVERY_FLAG_SET]', { reason });
+    this.state.recoveryRequired = true;
+    this.save();
+  }
+
+  /** Clear recovery flag after successful recovery/reconciliation. Called only after
+   *  manual review confirms checkpoint integrity. */
+  clearRecoveryFlag(): void {
+    console.log('[USAGE_RECOVERY_FLAG_CLEARED]');
+    this.state.recoveryRequired = false;
+    this.save();
   }
 }
 

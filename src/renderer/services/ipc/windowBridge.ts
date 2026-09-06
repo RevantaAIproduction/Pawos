@@ -242,8 +242,19 @@ export function contextBridge() {
       ipcApi.invoke('billing:recordAutonomousTurnUsage', submission),
     billingFlushUsageEvents: async (runId: string): Promise<NormalizedUsageRecord[]> =>
       ipcApi.invoke('billing:flushUsageEvents', runId),
-    billingGetAuthoritativeActualPc: async (runId: string): Promise<number> =>
-      ipcApi.invoke('billing:settleAutonomousRun', runId, null),
+    billingGetAuthoritativeActualPc: async (runId: string): Promise<number> => {
+      const result = await ipcApi.invoke('billing:settleAutonomousRun', runId, null);
+      // Handle recovery error response format: { actualPc: null, recoveryRequired: true, error: string }
+      if (result && typeof result === 'object' && 'recoveryRequired' in result && result.recoveryRequired === true) {
+        throw new Error(`[RECOVERY_REQUIRED] ${result.error || 'Usage data integrity check failed. Settlement blocked pending recovery.'}`);
+      }
+      // Normal response: { actualPc: number, recoveryRequired: false }
+      if (result && typeof result === 'object' && 'actualPc' in result) {
+        return result.actualPc as number;
+      }
+      // Fallback for old response format (number) during transition
+      return typeof result === 'number' ? result : 0;
+    },
     billingGetUsageEvents: async (limit?: number): Promise<NormalizedUsageRecord[]> => ipcApi.invoke('billing:getUsageEvents', limit),
     billingGetCreditHistory: async (): Promise<CreditConsumptionRecord[]> => ipcApi.invoke('billing:getCreditHistory'),
     billingGrantComputeBonus: async (units: number): Promise<EntitlementSnapshot> => ipcApi.invoke('billing:grantComputeBonus', units),

@@ -527,10 +527,28 @@ export function registerIpc(opts: {
     'billing:flushUsageEvents',
     (_evt, runId: string) => {
       console.log('[BILLING_FLUSH_USAGE] runId:', runId);
-      const events = usageEventStore.list();
-      const filtered = events.filter(e => e.runId === runId);
-      console.log('[BILLING_FLUSHED_USAGE] found:', filtered.length, 'events');
-      return filtered;
+      try {
+        // CRITICAL: Use recovery-safe calculation. Throws if checkpoint compromised.
+        const actualPc = usageEventStore.calculateActualPcForRun(runId);
+        const events = usageEventStore.list().filter(e => e.runId === runId);
+
+        console.log('[BILLING_FLUSHED_USAGE] runId:', runId, 'actualPc:', actualPc, 'eventCount:', events.length);
+        return { actualPc, recoveryRequired: false, eventCount: events.length };
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+
+        if (errorMsg.includes('RECOVERY_REQUIRED') || errorMsg.includes('recovery required')) {
+          console.error('[BILLING_FLUSH_RECOVERY_REQUIRED] runId:', runId);
+          return {
+            actualPc: null,
+            recoveryRequired: true,
+            eventCount: null,
+            error: 'Usage data integrity check failed. Cannot calculate actual PC.',
+          };
+        }
+
+        throw err;
+      }
     }
   );
 
@@ -538,21 +556,32 @@ export function registerIpc(opts: {
     'billing:settleAutonomousRun',
     async (_evt, runId: string, organizationId: string | null) => {
       console.log('[BILLING_SETTLE_START] runId:', runId, 'organizationId:', organizationId);
-      // Main process is authoritative for actual PC — calculated from UsageEventStore, not
-      // accepting renderer-supplied values. The RPC is called by the renderer with this
-      // actual PC, ensuring main process controls the billing calculation while respecting
-      // that authenticated RPC calls (settle_autonomous_task_run_pc) require user context.
+      // Main process is authoritative for actual PC — calculated from UsageEventStore using
+      // recovery-safe method that prevents silent undercharging. Not accepting renderer-supplied
+      // values. The RPC is called by the renderer with this actual PC, ensuring main process
+      // controls the billing calculation while respecting that authenticated RPC calls
+      // (settle_autonomous_task_run_pc) require user context.
       try {
-        const events = usageEventStore.list().filter(e => e.runId === runId);
-        if (events.length === 0) {
-          console.log('[BILLING_SETTLE_NO_USAGE] runId:', runId, '— no usage events recorded');
-          return 0;
-        }
-        const actualPc = events.reduce((sum, e) => sum + (e.normalizedCompute ?? 0), 0);
-        console.log('[BILLING_ACTUAL_PC_CALCULATED] runId:', runId, 'actualPc:', actualPc, 'eventCount:', events.length);
-        return actualPc;
+        // CRITICAL: Use recovery-safe calculation. Throws if checkpoint compromised.
+        const actualPc = usageEventStore.calculateActualPcForRun(runId);
+
+        console.log('[BILLING_ACTUAL_PC_CALCULATED] runId:', runId, 'actualPc:', actualPc);
+        return { actualPc, recoveryRequired: false };
       } catch (err) {
-        console.error('[BILLING_SETTLE_ERROR] runId:', runId, 'error:', err instanceof Error ? err.message : String(err));
+        const errorMsg = err instanceof Error ? err.message : String(err);
+
+        // If error indicates recovery is required, return explicit flag
+        if (errorMsg.includes('RECOVERY_REQUIRED') || errorMsg.includes('recovery required')) {
+          console.error('[BILLING_SETTLE_RECOVERY_REQUIRED] runId:', runId, 'message:', errorMsg);
+          return {
+            actualPc: null,
+            recoveryRequired: true,
+            error: 'Usage data integrity check failed. Settlement blocked pending recovery.',
+          };
+        }
+
+        // Other errors should not silence the problem
+        console.error('[BILLING_SETTLE_ERROR] runId:', runId, 'error:', errorMsg);
         throw err;
       }
     }

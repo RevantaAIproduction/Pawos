@@ -76,6 +76,11 @@ class RollingUsageGate {
       // the user's subscription rolling allowance. Only conversationTurn and toolContinuation
       // (the main chat loop's own requests) count against the user's quota.
       if (record.requestType === 'backgroundTask') continue;
+      // Autonomous work is billed through a separate Ticket Balance wallet, not against
+      // subscription Tier Compute quota. Autonomous usage is recorded with runId set to the
+      // autonomous task ID; normal conversations have runId === null. Exclude autonomous
+      // work from rolling limits to maintain quota separation.
+      if (record.runId !== null) continue;
       if (record.timestamp >= cutoff) total += record.normalizedCompute;
     }
     return Math.round(total * 10_000) / 10_000;

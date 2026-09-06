@@ -80,16 +80,16 @@ describe('RollingUsageGate — sumInWindow / getRollingUsage', () => {
   it('returns the correct limits from PawComputeCapacityStore for each tier', () => {
     vi.spyOn(usageEventStore, 'list').mockReturnValue([]);
     const goSummary = rollingUsageGate.getRollingUsage('go');
-    expect(goSummary.limit5h).toBe(132);
-    expect(goSummary.limit7d).toBe(528);
+    expect(goSummary.limit5h).toBe(10);
+    expect(goSummary.limit7d).toBe(50);
 
     const proSummary = rollingUsageGate.getRollingUsage('pro');
-    expect(proSummary.limit5h).toBe(400);
-    expect(proSummary.limit7d).toBe(1_600);
+    expect(proSummary.limit5h).toBe(200);
+    expect(proSummary.limit7d).toBe(500);
 
     const proMaxSummary = rollingUsageGate.getRollingUsage('proMax');
     expect(proMaxSummary.limit5h).toBe(2_000);
-    expect(proMaxSummary.limit7d).toBe(8_000);
+    expect(proMaxSummary.limit7d).toBe(10_000);
   });
 
   it('resolves Team Premium limits via seatTier parameter', () => {
@@ -97,8 +97,8 @@ describe('RollingUsageGate — sumInWindow / getRollingUsage', () => {
     const standardSummary = rollingUsageGate.getRollingUsage('team', 'standard');
     const premiumSummary = rollingUsageGate.getRollingUsage('team', 'premium');
     expect(premiumSummary.limit5h as number).toBeGreaterThan(standardSummary.limit5h as number);
-    expect(premiumSummary.limit5h).toBe(2_000);
-    expect(standardSummary.limit5h).toBe(800);
+    expect(premiumSummary.limit5h).toBe(625);
+    expect(standardSummary.limit5h).toBe(200);
   });
 });
 

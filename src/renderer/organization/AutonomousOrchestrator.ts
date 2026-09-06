@@ -389,6 +389,11 @@ export interface AutonomousOrchestrationResult {
  */
 export async function orchestrateAutonomousRun(input: AutonomousOrchestrationInput, deps: AutonomousOrchestrationDeps = defaultDeps()): Promise<AutonomousOrchestrationResult> {
   console.log('[AUTONOMOUS_RUN_START] runId:', input.runId, 'ticketId:', input.ticketId, 'source:', input.ticketSource);
+
+  // Capture wallet balance before execution
+  const walletBefore = await deps.billingService.getTicketBalance(input.organizationId ?? null);
+  console.log('[AUTONOMOUS_RUN_WALLET_BEFORE] runId:', input.runId, 'availableBalancePc:', walletBefore.availableBalancePc, 'reservedPc:', walletBefore.reservedPc);
+
   console.log('[TIER_COMPUTE_ISOLATION] autonomous work uses Ticket Balance PC, NOT Tier Compute');
   const requiredConnectorId = input.ticketSource ? CONNECTOR_ID_BY_TICKET_SOURCE[input.ticketSource] : undefined;
   if (requiredConnectorId) {
@@ -556,6 +561,10 @@ async function finishAutonomousRun(
 
   // Transition to awaiting_verification (work is done, now needs human review)
   await deps.billingService.transitionRun(input.runId, 'waiting_for_permission' as any, 'Implementation complete. Awaiting human verification before final completion.');
+
+  // Capture wallet balance after execution (for diagnostic logging)
+  const walletAfter = await deps.billingService.getTicketBalance(input.organizationId ?? null);
+  console.log('[AUTONOMOUS_RUN_WALLET_AFTER] runId:', input.runId, 'availableBalancePc:', walletAfter.availableBalancePc, 'reservedPc:', walletAfter.reservedPc);
 
   // Return the result indicating verification is required
   // Note: billingEventId remains null until verification approves — do NOT charge until verified
