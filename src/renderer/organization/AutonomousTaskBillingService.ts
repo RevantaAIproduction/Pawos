@@ -150,8 +150,23 @@ export const autonomousTaskBillingService = {
    * Idempotent: calling multiple times for the same runId returns the same billing event ID.
    */
   async settleWithActualPc(runId: string, actualPc: number): Promise<string> {
-    console.log('[SETTLEMENT_IDEMPOTENCY_GUARD] runId:', runId, 'actualPc:', actualPc, '— RPC enforces settled_at check for idempotency');
+    // Check if already settled to distinguish first settlement from idempotent retry
     const supabase = await getSupabaseClient();
+    const { data: run, error: runError } = await supabase
+      .from('autonomous_task_runs')
+      .select('settled_at')
+      .eq('id', runId)
+      .single();
+
+    if (runError) {
+      console.error('[SETTLEMENT_IDEMPOTENCY_LOOKUP_ERROR] runId:', runId, 'error:', runError.message);
+      throw runError;
+    }
+
+    const alreadySettled = run.settled_at !== null;
+    const settlementType = alreadySettled ? 'IDEMPOTENT_RETRY' : 'FIRST_SETTLEMENT';
+    console.log('[SETTLEMENT_IDEMPOTENCY_GUARD]', settlementType, 'runId:', runId, 'actualPc:', actualPc);
+
     const { data, error } = await supabase.rpc('settle_autonomous_task_run_pc', {
       p_run_id: runId,
       p_actual_pc: actualPc,
@@ -160,7 +175,8 @@ export const autonomousTaskBillingService = {
       console.error('[SETTLEMENT_IDEMPOTENCY_RPC_ERROR] runId:', runId, 'error:', error.message);
       throw error;
     }
-    console.log('[SETTLEMENT_IDEMPOTENCY_SUCCESS] runId:', runId, 'billingEventId:', data, '— billing event recorded with settled_at timestamp');
+
+    console.log('[SETTLEMENT_IDEMPOTENCY_' + settlementType + '] runId:', runId, 'billingEventId:', data, 'actualPc:', actualPc);
     return data as string;
   },
 
