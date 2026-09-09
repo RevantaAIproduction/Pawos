@@ -1,6 +1,11 @@
 /**
  * Jira Write-Back Plugin — adds comments and updates issue status after autonomous work.
  * Minimal: comment on issue, optionally transition status.
+ *
+ * Supports both OAuth 2.0 (Bearer token) and legacy Basic-auth credentials.
+ * Credential detection:
+ * - If apiEmail === 'api@jira', apiToken is treated as OAuth accessToken (Bearer auth)
+ * - Otherwise, apiEmail + apiToken are treated as Basic-auth credentials
  */
 
 export type JiraCommentInput = {
@@ -20,19 +25,34 @@ export type JiraWriteBackResult = {
   ok: boolean;
   commentId?: string;
   reason?: string;
+  cached?: boolean;          // true if result was from cache (idempotent)
+  recovered?: boolean;       // true if comment ID was recovered via reconciliation
+  retryable?: boolean;       // true if error is retryable
 };
+
+/**
+ * Builds the correct Authorization header for Jira API requests.
+ * Detects OAuth (Bearer token) vs Basic-auth credentials by checking for sentinel email 'api@jira'.
+ */
+function buildJiraAuthorizationHeader(apiEmail: string, apiToken: string): string {
+  if (apiEmail === 'api@jira') {
+    return `Bearer ${apiToken}`;
+  }
+  const auth = Buffer.from(`${apiEmail}:${apiToken}`).toString('base64');
+  return `Basic ${auth}`;
+}
 
 /**
  * Posts a comment to a Jira issue.
  */
 export async function postJiraComment(input: JiraCommentInput): Promise<JiraWriteBackResult> {
   try {
-    const auth = Buffer.from(`${input.apiEmail}:${input.apiToken}`).toString("base64");
+    const authorization = buildJiraAuthorizationHeader(input.apiEmail, input.apiToken);
 
     const response = await fetch(`${input.jiraUrl}/rest/api/3/issue/${input.issueKey}/comments`, {
       method: "POST",
       headers: {
-        Authorization: `Basic ${auth}`,
+        Authorization: authorization,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -80,12 +100,12 @@ export async function transitionJiraIssue(
   transitionName: string
 ): Promise<JiraWriteBackResult> {
   try {
-    const auth = Buffer.from(`${apiEmail}:${apiToken}`).toString("base64");
+    const authorization = buildJiraAuthorizationHeader(apiEmail, apiToken);
 
     // First, get available transitions
     const transitionsResponse = await fetch(`${jiraUrl}/rest/api/3/issue/${issueKey}/transitions`, {
       headers: {
-        Authorization: `Basic ${auth}`,
+        Authorization: authorization,
       },
     });
 
@@ -112,7 +132,7 @@ export async function transitionJiraIssue(
     const response = await fetch(`${jiraUrl}/rest/api/3/issue/${issueKey}/transitions`, {
       method: "POST",
       headers: {
-        Authorization: `Basic ${auth}`,
+        Authorization: authorization,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

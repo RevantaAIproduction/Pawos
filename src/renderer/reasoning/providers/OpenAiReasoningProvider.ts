@@ -30,6 +30,7 @@ export function createOpenAiReasoningProvider(config: OpenAiReasoningConfig): Re
   return {
     id: 'openai',
     label: 'OpenAI',
+    model,
     isSupported() {
       return Boolean(config.apiKey);
     },

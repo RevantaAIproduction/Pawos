@@ -224,6 +224,9 @@ export class ConversationRuntime {
 
   /** Project ID (org_projects.id) for this turn's context — propagated to all ActionRequests created in this turn for RLS scoping. */
   private currentTurnProjectId: string | undefined = undefined;
+  // Map of turnId → temporaryExecutionMode for proper per-request scoping
+  // Prevents mode from one turn leaking into concurrent turns
+  private turnIdToTemporaryMode = new Map<number, ConversationExecutionMode>();
 
   /** Pending approval awaiting user decision — stores action that's blocked on requires-confirmation for later resumption. */
   private pendingApprovalAction: { approvalId: string; request: ActionRequest; toolCall: ReasoningToolCall } | null = null;
@@ -535,6 +538,11 @@ export class ConversationRuntime {
   /** Recent structured runtime events, for debugging only — deliberately not exposed in any user-facing surface. */
   getDebugLog(): ConversationLogEntry[] {
     return [...this.debugLog];
+  }
+
+  /** Get the temporary execution mode for a specific turn ID (set via SubmittedInputContext). */
+  getTemporaryExecutionModeForTurn(turnId: number): ConversationExecutionMode | undefined {
+    return this.turnIdToTemporaryMode.get(turnId);
   }
 
   setReasoningProvider(provider: ReasoningProvider) {
@@ -996,6 +1004,9 @@ export class ConversationRuntime {
     const currentTurn = ++this.turnId;
     this.stopRecognition();
     this.currentTurnProjectId = context?.projectId;
+    if (context?.temporaryExecutionMode) {
+      this.turnIdToTemporaryMode.set(currentTurn, context.temporaryExecutionMode);
+    }
     this.startTurnRecord(transcript);
     this.pendingActionPromises = [];
     this.log('turn-start', { turnId: currentTurn, transcript, source: context?.source ?? 'typed' });
@@ -1497,7 +1508,9 @@ export class ConversationRuntime {
     // plugin's own self-gate ran identically either way, and already refused this exact request
     // once). Every other mode falls through to the existing wait-for-a-real-human-"yes" behavior.
     if (!result.ok && result.reason === 'requires-confirmation') {
-      const mode = this.args.getExecutionMode?.() ?? DEFAULT_EXECUTION_MODE;
+      // Get execution mode: use temporary mode for this turn if set, otherwise use persistent mode
+      const tempMode = this.getTemporaryExecutionModeForTurn(currentTurn);
+      const mode = tempMode ?? this.args.getExecutionMode?.() ?? DEFAULT_EXECUTION_MODE;
       const bypassPermissionsEnabled = this.args.isBypassPermissionsEnabled?.() ?? false;
       if (shouldAutoConfirmAction(mode, request.type, bypassPermissionsEnabled)) {
         await this.executeConfirmedAction(request, toolCall, currentTurn);
@@ -2033,6 +2046,7 @@ export class ConversationRuntime {
     this.finalizeTask(this.currentTurnRecord.assistantResponse || note || '', reason);
     this.persistTurn(this.currentTurnRecord);
     this.currentTurnRecord = null;
+    this.turnIdToTemporaryMode.delete(this.turnId);
   }
 
   /** Hands a finished turn to Electron's session history, if wired. Skips turns with no real content (e.g. an immediately-superseded record). */

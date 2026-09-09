@@ -4,6 +4,7 @@
  */
 
 import { entitlementService } from '../../billing/EntitlementService';
+import { emailService } from '../../mail/EmailService';
 import type {
   Meeting,
   MeetingAttendee,
@@ -34,21 +35,33 @@ import type {
   MeetingSummarizeWithCostResult,
 } from '../../../shared/workspace/MeetingTypes';
 
-// In-memory store for now; should be replaced with persistent SQLite storage
-const meetingStore = new Map<string, Meeting>();
-const meetingSummaryStore = new Map<string, Map<string, Meeting['summary']>>();
-const structuredSummaryStore = new Map<string, StructuredSummary>();
-const draftStore = new Map<string, MeetingDraft>();
-const scheduledSendStore = new Map<string, ScheduledSend>();
-const transactionStore = new Map<string, SummarizationCostTransaction>();
+// Phase 7: Supabase-backed persistent storage (replacing in-memory Maps)
+// Lazy-loaded on first use to avoid import at module load time
+let supabase: any = null;
+
+async function getSupabaseClient() {
+  if (!supabase) {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Supabase credentials not configured');
+    }
+    supabase = createClient(supabaseUrl, supabaseServiceKey);
+  }
+  return supabase;
+}
 
 /**
  * Create or start a meeting recording
  */
-export function recordMeeting(userId: string, request: MeetingRecordRequest): MeetingRecordResult {
+export async function recordMeeting(userId: string, request: MeetingRecordRequest): Promise<MeetingRecordResult> {
   try {
+    const db = await getSupabaseClient();
+    const meetingId = request.meetingId || `meeting-${Date.now()}`;
+
     const meeting: Meeting = {
-      id: request.meetingId || `meeting-${Date.now()}`,
+      id: meetingId,
       title: request.title,
       status: 'in-progress' as const,
       attendees: (request.attendees || []).map((email: string) => ({
@@ -60,7 +73,26 @@ export function recordMeeting(userId: string, request: MeetingRecordRequest): Me
       updatedAt: Date.now(),
     };
 
-    meetingStore.set(meeting.id, meeting);
+    // Persist meeting to Supabase
+    const { error } = await db
+      .from('meetings')
+      .insert({
+        id: meeting.id,
+        user_id: userId,
+        title: meeting.title,
+        status: meeting.status,
+        attendees: meeting.attendees,
+        organizer: meeting.organizer,
+        created_at: new Date(meeting.createdAt).toISOString(),
+        updated_at: new Date(meeting.updatedAt).toISOString(),
+      });
+
+    if (error) {
+      return {
+        ok: false,
+        reason: `Failed to persist meeting: ${error.message}`,
+      };
+    }
 
     return {
       ok: true,
@@ -82,48 +114,205 @@ export function recordMeeting(userId: string, request: MeetingRecordRequest): Me
 }
 
 /**
- * Generate AI summary of a meeting
+ * Generate AI summary of a meeting using Gemini
+ *
+ * Real implementation:
+ * 1. Validates meeting and transcript availability
+ * 2. Calls Gemini API with meeting transcript
+ * 3. Records usage metadata with category='meetings'
+ * 4. Consumes Tier Compute (normal AI usage, not Work PC)
+ * 5. Returns structured summary or failure
  */
 export async function summarizeMeeting(userId: string, request: MeetingSummarizeRequest): Promise<MeetingSummarizeResult> {
+  const { v4: uuidv4 } = await import('uuid');
+  const { getGeminiApiKey } = await import('../../ai/geminiApiKey');
+  const { recordUsageEvent, computeNormalizedCompute } = await import('../../billing/UsageMeteringEngine');
+  const { creditStore } = await import('../../billing/CreditStore');
+
   try {
-    const meeting = meetingStore.get(request.meetingId);
-    if (!meeting) {
+    const db = await getSupabaseClient();
+
+    // Fetch meeting from Supabase
+    const { data: meeting, error: fetchError } = await db
+      .from('meetings')
+      .select('*')
+      .eq('id', request.meetingId)
+      .eq('user_id', userId)
+      .single();
+
+    if (fetchError || !meeting) {
       return {
         ok: false,
         reason: 'Meeting not found',
       };
     }
 
-    // TODO: Integrate with real AI provider (Gemini)
-    // For now, generate a stub summary
-    const summary = {
+    // Get transcript text (meeting.recording is stored as JSONB in DB)
+    const transcriptText = request.transcriptText || (meeting.recording as any)?.url || '';
+    if (!transcriptText) {
+      return {
+        ok: false,
+        reason: 'No transcript or recording available for this meeting',
+      };
+    }
+
+    // Determine model to use (default to gemini-flash-latest for cost-effective summarization)
+    const model = request.model || 'gemini-flash-latest';
+
+    // Get Gemini API key
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) {
+      return {
+        ok: false,
+        reason: 'Gemini API not configured',
+      };
+    }
+
+    // Build summarization prompt
+    const summaryPrompt = `You are a meeting summarization expert. Summarize the following meeting transcript concisely and clearly.
+
+Meeting Title: ${meeting.title}
+Number of Attendees: ${meeting.attendees.length}
+Date: ${new Date(meeting.createdAt).toISOString().split('T')[0]}
+
+Transcript:
+${transcriptText}
+
+Provide the summary in JSON format with the following structure:
+{
+  "content": "A comprehensive 2-3 paragraph summary of the meeting",
+  "keyPoints": ["key point 1", "key point 2", "key point 3"],
+  "actionItems": ["action item 1", "action item 2"],
+  "decisions": ["decision 1", "decision 2"]
+}
+
+Focus on:
+- Main topics discussed
+- Key decisions made
+- Action items with owners
+- Timeline and next steps`;
+
+    // Call Gemini API
+    const requestId = uuidv4();
+    const baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
+
+    let res: Response;
+    try {
+      res = await fetch(`${baseUrl}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: summaryPrompt }] }],
+          generationConfig: { responseMimeType: 'application/json' },
+        }),
+      });
+    } catch (fetchError) {
+      return {
+        ok: false,
+        reason: `Failed to call Gemini API: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}`,
+      };
+    }
+
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => 'Unknown error');
+      return {
+        ok: false,
+        reason: `Gemini API error: ${res.status} ${res.statusText}`,
+      };
+    }
+
+    // Parse response
+    let json;
+    try {
+      json = (await res.json()) as {
+        candidates?: { content?: { parts?: { text?: string }[] } }[];
+        usageMetadata?: {
+          promptTokenCount?: number;
+          candidatesTokenCount?: number;
+          totalTokenCount?: number;
+          cachedContentTokenCount?: number;
+          thoughtsTokenCount?: number;
+        };
+      };
+    } catch {
+      return {
+        ok: false,
+        reason: 'Failed to parse Gemini response',
+      };
+    }
+
+    // Extract text content
+    const summaryText = json.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!summaryText) {
+      return {
+        ok: false,
+        reason: 'Gemini did not return summary content',
+      };
+    }
+
+    // Parse JSON response
+    let parsedSummary;
+    try {
+      parsedSummary = JSON.parse(summaryText);
+    } catch {
+      return {
+        ok: false,
+        reason: 'Failed to parse summary JSON from Gemini',
+      };
+    }
+
+    // Record usage metadata and consume Tier Compute
+    const usageMetadata = json.usageMetadata;
+    if (usageMetadata) {
+      // Record the usage event
+      const providerUsageMetadata = {
+        provider: 'gemini' as const,
+        model,
+        inputTokens: typeof usageMetadata.promptTokenCount === 'number' ? usageMetadata.promptTokenCount : null,
+        outputTokens: typeof usageMetadata.candidatesTokenCount === 'number' ? usageMetadata.candidatesTokenCount : null,
+        cachedInputTokens: typeof usageMetadata.cachedContentTokenCount === 'number' ? usageMetadata.cachedContentTokenCount : null,
+        totalTokens: typeof usageMetadata.totalTokenCount === 'number' ? usageMetadata.totalTokenCount : null,
+        thoughtsTokens: typeof usageMetadata.thoughtsTokenCount === 'number' ? usageMetadata.thoughtsTokenCount : null,
+        requestId,
+      };
+
+      recordUsageEvent(providerUsageMetadata, 'conversationTurn', { sessionId: null, runId: null }, false);
+
+      // Consume Tier Compute using the existing billing infrastructure
+      // This uses the normal AI usage path, not Autonomous Work PC
+      const normalizedCompute = computeNormalizedCompute(providerUsageMetadata);
+      creditStore.consume(normalizedCompute, 'meeting-summarization', 'meetings', false);
+    }
+
+    // Build structured summary
+    const summary: MeetingSummary = {
       id: `summary-${Date.now()}`,
       meetingId: request.meetingId,
-      content: `This is an AI-generated summary for "${meeting.title}". In a real implementation, this would be generated from the recording transcript using the configured AI provider.`,
-      keyPoints: [
-        'Key point 1 would go here',
-        'Key point 2 would go here',
-        'Key point 3 would go here',
-      ],
-      actionItems: [
-        'Action item 1 to be assigned',
-        'Action item 2 to be assigned',
-      ],
-      decisions: ['Decision 1 was made', 'Decision 2 was made'],
+      content: parsedSummary.content || 'No summary content',
+      keyPoints: parsedSummary.keyPoints || [],
+      actionItems: parsedSummary.actionItems || [],
+      decisions: parsedSummary.decisions || [],
       generatedAt: Date.now(),
-      generatedBy: request.model || 'paw-gemini',
+      generatedBy: model,
     };
 
-    meeting.summary = summary;
-    meeting.status = 'completed' as const;
-    meeting.updatedAt = Date.now();
+    // Persist summary to Supabase as part of the meeting
+    const { error: updateError } = await db
+      .from('meetings')
+      .update({
+        summary: summary,
+        status: 'completed',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', request.meetingId)
+      .eq('user_id', userId);
 
-    let summaryMap = meetingSummaryStore.get(request.meetingId);
-    if (!summaryMap) {
-      summaryMap = new Map();
-      meetingSummaryStore.set(request.meetingId, summaryMap);
+    if (updateError) {
+      return {
+        ok: false,
+        reason: `Failed to persist summary: ${updateError.message}`,
+      };
     }
-    summaryMap.set(summary.id, summary);
 
     return { ok: true, summary };
   } catch (error) {
@@ -142,23 +331,85 @@ export async function distributeMeetingSummary(
   request: MeetingDistributeRequest
 ): Promise<MeetingDistributeResult> {
   try {
-    const meeting = meetingStore.get(request.meetingId);
-    if (!meeting || !meeting.summary) {
+    const db = await getSupabaseClient();
+
+    // Validate recipients
+    if (!request.recipients || request.recipients.length === 0) {
+      return {
+        ok: false,
+        reason: 'No recipients provided',
+      };
+    }
+
+    // Validate and deduplicate recipients
+    const seen = new Set<string>();
+    const validRecipients: string[] = [];
+    for (const email of request.recipients) {
+      const trimmed = email.trim().toLowerCase();
+      if (!trimmed || !isValidEmail(trimmed)) {
+        continue;
+      }
+      if (!seen.has(trimmed)) {
+        seen.add(trimmed);
+        validRecipients.push(trimmed);
+      }
+    }
+
+    if (validRecipients.length === 0) {
+      return {
+        ok: false,
+        reason: 'No valid recipients provided',
+      };
+    }
+
+    // Fetch meeting with summary from Supabase
+    const { data: meeting, error: fetchError } = await db
+      .from('meetings')
+      .select('*')
+      .eq('id', request.meetingId)
+      .eq('user_id', userId)
+      .single();
+
+    if (fetchError || !meeting || !meeting.summary) {
       return {
         ok: false,
         reason: 'Meeting or summary not found',
       };
     }
 
-    // TODO: Integrate with email service to actually send summaries
-    // For now, return a stub response
+    // Send emails to each recipient, tracking success/failure
+    const sentTo: string[] = [];
+    const failed: Array<{ email: string; error: string }> = [];
+    const meetingDate = new Date(meeting.updated_at).toLocaleDateString('en-US', {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
 
-    const sentTo = request.recipients || [];
+    for (const recipient of validRecipients) {
+      try {
+        await emailService.sendMeetingSummary(recipient, {
+          meetingTitle: meeting.title || 'Meeting Summary',
+          organizerName: meeting.organizer?.name || meeting.organizer?.email || 'Unknown',
+          meetingDate,
+          summary: meeting.summary,
+          recipientName: extractNameFromEmail(recipient),
+        });
+        sentTo.push(recipient);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to send email';
+        failed.push({ email: recipient, error: errorMessage });
+      }
+    }
+
+    // Return result with detailed status
     return {
-      ok: true,
+      ok: sentTo.length > 0,
+      reason: sentTo.length === 0 ? 'Failed to send emails to all recipients' : undefined,
       distributionId: `dist-${Date.now()}`,
       sentTo,
-      failed: [],
+      failed: failed.length > 0 ? failed.map(f => f.email) : undefined,
     };
   } catch (error) {
     return {
@@ -168,38 +419,83 @@ export async function distributeMeetingSummary(
   }
 }
 
+// Helper: validate email address format
+function isValidEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+}
+
+// Helper: extract name from email (part before @)
+function extractNameFromEmail(email: string): string {
+  const name = email.split('@')[0];
+  return name.charAt(0).toUpperCase() + name.slice(1).replace(/[._-]/g, ' ');
+}
+
 /**
  * List meetings with optional filtering
  */
-export function listMeetings(userId: string, query?: MeetingListQuery): MeetingListResult {
+export async function listMeetings(userId: string, query?: MeetingListQuery): Promise<MeetingListResult> {
   try {
-    let meetings = Array.from(meetingStore.values()).filter(
-      (m) => m.organizer.email === userId
-    );
+    const db = await getSupabaseClient();
+
+    // Build query
+    let dbQuery = db
+      .from('meetings')
+      .select('*', { count: 'exact' })
+      .eq('user_id', userId);
 
     // Apply filters
     if (query?.status) {
-      meetings = meetings.filter((m) => m.status === query.status);
+      dbQuery = dbQuery.eq('status', query.status);
     }
     if (query?.hasRecording) {
-      meetings = meetings.filter((m) => m.recording !== undefined);
+      dbQuery = dbQuery.not('recording', 'is', null);
     }
     if (query?.hasSummary) {
-      meetings = meetings.filter((m) => m.summary !== undefined);
+      dbQuery = dbQuery.not('summary', 'is', null);
     }
 
     // Sort by created date descending
-    meetings.sort((a, b) => b.createdAt - a.createdAt);
+    dbQuery = dbQuery.order('created_at', { ascending: false });
 
     // Apply pagination
     const offset = query?.offset || 0;
     const limit = query?.limit || 50;
-    const paginated = meetings.slice(offset, offset + limit);
+    dbQuery = dbQuery.range(offset, offset + limit - 1);
+
+    const { data: meetings, error, count } = await dbQuery;
+
+    if (error) {
+      return {
+        ok: false,
+        meetings: [],
+        total: 0,
+      };
+    }
+
+    // Convert DB format to Meeting type (timestamps to milliseconds)
+    const convertedMeetings: Meeting[] = (meetings || []).map(m => ({
+      id: m.id,
+      title: m.title,
+      description: m.description,
+      status: m.status,
+      startedAt: m.started_at ? new Date(m.started_at).getTime() : undefined,
+      endedAt: m.ended_at ? new Date(m.ended_at).getTime() : undefined,
+      duration: m.duration_seconds,
+      attendees: m.attendees || [],
+      organizer: m.organizer,
+      recording: m.recording,
+      summary: m.summary,
+      calendarEventId: m.calendar_event_id,
+      meetingLink: m.meeting_link,
+      createdAt: new Date(m.created_at).getTime(),
+      updatedAt: new Date(m.updated_at).getTime(),
+    }));
 
     return {
       ok: true,
-      meetings: paginated,
-      total: meetings.length,
+      meetings: convertedMeetings,
+      total: count || 0,
     };
   } catch (error) {
     return {
@@ -213,32 +509,91 @@ export function listMeetings(userId: string, query?: MeetingListQuery): MeetingL
 /**
  * Get a single meeting by ID
  */
-export function getMeeting(meetingId: string): Meeting | null {
-  return meetingStore.get(meetingId) || null;
+export async function getMeeting(userId: string, meetingId: string): Promise<Meeting | null> {
+  try {
+    const db = await getSupabaseClient();
+    const { data: meeting, error } = await db
+      .from('meetings')
+      .select('*')
+      .eq('id', meetingId)
+      .eq('user_id', userId)
+      .single();
+
+    if (error || !meeting) {
+      return null;
+    }
+
+    // Convert DB format to Meeting type
+    return {
+      id: meeting.id,
+      title: meeting.title,
+      description: meeting.description,
+      status: meeting.status,
+      startedAt: meeting.started_at ? new Date(meeting.started_at).getTime() : undefined,
+      endedAt: meeting.ended_at ? new Date(meeting.ended_at).getTime() : undefined,
+      duration: meeting.duration_seconds,
+      attendees: meeting.attendees || [],
+      organizer: meeting.organizer,
+      recording: meeting.recording,
+      summary: meeting.summary,
+      calendarEventId: meeting.calendar_event_id,
+      meetingLink: meeting.meeting_link,
+      createdAt: new Date(meeting.created_at).getTime(),
+      updatedAt: new Date(meeting.updated_at).getTime(),
+    };
+  } catch (error) {
+    return null;
+  }
 }
 
 /**
  * Update meeting status
  */
-export function updateMeetingStatus(
+export async function updateMeetingStatus(
+  userId: string,
   meetingId: string,
   status: Meeting['status']
-): { ok: boolean; meeting?: Meeting; reason?: string } {
+): Promise<{ ok: boolean; meeting?: Meeting; reason?: string }> {
   try {
-    const meeting = meetingStore.get(meetingId);
-    if (!meeting) {
+    const db = await getSupabaseClient();
+
+    const now = new Date().toISOString();
+    const endedAt = status === 'completed' ? now : null;
+
+    const { data: updated, error } = await db
+      .from('meetings')
+      .update({
+        status,
+        ended_at: endedAt,
+        updated_at: now,
+      })
+      .eq('id', meetingId)
+      .eq('user_id', userId)
+      .select('*')
+      .single();
+
+    if (error || !updated) {
       return { ok: false, reason: 'Meeting not found' };
     }
 
-    meeting.status = status;
-    meeting.updatedAt = Date.now();
-
-    if (status === 'completed') {
-      meeting.endedAt = Date.now();
-      if (meeting.startedAt) {
-        meeting.duration = meeting.endedAt - meeting.startedAt;
-      }
-    }
+    // Convert to Meeting type
+    const meeting: Meeting = {
+      id: updated.id,
+      title: updated.title,
+      description: updated.description,
+      status: updated.status,
+      startedAt: updated.started_at ? new Date(updated.started_at).getTime() : undefined,
+      endedAt: updated.ended_at ? new Date(updated.ended_at).getTime() : undefined,
+      duration: updated.duration_seconds,
+      attendees: updated.attendees || [],
+      organizer: updated.organizer,
+      recording: updated.recording,
+      summary: updated.summary,
+      calendarEventId: updated.calendar_event_id,
+      meetingLink: updated.meeting_link,
+      createdAt: new Date(updated.created_at).getTime(),
+      updatedAt: new Date(updated.updated_at).getTime(),
+    };
 
     return { ok: true, meeting };
   } catch (error) {
@@ -252,22 +607,47 @@ export function updateMeetingStatus(
 /**
  * Add attendee to meeting
  */
-export function addAttendee(
+export async function addAttendee(
+  userId: string,
   meetingId: string,
   attendee: MeetingAttendee
-): { ok: boolean; meeting?: Meeting; reason?: string } {
+): Promise<{ ok: boolean; meeting?: Meeting; reason?: string }> {
   try {
-    const meeting = meetingStore.get(meetingId);
-    if (!meeting) {
+    const db = await getSupabaseClient();
+
+    const { data: meeting, error: fetchError } = await db
+      .from('meetings')
+      .select('*')
+      .eq('id', meetingId)
+      .eq('user_id', userId)
+      .single();
+
+    if (fetchError || !meeting) {
       return { ok: false, reason: 'Meeting not found' };
     }
 
-    const exists = meeting.attendees.some((a: MeetingAttendee) => a.email === attendee.email);
+    // Check if attendee already exists
+    const attendees = meeting.attendees || [];
+    const exists = attendees.some((a: MeetingAttendee) => a.email === attendee.email);
+
     if (!exists) {
-      meeting.attendees.push(attendee);
+      const now = new Date().toISOString();
+      const { error: updateError } = await db
+        .from('meetings')
+        .update({
+          attendees: [...attendees, attendee],
+          updated_at: now,
+        })
+        .eq('id', meetingId)
+        .eq('user_id', userId);
+
+      if (updateError) {
+        return { ok: false, reason: 'Failed to add attendee' };
+      }
     }
 
-    return { ok: true, meeting };
+    // Return the updated meeting
+    return { ok: true, meeting: (await getMeeting(userId, meetingId)) || undefined };
   } catch (error) {
     return {
       ok: false,
@@ -288,6 +668,8 @@ export async function joinAndRecordMeeting(
   meetingTitle?: string
 ): Promise<{ ok: boolean; meetingId?: string; reason?: string }> {
   try {
+    const db = await getSupabaseClient();
+
     // Validate meeting link
     if (!meetingLink || (!meetingLink.includes('meet.google.com') &&
         !meetingLink.includes('zoom.us') &&
@@ -296,23 +678,9 @@ export async function joinAndRecordMeeting(
     }
 
     const meetingId = `meeting-${Date.now()}`;
+    const now = new Date();
 
-    // Create meeting record
-    const meeting: Meeting = {
-      id: meetingId,
-      title: meetingTitle || 'Meeting',
-      status: 'in-progress',
-      startedAt: Date.now(),
-      attendees: [{ email: userEmail, joinedAt: Date.now() }],
-      organizer: { email: userEmail },
-      meetingLink,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-
-    meetingStore.set(meetingId, meeting);
-
-    // Create recording record (will be populated as recording progresses)
+    // Create recording record
     const recording = {
       id: `rec-${Date.now()}`,
       url: `file:///meetings/${meetingId}/recording.webm`,
@@ -322,7 +690,26 @@ export async function joinAndRecordMeeting(
       createdAt: Date.now(),
     };
 
-    meeting.recording = recording;
+    // Persist to Supabase
+    const { error } = await db
+      .from('meetings')
+      .insert({
+        id: meetingId,
+        user_id: userId,
+        title: meetingTitle || 'Meeting',
+        status: 'in-progress',
+        started_at: now.toISOString(),
+        attendees: [{ email: userEmail, joinedAt: Date.now() }],
+        organizer: { email: userEmail },
+        meeting_link: meetingLink,
+        recording: recording,
+        created_at: now.toISOString(),
+        updated_at: now.toISOString(),
+      });
+
+    if (error) {
+      return { ok: false, reason: `Failed to create meeting: ${error.message}` };
+    }
 
     return { ok: true, meetingId };
   } catch (error) {
@@ -337,23 +724,50 @@ export async function joinAndRecordMeeting(
  * Complete meeting recording after user leaves meeting.
  * Prepares for summary generation.
  */
-export function completeMeetingRecording(
+export async function completeMeetingRecording(
+  userId: string,
   meetingId: string,
   recordingDurationSeconds: number
-): { ok: boolean; meeting?: Meeting; reason?: string } {
+): Promise<{ ok: boolean; meeting?: Meeting; reason?: string }> {
   try {
-    const meeting = meetingStore.get(meetingId);
-    if (!meeting || !meeting.recording) {
+    const db = await getSupabaseClient();
+
+    const { data: meeting, error: fetchError } = await db
+      .from('meetings')
+      .select('*')
+      .eq('id', meetingId)
+      .eq('user_id', userId)
+      .single();
+
+    if (fetchError || !meeting || !meeting.recording) {
       return { ok: false, reason: 'Meeting or recording not found' };
     }
 
-    meeting.status = 'completed';
-    meeting.endedAt = Date.now();
-    meeting.duration = recordingDurationSeconds;
-    meeting.recording.duration = recordingDurationSeconds;
-    meeting.updatedAt = Date.now();
+    // Update recording duration
+    const updatedRecording = {
+      ...meeting.recording,
+      duration: recordingDurationSeconds,
+    };
 
-    return { ok: true, meeting };
+    const now = new Date();
+    const { error: updateError } = await db
+      .from('meetings')
+      .update({
+        status: 'completed',
+        ended_at: now.toISOString(),
+        duration_seconds: recordingDurationSeconds,
+        recording: updatedRecording,
+        updated_at: now.toISOString(),
+      })
+      .eq('id', meetingId)
+      .eq('user_id', userId);
+
+    if (updateError) {
+      return { ok: false, reason: 'Failed to complete recording' };
+    }
+
+    // Return the updated meeting
+    return { ok: true, meeting: (await getMeeting(userId, meetingId)) || undefined };
   } catch (error) {
     return {
       ok: false,
@@ -365,19 +779,29 @@ export function completeMeetingRecording(
 /**
  * Generate structured summary from meeting recording
  * Returns purpose, key takeaways, topics with timestamps, and action items
+ * TODO: Integrate with real AI provider to extract structure from summary content
  */
 export async function generateStructuredSummary(
+  userId: string,
   meetingId: string
 ): Promise<{ ok: boolean; structured?: StructuredSummary; reason?: string }> {
   try {
-    const meeting = meetingStore.get(meetingId);
-    if (!meeting || !meeting.summary) {
+    const db = await getSupabaseClient();
+
+    const { data: meeting, error } = await db
+      .from('meetings')
+      .select('*')
+      .eq('id', meetingId)
+      .eq('user_id', userId)
+      .single();
+
+    if (error || !meeting || !meeting.summary) {
       return { ok: false, reason: 'Meeting or summary not found' };
     }
 
-    // TODO: Integrate with real AI provider to extract structure from summary content
-    // For now, generate a structured summary from the existing summary
+    // Generate a structured summary from the existing summary
     const summary = meeting.summary;
+    const organizer = meeting.organizer || {};
 
     const structured: StructuredSummary = {
       purpose: `Purpose of ${meeting.title}`,
@@ -396,18 +820,17 @@ export async function generateStructuredSummary(
           duration: 180,
         },
       ],
-      actionItems: summary.actionItems.map((item: string, index: number) => ({
+      actionItems: (summary.actionItems || []).map((item: string, index: number) => ({
         id: `action-${index}`,
         task: item,
-        owner: meeting.organizer.name || 'Unassigned',
-        ownerEmail: meeting.organizer.email,
+        owner: (organizer as any).name || 'Unassigned',
+        ownerEmail: (organizer as any).email,
         dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         status: 'pending' as const,
         timestamp: 0,
       })),
     };
 
-    structuredSummaryStore.set(meetingId, structured);
     return { ok: true, structured };
   } catch (error) {
     return {
@@ -419,10 +842,15 @@ export async function generateStructuredSummary(
 
 /**
  * Crop summary to include only selected topics and action items
+ * Note: Structured summaries are currently generated on-the-fly from the basic summary
  */
-export function cropSummary(request: CropSummaryRequest): CropSummaryResult {
+export async function cropSummary(
+  userId: string,
+  request: CropSummaryRequest
+): Promise<CropSummaryResult> {
   try {
-    const structured = structuredSummaryStore.get(request.meetingId);
+    const { structured } = await generateStructuredSummary(userId, request.meetingId);
+
     if (!structured) {
       return { ok: false, reason: 'Structured summary not found' };
     }
@@ -450,10 +878,28 @@ export function cropSummary(request: CropSummaryRequest): CropSummaryResult {
 /**
  * Save meeting summary as draft
  */
-export function saveDraft(request: DraftRequest): DraftResult {
+export async function saveDraft(userId: string, request: DraftRequest): Promise<DraftResult> {
   try {
+    const db = await getSupabaseClient();
+
+    // Verify user owns the meeting
+    const { data: meeting, error: meetingError } = await db
+      .from('meetings')
+      .select('id')
+      .eq('id', request.meetingId)
+      .eq('user_id', userId)
+      .single();
+
+    if (meetingError || !meeting) {
+      return {
+        ok: false,
+        reason: 'Meeting not found or access denied',
+      };
+    }
+
+    const draftId = `draft-${Date.now()}`;
     const draft: MeetingDraft = {
-      id: `draft-${Date.now()}`,
+      id: draftId,
       meetingId: request.meetingId,
       recipients: request.recipients,
       contentType: request.contentType,
@@ -463,7 +909,28 @@ export function saveDraft(request: DraftRequest): DraftResult {
       updatedAt: Date.now(),
     };
 
-    draftStore.set(draft.id, draft);
+    // Persist draft to Supabase
+    const { error } = await db
+      .from('meeting_drafts')
+      .insert({
+        id: draft.id,
+        meeting_id: draft.meetingId,
+        user_id: userId,
+        recipients: draft.recipients,
+        content_type: draft.contentType,
+        selected_content: draft.selectedContent,
+        email_draft: draft.emailDraft,
+        saved_at: new Date(draft.savedAt).toISOString(),
+        updated_at: new Date(draft.updatedAt).toISOString(),
+      });
+
+    if (error) {
+      return {
+        ok: false,
+        reason: `Failed to save draft: ${error.message}`,
+      };
+    }
+
     return { ok: true, draft };
   } catch (error) {
     return {
@@ -476,14 +943,41 @@ export function saveDraft(request: DraftRequest): DraftResult {
 /**
  * Get all drafts for a meeting
  */
-export function getDrafts(
+export async function getDrafts(
+  userId: string,
   meetingId: string
-): { ok: boolean; drafts: MeetingDraft[]; reason?: string } {
+): Promise<{ ok: boolean; drafts: MeetingDraft[]; reason?: string }> {
   try {
-    const drafts = Array.from(draftStore.values()).filter(
-      (d: MeetingDraft) => d.meetingId === meetingId
-    );
-    return { ok: true, drafts };
+    const db = await getSupabaseClient();
+
+    const { data: drafts, error } = await db
+      .from('meeting_drafts')
+      .select('*')
+      .eq('meeting_id', meetingId)
+      .eq('user_id', userId)
+      .order('saved_at', { ascending: false });
+
+    if (error) {
+      return {
+        ok: false,
+        drafts: [],
+        reason: error.message,
+      };
+    }
+
+    // Convert DB format to MeetingDraft type
+    const convertedDrafts: MeetingDraft[] = (drafts || []).map(d => ({
+      id: d.id,
+      meetingId: d.meeting_id,
+      recipients: d.recipients || [],
+      contentType: d.content_type || 'entire',
+      selectedContent: d.selected_content,
+      emailDraft: d.email_draft || {},
+      savedAt: new Date(d.saved_at).getTime(),
+      updatedAt: new Date(d.updated_at).getTime(),
+    }));
+
+    return { ok: true, drafts: convertedDrafts };
   } catch (error) {
     return {
       ok: false,
@@ -496,10 +990,28 @@ export function getDrafts(
 /**
  * Schedule meeting summary to be sent at a later time
  */
-export function scheduleSend(request: ScheduleSendRequest): ScheduleSendResult {
+export async function scheduleSend(userId: string, request: ScheduleSendRequest): Promise<ScheduleSendResult> {
   try {
+    const db = await getSupabaseClient();
+
+    // Verify user owns the meeting
+    const { data: meeting, error: meetingError } = await db
+      .from('meetings')
+      .select('id')
+      .eq('id', request.meetingId)
+      .eq('user_id', userId)
+      .single();
+
+    if (meetingError || !meeting) {
+      return {
+        ok: false,
+        reason: 'Meeting not found or access denied',
+      };
+    }
+
+    const scheduledId = `scheduled-${Date.now()}`;
     const scheduled: ScheduledSend = {
-      id: `scheduled-${Date.now()}`,
+      id: scheduledId,
       meetingId: request.meetingId,
       recipients: request.recipients,
       contentType: request.contentType,
@@ -510,7 +1022,29 @@ export function scheduleSend(request: ScheduleSendRequest): ScheduleSendResult {
       createdAt: Date.now(),
     };
 
-    scheduledSendStore.set(scheduled.id, scheduled);
+    // Persist to Supabase
+    const { error } = await db
+      .from('meeting_scheduled_sends')
+      .insert({
+        id: scheduled.id,
+        meeting_id: scheduled.meetingId,
+        user_id: userId,
+        recipients: scheduled.recipients,
+        content_type: scheduled.contentType,
+        selected_content: scheduled.selectedContent,
+        email_content: scheduled.emailContent,
+        scheduled_time: new Date(scheduled.scheduledTime).toISOString(),
+        status: scheduled.status,
+        created_at: new Date(scheduled.createdAt).toISOString(),
+      });
+
+    if (error) {
+      return {
+        ok: false,
+        reason: `Failed to schedule send: ${error.message}`,
+      };
+    }
+
     return { ok: true, scheduledSend: scheduled };
   } catch (error) {
     return {
@@ -523,12 +1057,41 @@ export function scheduleSend(request: ScheduleSendRequest): ScheduleSendResult {
 /**
  * Get all scheduled sends for a meeting
  */
-export function getScheduledSends(meetingId: string): GetScheduledSendsResult {
+export async function getScheduledSends(userId: string, meetingId: string): Promise<GetScheduledSendsResult> {
   try {
-    const scheduled = Array.from(scheduledSendStore.values()).filter(
-      (s: ScheduledSend) => s.meetingId === meetingId && s.status === 'pending'
-    );
-    return { ok: true, scheduled };
+    const db = await getSupabaseClient();
+
+    const { data: scheduled, error } = await db
+      .from('meeting_scheduled_sends')
+      .select('*')
+      .eq('meeting_id', meetingId)
+      .eq('user_id', userId)
+      .eq('status', 'pending')
+      .order('scheduled_time', { ascending: true });
+
+    if (error) {
+      return {
+        ok: false,
+        scheduled: [],
+      };
+    }
+
+    // Convert DB format to ScheduledSend type
+    const convertedScheduled: ScheduledSend[] = (scheduled || []).map(s => ({
+      id: s.id,
+      meetingId: s.meeting_id,
+      recipients: s.recipients || [],
+      contentType: s.content_type || 'entire',
+      selectedContent: s.selected_content,
+      emailContent: s.email_content || {},
+      scheduledTime: new Date(s.scheduled_time).getTime(),
+      status: s.status || 'pending',
+      createdAt: new Date(s.created_at).getTime(),
+      sentAt: s.sent_at ? new Date(s.sent_at).getTime() : undefined,
+      error: s.error,
+    }));
+
+    return { ok: true, scheduled: convertedScheduled };
   } catch (error) {
     return {
       ok: false,
@@ -554,8 +1117,10 @@ export function calculateSummarizationCost(durationSeconds: number): number {
  * Used to display cost to user before confirming
  * Pro tier or higher required (Pro, Pro Max, Team, Enterprise)
  */
-export function getSummarizationCost(userId: string, request: SummarizationCostRequest): SummarizationCostResponse {
+export async function getSummarizationCost(userId: string, request: SummarizationCostRequest): Promise<SummarizationCostResponse> {
   try {
+    const db = await getSupabaseClient();
+
     // Set current user for entitlementService tier checks
     entitlementService.setCurrentUserId(userId);
 
@@ -570,8 +1135,15 @@ export function getSummarizationCost(userId: string, request: SummarizationCostR
       };
     }
 
-    const meeting = meetingStore.get(request.meetingId);
-    if (!meeting) {
+    // Fetch meeting from Supabase
+    const { data: meeting, error } = await db
+      .from('meetings')
+      .select('*')
+      .eq('id', request.meetingId)
+      .eq('user_id', userId)
+      .single();
+
+    if (error || !meeting) {
       return {
         ok: false,
         cost: 0,
@@ -583,7 +1155,8 @@ export function getSummarizationCost(userId: string, request: SummarizationCostR
     }
 
     // Calculate cost from request duration or meeting recording duration
-    const durationSeconds = request.durationSeconds || meeting.recording?.duration || 0;
+    const recordingDuration = (meeting.recording as any)?.duration || 0;
+    const durationSeconds = request.durationSeconds || recordingDuration || 0;
     const cost = calculateSummarizationCost(durationSeconds);
     const durationMinutes = Math.round((durationSeconds / 60) * 100) / 100;
 
@@ -625,6 +1198,8 @@ export async function confirmSummarize(
   request: MeetingSummarizeWithCostRequest
 ): Promise<MeetingSummarizeWithCostResult> {
   try {
+    const db = await getSupabaseClient();
+
     // Set current user for entitlementService tier checks
     entitlementService.setCurrentUserId(userId);
 
@@ -636,15 +1211,23 @@ export async function confirmSummarize(
       };
     }
 
-    const meeting = meetingStore.get(request.meetingId);
-    if (!meeting) {
+    // Fetch meeting from Supabase
+    const { data: meeting, error: fetchError } = await db
+      .from('meetings')
+      .select('*')
+      .eq('id', request.meetingId)
+      .eq('user_id', userId)
+      .single();
+
+    if (fetchError || !meeting) {
       return {
         ok: false,
         reason: 'Meeting not found',
       };
     }
 
-    if (!meeting.recording) {
+    const recordingDuration = (meeting.recording as any)?.duration;
+    if (!meeting.recording || recordingDuration === undefined) {
       return {
         ok: false,
         reason: 'No recording found for this meeting',
@@ -652,7 +1235,7 @@ export async function confirmSummarize(
     }
 
     // Calculate cost
-    const durationSeconds = meeting.recording.duration;
+    const durationSeconds = recordingDuration;
     const cost = calculateSummarizationCost(durationSeconds);
     const durationMinutes = Math.round((durationSeconds / 60) * 100) / 100;
 
@@ -666,7 +1249,7 @@ export async function confirmSummarize(
       };
     }
 
-    // Create transaction record
+    // Create transaction record (for audit/logging purposes)
     const transaction: SummarizationCostTransaction = {
       id: `txn-${Date.now()}`,
       userId,
@@ -677,8 +1260,6 @@ export async function confirmSummarize(
       timestamp: Date.now(),
       status: 'pending',
     };
-
-    transactionStore.set(transaction.id, transaction);
 
     // Generate summary using existing handler
     const summaryRequest: MeetingSummarizeRequest = {

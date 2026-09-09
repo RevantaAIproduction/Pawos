@@ -408,6 +408,9 @@ export function registerIpc(opts: {
   // TicketPricingConfigStore.ts), never a code constant a UI hardcodes, so
   // new preset amounts can be added later without a redeploy.
   ipcMain.handle('billing:getTicketPricingConfig', () => ticketPricingConfigStore.get());
+  // Gemini model pricing and Paw Compute conversion config — used by autonomous orchestration
+  // to calculate token-to-compute conversion. Exposed via IPC so renderer doesn't import main-process store.
+  ipcMain.handle('billing:getPawComputeConfig', () => pawComputeConfigStore.get());
   // Google Places API key for address autocomplete in billing checkout flow
   ipcMain.handle('billing:getGooglePlacesApiKey', () => process.env.GOOGLE_PLACES_API_KEY || '');
   ipcMain.handle('billing:getSubscription', () => subscriptionStore.getEffective());
@@ -1237,18 +1240,26 @@ export function registerIpc(opts: {
   });
 
   // Meeting Assistant Runtime — Pro+ tier only. Recording, summarization, distribution.
-  // TODO: Tier gating via entitlementService when 'meetingAssistant' FeatureId is added
   ipcMain.handle('meeting:record', (_evt, userId: string, request: any) => {
+    if (!entitlementService.isFeatureAvailable('meetingAssistant')) {
+      return { ok: false, reason: 'Meeting Assistant requires Paw Pro or higher.' };
+    }
     const { recordMeeting } = require('./handlers/meetingHandler');
     return recordMeeting(userId, request);
   });
 
   ipcMain.handle('meeting:summarize', async (_evt, userId: string, request: any) => {
+    if (!entitlementService.isFeatureAvailable('meetingAssistant')) {
+      return { ok: false, reason: 'Meeting Assistant requires Paw Pro or higher.' };
+    }
     const { summarizeMeeting } = require('./handlers/meetingHandler');
     return await summarizeMeeting(userId, request);
   });
 
   ipcMain.handle('meeting:distribute', async (_evt, userId: string, request: any) => {
+    if (!entitlementService.isFeatureAvailable('meetingAssistant')) {
+      return { ok: false, reason: 'Meeting Assistant requires Paw Pro or higher.' };
+    }
     const { distributeMeetingSummary } = require('./handlers/meetingHandler');
     return await distributeMeetingSummary(userId, request);
   });
@@ -1277,20 +1288,28 @@ export function registerIpc(opts: {
 
   // Join meeting and start recording (Pro+ tier, user-approved flow)
   // Called after pre-meeting notification approval
-  // TODO: Tier gating via entitlementService when 'meetingAssistant' FeatureId is added
   ipcMain.handle('meeting:joinAndRecord', async (_evt, userId: string, userEmail: string, meetingLink: string, meetingTitle?: string) => {
+    if (!entitlementService.isFeatureAvailable('meetingAssistant')) {
+      return { ok: false, reason: 'Meeting Assistant requires Paw Pro or higher.' };
+    }
     const { joinAndRecordMeeting } = require('./handlers/meetingHandler');
     return await joinAndRecordMeeting(userId, userEmail, meetingLink, meetingTitle);
   });
 
   // Complete meeting recording after user leaves
   ipcMain.handle('meeting:completeRecording', (_evt, meetingId: string, durationSeconds: number) => {
+    if (!entitlementService.isFeatureAvailable('meetingAssistant')) {
+      return { ok: false, reason: 'Meeting Assistant requires Paw Pro or higher.' };
+    }
     const { completeMeetingRecording } = require('./handlers/meetingHandler');
     return completeMeetingRecording(meetingId, durationSeconds);
   });
 
   // Handle pre-meeting notification approval
   ipcMain.handle('meeting:approvePreNotification', (_evt, eventId: string, meetingLink: string, userEmail: string) => {
+    if (!entitlementService.isFeatureAvailable('meetingAssistant')) {
+      return { ok: false, reason: 'Meeting Assistant requires Paw Pro or higher.' };
+    }
     const { handlePreMeetingApproval } = require('./handlers/meetingNotificationHandler');
     return handlePreMeetingApproval(eventId, meetingLink, userEmail);
   });
@@ -1302,8 +1321,10 @@ export function registerIpc(opts: {
   });
 
   // Start calendar polling for upcoming meetings (2-min pre-notification)
-  // TODO: Tier gating via entitlementService when 'meetingAssistant' FeatureId is added
   ipcMain.handle('meeting:startCalendarPolling', (_evt, userId: string) => {
+    if (!entitlementService.isFeatureAvailable('meetingAssistant')) {
+      return { ok: false, reason: 'Meeting Assistant requires Paw Pro or higher.' };
+    }
     const { calendarPollingService } = require('../workspace/services/CalendarPollingService');
     const mainWindow = opts.mainWindowProvider();
     calendarPollingService.startPolling(userId, () => mainWindow);
@@ -1318,54 +1339,72 @@ export function registerIpc(opts: {
   });
 
   // Generate structured summary (purpose, takeaways, topics, action items)
-  // TODO: Tier gating via entitlementService when 'meetingAssistant' FeatureId is added
   ipcMain.handle('meeting:generateStructuredSummary', async (_evt, meetingId: string) => {
+    if (!entitlementService.isFeatureAvailable('meetingAssistant')) {
+      return { ok: false, reason: 'Meeting Assistant requires Paw Pro or higher.' };
+    }
     const { generateStructuredSummary } = require('./handlers/meetingHandler');
     return await generateStructuredSummary(meetingId);
   });
 
   // Crop summary to selected topics and action items
-  // TODO: Tier gating via entitlementService when 'meetingAssistant' FeatureId is added
   ipcMain.handle('meeting:cropSummary', (_evt, request: any) => {
+    if (!entitlementService.isFeatureAvailable('meetingAssistant')) {
+      return { ok: false, reason: 'Meeting Assistant requires Paw Pro or higher.' };
+    }
     const { cropSummary } = require('./handlers/meetingHandler');
     return cropSummary(request);
   });
 
   // Save meeting summary as draft
-  // TODO: Tier gating via entitlementService when 'meetingAssistant' FeatureId is added
   ipcMain.handle('meeting:saveDraft', (_evt, request: any) => {
+    if (!entitlementService.isFeatureAvailable('meetingAssistant')) {
+      return { ok: false, reason: 'Meeting Assistant requires Paw Pro or higher.' };
+    }
     const { saveDraft } = require('./handlers/meetingHandler');
     return saveDraft(request);
   });
 
   // Get all drafts for a meeting
-  // TODO: Tier gating via entitlementService when 'meetingAssistant' FeatureId is added
   ipcMain.handle('meeting:getDrafts', (_evt, meetingId: string) => {
+    if (!entitlementService.isFeatureAvailable('meetingAssistant')) {
+      return { ok: false, reason: 'Meeting Assistant requires Paw Pro or higher.' };
+    }
     const { getDrafts } = require('./handlers/meetingHandler');
     return getDrafts(meetingId);
   });
 
   // Schedule meeting summary to be sent later
-  // TODO: Tier gating via entitlementService when 'meetingAssistant' FeatureId is added
   ipcMain.handle('meeting:scheduleSend', (_evt, request: any) => {
+    if (!entitlementService.isFeatureAvailable('meetingAssistant')) {
+      return { ok: false, reason: 'Meeting Assistant requires Paw Pro or higher.' };
+    }
     const { scheduleSend } = require('./handlers/meetingHandler');
     return scheduleSend(request);
   });
 
   // Get all scheduled sends for a meeting
-  // TODO: Tier gating via entitlementService when 'meetingAssistant' FeatureId is added
   ipcMain.handle('meeting:getScheduledSends', (_evt, meetingId: string) => {
+    if (!entitlementService.isFeatureAvailable('meetingAssistant')) {
+      return { ok: false, reason: 'Meeting Assistant requires Paw Pro or higher.' };
+    }
     const { getScheduledSends } = require('./handlers/meetingHandler');
     return getScheduledSends(meetingId);
   });
 
   // Meeting Summarization Compute Cost handlers — Pro tier or higher required
   ipcMain.handle('meeting:getSummarizationCost', (_evt, userId: string, request: any) => {
+    if (!entitlementService.isFeatureAvailable('meetingAssistant')) {
+      return { ok: false, reason: 'Meeting Assistant requires Paw Pro or higher.' };
+    }
     const { getSummarizationCost } = require('./handlers/meetingHandler');
     return getSummarizationCost(userId, request);
   });
 
   ipcMain.handle('meeting:confirmSummarize', async (_evt, userId: string, request: any) => {
+    if (!entitlementService.isFeatureAvailable('meetingAssistant')) {
+      return { ok: false, reason: 'Meeting Assistant requires Paw Pro or higher.' };
+    }
     const { confirmSummarize } = require('./handlers/meetingHandler');
     return confirmSummarize(userId, request);
   });

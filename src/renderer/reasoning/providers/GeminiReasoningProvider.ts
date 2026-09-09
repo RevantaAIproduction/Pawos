@@ -110,6 +110,7 @@ export function createGeminiReasoningProvider(config: GeminiReasoningConfig): Re
   return {
     id: 'gemini',
     label: 'Gemini',
+    model,
     isSupported() {
       return Boolean(config.apiKey);
     },
@@ -153,6 +154,11 @@ export function createGeminiReasoningProvider(config: GeminiReasoningConfig): Re
                 ? { systemInstruction: { parts: [{ text: request.systemPrompt }] } }
                 : {}),
               ...(toGeminiTools(request) ? { tools: toGeminiTools(request) } : {}),
+              // Explicit output limit for authorization/cost-bounding: 8,000 tokens is conservative
+              // for Flash and below, covers typical autonomous task responses without truncating normal
+              // conversation responses in non-autonomous contexts. This limit ensures pre-request cost
+              // authorization is defensible: max output PC = 8K tokens * pricing.outputPerMillionUsd.
+              maxOutputTokens: 8000,
             }),
           });
           resetIdleTimer();

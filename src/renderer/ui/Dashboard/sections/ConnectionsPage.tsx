@@ -336,6 +336,31 @@ export function ConnectionsPage({ scope, onUpgrade }: { scope: ConnectivityScope
 
   const infraContainers = useMemo(() => infra?.cliTools.filter((c) => c.kind === 'container') ?? [], [infra]);
 
+  const [slackMessageChannel, setSlackMessageChannel] = useState<string>('');
+  const [slackMessageText, setSlackMessageText] = useState<string>('');
+  const [slackMessageBusy, setSlackMessageBusy] = useState(false);
+  const [slackMessageError, setSlackMessageError] = useState<string | null>(null);
+
+  async function postSlackMessage(connectorId: string) {
+    if (!slackMessageChannel.trim() || !slackMessageText.trim()) {
+      setSlackMessageError('Channel and message are required.');
+      return;
+    }
+    setSlackMessageBusy(true);
+    setSlackMessageError(null);
+    try {
+      const result = await ipc.connectivitySlackPostMessage(scope, slackMessageChannel, slackMessageText);
+      if (!result.ok) throw new Error(result.error);
+      if (!result.data.ok) throw new Error(result.data.reason ?? 'Failed to post message');
+      setSlackMessageChannel('');
+      setSlackMessageText('');
+    } catch (e) {
+      setSlackMessageError(getErrorMessage(e));
+    } finally {
+      setSlackMessageBusy(false);
+    }
+  }
+
   const connectedCloudCount = connectable.filter((c) => connectionFor(c.id)?.status === 'connected').length;
   const totalCloudCount = connectable.length;
 
@@ -542,6 +567,35 @@ export function ConnectionsPage({ scope, onUpgrade }: { scope: ConnectivityScope
                       );
                     })()}
                   </div>
+                  {c.id === 'slack' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16, borderTop: '1px solid rgba(var(--pawos-overlay-rgb), 0.1)', paddingTop: 16 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 600 }}>Send message</div>
+                      <input
+                        type="text"
+                        style={fieldInputStyle}
+                        placeholder="Channel (e.g., #general or @username)"
+                        value={slackMessageChannel}
+                        onChange={(e) => setSlackMessageChannel(e.target.value)}
+                        disabled={slackMessageBusy}
+                      />
+                      <textarea
+                        style={{ ...fieldInputStyle, minHeight: 80, fontFamily: 'inherit', resize: 'vertical' }}
+                        placeholder="Message text"
+                        value={slackMessageText}
+                        onChange={(e) => setSlackMessageText(e.target.value)}
+                        disabled={slackMessageBusy}
+                      />
+                      <button
+                        type="button"
+                        className={styles.chip}
+                        disabled={slackMessageBusy || !slackMessageChannel.trim() || !slackMessageText.trim()}
+                        onClick={() => postSlackMessage(c.id)}
+                      >
+                        {slackMessageBusy ? 'Posting…' : 'Post message'}
+                      </button>
+                      {slackMessageError && <p style={{ color: '#e08c8c', fontSize: 12.5 }}>{slackMessageError}</p>}
+                    </div>
+                  )}
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button type="button" className={styles.chip} disabled={busy} onClick={() => checkHealth(c.id, connection.id)}>
                       Check health

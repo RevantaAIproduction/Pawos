@@ -20,7 +20,7 @@
 alter table autonomous_task_runs drop constraint if exists autonomous_task_runs_status_check;
 alter table autonomous_task_runs add constraint autonomous_task_runs_status_check
   check (status in (
-    'queued', 'running', 'waiting_for_permission', 'blocked',
+    'queued', 'running', 'waiting_for_permission', 'waiting_for_topup', 'blocked',
     'completed', 'failed', 'cancelled', 'retry_limit_reached', 'abandoned'
   ));
 
@@ -100,7 +100,7 @@ begin
   if p_to_status = 'completed' then
     raise exception 'transition_autonomous_task_run() cannot set completed — use mark_autonomous_task_completed()';
   end if;
-  if p_to_status not in ('running', 'waiting_for_permission', 'blocked', 'failed', 'cancelled') then
+  if p_to_status not in ('running', 'waiting_for_permission', 'waiting_for_topup', 'blocked', 'failed', 'cancelled') then
     raise exception 'transition_autonomous_task_run() does not accept target status %', p_to_status;
   end if;
 
@@ -108,12 +108,15 @@ begin
     ('queued', 'running'),
     ('queued', 'cancelled'),
     ('running', 'waiting_for_permission'),
+    ('running', 'waiting_for_topup'),
     ('running', 'blocked'),
     ('running', 'failed'),
     ('running', 'cancelled'),
     ('waiting_for_permission', 'running'),
     ('waiting_for_permission', 'cancelled'),
     ('waiting_for_permission', 'blocked'),
+    ('waiting_for_topup', 'running'),
+    ('waiting_for_topup', 'cancelled'),
     ('blocked', 'failed'),
     ('blocked', 'cancelled')
   );
@@ -165,7 +168,7 @@ begin
   if p_ticket_id is not null then
     select * into v_existing
     from autonomous_task_runs
-    where status in ('queued', 'running', 'waiting_for_permission', 'blocked')
+    where status in ('queued', 'running', 'waiting_for_permission', 'waiting_for_topup', 'blocked')
       and ticket_id = p_ticket_id
       and coalesce(organization_id::text, user_id::text) = coalesce(p_organization_id::text, auth.uid()::text)
     limit 1;

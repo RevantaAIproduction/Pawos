@@ -37,6 +37,7 @@ export function createOpenAiCompatibleReasoningProvider(
   return {
     id: config.id,
     label: config.label,
+    model: config.model,
     isSupported() {
       return Boolean(config.baseUrl);
     },

@@ -229,6 +229,10 @@ export type TicketBalance = {
   balanceUsd: number;
   /** Cumulative completed tickets ever billed against this balance — determines the rate the *next* ticket is charged at. */
   ticketsUsedCount: number;
+  /** Available Paw Compute (PC) from prepaid wallet, not yet reserved by any active run. */
+  availableBalancePc: number;
+  /** PC currently reserved by active/running autonomous task runs. */
+  reservedPc: number;
   updatedAt: string;
 };
 

@@ -1,10 +1,17 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron';
+import { createClient } from '@supabase/supabase-js';
 import { connectivityRuntime } from '../connectivity/ConnectivityRuntime';
 import { isConnectorEntitled } from '../connectivity/ConnectorEntitlementGate';
 import { verifyPullRequestExists, type PullRequestVerificationResult } from '../connectivity/PullRequestVerification';
 import { postAutonomousCompletionComment, type PullRequestEvidenceCommentResult } from '../connectivity/PullRequestEvidenceComment';
+import { postJiraComment, type JiraCommentInput, type JiraWriteBackResult, transitionJiraIssue } from '../execution/plugins/infrastructure/JiraWriteBackPlugin';
+import { postLinearComment, type LinearCommentInput, type LinearWriteBackResult, transitionLinearIssue } from '../execution/plugins/infrastructure/LinearWriteBackPlugin';
+import { postJiraCommentIdempotent, type IdempotentJiraCommentInput } from '../execution/plugins/infrastructure/JiraWriteBackIdempotent';
+import { postLinearCommentIdempotent, type IdempotentLinearCommentInput } from '../execution/plugins/infrastructure/LinearWriteBackIdempotent';
+import { postGitHubCommentIdempotent, type IdempotentGitHubCommentInput, type GitHubWriteBackResult } from '../execution/plugins/infrastructure/GitHubWriteBackIdempotent';
 import { credentialVaultBridge, type StoredCredential } from '../connectivity/CredentialVaultBridge';
 import { jiraMetadataStore, type JiraMetadata } from '../connectivity/JiraMetadataStore';
+import { SlackConnector } from '../infrastructure/connectors/communication/SlackConnector';
 import type {
   ConnectivityScope,
   ConnectorDefinition,
@@ -16,6 +23,15 @@ import type {
   ApiTokenValidationResult,
   OAuthBeginResult,
 } from '../../shared/connectivity/ConnectivityTypes';
+
+function getSupabaseClient() {
+  const url = process.env.SUPABASE_URL;
+  const anonKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !anonKey) {
+    throw new Error('Supabase not configured');
+  }
+  return createClient(url, anonKey);
+}
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
@@ -183,18 +199,46 @@ export function registerConnectivityIpc(): void {
 
   // Autonomous Work's ONE genuinely real "external update" capability — posts a completion evidence
   // comment on an existing GitHub/GitLab pull request via the already-real createPullRequestComment()
-  // write capability. Never creates a PR, never updates a Jira/Linear/GitHub-Issues ticket (no such
-  // write capability exists anywhere in this codebase — see the connector-capability audit in
-  // AutonomousOrchestrator.ts's own doc comment). Honestly reports { posted: false, reason } for a
-  // disconnected connector, an unrecognized URL, or a failed API call — never fabricates success.
-  safeHandle<PullRequestEvidenceCommentResult>('connectivity:postAutonomousCompletionComment', (prUrl: unknown, body: unknown) => {
-    if (!isNonEmptyString(prUrl)) {
-      throw new Error('connectivity:postAutonomousCompletionComment requires a non-empty prUrl string.');
+  // write capability. Uses durable idempotency to prevent duplicate comments on network failures.
+  // Never creates a PR, never updates a Jira/Linear/GitHub-Issues ticket (no such write capability
+  // exists anywhere in this codebase). Honestly reports { posted: false, reason } for a disconnected
+  // connector, an unrecognized URL, or a failed API call — never fabricates success.
+  safeHandle<GitHubWriteBackResult>('connectivity:postAutonomousCompletionComment', async (input: unknown) => {
+    const githubInput = input as Partial<IdempotentGitHubCommentInput> | null | undefined;
+    if (!githubInput || !isNonEmptyString(githubInput.runId) || !isNonEmptyString(githubInput.prUrl) || !isNonEmptyString(githubInput.comment)) {
+      throw new Error('connectivity:postAutonomousCompletionComment requires {runId, prUrl, comment}.');
     }
-    if (!isNonEmptyString(body)) {
-      throw new Error('connectivity:postAutonomousCompletionComment requires a non-empty body string.');
+    const supabase = getSupabaseClient();
+    return postGitHubCommentIdempotent(supabase, githubInput as IdempotentGitHubCommentInput);
+  });
+
+  // Jira write-back: post a comment to a Jira issue after autonomous work completion.
+  // Uses durable idempotency: prevents duplicate comments on network failures.
+  // Input: { runId, jiraUrl, apiEmail, apiToken, issueKey, comment }
+  // User-provided credentials from credential vault.
+  safeHandle<JiraWriteBackResult>('connectivity:postJiraComment', async (input: unknown) => {
+    const jiraInput = input as Partial<IdempotentJiraCommentInput> | null | undefined;
+    if (!jiraInput || !isNonEmptyString(jiraInput.runId) || !isNonEmptyString(jiraInput.jiraUrl) ||
+        !isNonEmptyString(jiraInput.apiEmail) || !isNonEmptyString(jiraInput.apiToken) ||
+        !isNonEmptyString(jiraInput.issueKey) || !isNonEmptyString(jiraInput.comment)) {
+      throw new Error('connectivity:postJiraComment requires {runId, jiraUrl, apiEmail, apiToken, issueKey, comment}.');
     }
-    return postAutonomousCompletionComment(prUrl, body);
+    const supabase = getSupabaseClient();
+    return postJiraCommentIdempotent(supabase, jiraInput as IdempotentJiraCommentInput);
+  });
+
+  // Linear write-back: post a comment to a Linear issue after autonomous work completion.
+  // Uses durable idempotency: prevents duplicate comments on network failures.
+  // Input: { runId, linearApiKey, issueId, comment }
+  // User-provided credentials from credential vault.
+  safeHandle<LinearWriteBackResult>('connectivity:postLinearComment', async (input: unknown) => {
+    const linearInput = input as Partial<IdempotentLinearCommentInput> | null | undefined;
+    if (!linearInput || !isNonEmptyString(linearInput.runId) || !isNonEmptyString(linearInput.linearApiKey) ||
+        !isNonEmptyString(linearInput.issueId) || !isNonEmptyString(linearInput.comment)) {
+      throw new Error('connectivity:postLinearComment requires {runId, linearApiKey, issueId, comment}.');
+    }
+    const supabase = getSupabaseClient();
+    return postLinearCommentIdempotent(supabase, linearInput as IdempotentLinearCommentInput);
   });
 
   safeHandle<DeploymentProfile>('connectivity:deploymentProfiles:create', (scope: unknown, name: unknown, config: unknown) => {
@@ -340,5 +384,62 @@ export function registerConnectivityIpc(): void {
       throw new Error("connectivity:getJiraMetadata requires a valid scope ({ userId, organizationId? }).");
     }
     return jiraMetadataStore.read(scope);
+  });
+
+  // Jira status transition: move an issue to a new status/transition.
+  // Input: { jiraUrl, apiEmail, apiToken, issueKey, transitionName }
+  // Validates transition exists before executing; naturally idempotent at state level.
+  safeHandle<JiraWriteBackResult>('connectivity:transitionJiraIssue', async (input: unknown) => {
+    const jiraInput = input as Partial<{
+      jiraUrl: string;
+      apiEmail: string;
+      apiToken: string;
+      issueKey: string;
+      transitionName: string;
+    }> | null | undefined;
+
+    if (!jiraInput || !isNonEmptyString(jiraInput.jiraUrl) || !isNonEmptyString(jiraInput.apiEmail) ||
+        !isNonEmptyString(jiraInput.apiToken) || !isNonEmptyString(jiraInput.issueKey) ||
+        !isNonEmptyString(jiraInput.transitionName)) {
+      throw new Error('connectivity:transitionJiraIssue requires {jiraUrl, apiEmail, apiToken, issueKey, transitionName}.');
+    }
+
+    return transitionJiraIssue(jiraInput.jiraUrl, jiraInput.apiEmail, jiraInput.apiToken, jiraInput.issueKey, jiraInput.transitionName);
+  });
+
+  // Linear status transition: move an issue to a new state.
+  // Input: { linearApiKey, issueId, statusName }
+  // Validates state exists before executing; naturally idempotent at state level.
+  safeHandle<LinearWriteBackResult>('connectivity:transitionLinearIssue', async (input: unknown) => {
+    const linearInput = input as Partial<{
+      linearApiKey: string;
+      issueId: string;
+      statusName: string;
+    }> | null | undefined;
+
+    if (!linearInput || !isNonEmptyString(linearInput.linearApiKey) || !isNonEmptyString(linearInput.issueId) ||
+        !isNonEmptyString(linearInput.statusName)) {
+      throw new Error('connectivity:transitionLinearIssue requires {linearApiKey, issueId, statusName}.');
+    }
+
+    return transitionLinearIssue(linearInput.linearApiKey, linearInput.issueId, linearInput.statusName);
+  });
+
+  // Slack message posting: send a message to a connected Slack workspace.
+  // Input: { scope: { userId, organizationId? }, channel, text }
+  // Retrieves Slack access token from credential vault; enforces Pro tier entitlement.
+  // Returns { ok: true } or { ok: false, reason: string }
+  safeHandle<{ ok: true } | { ok: false; reason: string }>('connectivity:slack:postMessage', async (input: unknown) => {
+    const slackInput = input as Partial<{ scope: unknown; channel: string; text: string }> | null | undefined;
+    if (!slackInput || !isConnectivityScope(slackInput.scope) || !isNonEmptyString(slackInput.channel) || !isNonEmptyString(slackInput.text)) {
+      throw new Error('connectivity:slack:postMessage requires {scope, channel, text}.');
+    }
+    assertConnectorEntitled('slack');
+    const credential = await credentialVaultBridge.read('slack', slackInput.scope);
+    if (!credential) {
+      return { ok: false, reason: 'Slack is not connected.' };
+    }
+    const connector = new SlackConnector(credential.secret);
+    return connector.postMessage(slackInput.channel, slackInput.text);
   });
 }

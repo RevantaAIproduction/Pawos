@@ -28,6 +28,19 @@ import { LiveStatus } from './LiveStatus/LiveStatus';
 import { ExtensionRenderer, type ExtensionRendererProps } from './extensions/ExtensionRenderer';
 import type { ExtensionExpandRequest } from './extensions/ExtensionTypes';
 import { LiveWorkStream } from './LiveWorkStream/LiveWorkStream';
+import { useCurrentFileContext, buildFileContextPrompt } from '../workspace/useCurrentFileContext';
+import { FileContextSelector } from './FileContextSelector';
+import { shouldShowExecutionChoice, detectStrategyChange } from './IntentDetection';
+import { ExecutionChoiceCard } from './ExecutionChoiceCard';
+import { executionStrategyStore, type ExecutionStrategy } from './ExecutionStrategyStore';
+import { CardGrid, type CardConfig } from '../CardGrid/CardGrid';
+import { ProjectContextBar } from './ProjectContextBar';
+import { CompanionHamburger } from './CompanionHamburger';
+import { PlusMenu } from './PlusMenu';
+import { AcceptEditsControl } from './AcceptEditsControl';
+import { ModelSelectorWidget } from './ModelSelectorWidget';
+import { ContextualGovernancePanel } from './ContextualGovernancePanel';
+import { ContextualPlanPanel } from './ContextualPlanPanel';
 
 /** Reasoning models are genuinely selectable (they change which model actually answers); the rest
  *  of the catalog are automatic, specialized routers Paw invokes per-need — shown for transparency
@@ -282,10 +295,30 @@ export function ConversationPanel({
   streamingPawCompute?: number;
   streamingElapsedSeconds?: number;
   onOpenSidebar?: (cardType: 'terminal' | 'worktree' | 'browser' | 'background-tasks') => void;
+  openCards?: CardConfig[];
+  onRemoveCard?: (cardId: string) => void;
+  onExpandCard?: (cardId: string) => void;
+  onCollapseCard?: () => void;
+  expandedCardId?: string | null;
 }) {
   const windowCtx = useWindowContext();
   const isStreaming = snapshot.state === 'thinking' || snapshot.state === 'performingAction';
   const ipc = useIpcBridge();
+
+  // Hands-on coding: File context for current working file
+  const fileContext = useCurrentFileContext();
+
+  // Execution strategy: User's remembered choice (handsOn | autonomous | undefined)
+  const [executionStrategy, setExecutionStrategy] = useState<ExecutionStrategy>(() =>
+    executionStrategyStore.getStrategy()
+  );
+
+  // Execution choice: Store pending request awaiting user's strategy choice (first-time only)
+  const [executionChoicePending, setExecutionChoicePending] = useState(false);
+  const [pendingRequest, setPendingRequest] = useState<{
+    text: string;
+    context: SubmittedInputContext;
+  } | null>(null);
 
   const [draft, setDraft] = useState('');
   const [wasPasted, setWasPasted] = useState(false);
@@ -741,6 +774,28 @@ export function ConversationPanel({
     setWasPasted(false);
     requestAnimationFrame(resizeTextarea);
   }, [draft, snapshot.draftTranscript, snapshot.state]);
+
+  // Hands-on coding: Reload file context after code edits are applied
+  useEffect(() => {
+    if (!fileContext.currentFile) return;
+
+    // Find the most recent completed task with an applyCodeEdit action
+    const recentTask = snapshot.messages
+      .filter(m => m.task && m.task.status === 'completed')
+      .pop()?.task;
+
+    if (!recentTask) return;
+
+    // Check if this task contains an applyCodeEdit action that just completed
+    const hasCodeEditAction = recentTask.actions.some(
+      a => a.type === 'applyCodeEdit' && a.endedAt !== null && a.result?.ok === true
+    );
+
+    if (hasCodeEditAction) {
+      void fileContext.reloadFile();
+    }
+  }, [snapshot.messages]);
+
   // While performing an action, show what's actually happening ("Opening VS
   // Code…") instead of the generic "Performing action" — Desktop Status
   // should always name the real activity, not just the state machine's name for it.
@@ -802,11 +857,105 @@ export function ConversationPanel({
         });
       }
     }
-    onSendTranscript(text, wasPasted ? { source: 'pasted', projectId: windowCtx.context.project?.id } : { projectId: windowCtx.context.project?.id });
+    // Hands-on coding: Inject file context if a file is selected
+    const fileContextPrompt = buildFileContextPrompt(fileContext.currentFile);
+    const reasoningText = fileContextPrompt
+      ? `${fileContextPrompt}\n\nUser request: ${text}`
+      : text;
+
+    const context = wasPasted
+      ? { source: 'pasted' as const, reasoningText, projectId: windowCtx.context.project?.id }
+      : { reasoningText, projectId: windowCtx.context.project?.id };
+
+    // EXECUTION STRATEGY: Check if this is an explicit strategy change request
+    const strategyChange = detectStrategyChange(text);
+    if (strategyChange) {
+      // User explicitly changed strategy - persist it
+      executionStrategyStore.setStrategy(strategyChange);
+      setExecutionStrategy(strategyChange);
+      // Submit the request normally (confirm the strategy change in conversation)
+      onSendTranscript(text, context);
+      setDraft('');
+      lastSyncedVoiceDraftRef.current = '';
+      setWasPasted(false);
+      requestAnimationFrame(resizeTextarea);
+      return;
+    }
+
+    // EXECUTION CHOICE: Determine if we should show the choice card
+    // Note: Attachments use a separate onSendTranscript call (line 930), not send().
+    // send() only handles pure text, so hasAttachedImages is always false here.
+    const hasAttachedImages = false;
+    const hasExistingStrategy = executionStrategy !== undefined;
+    const isActionable = shouldShowExecutionChoice(
+      text,
+      windowCtx.context,
+      hasAttachedImages,
+      !!fileContext.currentFile,
+      hasExistingStrategy,
+      false // not a strategy change request (already handled above)
+    );
+
+    // If user has a strategy AND request is actionable → apply strategy automatically
+    if (hasExistingStrategy && isActionable) {
+      const temporaryMode = executionStrategy === 'handsOn' ? 'acceptEdits' : 'plan';
+      const contextWithMode: SubmittedInputContext = {
+        ...context,
+        temporaryExecutionMode: temporaryMode,
+      };
+      onSendTranscript(text, contextWithMode);
+      setDraft('');
+      lastSyncedVoiceDraftRef.current = '';
+      setWasPasted(false);
+      requestAnimationFrame(resizeTextarea);
+      return;
+    }
+
+    // First-time actionable request with no strategy → show choice card
+    if (!hasExistingStrategy && isActionable) {
+      setPendingRequest({ text, context });
+      setExecutionChoicePending(true);
+      return;
+    }
+
+    // Non-actionable request → normal submission
+    onSendTranscript(text, context);
     setDraft('');
     lastSyncedVoiceDraftRef.current = '';
     setWasPasted(false);
     requestAnimationFrame(resizeTextarea);
+  };
+
+  const handleExecutionChoice = (choice: 'work_with_me' | 'autonomous') => {
+    if (!pendingRequest) return;
+
+    // Persist the strategy for future requests
+    const strategy = choice === 'work_with_me' ? 'handsOn' : 'autonomous';
+    executionStrategyStore.setStrategy(strategy);
+    setExecutionStrategy(strategy);
+
+    // Add temporary execution mode to context based on choice
+    const temporaryMode = choice === 'work_with_me' ? 'acceptEdits' : 'plan';
+    const contextWithMode: SubmittedInputContext = {
+      ...pendingRequest.context,
+      temporaryExecutionMode: temporaryMode,
+    };
+
+    // Submit the pending request with the chosen execution strategy
+    onSendTranscript(pendingRequest.text, contextWithMode);
+
+    // Clear pending choice state
+    setExecutionChoicePending(false);
+    setPendingRequest(null);
+    setDraft('');
+    lastSyncedVoiceDraftRef.current = '';
+    setWasPasted(false);
+    requestAnimationFrame(resizeTextarea);
+  };
+
+  const handleCancelExecutionChoice = () => {
+    setExecutionChoicePending(false);
+    setPendingRequest(null);
   };
 
   const handleCancelQueue = () => {
@@ -986,6 +1135,9 @@ export function ConversationPanel({
         </div>
       </div>
 
+      {/* Project Context Bar - Phase 3 */}
+      <ProjectContextBar activeTask={undefined} currentWorkingFile={currentWorkingFile} />
+
       {/* Session Name Display - Line 2 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1050,6 +1202,21 @@ export function ConversationPanel({
           onUseCredits={onUseCredits}
           redeeming={redeemingCredits}
           redeemError={redeemCreditsError}
+        />
+      )}
+
+      {/* Hands-on coding: File context selector */}
+      {windowCtx.context.project && (
+        <FileContextSelector />
+      )}
+
+      {/* EXECUTION CHOICE: Show card when pending user's strategy choice */}
+      {executionChoicePending && pendingRequest && (
+        <ExecutionChoiceCard
+          understanding={`I understand you want to: ${pendingRequest.text}`}
+          onWorkWithMe={() => handleExecutionChoice('work_with_me')}
+          onAutonomous={() => handleExecutionChoice('autonomous')}
+          onCancel={handleCancelExecutionChoice}
         />
       )}
 
@@ -1638,19 +1805,13 @@ export function ConversationPanel({
           {/* Left: Folder + Branch + Git Status */}
           <div style={{ display: 'flex', gap: 16, alignItems: 'center', flex: 1 }}>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: '12px', color: 'rgba(255,255,255,0.7)' }}>
-              <span>src/renderer/conversation</span>
-              <span>main</span>
+              {currentWorkingFile && <span>{currentWorkingFile}</span>}
               {!activeTask?.gitConnected && (
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '3px 8px', background: 'rgba(255,165,0,0.1)', borderRadius: '3px', border: '1px solid rgba(255,165,0,0.2)', cursor: 'pointer' }} title="Connect your git to enable easy push and pull">
                   <span style={{ fontSize: '12px', color: 'rgba(255,165,0,0.8)' }}>⚠</span>
                   <span style={{ fontSize: '11px', color: 'rgba(255,165,0,0.7)' }}>connect git</span>
                 </div>
               )}
-            </div>
-            {/* Line Edits */}
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '12px', fontWeight: 500 }}>
-              <span style={{ color: '#4ade80' }}>+200</span>
-              <span style={{ color: '#f87171' }}>-40</span>
             </div>
           </div>
 
@@ -1721,6 +1882,30 @@ export function ConversationPanel({
               ✕
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Contextual Governance Panel - Phase 10 */}
+      <div style={{ padding: '0 16px', paddingTop: '12px' }}>
+        <ContextualGovernancePanel />
+      </div>
+
+      {/* Contextual Plan Panel - Phase 11 */}
+      <div style={{ padding: '0 16px' }}>
+        <ContextualPlanPanel />
+      </div>
+
+      {/* Contextual Live Cards — only when there are open cards */}
+      {openCards && openCards.length > 0 && (
+        <div data-interactive="true" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', minHeight: 0, overflow: 'hidden' }}>
+          <CardGrid
+            cards={openCards}
+            onRemoveCard={onRemoveCard || (() => {})}
+            onAddCard={() => {}}
+            expandedCardId={expandedCardId || null}
+            onExpandCard={onExpandCard || (() => {})}
+            onCollapseCard={onCollapseCard || (() => {})}
+          />
         </div>
       )}
 
@@ -1844,38 +2029,42 @@ export function ConversationPanel({
           })()}
 
           {/* Text input - takes available space, clean and prominent */}
-          <textarea
-            ref={textareaRef}
-            className={styles.input}
-            rows={1}
-            autoFocus
-            value={draft}
-            onChange={(event) => {
-              const text = event.target.value;
-              setDraft(text);
-              if (!text) setWasPasted(false);
+          <div style={{ display: 'flex', flex: 1, minWidth: 0, gap: '8px', alignItems: 'flex-end' }}>
+            <textarea
+              ref={textareaRef}
+              className={styles.input}
+              rows={1}
+              autoFocus
+              value={draft}
+              onChange={(event) => {
+                const text = event.target.value;
+                setDraft(text);
+                if (!text) setWasPasted(false);
 
-              // Line-counting logic for large prompt detection
-              if (text.trim()) {
-                const lineCount = text.split('\n').length;
-                // Store line count in data attr for later use (if >700 lines)
-                if (textareaRef.current) {
-                  textareaRef.current.setAttribute('data-line-count', String(lineCount));
+                // Line-counting logic for large prompt detection
+                if (text.trim()) {
+                  const lineCount = text.split('\n').length;
+                  // Store line count in data attr for later use (if >700 lines)
+                  if (textareaRef.current) {
+                    textareaRef.current.setAttribute('data-line-count', String(lineCount));
+                  }
                 }
-              }
 
-              resizeTextarea();
-            }}
-            onPaste={handlePaste}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                send();
-              }
-            }}
-            placeholder="Type or describe what you need"
-            style={{ flex: 1, minWidth: 0 }}
-          />
+                resizeTextarea();
+              }}
+              onPaste={handlePaste}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  send();
+                }
+              }}
+              placeholder="Type or describe what you need"
+              style={{ flex: 1, minWidth: 0 }}
+            />
+            {/* File context pill - shows attached file */}
+            <FileContextSelector mode="compact" />
+          </div>
 
           {/* Microphone button - RIGHT side, records and transcribes */}
           <button
@@ -2074,6 +2263,30 @@ export function ConversationPanel({
             </div>
           </div>
         )}
+
+        {/* Bottom Control Row: Accept Edits + Model Selector - Phase 8-9 */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px 0', gap: '12px' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <AcceptEditsControl
+              currentStrategy={activeExecutionMode === 'plan' ? 'plan_first' : activeExecutionMode === 'bypass' ? 'auto_accept' : 'manual'}
+              onStrategyChange={(strategy) => {
+                const modeMap: Record<string, ConversationExecutionMode> = {
+                  'manual': 'manual',
+                  'auto_accept': 'bypass',
+                  'plan_first': 'plan'
+                };
+                onSetExecutionMode?.(modeMap[strategy] || 'manual');
+              }}
+            />
+            <PlusMenu onAddSlashCommand={() => {}} onAddConnector={() => {}} />
+          </div>
+          <ModelSelectorWidget
+            activePawModel={activePawModel}
+            onSelectModel={onSelectModel}
+            entitlement={entitlement}
+            streamingElapsedSeconds={streamingElapsedSeconds}
+          />
+        </div>
 
         {/* Toolbar: Clean compact bottom toolbar with only essential controls */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderTop: '1px solid rgba(255,255,255,0.06)', marginTop: '8px', gap: '12px', minHeight: '28px' }}>

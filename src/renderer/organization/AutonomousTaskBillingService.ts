@@ -182,8 +182,8 @@ export const autonomousTaskBillingService = {
 
   /**
    * The single, explicit entry point for every non-completion state change (queued->running,
-   * running->waiting_for_permission/blocked/failed/cancelled, waiting_for_permission->running/
-   * cancelled/blocked, blocked->failed/cancelled) — see transition_autonomous_task_run() in
+   * running->waiting_for_permission/waiting_for_topup/blocked/failed/cancelled, waiting_for_permission->running/
+   * cancelled/blocked, waiting_for_topup->running/cancelled, blocked->failed/cancelled) — see transition_autonomous_task_run() in
    * 20260816000000_autonomous_orchestration_state_machine.sql. The RPC itself structurally refuses
    * to ever accept `toStatus: 'completed'` and rejects any pair not in its own explicit allowed-
    * transition table, so this method can never be used to smuggle a run into COMPLETED without going
@@ -191,7 +191,7 @@ export const autonomousTaskBillingService = {
    * (e.g. a terminal state resuming) — both are enforced server-side, not just by this method's own
    * type signature.
    */
-  async transitionRun(runId: string, toStatus: 'running' | 'waiting_for_permission' | 'blocked' | 'failed' | 'cancelled', reason?: string): Promise<AutonomousTaskRun> {
+  async transitionRun(runId: string, toStatus: 'running' | 'waiting_for_permission' | 'waiting_for_topup' | 'blocked' | 'failed' | 'cancelled', reason?: string): Promise<AutonomousTaskRun> {
     const supabase = await getSupabaseClient();
     const { data, error } = await supabase
       .rpc('transition_autonomous_task_run', { p_run_id: runId, p_to_status: toStatus, p_reason: reason ?? null })
@@ -262,28 +262,42 @@ export const autonomousTaskBillingService = {
     return (data ?? []).map(toBillingEvent);
   },
 
-  /** Real ticket balance wallet — reads user_task_credits when organizationId is null, organization_task_credits otherwise. */
+  /** Real ticket balance wallet — reads user_task_credits when organizationId is null, organization_task_credits otherwise. Includes both USD and PC balances. */
   async getTicketBalance(organizationId: string | null): Promise<TicketBalance> {
     const supabase = await getSupabaseClient();
     if (organizationId) {
       const { data, error } = await supabase
         .from('organization_task_credits')
-        .select('organization_id, balance_usd, tickets_used_count, updated_at')
+        .select('organization_id, balance_usd, tickets_used_count, balance_pc, balance_reserved, updated_at')
         .eq('organization_id', organizationId)
-        .maybeSingle<BalanceRow>();
+        .maybeSingle<BalanceRow & { balance_pc: number; balance_reserved: number }>();
       if (error) throw error;
-      return { organizationId, balanceUsd: data?.balance_usd ?? 0, ticketsUsedCount: data?.tickets_used_count ?? 0, updatedAt: data?.updated_at ?? new Date(0).toISOString() };
+      return {
+        organizationId,
+        balanceUsd: data?.balance_usd ?? 0,
+        ticketsUsedCount: data?.tickets_used_count ?? 0,
+        availableBalancePc: (data?.balance_pc ?? 0) - (data?.balance_reserved ?? 0),
+        reservedPc: data?.balance_reserved ?? 0,
+        updatedAt: data?.updated_at ?? new Date(0).toISOString(),
+      };
     }
     const { data: userData } = await supabase.auth.getUser();
     const userId = userData.user?.id;
     if (!userId) throw new Error('Not signed in');
     const { data, error } = await supabase
       .from('user_task_credits')
-      .select('balance_usd, tickets_used_count, updated_at')
+      .select('balance_usd, tickets_used_count, balance_pc, balance_reserved, updated_at')
       .eq('user_id', userId)
-      .maybeSingle<{ balance_usd: number; tickets_used_count: number; updated_at: string }>();
+      .maybeSingle<{ balance_usd: number; tickets_used_count: number; balance_pc: number; balance_reserved: number; updated_at: string }>();
     if (error) throw error;
-    return { organizationId: null, balanceUsd: data?.balance_usd ?? 0, ticketsUsedCount: data?.tickets_used_count ?? 0, updatedAt: data?.updated_at ?? new Date(0).toISOString() };
+    return {
+      organizationId: null,
+      balanceUsd: data?.balance_usd ?? 0,
+      ticketsUsedCount: data?.tickets_used_count ?? 0,
+      availableBalancePc: (data?.balance_pc ?? 0) - (data?.balance_reserved ?? 0),
+      reservedPc: data?.balance_reserved ?? 0,
+      updatedAt: data?.updated_at ?? new Date(0).toISOString(),
+    };
   },
 
   async listTopups(organizationId: string | null, limit = 100): Promise<TicketBalanceTopup[]> {
@@ -294,6 +308,53 @@ export const autonomousTaskBillingService = {
     if (error) throw error;
     return (data ?? []).map(toTopup);
   },
+
+  /**
+   * Reserve PC from the ticket wallet for an autonomous run. Called before starting execution.
+   * Returns success status, reserved amount, remaining available balance, and error if failed.
+   * Idempotent by request_id.
+   */
+  async reserveAutonomousPc(runId: string, estimatedPc: number, requestId: string): Promise<{ success: boolean; reservedPc: number | null; availableRemaining: number | null; errorMessage: string | null }> {
+    const supabase = await getSupabaseClient();
+    const { data, error } = await supabase.rpc('reserve_autonomous_pc', {
+      p_run_id: runId,
+      p_estimated_pc: estimatedPc,
+      p_request_id: requestId,
+    });
+    if (error) throw error;
+    const result = data as { success: boolean; reserved_pc: number | null; available_remaining: number | null; error_message: string | null };
+    return {
+      success: result.success,
+      reservedPc: result.reserved_pc,
+      availableRemaining: result.available_remaining,
+      errorMessage: result.error_message,
+    };
+  },
+
+  /**
+   * Extend a previously-reserved PC allocation for an autonomous run mid-execution.
+   * Called when execution realizes it needs more PC than initially reserved.
+   * Returns success, new total reserved amount, remaining available, and error if failed.
+   * Idempotent by extension_request_id.
+   */
+  async extendAutonomousReservation(runId: string, additionalPc: number, extensionRequestId: string, executorInstanceId: string): Promise<{ success: boolean; newReservedTotal: number | null; availableRemaining: number | null; errorMessage: string | null }> {
+    const supabase = await getSupabaseClient();
+    const { data, error } = await supabase.rpc('extend_autonomous_reservation', {
+      p_run_id: runId,
+      p_additional_pc: additionalPc,
+      p_extension_request_id: extensionRequestId,
+      p_executor_instance_id: executorInstanceId,
+    });
+    if (error) throw error;
+    const result = data as { success: boolean; new_reserved_total: number | null; available_remaining: number | null; error_message: string | null };
+    return {
+      success: result.success,
+      newReservedTotal: result.new_reserved_total,
+      availableRemaining: result.available_remaining,
+      errorMessage: result.error_message,
+    };
+  },
+
 
   /** Month-to-date total spend, computed client-side from the billing history
    * this session already fetched — no separate aggregate RPC needed for a

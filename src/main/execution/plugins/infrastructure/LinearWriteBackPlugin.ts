@@ -18,6 +18,9 @@ export type LinearWriteBackResult = {
   ok: boolean;
   commentId?: string;
   reason?: string;
+  cached?: boolean;          // true if result was from cache (idempotent)
+  recovered?: boolean;       // true if comment ID was recovered via reconciliation
+  retryable?: boolean;       // true if error is retryable
 };
 
 /**

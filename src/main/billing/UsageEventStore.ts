@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { app } from 'electron';
 import type { NormalizedUsageRecord } from '../../shared/billing/UsageMeteringTypes';
+import { normalizedComputeToWorkPc } from '../../shared/billing/AutonomousWorkPcCommercialModel';
 
 const FILE_NAME = 'usage-events.json';
 /** Larger than CreditStore's 200-entry consumption-summary history — this is meant to be a genuine
@@ -90,14 +91,26 @@ class UsageEventStore {
     }
 
     const records = this.state.records.filter((r) => r.runId === runId);
-    const actualPc = Math.round(records.reduce((sum, r) => sum + (r.normalizedCompute ?? 0), 0));
+    const totalNormalizedCompute = records.reduce((sum, r) => sum + (r.normalizedCompute ?? 0), 0);
+
+    // CRITICAL: Convert from internal normalized compute to customer Work PC
+    // Formula: normalizedCompute / 1000 = provider cost USD
+    // Then: provider cost USD → 70% margin → customer charge → Work PC
+    const actualWorkPc = normalizedComputeToWorkPc(totalNormalizedCompute);
 
     console.log(
       '[USAGE_ACTUAL_PC_CALCULATED]',
-      { runId, actualPc, recordCount: records.length, recoveryRequired: this.state.recoveryRequired }
+      {
+        runId,
+        totalNormalizedCompute: Math.round(totalNormalizedCompute * 100) / 100,
+        actualWorkPc: Math.round(actualWorkPc * 100) / 100,
+        recordCount: records.length,
+        recoveryRequired: this.state.recoveryRequired,
+        note: 'Converted from normalized compute to customer Work PC via 70% margin'
+      }
     );
 
-    return actualPc;
+    return Math.round(actualWorkPc);
   }
 
   /** Check if checkpoint recovery is required. Used by settlement handlers to block

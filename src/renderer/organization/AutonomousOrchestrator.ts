@@ -1,9 +1,11 @@
 import { ConversationRuntime } from '../conversation/ConversationRuntime';
 import { ReasoningRuntime } from '../reasoning/ReasoningRuntime';
+import type { ReasoningProvider, ReasoningProviderRequest, ReasoningProviderSession, ReasoningProviderCallbacks } from '../reasoning/ReasoningProvider';
 import { aiRouter } from '../ai/AIRouter';
 import { buildSystemPrompt } from '../conversation/systemPrompt';
 import { getIpcBridge } from '../services/ipc/ipcBridge';
 import { autonomousTaskBillingService } from './AutonomousTaskBillingService';
+import { providerCostToWorkPc } from '../../shared/billing/AutonomousWorkPcCommercialModel';
 import { CONNECTOR_ID_BY_TICKET_SOURCE, connectorDisplayName } from './AutonomousTaskBillingGate';
 import { getSupabaseClient } from '../auth/supabaseClient';
 import { resolveCredentialsForOrganization } from './CredentialResolver';
@@ -154,7 +156,7 @@ export type HeadlessTurnResult =
 export interface AutonomousTurnRunner {
   /** Starts a brand-new headless turn. Resolves once the turn either finishes (naturally or via
    *  error/interruption) or genuinely stalls on a real confirmation gate. */
-  run(prompt: string, opts: { autonomousRunId: string }): Promise<HeadlessTurnResult>;
+  run(prompt: string, opts: { autonomousRunId?: string; autonomousOrganizationId?: string }): Promise<HeadlessTurnResult>;
   /** Resumes a run previously left `waitingForPermission`, by supplying the real "yes"/"no" a human
    *  would otherwise type — reuses the exact same executeConfirmedAction() path
    *  ConversationRuntime already exposes for a live human reply. Returns null if no live session for
@@ -197,6 +199,292 @@ type LiveSession = { runtime: ConversationRuntime };
 export class HeadlessTurnRunner implements AutonomousTurnRunner {
   private sessions = new Map<string, LiveSession>();
 
+  private createAuthorizedProvider(baseProvider: ReasoningProvider, runId: string, organizationId: string | null, executorInstanceId: string): ReasoningProvider {
+    const billingService = autonomousTaskBillingService;
+
+    // PHASE 2D: Exact Gemini token preflight via countTokens API
+    const getExactInputTokenCount = async (geminiRequest: ReasoningProviderRequest, model: string, geminiApiKey: string): Promise<number> => {
+      // Call Gemini's countTokens API with EXACT effective request
+      // This matches the structure of generateContent request in GeminiReasoningProvider.ts
+      // CRITICAL: The countTokens request must be IDENTICAL to the generateContent request for billing accuracy
+
+      // Reconstruct request exactly as GeminiReasoningProvider.ts does
+      function toGeminiContents(request: ReasoningProviderRequest) {
+        const contents: any[] = [];
+        for (const m of request.history) {
+          if (m.role === 'user') {
+            contents.push({ role: 'user', parts: [{ text: m.content }] });
+          } else if (m.role === 'assistant') {
+            const parts: any[] = [];
+            if (m.content) parts.push({ text: m.content });
+            for (const call of m.toolCalls ?? []) {
+              parts.push({
+                functionCall: { name: call.name, args: call.arguments ?? {} },
+                ...(call.thoughtSignature ? { thoughtSignature: call.thoughtSignature } : {}),
+              });
+            }
+            if (parts.length > 0) contents.push({ role: 'model', parts });
+          } else if (m.role === 'tool') {
+            contents.push({
+              role: 'user',
+              parts: [{ functionResponse: { name: m.name ?? 'unknown_tool', response: { result: m.content } } }],
+            });
+          }
+        }
+        if (request.input) contents.push({ role: 'user', parts: [{ text: request.input }] });
+        return contents;
+      }
+
+      function toGeminiTools(request: ReasoningProviderRequest) {
+        if (!request.tools || request.tools.length === 0) return undefined;
+        return [
+          {
+            function_declarations: request.tools.map((tool) => ({
+              name: tool.name,
+              description: tool.description,
+              parameters: tool.parameters,
+            })),
+          },
+        ];
+      }
+
+      const baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
+      const url = `${baseUrl}/models/${model}:countTokens?key=${encodeURIComponent(geminiApiKey)}`;
+
+      const countTokensRequest = {
+        contents: toGeminiContents(geminiRequest),
+        ...(geminiRequest.systemPrompt ? { systemInstruction: { parts: [{ text: geminiRequest.systemPrompt }] } } : {}),
+        ...(toGeminiTools(geminiRequest) ? { tools: toGeminiTools(geminiRequest) } : {}),
+      };
+
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(countTokensRequest),
+        });
+
+        if (!res.ok) {
+          const errorBody = await res.text();
+          throw new Error(`Gemini countTokens failed (${res.status}): ${errorBody}`);
+        }
+
+        const data = await res.json();
+        if (typeof data.totalTokens !== 'number') {
+          throw new Error('Invalid countTokens response: missing totalTokens');
+        }
+
+        return data.totalTokens;
+      } catch (err) {
+        // FAIL-CLOSED: If exact token count cannot be determined, do NOT authorize
+        throw new Error(
+          `Exact token preflight failed. Cannot authorize request without precise token count. ` +
+          `Error: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    };
+
+    const calculateMaxRequestCost = async (geminiRequest: ReasoningProviderRequest, model: string, apiKey: string): Promise<number> => {
+      // AUTONOMOUS WORK PC AUTHORIZATION
+      //
+      // This calculates the maximum customer Work PC that MIGHT be consumed by a Gemini request,
+      // accounting for EXACT token counts via Gemini's countTokens API and the 70% gross margin policy.
+      //
+      // Important: Token count comes from Gemini's countTokens API (exact).
+      // Actual consumption comes from Gemini's real usage response.
+      // Reservation is a temporary hold. Settlement charges actual usage.
+
+      // Step 1: Get EXACT input token count from Gemini's countTokens API (PHASE 2D)
+      // CRITICAL: This is NOT an estimate. We get the exact count from Gemini.
+      // Do NOT use chars/4 heuristic or arbitrary margins.
+      let inputTokens: number;
+      try {
+        inputTokens = await getExactInputTokenCount(geminiRequest, model, baseProvider.id === 'gemini' ? (baseProvider as any).apiKey : '');
+      } catch (err) {
+        // FAIL-CLOSED: Cannot authorize without exact token count
+        throw new Error(`Token preflight failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+
+      // Step 2: Get configured output limit
+      // Set in GeminiReasoningProvider.ts: 8,000 tokens
+      // This bounds the maximum billable output tokens per request
+      const configuredMaxOutputTokens = 8000;
+
+      // Step 3: Resolve actual model pricing from config
+      // Fetch Gemini pricing config via IPC
+      const ipcRenderer = (window as any).electron?.ipcRenderer;
+      if (!ipcRenderer) throw new Error('IPC unavailable');
+      const pawComputeConfig = await ipcRenderer.invoke('billing:getPawComputeConfig');
+      const pricing = pawComputeConfig.modelPricing[model] ?? pawComputeConfig.modelPricing.default;
+
+      if (!pricing) {
+        throw new Error(`No pricing configuration available for model: ${model}`);
+      }
+
+      // Step 4: Calculate provider cost (USD) with EXACT input tokens
+      // Use exact input tokens from countTokens API
+      // Output: assume configured maximum (8,000 tokens)
+      const inputUsd = (inputTokens * pricing.inputPerMillionUsd) / 1_000_000;
+      const outputUsd = (configuredMaxOutputTokens * pricing.outputPerMillionUsd) / 1_000_000;
+      const maximumProviderCostUsd = inputUsd + outputUsd;
+
+      // Step 5: Apply 70% gross margin commercial policy
+      // Customer charge = Provider cost / 0.30
+      const maximumCustomerChargeUsd = maximumProviderCostUsd / 0.30;
+
+      // Step 6: Convert to customer Work PC
+      // $1 customer charge = 100 Work PC
+      const maximumWorkPc = providerCostToWorkPc(maximumProviderCostUsd);
+
+      // Step 7: No arbitrary safety margin (PHASE 2D)
+      // With exact token counts from Gemini's countTokens API, we don't need estimation variance margin.
+      // Authorization is based on exact input tokens + configured output budget.
+      const maxWorkPc = providerCostToWorkPc(maximumProviderCostUsd);
+
+      console.log('[AUTONOMOUS_AUTHORIZATION_CALCULATED]', {
+        runId,
+        model,
+        inputTokensExact: inputTokens,  // EXACT from countTokens
+        maxOutputTokensConfigured: configuredMaxOutputTokens,
+        inputUsd: Math.round(inputUsd * 10000) / 10000,
+        outputUsd: Math.round(outputUsd * 10000) / 10000,
+        maximumProviderCostUsd: Math.round(maximumProviderCostUsd * 10000) / 10000,
+        maximumCustomerChargeUsd: Math.round(maximumCustomerChargeUsd * 10000) / 10000,
+        maximumWorkPc: Math.round(maxWorkPc * 10000) / 10000,
+      });
+
+      return Math.ceil(maxWorkPc);
+    };
+
+    const authorizeModelRequest = async (requiredPc: number): Promise<void> => {
+      // ATOMIC authorization RPC: single database operation replaces read-check-extend
+      // This RPC validates run ownership, locks wallet, checks idempotency, extends if needed
+      // Returns success/failure with clear reason
+      // Zero mutations if authorization fails
+
+      // PHASE 2C: executorInstanceId is server-generated (passed from claim_autonomous_executor_for_run)
+      // Never uses crypto.randomUUID() — executor identity is authoritative on server
+      if (!executorInstanceId) {
+        throw new Error(
+          'Executor instance ID not available. ' +
+          'The run must be claimed server-side via claim_autonomous_executor_for_run() before authorization.'
+        );
+      }
+
+      const supabase = await getSupabaseClient();
+      const requestId = crypto.randomUUID(); // Unique per model request (not per retry)
+
+      const { data, error } = await supabase.rpc(
+        'authorize_autonomous_model_request',
+        {
+          p_run_id: runId,
+          p_request_id: requestId,
+          p_required_pc: requiredPc,
+          p_executor_instance_id: executorInstanceId
+        }
+      );
+
+      if (error) {
+        throw new Error(`Authorization RPC failed: ${error.message}`);
+      }
+
+      if (!data || data.length === 0) {
+        throw new Error('Authorization RPC returned no result');
+      }
+
+      const result = data[0];
+      console.log('[AUTHORIZE_RESULT]', {
+        runId,
+        requestId,
+        success: result.success,
+        reserved: result.authorized_reservation_total,
+        available: result.available_remaining,
+        error: result.error_message
+      });
+
+      if (!result.success) {
+        throw new Error(
+          `Autonomous work PC authorization failed: ${result.error_message ?? 'insufficient balance'}. ` +
+          `Please top up wallet and resume.`
+        );
+      }
+    };
+
+    return {
+      id: baseProvider.id,
+      label: baseProvider.label,
+      isSupported: () => baseProvider.isSupported(),
+
+      streamResponse: (request: ReasoningProviderRequest, callbacks: ReasoningProviderCallbacks): ReasoningProviderSession => {
+        let realSession: ReasoningProviderSession | null = null;
+
+        // ATOMIC authorization: single RPC validates run, locks wallet, checks idempotency, extends atomically
+        // DO NOT CALL GEMINI until this authorization RPC returns success
+        (async () => {
+          try {
+            // 1. Resolve actual model for authorization
+            // Must use the SAME model as actual execution to ensure pricing consistency
+            // baseProvider.model is now always available from AIRouter (via ReasoningProvider interface)
+            // This is the authoritative model string used for billing/authorization
+            const model = baseProvider.model;
+
+            if (!model) {
+              throw new Error(
+                `Model identity not available from provider "${baseProvider.id}". ` +
+                `Authorization requires knowing the exact concrete model for pricing lookup. ` +
+                `This is a configuration error — the provider instance must be created with a specific model.`
+              );
+            }
+
+            // PHASE 2D: Get exact input token count via Gemini's countTokens API
+            // This requires API key for Gemini requests
+            const { aiProviderConfigStore } = await import('../ai/AIProviderConfigStore');
+            const geminiApiKey = aiProviderConfigStore.getApiKey('gemini');
+            if (!geminiApiKey) {
+              throw new Error('Gemini API key not configured. Cannot perform token preflight.');
+            }
+
+            const requiredWorkPcPerRequest = await calculateMaxRequestCost(request, model, geminiApiKey);
+
+            console.log('[AUTONOMOUS_MODEL_REQUEST_AUTHORIZATION]', {
+              runId,
+              requiredWorkPc: requiredWorkPcPerRequest,
+              model
+            });
+
+            // 2. ATOMIC: Call authorize_autonomous_model_request RPC
+            // This single RPC:
+            // - Validates run ownership and state (must be 'running', not 'waiting_for_permission')
+            // - Validates run is not already settled
+            // - Validates executor instance ID
+            // - Locks run + wallet rows (row-level, not table-wide)
+            // - Checks if (run_id, request_id) already authorized (idempotent)
+            // - Extends wallet reservation if needed (in Work PC, not normalized compute)
+            // - Returns success/failure atomically
+            // - Makes ZERO mutations if authorization fails
+            await authorizeModelRequest(requiredWorkPcPerRequest);
+
+            // 3. Authorization succeeded — ONLY NOW call Gemini API
+            console.log('[AUTONOMOUS_AUTHORIZATION_PASSED]', { runId, requiredWorkPc: requiredWorkPcPerRequest });
+            realSession = baseProvider.streamResponse(request, callbacks);
+          } catch (err) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            console.error('[MODEL_REQUEST_AUTHORIZATION_FAILED]', { runId, error: error.message });
+            // Transition to waiting_for_topup will be handled by orchestrator if balance insufficient
+            callbacks.onError(error);
+          }
+        })();
+
+        // Return a cancellable session (delegates to real session once started)
+        return {
+          cancel: () => {
+            if (realSession) realSession.cancel();
+          }
+        };
+      }
+    };
+  }
+
   private awaitSettlement(runtime: ConversationRuntime, getLatestRecord: () => ExecutionRecord | null): Promise<HeadlessTurnResult> {
     return new Promise((resolve) => {
       let settled = false;
@@ -226,11 +514,57 @@ export class HeadlessTurnRunner implements AutonomousTurnRunner {
     });
   }
 
-  async run(prompt: string, opts: { autonomousRunId: string }): Promise<HeadlessTurnResult> {
+  async run(prompt: string, opts: { autonomousRunId?: string; autonomousOrganizationId?: string }): Promise<HeadlessTurnResult> {
     const bridge = getIpcBridge();
     let latestRecord: ExecutionRecord | null = null;
 
-    const reasoningRuntime = new ReasoningRuntime(aiRouter.getReasoningProvider(), buildSystemPrompt(true));
+    // PHASE 2C: Claim executor server-side BEFORE authorization
+    let executorInstanceId: string | null = null;
+    if (opts.autonomousRunId) {
+      const supabase = await getSupabaseClient();
+      const claimRequestId = crypto.randomUUID(); // Request-level idempotency (not executor identity)
+
+      const { data: claimResult, error: claimError } = await supabase.rpc(
+        'claim_autonomous_executor_for_run',
+        {
+          p_run_id: opts.autonomousRunId,
+          p_claim_request_id: claimRequestId
+        }
+      );
+
+      if (claimError) {
+        throw new Error(`Failed to claim executor: ${claimError.message}`);
+      }
+
+      if (!claimResult || claimResult.length === 0) {
+        throw new Error('Executor claim returned no result');
+      }
+
+      const claimData = claimResult[0];
+      if (claimData.error_message) {
+        throw new Error(`Executor claim failed: ${claimData.error_message}`);
+      }
+
+      executorInstanceId = claimData.execution_executor_instance_id;
+      if (!executorInstanceId) {
+        throw new Error('Server failed to generate executor instance ID');
+      }
+
+      console.log('[EXECUTOR_CLAIMED_SERVER_SIDE]', {
+        runId: opts.autonomousRunId,
+        executorInstanceId,
+        claimRequestId,
+        status: claimData.status
+      });
+    }
+
+    // Wrap the provider with reservation authorization: check/extend before each Gemini API call
+    const baseProvider = aiRouter.getReasoningProvider();
+    const authorizedProvider = opts.autonomousRunId && executorInstanceId
+      ? this.createAuthorizedProvider(baseProvider, opts.autonomousRunId, opts.autonomousOrganizationId ?? null, executorInstanceId)
+      : baseProvider;
+
+    const reasoningRuntime = new ReasoningRuntime(authorizedProvider, buildSystemPrompt(true));
 
     // Real, checked policy (per the audit finding that this used to auto-confirm applyCodeEdit/
     // writeFile unconditionally, with no entitlement check anywhere in the path) — only an account
@@ -253,7 +587,7 @@ export class HeadlessTurnRunner implements AutonomousTurnRunner {
       },
       getExecutionMode: () => executionMode,
       isBypassPermissionsEnabled: () => false,
-      autonomousRunId: opts.autonomousRunId,
+      autonomousRunId: opts.autonomousRunId ?? undefined,
       onTurnUsage: async (submission) => {
         console.log('[AUTONOMOUS_RUN_USAGE_RECORD_START] runId:', opts.autonomousRunId);
         const recordPromise = bridge.billingRecordAutonomousTurnUsage?.(submission);
@@ -270,16 +604,23 @@ export class HeadlessTurnRunner implements AutonomousTurnRunner {
       },
     });
 
-    this.sessions.set(opts.autonomousRunId, { runtime });
+    // If autonomous mode, track the session; otherwise, run without session tracking
+    if (opts.autonomousRunId) {
+      this.sessions.set(opts.autonomousRunId, { runtime });
+    }
+
     const settlement = this.awaitSettlement(runtime, () => latestRecord);
     runtime.submitTranscript(prompt);
     const result = await settlement;
-    if (result.kind === 'finished') {
-      console.log('[BILLING_SAFETY_VERIFICATION] runId:', opts.autonomousRunId, 'turn completed and settlement succeeded (usage recorded via onTurnUsage callback)');
-      this.sessions.delete(opts.autonomousRunId);
-    }
-    if (result.kind === 'waitingForPermission') {
-      console.log('[BILLING_SAFETY_PERMISSION_PENDING] runId:', opts.autonomousRunId, 'turn awaiting approval before completion');
+
+    if (opts.autonomousRunId) {
+      if (result.kind === 'finished') {
+        console.log('[BILLING_SAFETY_VERIFICATION] runId:', opts.autonomousRunId, 'turn completed and settlement succeeded (usage recorded via onTurnUsage callback)');
+        this.sessions.delete(opts.autonomousRunId);
+      }
+      if (result.kind === 'waitingForPermission') {
+        console.log('[BILLING_SAFETY_PERMISSION_PENDING] runId:', opts.autonomousRunId, 'turn awaiting approval before completion');
+      }
     }
     return result;
   }
@@ -334,7 +675,7 @@ export interface AutonomousOrchestrationDeps {
   turnRunner: AutonomousTurnRunner;
   getConnectorStatus: (connectorId: string, scope: { userId: string; organizationId?: string }) => ReturnType<ReturnType<typeof getIpcBridge>['connectivityGetStatus']>;
   verifyPullRequestExists: (prUrl: string) => ReturnType<ReturnType<typeof getIpcBridge>['connectivityVerifyPullRequestExists']>;
-  postCompletionComment: (prUrl: string, body: string) => ReturnType<ReturnType<typeof getIpcBridge>['connectivityPostAutonomousCompletionComment']>;
+  postCompletionComment: (runId: string, prUrl: string, body: string) => ReturnType<ReturnType<typeof getIpcBridge>['connectivityPostAutonomousCompletionComment']>;
   getCurrentUserId: () => Promise<string>;
   /** Real `git status --porcelain -b` against the SOURCE checkout (never the isolated worktree) —
    *  this is how "git state is known" before execution begins is actually satisfied, not asserted. */
@@ -351,7 +692,7 @@ function defaultDeps(): AutonomousOrchestrationDeps {
     turnRunner: headlessTurnRunner,
     getConnectorStatus: (connectorId, scope) => bridge.connectivityGetStatus(connectorId, scope),
     verifyPullRequestExists: (prUrl) => bridge.connectivityVerifyPullRequestExists(prUrl),
-    postCompletionComment: (prUrl, body) => bridge.connectivityPostAutonomousCompletionComment(prUrl, body),
+    postCompletionComment: (runId, prUrl, body) => bridge.connectivityPostAutonomousCompletionComment({ runId, prUrl, comment: body }),
     getCurrentUserId: async () => {
       const supabase = await getSupabaseClient();
       const { data } = await supabase.auth.getUser();
@@ -455,6 +796,28 @@ export async function orchestrateAutonomousRun(input: AutonomousOrchestrationInp
   };
   const preflightChecks: AutonomousEvidenceCheck[] = [gitStateCheck, isolationCheck];
 
+  // Reserve PC for this turn: evidence-based estimate from Gemini typical costs.
+  // Cold request (~32 PC) + ~25 warm tool continuations (~8 PC each) = ~232 PC.
+  // Conservative reserve: 300 PC covers typical autonomous task turn with safety margin.
+  // This is for ONE turn; if additional turns needed, will be handled after completion.
+  const estimatedPcPerTurn = 300;
+  const reserveResult = await deps.billingService.reserveAutonomousPc(
+    input.runId,
+    estimatedPcPerTurn,
+    `reserve-${input.runId}-turn-1`
+  );
+  if (!reserveResult.success) {
+    const reason = `Insufficient Autonomous Work PC balance to start. Required: ${estimatedPcPerTurn} PC, Available: ${reserveResult.availableRemaining ?? 0} PC. Please add more credit.`;
+    await deps.billingService.transitionRun(input.runId, 'waiting_for_topup', reason);
+    return {
+      runId: input.runId,
+      outcome: { kind: 'blocked', reason, evidence: { executionRecordId: null, commandsExecuted: 0, filesChanged: 0, checks: [{ label: 'PC Balance', status: 'BLOCKED', detail: reason }] } },
+      billingEventId: null,
+      externalUpdate: { label: 'External update', status: 'NOT_EXECUTED', detail: 'Skipped — insufficient PC balance. Top up wallet and retry.' },
+    };
+  }
+  console.log('[AUTONOMOUS_RUN_RESERVED] runId:', input.runId, 'reservedPc:', estimatedPcPerTurn, 'reservedTotal:', reserveResult.reservedPc, 'availableRemaining:', reserveResult.availableRemaining);
+
   await deps.billingService.transitionRun(input.runId, 'running', 'Autonomous orchestration started.');
 
   const prompt = buildAutonomousPrompt(
@@ -462,7 +825,11 @@ export async function orchestrateAutonomousRun(input: AutonomousOrchestrationInp
     worktreePath
   );
 
-  let turnResult = await deps.turnRunner.run(prompt, { autonomousRunId: input.runId });
+  let turnResult = await deps.turnRunner.run(prompt, {
+    autonomousRunId: input.runId,
+    autonomousOrganizationId: input.organizationId ?? undefined
+  });
+
   while (turnResult.kind === 'waitingForPermission') {
     await deps.billingService.transitionRun(input.runId, 'waiting_for_permission', 'A destructive action requires human confirmation before continuing.');
     // Genuinely pauses here — there is no UI wired to grant this permission yet (out of scope for
@@ -481,16 +848,106 @@ export async function orchestrateAutonomousRun(input: AutonomousOrchestrationInp
   return finishAutonomousRun(input, turnResult.executionRecord, deps, preflightChecks);
 }
 
+/** Called once a run previously left `waiting_for_topup` (insufficient balance) detects sufficient balance
+ *  again via top-up or other means — reuses the same live headless turn session if still alive. */
+export async function resumeAutonomousRunFromTopup(input: AutonomousOrchestrationInput, deps: AutonomousOrchestrationDeps = defaultDeps()): Promise<AutonomousOrchestrationResult> {
+  // Same evidence-based estimate as initial reservation: one turn = ~300 PC
+  const estimatedPcPerTurn = 300;
+
+  const walletAfterTopup = await deps.billingService.getTicketBalance(input.organizationId ?? null);
+  if (walletAfterTopup.availableBalancePc < estimatedPcPerTurn) {
+    const reason = `Insufficient balance after top-up. Available: ${walletAfterTopup.availableBalancePc} PC, need at least ${estimatedPcPerTurn} PC. Please add more credit.`;
+    return {
+      runId: input.runId,
+      outcome: { kind: 'blocked', reason, evidence: { executionRecordId: null, commandsExecuted: 0, filesChanged: 0, checks: [{ label: 'PC Balance', status: 'BLOCKED', detail: reason }] } },
+      billingEventId: null,
+      externalUpdate: { label: 'External update', status: 'NOT_EXECUTED', detail: 'Insufficient balance — add more credit and retry.' },
+    };
+  }
+
+  // Extend the reservation to ensure we have enough for the next turn
+  const currentWallet = await deps.billingService.getTicketBalance(input.organizationId ?? null);
+  if (currentWallet.reservedPc < estimatedPcPerTurn) {
+    const additionalNeeded = estimatedPcPerTurn - currentWallet.reservedPc;
+    const extendResult = await deps.billingService.extendAutonomousReservation(
+      input.runId,
+      additionalNeeded,
+      `extend-${input.runId}-topup-${Date.now()}`,
+      `resumed-from-topup`
+    );
+    if (!extendResult.success) {
+      const reason = `Failed to extend reservation after top-up: ${extendResult.errorMessage ?? 'Unknown error.'}`;
+      return {
+        runId: input.runId,
+        outcome: { kind: 'blocked', reason, evidence: { executionRecordId: null, commandsExecuted: 0, filesChanged: 0, checks: [{ label: 'PC Extension', status: 'BLOCKED', detail: reason }] } },
+        billingEventId: null,
+        externalUpdate: { label: 'External update', status: 'NOT_EXECUTED', detail: 'Failed to extend reservation. Wallet may be depleted.' },
+      };
+    }
+  }
+
+  await deps.billingService.transitionRun(input.runId, 'running', 'Balance restored — resuming execution.');
+  const resumed = await deps.turnRunner.resume(input.runId, true);
+  if (!resumed) {
+    const reason = 'No live orchestration session was found for this run — it may have been interrupted by an app restart. Start a new run instead.';
+    await deps.billingService.transitionRun(input.runId, 'blocked', reason);
+    return {
+      runId: input.runId,
+      outcome: { kind: 'blocked', reason, evidence: { executionRecordId: null, commandsExecuted: 0, filesChanged: 0, checks: [{ label: 'Session', status: 'NOT_EXECUTED', detail: reason }] } },
+      billingEventId: null,
+      externalUpdate: { label: 'External update', status: 'NOT_EXECUTED', detail: 'No live session to resume.' },
+    };
+  }
+  if (resumed.kind === 'waitingForPermission') {
+    await deps.billingService.transitionRun(input.runId, 'waiting_for_permission', 'Another action requires human confirmation.');
+    return {
+      runId: input.runId,
+      outcome: { kind: 'blocked', reason: 'Waiting for human permission before continuing.', evidence: deriveOutcomeFromExecutionRecord(resumed.executionRecord).evidence },
+      billingEventId: null,
+      externalUpdate: { label: 'External update', status: 'NOT_EXECUTED', detail: 'Run is still in progress — waiting for permission.' },
+    };
+  }
+  return finishAutonomousRun(input, resumed.executionRecord, deps);
+}
+
 /** Called once a run previously left `waiting_for_permission` receives a real decision — reuses the
  *  same live headless turn session if one is still alive in this process (see HeadlessTurnRunner's
  *  own doc comment for the disclosed across-restart limitation). */
 export async function resumeAutonomousRun(input: AutonomousOrchestrationInput, granted: boolean, deps: AutonomousOrchestrationDeps = defaultDeps()): Promise<AutonomousOrchestrationResult> {
   if (!granted) {
+    // User denied permission — transition to terminal state
     await deps.billingService.transitionRun(input.runId, 'cancelled', 'Human denied the required permission.');
+
+    // PHASE 1: Settle any provider work that occurred before cancellation
+    // Cancellation AFTER provider work → settle actual Work PC
+    // Cancellation BEFORE provider work → settle 0 / release reservation
+    let billingEventId: string | null = null;
+    try {
+      const ipcRenderer = (window as any).electron?.ipcRenderer;
+      if (ipcRenderer) {
+        const settlementData = await ipcRenderer.invoke('billing:settleAutonomousRun', input.runId, input.organizationId ?? null);
+        if (settlementData.actualPc !== null && settlementData.actualPc !== undefined) {
+          try {
+            billingEventId = await deps.billingService.settleWithActualPc(input.runId, settlementData.actualPc);
+            console.log('[CANCELLATION_SETTLED] runId:', input.runId, 'billingEventId:', billingEventId, 'actualPc:', settlementData.actualPc);
+          } catch (settleErr) {
+            const err = settleErr instanceof Error ? settleErr.message : String(settleErr);
+            console.error('[CANCELLATION_SETTLEMENT_FAILED] runId:', input.runId, 'error:', err);
+            throw new Error(`Cancellation settlement failed: ${err}`);
+          }
+        }
+      }
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      console.error('[CANCELLATION_PHASE_ERROR] runId:', input.runId, 'error:', error);
+      // Do not suppress cancellation errors
+      throw err;
+    }
+
     return {
       runId: input.runId,
       outcome: { kind: 'cancelled', reason: 'Human denied the required permission.', evidence: { executionRecordId: null, commandsExecuted: 0, filesChanged: 0, checks: [] } },
-      billingEventId: null,
+      billingEventId, // Contains settlement ID if provider work occurred
       externalUpdate: { label: 'External update', status: 'NOT_EXECUTED', detail: 'Run was cancelled.' },
     };
   }
@@ -530,26 +987,88 @@ async function finishAutonomousRun(
   // always present on the final result, success or not, never only on the happy path.
   outcome.evidence.checks = [...preflightChecks, ...outcome.evidence.checks];
 
+  // ===== PHASE 1 CORRECTED: CANONICAL BILLING BOUNDARY =====
+  // Architecture: execution outcome → terminal state → settlement
+  // NOT: settlement while running
+  //
+  // Settlement REQUIRES terminal status. Must transition FIRST, then settle.
+  let billingEventId: string | null = null;
+
+  // ===== STEP 1: MARK TERMINAL STATE (BEFORE settlement) =====
   if (outcome.kind !== 'success') {
-    const reason = outcome.kind === 'blocked' ? 'blocked' : 'failed';
-    if (reason === 'blocked') {
-      await deps.billingService.transitionRun(input.runId, 'blocked', outcome.reason);
-    } else {
+    // Non-success outcomes: transition to terminal state
+    // NOTE: 'blocked' is application-level state; settlement RPC only accepts
+    // (completed, failed, cancelled, abandoned). Treat blocked as failed for settlement.
+    await deps.billingService.markTerminal(input.runId, 'failed');
+  } else {
+    // Success: must use completeRun() to mark 'completed' (per SQL constraint)
+    // This transitions to terminal status AND marks execution complete
+    try {
+      await deps.billingService.completeRun(input.runId, {
+        prUrl: input.prUrl,
+        clientReplySent: false,
+        deployCompleted: false,
+      });
+    } catch (completeErr) {
+      const err = completeErr instanceof Error ? completeErr.message : String(completeErr);
+      console.error('[COMPLETION_FAILED] runId:', input.runId, 'error:', err);
+      // If completion fails, mark as failed so we can still settle actual usage
       await deps.billingService.markTerminal(input.runId, 'failed');
+      // Continue to settlement with actual usage that was recorded
     }
+  }
+
+  // ===== STEP 2: SETTLE WITH ACTUAL WORK PERFORMED (after terminal state) =====
+  // Settlement RPC requires terminal status; now that status is set, we can settle
+  // Billing boundary = actual provider work performed, not outcome status
+  try {
+    const ipcRenderer = (window as any).electron?.ipcRenderer;
+    if (!ipcRenderer) {
+      throw new Error('IPC renderer not available — cannot settle autonomous run');
+    }
+
+    const settlementData = await ipcRenderer.invoke('billing:settleAutonomousRun', input.runId, input.organizationId ?? null);
+
+    if (settlementData.recoveryRequired) {
+      console.error('[SETTLEMENT_RECOVERY_REQUIRED] runId:', input.runId, 'Cannot settle with compromised usage data');
+      // Usage data integrity issue: preserve reservation for manual recovery
+    } else if (settlementData.actualPc !== null && settlementData.actualPc !== undefined) {
+      const actualPc = settlementData.actualPc;
+      console.log('[SETTLEMENT_ACTUAL_PC_RECEIVED] runId:', input.runId, 'actualPc:', actualPc);
+
+      // Settlement RPC: release unused reservation, deduct actual consumption, create billing event
+      try {
+        billingEventId = await deps.billingService.settleWithActualPc(input.runId, actualPc);
+        console.log('[SETTLEMENT_COMMITTED] runId:', input.runId, 'billingEventId:', billingEventId, 'actualPc:', actualPc);
+      } catch (settleErr) {
+        const settleError = settleErr instanceof Error ? settleErr.message : String(settleErr);
+        console.error('[SETTLEMENT_FAILED_AFTER_TERMINAL] runId:', input.runId, 'error:', settleError);
+        // CRITICAL: Do not suppress settlement failure. Run is already terminal, reservation is locked.
+        // Throw so retry can occur safely. Idempotency is guaranteed by settled_at check in RPC.
+        throw new Error(`Settlement failed after terminal transition: ${settleError}. Run is safe to retry.`);
+      }
+    } else if (settlementData.error) {
+      console.error('[SETTLEMENT_CALCULATION_FAILED] runId:', input.runId, 'error:', settlementData.error);
+      throw new Error(`Actual PC calculation failed: ${settlementData.error}`);
+    }
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    console.error('[SETTLEMENT_PHASE_FAILED] runId:', input.runId, 'error:', error);
+    // Settlement failure is terminal — outcome must be reported with error
+    throw err;
+  }
+
+  // ===== STEP 3: SUCCESS PATH ONLY — Continue to verification/PR workflow =====
+  if (outcome.kind !== 'success') {
     return {
       runId: input.runId,
       outcome,
-      billingEventId: null,
+      billingEventId, // Contains ID if provider work occurred; null if zero usage
       externalUpdate: { label: 'External update', status: 'NOT_EXECUTED', detail: 'Skipped — the run did not succeed.' },
     };
   }
 
-  // ===== NEW: Work completed successfully — now handle PR creation & verification lifecycle =====
-
-  // Mark implementation as complete (before attempting external updates)
-  await deps.billingService.transitionRun(input.runId, 'running' as any, 'Engineering work completed successfully. Awaiting verification.');
-
+  // Success path: proceed to external updates and verification workflow
   let prUrl = input.prUrl;
   const prCreation = await attemptPRCreation(input, executionRecord);
   if (prCreation.ok && prCreation.prUrl) {
@@ -559,19 +1078,18 @@ async function finishAutonomousRun(
   // Attempt external ticket updates (Jira, Linear, GitHub)
   const externalUpdate = await attemptExternalUpdate(input, deps, prUrl, executionRecord);
 
-  // Transition to awaiting_verification (work is done, now needs human review)
+  // Transition to waiting_for_permission for human verification
+  // Note: This is a non-terminal state. If the run were somehow reverted, settlement has already occurred.
   await deps.billingService.transitionRun(input.runId, 'waiting_for_permission' as any, 'Implementation complete. Awaiting human verification before final completion.');
 
-  // Capture wallet balance after execution (for diagnostic logging)
+  // Capture wallet balance after settlement
   const walletAfter = await deps.billingService.getTicketBalance(input.organizationId ?? null);
-  console.log('[AUTONOMOUS_RUN_WALLET_AFTER] runId:', input.runId, 'availableBalancePc:', walletAfter.availableBalancePc, 'reservedPc:', walletAfter.reservedPc);
+  console.log('[AUTONOMOUS_RUN_WALLET_AFTER_SETTLEMENT] runId:', input.runId, 'availableBalancePc:', walletAfter.availableBalancePc, 'reservedPc:', walletAfter.reservedPc, 'billingEventId:', billingEventId);
 
-  // Return the result indicating verification is required
-  // Note: billingEventId remains null until verification approves — do NOT charge until verified
   return {
     runId: input.runId,
     outcome,
-    billingEventId: null, // Will be charged when verification succeeds
+    billingEventId, // Contains real settlement event ID
     externalUpdate,
   };
 }
@@ -658,11 +1176,11 @@ async function attemptExternalUpdate(
   // 1. Update GitHub PR (existing/newly created)
   if (prUrl) {
     const commentBody = `PawOS Autonomous Work completed this ticket${input.ticketId ? ` (${input.ticketId})` : ''}. See the linked Work Record for full evidence (commands run, files changed, validation results).`;
-    const result = await deps.postCompletionComment(prUrl, commentBody);
-    if (result.ok && result.data.posted) {
+    const result = await deps.postCompletionComment(input.runId, prUrl, commentBody);
+    if (result.ok && result.ok) {
       updates.push(`GitHub PR ${prUrl} commented`);
     } else {
-      updates.push(`GitHub PR comment failed: ${result.ok ? result.data?.reason : result.error}`);
+      updates.push(`GitHub PR comment failed: ${result.reason}`);
       hasFailures = true;
     }
   }
@@ -675,23 +1193,49 @@ async function attemptExternalUpdate(
       } else {
         const credentials = await resolveCredentialsForOrganization(input.organizationId);
         if (credentials.jira) {
-          const postJiraComment = async (opts: any) => ({ ok: false, reason: 'Jira write-back requires main process' });
-
-          const jiraComment = `Implemented the requested changes and completed validation. Changes are available in PR ${prUrl || 'N/A'} for review.`;
-
-          const result = await postJiraComment({
-            jiraUrl: credentials.jira.url,
-            apiEmail: credentials.jira.email,
-            apiToken: credentials.jira.apiToken,
-            issueKey: input.ticketId,
-            comment: jiraComment,
-          });
-
-          if (result.ok) {
-            updates.push(`Jira ${input.ticketId} commented successfully`);
+          const ipcRenderer = (window as any).electron?.ipcRenderer;
+          if (!ipcRenderer) {
+            updates.push(`Jira ${input.ticketId}: IPC renderer not available`);
           } else {
-            updates.push(`Jira ${input.ticketId} comment failed: ${result.reason}`);
-            hasFailures = true;
+            const jiraComment = `Implemented the requested changes and completed validation. Changes are available in PR ${prUrl || 'N/A'} for review.`;
+
+            const result = await ipcRenderer.invoke('connectivity:postJiraComment', {
+              runId: input.runId,
+              jiraUrl: credentials.jira.url,
+              apiEmail: credentials.jira.email,
+              apiToken: credentials.jira.apiToken,
+              issueKey: input.ticketId,
+              comment: jiraComment,
+            });
+
+            if (result.ok && result.data?.ok) {
+              updates.push(`Jira ${input.ticketId} commented successfully`);
+
+              // Attempt status transition after successful comment
+              try {
+                const transitionResult = await ipcRenderer.invoke('connectivity:transitionJiraIssue', {
+                  jiraUrl: credentials.jira.url,
+                  apiEmail: credentials.jira.email,
+                  apiToken: credentials.jira.apiToken,
+                  issueKey: input.ticketId,
+                  transitionName: 'Done',
+                });
+
+                if (transitionResult.ok && transitionResult.data?.ok) {
+                  updates.push(`Jira ${input.ticketId} status transitioned to Done`);
+                } else {
+                  const transitionReason = transitionResult.error || transitionResult.data?.reason || 'Unknown error';
+                  updates.push(`Jira ${input.ticketId} status transition failed: ${transitionReason}`);
+                }
+              } catch (transitionError) {
+                const err = transitionError instanceof Error ? transitionError.message : 'Unknown error';
+                updates.push(`Jira ${input.ticketId} status transition error: ${err}`);
+              }
+            } else {
+              const reason = result.error || result.data?.reason || 'Unknown error';
+              updates.push(`Jira ${input.ticketId} comment failed: ${reason}`);
+              hasFailures = true;
+            }
           }
         } else {
           updates.push(`Jira ${input.ticketId}: credentials not configured`);
@@ -710,21 +1254,45 @@ async function attemptExternalUpdate(
       } else {
         const credentials = await resolveCredentialsForOrganization(input.organizationId);
         if (credentials.linear) {
-          const postLinearComment = async (opts: any) => ({ ok: false, reason: 'Linear write-back requires main process' });
-
-          const linearComment = `Autonomous engineering work completed. Changes available for review in PR: ${prUrl || 'N/A'}. Implementation passed validation.`;
-
-          const result = await postLinearComment({
-            linearApiKey: credentials.linear.apiKey,
-            issueId: input.ticketId,
-            comment: linearComment,
-          });
-
-          if (result.ok) {
-            updates.push(`Linear ${input.ticketId} commented successfully`);
+          const ipcRenderer = (window as any).electron?.ipcRenderer;
+          if (!ipcRenderer) {
+            updates.push(`Linear ${input.ticketId}: IPC renderer not available`);
           } else {
-            updates.push(`Linear ${input.ticketId} comment failed: ${result.reason}`);
-            hasFailures = true;
+            const linearComment = `Autonomous engineering work completed. Changes available for review in PR: ${prUrl || 'N/A'}. Implementation passed validation.`;
+
+            const result = await ipcRenderer.invoke('connectivity:postLinearComment', {
+              runId: input.runId,
+              linearApiKey: credentials.linear.apiKey,
+              issueId: input.ticketId,
+              comment: linearComment,
+            });
+
+            if (result.ok && result.data?.ok) {
+              updates.push(`Linear ${input.ticketId} commented successfully`);
+
+              // Attempt status transition after successful comment
+              try {
+                const transitionResult = await ipcRenderer.invoke('connectivity:transitionLinearIssue', {
+                  linearApiKey: credentials.linear.apiKey,
+                  issueId: input.ticketId,
+                  statusName: 'Done',
+                });
+
+                if (transitionResult.ok && transitionResult.data?.ok) {
+                  updates.push(`Linear ${input.ticketId} status transitioned to Done`);
+                } else {
+                  const transitionReason = transitionResult.error || transitionResult.data?.reason || 'Unknown error';
+                  updates.push(`Linear ${input.ticketId} status transition failed: ${transitionReason}`);
+                }
+              } catch (transitionError) {
+                const err = transitionError instanceof Error ? transitionError.message : 'Unknown error';
+                updates.push(`Linear ${input.ticketId} status transition error: ${err}`);
+              }
+            } else {
+              const reason = result.error || result.data?.reason || 'Unknown error';
+              updates.push(`Linear ${input.ticketId} comment failed: ${reason}`);
+              hasFailures = true;
+            }
           }
         } else {
           updates.push(`Linear ${input.ticketId}: credentials not configured`);

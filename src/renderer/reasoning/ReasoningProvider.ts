@@ -36,6 +36,7 @@ export type ReasoningProviderSession = {
 export interface ReasoningProvider {
   readonly id: string;
   readonly label: string;
+  readonly model?: string;
   isSupported(): boolean;
   streamResponse(request: ReasoningProviderRequest, callbacks: ReasoningProviderCallbacks): ReasoningProviderSession;
 }

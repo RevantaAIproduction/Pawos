@@ -430,6 +430,12 @@ export function contextBridge() {
       ipcRenderer.invoke("connectivity:oauth:cancel", requestId) as Promise<ConnectivityIpcResult<void>>,
     connectivityDeploymentProfilesHydrate: (profile: DeploymentProfile) =>
       ipcRenderer.invoke("connectivity:deploymentProfiles:hydrate", profile) as Promise<ConnectivityIpcResult<void>>,
+    connectivityTransitionJiraIssue: (input: { jiraUrl: string; apiEmail: string; apiToken: string; issueKey: string; transitionName: string }) =>
+      ipcRenderer.invoke("connectivity:transitionJiraIssue", input) as Promise<ConnectivityIpcResult<{ ok: boolean; reason?: string }>>,
+    connectivityTransitionLinearIssue: (input: { linearApiKey: string; issueId: string; statusName: string }) =>
+      ipcRenderer.invoke("connectivity:transitionLinearIssue", input) as Promise<ConnectivityIpcResult<{ ok: boolean; reason?: string }>>,
+    connectivitySlackPostMessage: (scope: ConnectivityScope, channel: string, text: string) =>
+      ipcRenderer.invoke("connectivity:slack:postMessage", { scope, channel, text }) as Promise<ConnectivityIpcResult<{ ok: true } | { ok: false; reason: string }>>,
 
     // Workspace Integrations (Mail, Slack, Drive, Calendar)
     integrationConnect: (userId: string, request: any) =>
@@ -503,6 +509,24 @@ export function contextBridge() {
       ipcRenderer.invoke("task:getLogs", taskId, limit) as Promise<any>,
     taskClearOld: (olderThanDays?: number) =>
       ipcRenderer.invoke("task:clearOld", olderThanDays) as Promise<any>,
+
+    // Billing/economics
+    billingGetPawComputeConfig: () =>
+      ipcRenderer.invoke("billing:getPawComputeConfig") as Promise<any>,
+
+    // Governance & Approval Handler
+    governanceApprove: (approvalId: string) =>
+      ipcRenderer.invoke("governance:approve", approvalId) as Promise<{ ok: boolean; error?: string }>,
+    governanceDeny: (approvalId: string) =>
+      ipcRenderer.invoke("governance:deny", approvalId) as Promise<{ ok: boolean; error?: string }>,
+    governanceGetPending: () =>
+      ipcRenderer.invoke("governance:getPending") as Promise<Array<{ approvalId: string; actionType: string; requestedAt: number }>>,
+    onGovernanceApproved: (cb: (payload: { approvalId: string }) => void) => {
+      ipcRenderer.on("governance:approved", (_evt, payload) => cb(payload));
+    },
+    onGovernanceDenied: (cb: (payload: { approvalId: string }) => void) => {
+      ipcRenderer.on("governance:denied", (_evt, payload) => cb(payload));
+    },
 
     selectFolder: () =>
       ipcRenderer.invoke("project:selectFolder") as Promise<string | null>,

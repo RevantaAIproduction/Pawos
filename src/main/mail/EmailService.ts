@@ -27,6 +27,7 @@ import { ProductUpdate, type ProductUpdateVariant } from './emails/ProductUpdate
 import { Newsletter, type NewsletterSection } from './emails/Newsletter';
 import { FeedbackReceived } from './emails/FeedbackReceived';
 import { OrganizationInvite } from './emails/OrganizationInvite';
+import { MeetingSummaryEmail, type MeetingSummaryEmailProps } from './emails/MeetingSummary';
 
 export type SmtpConfig = {
   host: string;
@@ -229,6 +230,17 @@ export class EmailService {
     params: { headline: string; intro: string; sections: NewsletterSection[]; ctaLabel?: string; ctaUrl?: string; unsubscribeUrl: string }
   ): Promise<void> {
     await this.send(to, params.headline, React.createElement(Newsletter, { ...params, ...this.branding() }));
+  }
+
+  async sendMeetingSummary(
+    to: string,
+    params: Omit<MeetingSummaryEmailProps, keyof ReturnType<typeof this.branding>>
+  ): Promise<void> {
+    await this.send(
+      to,
+      `Meeting Summary: ${params.meetingTitle}`,
+      React.createElement(MeetingSummaryEmail, { ...params, ...this.branding() })
+    );
   }
 }
 

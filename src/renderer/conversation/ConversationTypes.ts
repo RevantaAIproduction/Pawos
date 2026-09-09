@@ -90,6 +90,8 @@ export type SubmittedInputContext = {
   };
   /** Project ID (org_projects.id) this conversation is associated with, if any. Propagates through ActionRequest for RLS scoping. */
   projectId?: string;
+  /** Temporary execution mode for this specific request, chosen via dynamic execution choice card. Applies only to this turn, does not persist. */
+  temporaryExecutionMode?: 'acceptEdits' | 'plan';
 };
 
 /** Window Context — PawOS internal state representing the current user context. */

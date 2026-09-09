@@ -28,6 +28,7 @@ export function createOllamaReasoningProvider(config: OllamaReasoningConfig): Re
   return {
     id: 'ollama',
     label: 'Ollama (local)',
+    model: config.model,
     isSupported() {
       return true; // local daemon; actual reachability is only known at request time
     },

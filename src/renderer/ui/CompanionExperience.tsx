@@ -296,9 +296,8 @@ export default function CompanionExperience() {
       </div>
       {conversationSnapshot.panelOpen && (
         <WindowContextProvider>
-          <div style={{ display: 'flex', height: '100%', width: '100%', overflow: 'hidden' }}>
-            <div className={styles.conversationPanelSlot} data-interactive="true" style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-              <ConversationPanel
+          <div className={styles.conversationPanelSlot} data-interactive="true" style={{ height: '100%', width: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <ConversationPanel
               snapshot={conversationSnapshot}
               onClose={() => conversation.close()}
               onStartListening={() => conversation.startListening()}
@@ -338,6 +337,7 @@ export default function CompanionExperience() {
               streamingPawCompute={conversation.streamingPawCompute}
               streamingElapsedSeconds={conversation.streamingElapsedSeconds}
               onCancel={() => conversation.cancel()}
+              openCards={openCards}
               onOpenSidebar={(cardType) => {
                 const existingCard = openCards.find((c) => c.type === cardType);
                 if (!existingCard) {
@@ -345,21 +345,11 @@ export default function CompanionExperience() {
                   setOpenCards((prev) => [...prev, { id: newId, type: cardType, title: cardType.charAt(0).toUpperCase() + cardType.slice(1) }]);
                 }
               }}
-            />
-          </div>
-          <div className={styles.cardGridSlot} data-interactive="true" style={{ flex: 0.4, minWidth: 0, overflow: 'hidden' }}>
-            <CardGrid
-              cards={openCards}
               onRemoveCard={(cardId) => setOpenCards((prev) => prev.filter((c) => c.id !== cardId))}
-              onAddCard={(type) => {
-                const newId = `${type}-${Date.now()}`;
-                setOpenCards((prev) => [...prev, { id: newId, type, title: type.charAt(0).toUpperCase() + type.slice(1) }]);
-              }}
               expandedCardId={expandedCardId}
               onExpandCard={(cardId) => setExpandedCardId(cardId)}
               onCollapseCard={() => setExpandedCardId(null)}
             />
-          </div>
           </div>
         </WindowContextProvider>
       )}

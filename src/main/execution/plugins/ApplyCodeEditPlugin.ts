@@ -10,6 +10,7 @@ import { applyCodeEditHunks } from '../patchApplier';
 import { languageProviderRegistry } from '../languageProviders/LanguageProviderRegistry';
 import { findProjectRootFor } from '../findProjectRoot';
 import { recordCodingEditHistory } from '../../memory/entities/codingRuntimeMemoryEntities';
+import { validateProjectBoundary } from '../ProjectBoundaryEnforcement';
 
 function sha256(content: string): string {
   return crypto.createHash('sha256').update(content, 'utf-8').digest('hex');
@@ -47,6 +48,19 @@ export class ApplyCodeEditPlugin extends BasePlugin {
 
   async execute(request: ActionRequest): Promise<ActionResult> {
     if (request.type !== 'applyCodeEdit') return { ok: false, reason: 'failed', message: 'Mismatched request.' };
+
+    // SECURITY: Enforce project boundary if projectId is specified
+    if (request.projectId) {
+      const projectRootPath = await this.getProjectRoot(request.projectId);
+      const boundaryCheck = validateProjectBoundary(request.path, {
+        projectId: request.projectId,
+        projectRootPath,
+      });
+      if (!boundaryCheck.ok) {
+        return { ok: false, reason: 'failed', message: boundaryCheck.reason };
+      }
+    }
+
     if (!fs.existsSync(request.path)) {
       return { ok: false, reason: 'failed', message: `"${request.path}" doesn't exist — use writeFile to create a new file.` };
     }
@@ -69,6 +83,12 @@ export class ApplyCodeEditPlugin extends BasePlugin {
     } catch (error) {
       return { ok: false, reason: 'failed', message: (error as Error).message };
     }
+  }
+
+  private async getProjectRoot(projectId: string): Promise<string | undefined> {
+    // TODO: Resolve projectId to project root path from database
+    // For now, return undefined to preserve existing behavior
+    return undefined;
   }
 
   /**

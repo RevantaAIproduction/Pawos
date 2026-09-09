@@ -750,6 +750,23 @@ export const ipc = {
   async projectMarkVerified(projectId: string) {
     return (getBridge() as any).projectMarkVerified(projectId);
   },
+
+  // Governance & Approval
+  async governanceApprove(approvalId: string): Promise<{ ok: boolean; error?: string }> {
+    return getBridge().governanceApprove(approvalId);
+  },
+  async governanceDeny(approvalId: string): Promise<{ ok: boolean; error?: string }> {
+    return getBridge().governanceDeny(approvalId);
+  },
+  async governanceGetPending(): Promise<Array<{ approvalId: string; actionType: string; requestedAt: number }>> {
+    return getBridge().governanceGetPending();
+  },
+  onGovernanceApproved(cb: (payload: { approvalId: string }) => void) {
+    return getBridge().onGovernanceApproved(cb);
+  },
+  onGovernanceDenied(cb: (payload: { approvalId: string }) => void) {
+    return getBridge().onGovernanceDenied(cb);
+  },
 };
 
 export type IpcApi = typeof ipc;

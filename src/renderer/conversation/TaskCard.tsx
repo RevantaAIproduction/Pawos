@@ -869,7 +869,7 @@ export function TaskCard({
       (a) => (FILE_CREATE_TYPES.has(a.type) && a.result?.ok) || (FILE_WRITE_TYPES.has(a.type) && a.result?.ok && (a.result.data as { overwritten?: boolean } | undefined)?.overwritten === false)
     );
     const filesModified = task.actions.filter(
-      (a) => (FILE_CHANGE_TYPES.has(a.type) && a.result?.ok) || (FILE_WRITE_TYPES.has(a.type) && a.result?.ok && (a.result.data as { overwritten?: boolean } | undefined)?.overwritten === true)
+      (a) => (FILE_CHANGE_TYPES.has(a.type) && a.result?.ok) || (FILE_WRITE_TYPES.has(a.type) && a.result?.ok && (a.result.data as { overwritten?: boolean } | undefined)?.overwritten === true) || (a.type === 'applyCodeEdit' && a.result?.ok)
     );
     const appsOpened = task.actions.filter((a) => APP_OPEN_TYPES.has(a.type) && a.result?.ok);
     const envChanges = task.actions.filter((a) => ENV_CHANGE_TYPES.has(a.type));
@@ -1407,9 +1407,27 @@ export function TaskCard({
               <h4 className={styles.sectionTitle}>Files Modified</h4>
               {sections.filesModified.map((a) => {
                 const path = getField(a.request, REQUEST_PATH_KEYS);
+                const isCodeEdit = a.type === 'applyCodeEdit';
+                const hunksApplied = isCodeEdit && a.result?.ok ? (a.result.data as { hunksApplied?: number }).hunksApplied : undefined;
+                const filename = path ? path.split('/').pop() : undefined;
+
                 return (
                   <div key={a.id} className={styles.fileRow}>
-                    <span className={styles.filePath}>{path}</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+                      {isCodeEdit && (
+                        <div style={{ fontSize: '12px', fontWeight: '600', color: 'rgba(255,255,255,0.85)', fontFamily: "'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace" }}>
+                          {filename}
+                        </div>
+                      )}
+                      <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.65)', fontFamily: "'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace" }}>
+                        {path}
+                      </div>
+                      {hunksApplied !== undefined && (
+                        <div style={{ fontSize: '11px', color: 'rgba(76, 175, 80, 0.8)', marginTop: '4px' }}>
+                          ✓ {hunksApplied} hunk{hunksApplied === 1 ? '' : 's'} applied
+                        </div>
+                      )}
+                    </div>
                     {path && onOpenPath && (
                       <button type="button" className={styles.openBtn} onClick={() => onOpenPath(path, 'file')}>
                         Open

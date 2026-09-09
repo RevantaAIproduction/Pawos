@@ -34,6 +34,7 @@ export function createAnthropicReasoningProvider(config: AnthropicReasoningConfi
   return {
     id: 'anthropic',
     label: 'Anthropic',
+    model,
     isSupported() {
       return Boolean(config.apiKey);
     },
