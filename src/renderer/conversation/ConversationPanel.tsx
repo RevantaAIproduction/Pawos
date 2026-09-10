@@ -1233,16 +1233,64 @@ export function ConversationPanel({
             {/* Panel Content */}
             <div className={styles.panelContent}>
               {openPanel === 'terminal' && (
-                <div className={styles.panelPlaceholder}>Terminal panel coming soon</div>
+                <div>
+                  <div className={styles.panelPlaceholder}>
+                    ⌘ Terminal output will appear here
+                  </div>
+                  <div style={{
+                    padding: '12px 16px',
+                    fontSize: '11px',
+                    color: 'rgba(255, 255, 255, 0.5)',
+                    fontFamily: 'monospace',
+                    borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+                  }}>
+                    Ready to execute commands...
+                  </div>
+                </div>
               )}
               {openPanel === 'browser' && (
-                <div className={styles.panelPlaceholder}>Browser panel coming soon</div>
+                <div>
+                  <div className={styles.panelPlaceholder}>
+                    🌐 Browser preview will appear here
+                  </div>
+                  <div style={{
+                    padding: '12px 16px',
+                    fontSize: '11px',
+                    color: 'rgba(255, 255, 255, 0.5)',
+                  }}>
+                    Navigate to URLs or view previews
+                  </div>
+                </div>
               )}
               {openPanel === 'files' && (
-                <div className={styles.panelPlaceholder}>Files panel coming soon</div>
+                <div>
+                  <div className={styles.panelPlaceholder}>
+                    📁 Project files and workspace
+                  </div>
+                  <div style={{
+                    padding: '12px 16px',
+                    fontSize: '11px',
+                    color: 'rgba(255, 255, 255, 0.5)',
+                    borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+                  }}>
+                    Browse and open files from your project
+                  </div>
+                </div>
               )}
               {openPanel === 'worktree' && (
-                <div className={styles.panelPlaceholder}>Worktree panel coming soon</div>
+                <div>
+                  <div className={styles.panelPlaceholder}>
+                    🌳 Git workspace and branches
+                  </div>
+                  <div style={{
+                    padding: '12px 16px',
+                    fontSize: '11px',
+                    color: 'rgba(255, 255, 255, 0.5)',
+                    borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+                  }}>
+                    View branches, commits, and workspace state
+                  </div>
+                </div>
               )}
             </div>
           </div>
