@@ -19,7 +19,6 @@ import {
   HeartIcon,
   PawIcon,
   GoogleGlyph,
-  MicrosoftGlyph,
   AppleGlyph,
   GitHubGlyph,
 } from './icons';
@@ -43,7 +42,6 @@ const FEATURES = [
 export function AuthScreen({
   onSignInWithGoogle,
   onSignInWithGithub,
-  onSignInWithMicrosoft,
   onSignInWithEmail,
   onCreateEmailAccount,
   onRequestPasswordReset,
@@ -53,11 +51,9 @@ export function AuthScreen({
   onVerifyEmailCode,
   isGoogleSignInAvailable,
   isGithubSignInAvailable,
-  isMicrosoftSignInAvailable,
 }: {
   onSignInWithGoogle: () => Promise<unknown>;
   onSignInWithGithub: () => Promise<unknown>;
-  onSignInWithMicrosoft: () => Promise<unknown>;
   onSignInWithEmail: (options: EmailSignInOptions) => Promise<unknown>;
   onCreateEmailAccount: (options: EmailCreateAccountOptions) => Promise<unknown>;
   onRequestPasswordReset: (email: string) => Promise<{ expiresInMinutes: number }>;
@@ -67,7 +63,6 @@ export function AuthScreen({
   onVerifyEmailCode: (email: string, code: string) => Promise<{ valid: boolean; reason?: string }>;
   isGoogleSignInAvailable: () => Promise<boolean>;
   isGithubSignInAvailable: () => Promise<boolean>;
-  isMicrosoftSignInAvailable: () => Promise<boolean>;
 }) {
   const [mode, setMode] = useState<Mode>('signin');
   const [step, setStep] = useState<Step>('form');
@@ -81,10 +76,9 @@ export function AuthScreen({
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState<'google' | 'github' | 'microsoft' | 'email' | null>(null);
+  const [pending, setPending] = useState<'google' | 'github' | 'email' | null>(null);
   const [googleAvailable, setGoogleAvailable] = useState(true);
   const [githubAvailable, setGithubAvailable] = useState(true);
-  const [microsoftAvailable, setMicrosoftAvailable] = useState(true);
 
   const [otpCode, setOtpCode] = useState('');
   const [verifyError, setVerifyError] = useState<string | null>(null);
@@ -103,10 +97,6 @@ export function AuthScreen({
   useEffect(() => {
     isGithubSignInAvailable().then(setGithubAvailable);
   }, [isGithubSignInAvailable]);
-
-  useEffect(() => {
-    isMicrosoftSignInAvailable().then(setMicrosoftAvailable);
-  }, [isMicrosoftSignInAvailable]);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -128,7 +118,6 @@ export function AuthScreen({
 
   const handleGoogle = () => runGuarded('google', onSignInWithGoogle);
   const handleGithub = () => runGuarded('github', onSignInWithGithub);
-  const handleMicrosoft = () => runGuarded('microsoft', onSignInWithMicrosoft);
 
   /** Sends (or resends) the verification code and moves to the code-entry step. Doesn't create the account yet — that only happens once the code is proven. */
   const requestVerificationCode = async () => {
@@ -489,16 +478,6 @@ export function AuthScreen({
               {!githubAvailable && (
                 <p className={styles.hint}>
                   GitHub sign-in needs GITHUB_REDIRECT_URI configured in .env before this will work.
-                </p>
-              )}
-
-              <button type="button" className={styles.providerButton} onClick={handleMicrosoft} disabled={busy}>
-                <MicrosoftGlyph size={18} />
-                {pending === 'microsoft' ? 'Opening Microsoft sign-in…' : 'Continue with Microsoft'}
-              </button>
-              {!microsoftAvailable && (
-                <p className={styles.hint}>
-                  Microsoft sign-in needs MICROSOFT_CLIENT_ID configured in .env before this will work.
                 </p>
               )}
 

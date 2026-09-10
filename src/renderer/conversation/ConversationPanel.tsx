@@ -1377,9 +1377,9 @@ export function ConversationPanel({
               const percentage = (usage5h / limit5h) * 100;
               const isApproachingLimit = percentage >= 65;
 
-              let circleColor = 'rgba(59, 130, 246, 0.8)'; // blue
-              if (percentage >= 90) circleColor = 'rgba(239, 68, 68, 0.8)'; // red
-              else if (percentage >= 65) circleColor = 'rgba(234, 179, 8, 0.8)'; // yellow
+              let circleColor = 'rgba(120, 150, 200, 0.6)'; // muted blue
+              if (percentage >= 90) circleColor = 'rgba(180, 100, 100, 0.6)'; // muted red
+              else if (percentage >= 65) circleColor = 'rgba(180, 150, 100, 0.6)'; // muted yellow
 
               return (
                 <>
