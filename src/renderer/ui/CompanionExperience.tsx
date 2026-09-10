@@ -332,7 +332,8 @@ export default function CompanionExperience() {
               activePawModel={conversation.activePawModel}
               modelTierRequirements={conversation.modelTierRequirements}
               onSelectModel={(id) => conversation.selectModel(id)}
-              currentWorkingFile={activeTask ? 'Working...' : undefined}
+              currentWorkingFile={undefined}
+              activeTask={activeTask}
               wakeWord={undefined}
               streamingPawCompute={conversation.streamingPawCompute}
               streamingElapsedSeconds={conversation.streamingElapsedSeconds}

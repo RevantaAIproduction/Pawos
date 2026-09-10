@@ -33,7 +33,6 @@ import { FileContextSelector } from './FileContextSelector';
 import { shouldShowExecutionChoice, detectStrategyChange } from './IntentDetection';
 import { ExecutionChoiceCard } from './ExecutionChoiceCard';
 import { executionStrategyStore, type ExecutionStrategy } from './ExecutionStrategyStore';
-import { CardGrid, type CardConfig } from '../CardGrid/CardGrid';
 import { ProjectContextBar } from './ProjectContextBar';
 import { CompanionHamburger } from './CompanionHamburger';
 import { PlusMenu } from './PlusMenu';
@@ -295,11 +294,6 @@ export function ConversationPanel({
   streamingPawCompute?: number;
   streamingElapsedSeconds?: number;
   onOpenSidebar?: (cardType: 'terminal' | 'worktree' | 'browser' | 'background-tasks') => void;
-  openCards?: CardConfig[];
-  onRemoveCard?: (cardId: string) => void;
-  onExpandCard?: (cardId: string) => void;
-  onCollapseCard?: () => void;
-  expandedCardId?: string | null;
 }) {
   const windowCtx = useWindowContext();
   const isStreaming = snapshot.state === 'thinking' || snapshot.state === 'performingAction';
@@ -350,6 +344,7 @@ export function ConversationPanel({
   const [planRevisionFeedback, setPlanRevisionFeedback] = useState('');
   const [showPlanSidebar, setShowPlanSidebar] = useState(false);
   const [showTierUpgradePopup, setShowTierUpgradePopup] = useState(false);
+  const [openPanel, setOpenPanel] = useState<'terminal' | 'browser' | 'files' | 'worktree' | null>(null);
   // Incognito Mode (Go tier only): Private session, doesn't persist data or history
   // BUT still calculates Paw Computes usage in real-time (no free pass)
   const [incognitoMode, setIncognitoMode] = useState(false);
@@ -577,13 +572,21 @@ export function ConversationPanel({
   // Load user email and persisted persona on mount
   useEffect(() => {
     const loadUserData = async () => {
+      // Skip on fresh/offline install to avoid repeated "Failed to fetch" errors
+      if (!navigator.onLine) return;
+
       try {
         const supabase = await getSupabaseClient();
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user?.email) {
           setUserEmail(session.user.email);
         }
-      } catch {}
+      } catch (err) {
+        // Silently ignore network errors during initialization
+        if (!(err instanceof Error && err.message.includes('Failed to fetch'))) {
+          console.debug('Auth load error:', err);
+        }
+      }
     };
     const loadPersistedPersona = async () => {
       const convId = conversationIdRef.current;
@@ -1020,1907 +1023,383 @@ export function ConversationPanel({
     onSendTranscript(`📎 ${file.name}`, { reasoningText, source: 'file' });
   };
 
+
+  const hasMessages = snapshot.messages.length > 0;
+  const isIdleState = !hasMessages && !isStreaming && !proposedPlan;
+
   return (
     <section className={styles.panel} aria-label="Conversation panel">
-      {/* Wake Word Display (Very Top) */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.8)', cursor: 'pointer', transition: 'color 0.15s ease', padding: '4px 8px' }} onMouseOver={(e) => e.currentTarget.style.color = 'rgba(255,255,255,1)'} onMouseOut={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.8)'} title="Click to change wake word in Companion Studio">
-            {wakeWord}
-          </div>
-          <button style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 8px', color: 'rgba(255,255,255,0.7)', fontSize: '16px', transition: 'color 0.15s ease', position: 'relative' }} onMouseOver={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.9)'} onMouseOut={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.7)'} onClick={() => setHamburgerMenuOpen(!hamburgerMenuOpen)} type="button" title="Navigation menu">
-            ≡
-            {hamburgerMenuOpen && (
-              <div style={{ position: 'absolute', top: '100%', left: 0, background: 'rgba(20,20,24,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', zIndex: 100, boxShadow: '0 12px 32px rgba(0,0,0,0.4)', backdropFilter: 'blur(12px)', marginTop: '8px', width: '280px', maxHeight: '400px', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-                {/* Navigation buttons */}
-                <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                  <button style={{ padding: '8px 12px', background: 'transparent', border: 'none', borderRadius: '4px', color: 'rgba(255,255,255,0.8)', cursor: 'pointer', textAlign: 'left', fontSize: '13px', transition: 'background 0.15s ease', fontWeight: '500' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">+ New</button>
-                  <button style={{ padding: '8px 12px', background: 'transparent', border: 'none', borderRadius: '4px', color: 'rgba(255,255,255,0.8)', cursor: 'pointer', textAlign: 'left', fontSize: '13px', transition: 'background 0.15s ease', fontWeight: '500' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">📁 Artifacts</button>
-                  <button style={{ padding: '8px 12px', background: 'transparent', border: 'none', borderRadius: '4px', color: 'rgba(255,255,255,0.8)', cursor: 'pointer', textAlign: 'left', fontSize: '13px', transition: 'background 0.15s ease', fontWeight: '500' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">⚙ Customize</button>
-                  <div style={{ position: 'relative' }} ref={moreMenuRef}>
-                    <button style={{ padding: '8px 12px', background: 'transparent', border: 'none', borderRadius: '4px', color: 'rgba(255,255,255,0.8)', cursor: 'pointer', textAlign: 'left', fontSize: '13px', transition: 'background 0.15s ease', fontWeight: '500' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} onClick={() => setMoreMenuOpen(!moreMenuOpen)} type="button">▼ More</button>
-                    {moreMenuOpen && (
-                      <div style={{ position: 'absolute', top: '100%', left: 0, background: 'rgba(20,20,24,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '6px', minWidth: '140px', zIndex: 50, boxShadow: '0 8px 24px rgba(0,0,0,0.3)', backdropFilter: 'blur(12px)', marginTop: '4px' }} onClick={(e) => e.stopPropagation()}>
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">Routines</button>
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">Dispatch</button>
-                      </div>
-                    )}
-                  </div>
-                </div>
+      {/* PREMIUM HEADER */}
+      <div className={styles.premiumHeader}>
+        <div className={styles.headerLeft}>
+          <CompanionHamburger userEmail={userEmail} entitlement={entitlement} />
+          <div className={styles.pawosLogo}>PawOS</div>
+        </div>
 
-                {/* Work history section - empty initially, populated with real data */}
-                <div style={{ padding: '12px', flex: 1, minHeight: 0, overflowY: 'auto' }}>
-                  {/* Section header */}
-                  <div style={{ fontSize: '12px', fontWeight: '600', color: 'rgba(255,255,255,0.6)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    Sessions
-                  </div>
-                  {/* Sessions list - currently empty, will show real sessions */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minHeight: '60px', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.5)', fontSize: '12px', textAlign: 'center', padding: '12px 8px' }} title="Start your first conversation to see sessions list">
-                    Start a conversation
-                  </div>
-                </div>
+        <div className={styles.headerCenter}>
+          <ProjectContextBar currentWorkingFile={currentWorkingFile} />
+        </div>
 
-                {/* User section */}
-                <div style={{ padding: '12px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ fontSize: '12px', fontWeight: '500', color: 'rgba(255,255,255,0.8)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <div style={{ width: '20px', height: '20px', borderRadius: '4px', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: '700', color: 'rgba(255,255,255,0.6)' }}>
-                      {userEmail ? userEmail.charAt(0).toUpperCase() : 'T'}
-                    </div>
-                    <span>{userEmail ? userEmail.split('@')[0] : 'User'}</span>
-                    <span style={{ color: 'rgba(255,255,255,0.5)' }}>·</span>
-                    <span style={{ color: 'rgba(255,255,255,0.6)' }}>{entitlement?.tier || 'Free'}</span>
-                  </div>
-                  <button style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'opacity 0.15s ease', color: 'rgba(255,255,255,0.6)' }} onMouseOver={(e) => { e.currentTarget.style.opacity = '0.8'; e.currentTarget.style.color = 'rgba(255,255,255,0.8)'; }} onMouseOut={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; }} type="button" title="Report issue" onClick={() => setFeedbackModalOpen(true)}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round' }}>
-                      <circle cx="12" cy="10" r="6"/>
-                      <path d="M12 4v-2M10 5l-1.5-1.5M14 5l1.5-1.5"/>
-                      <line x1="12" y1="16" x2="12" y2="20"/>
-                      <circle cx="10" cy="13" r="1" fill="currentColor"/>
-                      <circle cx="12" cy="12.5" r="1" fill="currentColor"/>
-                      <circle cx="14" cy="13" r="1" fill="currentColor"/>
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            )}
+        {/* Workspace Controls */}
+        <div className={styles.workspaceControls}>
+          <button className={styles.workspaceTab} onClick={() => setOpenPanel(openPanel === 'terminal' ? null : 'terminal')} title="Terminal">
+            ⌘ Terminal
+          </button>
+          <button className={styles.workspaceTab} onClick={() => setOpenPanel(openPanel === 'browser' ? null : 'browser')} title="Browser">
+            🌐 Browser
+          </button>
+          <button className={styles.workspaceTab} onClick={() => setOpenPanel(openPanel === 'files' ? null : 'files')} title="Files">
+            📁 Files
+          </button>
+          <button className={styles.workspaceTab} onClick={() => setOpenPanel(openPanel === 'worktree' ? null : 'worktree')} title="Worktree">
+            🌳 Worktree
           </button>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', padding: '4px' }}>
-          <button className={styles.closeBtn} onClick={onClose} type="button" style={{ opacity: 0.7, fontSize: 13 }}>
+
+        <div className={styles.headerRight}>
+          <div className={styles.modelSelectorCompact}>
+            <ModelSelectorWidget
+              activePawModel={activePawModel}
+              onSelectModel={onSelectModel}
+              entitlement={entitlement}
+              streamingElapsedSeconds={streamingElapsedSeconds}
+            />
+          </div>
+          <button className={styles.closeBtn} onClick={onClose} type="button" title="Close">
             ✕
           </button>
-          <button style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.6)', padding: '6px', borderRadius: '4px', transition: 'all 0.15s ease', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', position: 'relative' }} onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'rgba(255,255,255,0.85)'; }} onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; }} onClick={() => setThreeDotsMenuOpen(!threeDotsMenuOpen)} type="button" title="Menu">
-            ⋮
-            {threeDotsMenuOpen && (
-              <div style={{ position: 'absolute', top: '100%', right: 0, background: 'rgba(20,20,24,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '6px', minWidth: '180px', zIndex: 100, boxShadow: '0 8px 24px rgba(0,0,0,0.3)', backdropFilter: 'blur(12px)', marginTop: '8px' }}>
-                <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">📁 Files</button>
-                <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} onClick={() => { onOpenSidebar?.('background-tasks'); setThreeDotsMenuOpen(false); }} type="button">⏱ Background tasks</button>
-                <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">⤢ Open in</button>
-                <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">✎ Rename</button>
-                <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">📄 Transcript view</button>
-                <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">📦 Archive</button>
-                <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,100,100,0.8)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,100,100,0.1)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">🗑 Delete</button>
-              </div>
-            )}
-          </button>
-          {entitlement?.tier === 'go' && (
-            <button
-              onClick={() => setIncognitoMode(!incognitoMode)}
-              type="button"
-              title={incognitoMode ? 'Exit Incognito Mode' : 'Enter Incognito Mode'}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '6px',
-                opacity: incognitoMode ? 1 : 0.6,
-                transition: 'opacity 0.2s ease',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: '4px',
-                marginTop: '4px'
-              }}
-              onMouseOver={(e) => e.currentTarget.style.opacity = '1'}
-              onMouseOut={(e) => e.currentTarget.style.opacity = incognitoMode ? '1' : '0.6'}
-            >
-            <svg width="14" height="14" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'block', stroke: 'currentColor', strokeWidth: 1 }}>
-              <path d="M8.4 15.2L10.7 10.1C10.9 9.65 11.35 9.35 11.85 9.35H20.15C20.65 9.35 21.1 9.65 21.3 10.1L23.6 15.2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M7.9 16.05H24.1" strokeLinecap="round"/>
-              <path d="M9.2 16.1C9.35 18.15 10.65 19.25 12.25 19.25C13.85 19.25 15.05 18.15 15.25 16.1" strokeLinecap="round"/>
-              <path d="M16.75 16.1C16.95 18.15 18.15 19.25 19.75 19.25C21.35 19.25 22.65 18.15 22.8 16.1" strokeLinecap="round"/>
-            </svg>
-            </button>
-          )}
         </div>
       </div>
 
-      {/* Project Context Bar - Phase 3 */}
-      <ProjectContextBar activeTask={undefined} currentWorkingFile={currentWorkingFile} />
-
-      {/* Session Name Display - Line 2 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>💻</span>
-          <div style={{ fontSize: '12px', fontWeight: '600', color: 'rgba(255,255,255,0.7)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {snapshot.messages.length > 0 ? `Conversation • ${new Date().toLocaleDateString()}` : 'New Conversation'}
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-          <button style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.6)', padding: '6px', borderRadius: '4px', transition: 'all 0.15s ease', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'rgba(255,255,255,0.85)'; }} onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; }} onClick={() => { onOpenSidebar?.('terminal'); }} type="button" title="Terminal">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round' }}>
-              <path d="M4 6h16v12H4z"/>
-              <path d="M7 14l2-2 2 2M14 14l2-2 2 2"/>
-            </svg>
-          </button>
-          <button style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.6)', padding: '6px', borderRadius: '4px', transition: 'all 0.15s ease', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'rgba(255,255,255,0.85)'; }} onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; }} onClick={() => { onOpenSidebar?.('worktree'); }} type="button" title="Work Tree">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round' }}>
-              <path d="M3 6h18v12H3z"/>
-              <line x1="9" y1="6" x2="9" y2="18"/>
-              <line x1="15" y1="6" x2="15" y2="18"/>
-            </svg>
-          </button>
-          <button style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.6)', padding: '6px', borderRadius: '4px', transition: 'all 0.15s ease', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'rgba(255,255,255,0.85)'; }} onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; }} onClick={() => { onOpenSidebar?.('browser'); }} type="button" title="Browser">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round' }}>
-              <path d="M3 8h18v11H3z"/>
-              <line x1="3" y1="8" x2="3" y2="6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v2"/>
-            </svg>
-          </button>
-          <button style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.6)', padding: '6px', borderRadius: '4px', transition: 'all 0.15s ease', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', position: 'relative' }} onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'rgba(255,255,255,0.85)'; }} onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; }} onClick={() => setThreeDotsMenuOpen(!threeDotsMenuOpen)} type="button" title="Menu">
-            ⋮
-            {threeDotsMenuOpen && (
-              <div style={{ position: 'absolute', top: '100%', right: 0, background: 'rgba(20,20,24,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '6px', minWidth: '180px', zIndex: 100, boxShadow: '0 8px 24px rgba(0,0,0,0.3)', backdropFilter: 'blur(12px)', marginTop: '8px' }}>
-                <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">📁 Files</button>
-                <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} onClick={() => { onOpenSidebar?.('background-tasks'); setThreeDotsMenuOpen(false); }} type="button">⏱ Background tasks</button>
-                <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">⤢ Open in</button>
-                <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">✎ Rename</button>
-                <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">📄 Transcript view</button>
-                <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">📦 Archive</button>
-                <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,100,100,0.8)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,100,100,0.1)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">🗑 Delete</button>
-              </div>
-            )}
-          </button>
-        </div>
-      </div>
-
-      <div className={styles.panelContent}>
-        <div className={styles.chatArea}>
-
-      {creditsNoticeTier && onDismissCreditsNotice && (
-        <CreditsRequiredNotice
-          tier={creditsNoticeTier}
-          seatTier={creditsNoticeSeatTier}
-          pooled={creditsNoticePooled ?? false}
-          enterpriseContactAvailable={enterpriseContactAvailable}
-          onDismiss={onDismissCreditsNotice}
-          onUpgrade={onUpgrade}
-          onBuyCompute={onBuyCompute}
-          onContactSales={onContactSales}
-          onContactAdmin={onContactAdmin}
-          onRequestMoreCompute={onRequestMoreCompute}
-          pawCreditsBalanceUsd={pawCreditsBalanceUsd}
-          onUseCredits={onUseCredits}
-          redeeming={redeemingCredits}
-          redeemError={redeemCreditsError}
-        />
-      )}
-
-      {/* Hands-on coding: File context selector */}
-      {windowCtx.context.project && (
-        <FileContextSelector />
-      )}
-
-      {/* EXECUTION CHOICE: Show card when pending user's strategy choice */}
-      {executionChoicePending && pendingRequest && (
-        <ExecutionChoiceCard
-          understanding={`I understand you want to: ${pendingRequest.text}`}
-          onWorkWithMe={() => handleExecutionChoice('work_with_me')}
-          onAutonomous={() => handleExecutionChoice('autonomous')}
-          onCancel={handleCancelExecutionChoice}
-        />
-      )}
-
-      <div ref={transcriptRef} className={styles.transcript} role="log" aria-live="polite" aria-relevant="additions text">
-        {snapshot.messages.length === 0 && (
-          entitlement?.tier === 'go' ? (
-            <div style={{ padding: '40px 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '400px' }}>
-              <div style={{ maxWidth: '600px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.02)', padding: '48px', textAlign: 'center' }}>
-                <div style={{ fontSize: '32px', marginBottom: '16px' }}>✨</div>
-                <div style={{ fontSize: '24px', fontWeight: '600', color: 'rgba(255,255,255,0.85)', marginBottom: '12px' }}>What's up next, {userEmail ? userEmail.split('@')[0] : 'Tharun'}?</div>
-
-                <div style={{ fontSize: '16px', color: 'rgba(255,255,255,0.7)', lineHeight: '1.6', marginBottom: '32px' }}>
-                  <div>Get Pro to connect your</div>
-                  <div style={{ color: 'rgba(255,255,255,0.75)', fontWeight: '600' }}>Gmail, Google Drive, Slack,</div>
-                  <div>and <span style={{ color: 'rgba(255,255,255,0.75)', fontWeight: '600' }}>Google Calendar</span></div>
-                  <div style={{ marginTop: '12px', color: 'rgba(255,255,255,0.6)' }}>for getting your daily tasks ready.</div>
-                </div>
-
-                <button
-                  onClick={onUpgrade}
-                  style={{
-                    background: 'rgba(255,255,255,0.1)',
-                    border: '1px solid rgba(255,255,255,0.12)',
-                    borderRadius: '8px',
-                    padding: '12px 32px',
-                    color: 'rgba(255,255,255,0.8)',
-                    cursor: 'pointer',
-                    fontSize: '16px',
-                    fontWeight: '600',
-                    marginBottom: '32px',
-                    transition: 'all 0.15s ease'
-                  }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.background = 'rgba(255,255,255,0.12)';
-                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)';
-                    e.currentTarget.style.color = 'rgba(255,255,255,0.9)';
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
-                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)';
-                    e.currentTarget.style.color = 'rgba(255,255,255,0.8)';
-                  }}
-                  type="button"
-                >
-                  ✨ Get Pro
-                </button>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '32px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '32px' }}>
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <rect x="2" y="4" width="20" height="16" rx="2" fill="#EA4335"/>
-                      <path d="M22 4l-10 8L2 4" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                    </svg>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '32px' }}>
-                    <svg width="32" height="32" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M8 2l7 12-7 12H2l7-12L2 2h6z" fill="#0F9D58"/>
-                      <path d="M16 2l7 12-7 12h6l7-12-7-12h-6z" fill="#4285F4"/>
-                      <path d="M8 14l8-12 8 12-8 12-8-12z" fill="#FBBC04"/>
-                    </svg>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '32px' }}>
-                    <svg width="32" height="32" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <rect x="3" y="4" width="18" height="18" rx="2" fill="#4285F4"/>
-                      <rect x="3" y="4" width="18" height="4" fill="#1F73E7"/>
-                      <circle cx="12" cy="14" r="3" fill="white"/>
-                    </svg>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '32px' }}>
-                    <svg width="32" height="32" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M5 2c-1.1 0-2 .9-2 2v3h3V4c0-1.1-.9-2-2-2zm0 8c-1.1 0-2 .9-2 2v3h3v-3c0-1.1-.9-2-2-2zm6-8c-1.1 0-2 .9-2 2v3h3V4c0-1.1-.9-2-2-2zm0 8c-1.1 0-2 .9-2 2v3h3v-3c0-1.1-.9-2-2-2zm6-8c-1.1 0-2 .9-2 2v3h3V4c0-1.1-.9-2-2-2zm0 8c-1.1 0-2 .9-2 2v3h3v-3c0-1.1-.9-2-2-2z" fill="#E01E5A"/>
-                      <path d="M19 12c0-1.1-.9-2-2-2h-3v3h3c1.1 0 2-.9 2-2zm-8 0c0-1.1-.9-2-2-2H6v3h3c1.1 0 2-.9 2-2z" fill="#36C5F0"/>
-                    </svg>
-                  </div>
-                </div>
-
-                <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', lineHeight: '1.6', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '24px' }}>
-                  <div style={{ marginBottom: '8px' }}>🔒 Your data is private and secure.</div>
-                  <div>Only you have access.</div>
-                </div>
-
-                <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginTop: '24px' }}>One place. All your work. Powered by PawOS. 🐾</div>
-              </div>
-            </div>
-          ) : (
-            <div className={styles.emptyState}>Ready to start. Type or speak to PawOS.</div>
-          )
-        )}
-        {supportPersona && (
-          <div
-            style={{
-              padding: '12px',
-              backgroundColor: 'rgba(59, 130, 246, 0.08)',
-              border: '1px solid rgba(59, 130, 246, 0.2)',
-              borderRadius: '6px',
-              marginBottom: '16px',
-              fontSize: 12,
-              fontWeight: 500,
-              color: '#3b82f6',
-            }}
-          >
-            ✓ {supportPersona} connected
-          </div>
-        )}
-        {snapshot.messages.map((message) =>
-          message.role === 'system' ? (
-            message.task ? (
-              <TaskCard
-                key={message.id}
-                task={message.task}
-                onRetryAction={onRetryAction}
-                onOpenPath={onOpenPath}
-                onConnectCapability={onConnectCapability}
-                onNavigateToSettingsConnector={onNavigateToSettingsConnector}
-                onOpenTicketBalance={onOpenTicketBalance}
-                onPlanDecision={onPlanDecision}
-              />
-            ) : (
-              <div key={message.id} className={styles.systemLineWrap}>
-                <div
-                  className={`${styles.systemLine} ${message.status === 'streaming' ? styles.systemLineActive : styles.systemLineDone}`}
-                >
-                  <span className={styles.systemLineIcon}>{message.status === 'streaming' ? '⚙️' : '✓'}</span>
-                  <span className={styles.systemLineText}>{message.content}</span>
-                </div>
-              </div>
-            )
-          ) : message.role === 'assistant' && message.status !== 'streaming' && !message.content.trim() ? (
-            // A finished assistant turn with no narration text at all — the model made a
-            // tool call and said nothing alongside it. The real record of what happened
-            // already renders as its own TaskCard/system-line entry elsewhere in this same
-            // list; rendering an empty "assistant" bubble here would only add a blank box
-            // with no information, which is exactly the "I can't see what it's doing"
-            // complaint this was fixed for. Skip it outright rather than showing nothing
-            // inside a labeled box.
-            null
-          ) : (
-            <React.Fragment key={message.id}>
-              {message.role === 'assistant' && message.status !== 'streaming' && isProjectPlanMessage(message.content) ? (
-                // A finished project-plan message renders only as the structured
-                // card below — never also as a raw markdown-looking text bubble.
-                // While still streaming, the raw bubble below is shown instead
-                // (the card can't be built from a plan that's mid-generation).
-                <ProjectPlanCard
-                  content={message.content}
-                  onBuild={() => onSendTranscript('Build Project from the approved PROJECT PLAN.')}
-                  onModify={() => onSendTranscript('Modify Plan. I want to adjust the PROJECT PLAN before building.')}
-                  onAccept={() => onSendTranscript('I approve this plan as written.')}
-                  onDeny={() => onSendTranscript('I reject this plan and would like a different approach.')}
+      {/* ═ SPLIT LAYOUT: Conversation (left) + Panel (right) ═ */}
+      <div className={styles.splitContainer}>
+        {/* LEFT SIDE: Conversation & Idle State */}
+        <div className={styles.splitLeft}>
+          {/* IDLE STATE: Character + Greeting */}
+          {isIdleState && (
+            <div className={styles.idleState}>
+              <div className={styles.idleCharacter}>
+                <img
+                  src="file:///C:/Users/APPLE/Pictures/Screenshots/Screenshot 2026-09-10 175724.png"
+                  alt="PawOS Character"
+                  className={styles.characterImage}
                 />
-              ) : (
-                <article
-                  className={`${styles.message} ${message.role === 'assistant' ? styles.assistant : styles.user}`}
-                >
-                  <div className={styles.messageHeader}>
-                    <span className={styles.role}>{message.role}</span>
-                    {message.role === 'assistant' && message.status !== 'streaming' && message.content.trim() && (
-                      <button className={styles.speakMessageBtn} onClick={() => onSpeakMessage(message.content)} type="button">
-                        Speak
-                      </button>
-                    )}
-                  </div>
-                  <div className={message.status === 'streaming' ? styles.streaming : ''}>{message.content}</div>
-                  {message.extensions && message.extensions.length > 0 && (
-                    <ExtensionRenderer
-                      extensions={message.extensions}
-                      onExpand={(request) => handleExtensionExpand(request)}
-                      onAction={(extensionId, action, payload) =>
-                        handleExtensionAction(extensionId, action, payload)
-                      }
-                    />
-                  )}
-                </article>
+              </div>
+              <div className={styles.idleGreeting}>
+                <h1 className={styles.greetingTitle}>
+                  What's up next{userEmail ? `, ${userEmail.split('@')[0]}` : ''}?
+                </h1>
+                <p className={styles.greetingSubtitle}>Ask me to build, fix, automate, or research anything.</p>
+              </div>
+            </div>
+          )}
+
+          {/* CONVERSATION SCROLL AREA */}
+          {hasMessages && (
+            <div className={styles.conversationArea} ref={transcriptRef}>
+              {/* Credits exhaustion notice */}
+              {creditsNoticeTier && onDismissCreditsNotice && (
+                <CreditsRequiredNotice
+                  tier={creditsNoticeTier}
+                  seatTier={creditsNoticeSeatTier}
+                  pooled={creditsNoticePooled ?? false}
+                  enterpriseContactAvailable={enterpriseContactAvailable}
+                  onDismiss={onDismissCreditsNotice}
+                  onUpgrade={onUpgrade}
+                  onBuyCompute={onBuyCompute}
+                  onContactSales={onContactSales}
+                  onContactAdmin={onContactAdmin}
+                  onRequestMoreCompute={onRequestMoreCompute}
+                  pawCreditsBalanceUsd={pawCreditsBalanceUsd}
+                  onUseCredits={onUseCredits}
+                  redeeming={redeemingCredits}
+                  redeemError={redeemCreditsError}
+                />
               )}
-            </React.Fragment>
-          )
-        )}
-        {snapshot.draftTranscript && snapshot.state === 'listening' && (
-          <article className={`${styles.message} ${styles.user}`}>
-            <div className={styles.role}>user</div>
-            <div className={styles.streaming}>{snapshot.draftTranscript}</div>
-          </article>
-        )}
-        {!snapshot.draftTranscript && latestMessage?.role === 'assistant' && snapshot.state === 'speaking' && (
-          <div className={styles.speakingHint}>Speaking response...</div>
-        )}
-      </div>
 
-      {/* Live Work Stream — shown while CURRENT TASK is active (planning/executing/waiting for approval)
-           Disappears only when task reaches terminal state (completed/failed/interrupted) */}
-      {(() => {
-        // Show stream while task is active (planning, executing, waiting for permission/approval)
-        // Hide only when task is done or never started
-        const hasActiveTask = snapshot.state !== 'idle' && snapshot.state !== 'listening' && snapshot.state !== 'completed' && snapshot.state !== 'error' && snapshot.state !== 'interrupted';
-        const currentActions = snapshot.messages
-          .filter((m) => m.task)
-          .flatMap((m) => m.task?.actions || [])
-          .filter((a) => a);
-
-        return hasActiveTask && (
-          <LiveWorkStream
-            actions={currentActions}
-            isRunning={snapshot.state === 'performingAction'}
-            showActivityDot={snapshot.state === 'performingAction' || snapshot.state === 'thinking'}
-          />
-        );
-      })()}
-
-      <LiveStatus
-        status={snapshot.state === 'thinking' ? 'thinking' : snapshot.state === 'performingAction' ? 'running-commands' : 'idle'}
-        isActive={isStreaming}
-        pawComputesUsed={streamingPawCompute}
-        elapsedSeconds={streamingElapsedSeconds}
-      />
-
-      {snapshot.errorMessage && <div className={styles.error}>{snapshot.errorMessage}</div>}
-      {attachError && <div className={styles.error}>{attachError}</div>}
-
-      {/* Limits Card - Shows when limit approaching/reached */}
-      {limitsState.limit5hrTriggered && (
-        <div style={{ margin: '16px', padding: '16px', background: 'rgba(248, 113, 113, 0.08)', border: '1px solid rgba(248, 113, 113, 0.2)', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div>
-            <div style={{ fontSize: '13px', fontWeight: 600, color: 'rgba(248, 113, 113, 0.9)', marginBottom: 6 }}>
-              🔴 You've reached 5hr pawos {entitlement?.tier} limit. Resets in {limitsState.countdownTime}
-            </div>
-            <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: 8 }}>
-              You've used all your 5-hour rolling window allowance. Purchase credits to continue working, or wait until the timer resets.
-            </div>
-            {creditsUsage.pcsUsedThisSession > 0 && (
-              <div style={{ fontSize: '12px', color: 'rgba(76, 175, 80, 0.8)', fontWeight: 500 }}>
-                Credits used: {creditsUsage.pcsUsedThisSession} PC = ${calculateDollarFromPC(creditsUsage.pcsUsedThisSession)}
-              </div>
-            )}
-          </div>
-
-          {/* Fuel Bar Indicator */}
-          <div style={{ height: '6px', background: 'rgba(255, 255, 255, 0.1)', borderRadius: '3px', overflow: 'hidden' }}>
-            <div style={{ height: '100%', background: 'linear-gradient(90deg, rgba(248, 113, 113, 0.8) 0%, rgba(248, 113, 113, 0.4) 100%)', width: '100%' }} />
-          </div>
-
-          {/* Buttons */}
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-            <button
-              onClick={() => setLimitsState(prev => ({ ...prev, showLimitDetails: true }))}
-              style={{
-                padding: '8px 16px',
-                background: 'transparent',
-                border: '1px solid rgba(248, 113, 113, 0.3)',
-                borderRadius: '4px',
-                color: 'rgba(248, 113, 113, 0.8)',
-                cursor: 'pointer',
-                fontSize: '12px',
-                fontWeight: 500,
-                transition: 'all 0.15s ease'
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.background = 'rgba(248, 113, 113, 0.1)';
-                e.currentTarget.style.borderColor = 'rgba(248, 113, 113, 0.5)';
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.background = 'transparent';
-                e.currentTarget.style.borderColor = 'rgba(248, 113, 113, 0.3)';
-              }}
-              type="button"
-            >
-              View Details
-            </button>
-            <button
-              onClick={() => {
-                // Resume work after reset or purchase
-                setLimitsState(prev => ({ ...prev, limit5hrTriggered: false }));
-                conversation.open();
-              }}
-              style={{
-                padding: '8px 16px',
-                background: 'rgba(77, 167, 255, 0.2)',
-                border: '1px solid rgba(77, 167, 255, 0.4)',
-                borderRadius: '4px',
-                color: 'rgba(77, 167, 255, 0.9)',
-                cursor: 'pointer',
-                fontSize: '12px',
-                fontWeight: 500,
-                transition: 'all 0.15s ease'
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.background = 'rgba(77, 167, 255, 0.3)';
-                e.currentTarget.style.borderColor = 'rgba(77, 167, 255, 0.6)';
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.background = 'rgba(77, 167, 255, 0.2)';
-                e.currentTarget.style.borderColor = 'rgba(77, 167, 255, 0.4)';
-              }}
-              type="button"
-            >
-              Try Again (Wait for Reset)
-            </button>
-            <button
-              onClick={() => {
-                // Buy $5 credits and resume
-                setCreditsUsage(prev => ({
-                  ...prev,
-                  dollarBought: prev.dollarBought + 5
-                }));
-                setLimitsState(prev => ({ ...prev, limit5hrTriggered: false }));
-                conversation.open();
-              }}
-              style={{
-                padding: '8px 16px',
-                background: 'rgba(76, 175, 80, 0.2)',
-                border: '1px solid rgba(76, 175, 80, 0.4)',
-                borderRadius: '4px',
-                color: 'rgba(76, 175, 80, 0.9)',
-                cursor: 'pointer',
-                fontSize: '12px',
-                fontWeight: 500,
-                transition: 'all 0.15s ease'
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.background = 'rgba(76, 175, 80, 0.3)';
-                e.currentTarget.style.borderColor = 'rgba(76, 175, 80, 0.6)';
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.background = 'rgba(76, 175, 80, 0.2)';
-                e.currentTarget.style.borderColor = 'rgba(76, 175, 80, 0.4)';
-              }}
-              type="button"
-            >
-              Buy Credits ($5 min)
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Weekly Limit Card */}
-      {limitsState.limitWeeklyTriggered && (
-        <div style={{ margin: '16px', padding: '16px', background: 'rgba(255, 193, 7, 0.08)', border: '1px solid rgba(255, 193, 7, 0.2)', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div>
-            <div style={{ fontSize: '13px', fontWeight: 600, color: 'rgba(255, 193, 7, 0.9)', marginBottom: 6 }}>
-              🟡 You've reached weekly pawos {entitlement?.tier} limit. Resets in {limitsState.countdownTime}
-            </div>
-            <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: 8 }}>
-              You've used all your weekly allowance. Purchase credits to continue working, or wait until the timer resets.
-            </div>
-            {creditsUsage.pcsUsedThisSession > 0 && (
-              <div style={{ fontSize: '12px', color: 'rgba(76, 175, 80, 0.8)', fontWeight: 500 }}>
-                Credits used: {creditsUsage.pcsUsedThisSession} PC = ${calculateDollarFromPC(creditsUsage.pcsUsedThisSession)}
-              </div>
-            )}
-          </div>
-          <div style={{ height: '6px', background: 'rgba(255, 255, 255, 0.1)', borderRadius: '3px', overflow: 'hidden' }}>
-            <div style={{ height: '100%', background: 'linear-gradient(90deg, rgba(255, 193, 7, 0.8) 0%, rgba(255, 193, 7, 0.4) 100%)', width: '100%' }} />
-          </div>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-            <button onClick={() => setLimitsState(prev => ({ ...prev, showLimitDetails: true }))} style={{ padding: '8px 16px', background: 'transparent', border: '1px solid rgba(255, 193, 7, 0.3)', borderRadius: '4px', color: 'rgba(255, 193, 7, 0.8)', cursor: 'pointer', fontSize: '12px', fontWeight: 500, transition: 'all 0.15s ease' }} onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(255, 193, 7, 0.1)'; e.currentTarget.style.borderColor = 'rgba(255, 193, 7, 0.5)'; }} onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(255, 193, 7, 0.3)'; }} type="button">View Details</button>
-            <button onClick={() => { setLimitsState(prev => ({ ...prev, limitWeeklyTriggered: false })); conversation.open(); }} style={{ padding: '8px 16px', background: 'rgba(77, 167, 255, 0.2)', border: '1px solid rgba(77, 167, 255, 0.4)', borderRadius: '4px', color: 'rgba(77, 167, 255, 0.9)', cursor: 'pointer', fontSize: '12px', fontWeight: 500, transition: 'all 0.15s ease' }} onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(77, 167, 255, 0.3)'; e.currentTarget.style.borderColor = 'rgba(77, 167, 255, 0.6)'; }} onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(77, 167, 255, 0.2)'; e.currentTarget.style.borderColor = 'rgba(77, 167, 255, 0.4)'; }} type="button">Try Again (Wait for Reset)</button>
-            <button onClick={() => { setCreditsUsage(prev => ({ ...prev, dollarBought: prev.dollarBought + 5 })); setLimitsState(prev => ({ ...prev, limitWeeklyTriggered: false })); conversation.open(); }} style={{ padding: '8px 16px', background: 'rgba(76, 175, 80, 0.2)', border: '1px solid rgba(76, 175, 80, 0.4)', borderRadius: '4px', color: 'rgba(76, 175, 80, 0.9)', cursor: 'pointer', fontSize: '12px', fontWeight: 500, transition: 'all 0.15s ease' }} onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(76, 175, 80, 0.3)'; e.currentTarget.style.borderColor = 'rgba(76, 175, 80, 0.6)'; }} onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(76, 175, 80, 0.2)'; e.currentTarget.style.borderColor = 'rgba(76, 175, 80, 0.4)'; }} type="button">Buy Credits ($5 min)</button>
-          </div>
-        </div>
-      )}
-
-      {/* Monthly Limit Card */}
-      {limitsState.limitMonthlyTriggered && (
-        <div style={{ margin: '16px', padding: '16px', background: 'rgba(244, 67, 54, 0.08)', border: '1px solid rgba(244, 67, 54, 0.2)', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div>
-            <div style={{ fontSize: '13px', fontWeight: 600, color: 'rgba(244, 67, 54, 0.9)', marginBottom: 6 }}>
-              🔴 You've reached monthly pawos {entitlement?.tier} limit. Resets in {limitsState.countdownTime}
-            </div>
-            <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', marginBottom: 8 }}>
-              You've used all your monthly allowance. Purchase credits to continue working. Monthly resets at next billing cycle.
-            </div>
-            {creditsUsage.pcsUsedThisSession > 0 && (
-              <div style={{ fontSize: '12px', color: 'rgba(76, 175, 80, 0.8)', fontWeight: 500 }}>
-                Credits used: {creditsUsage.pcsUsedThisSession} PC = ${calculateDollarFromPC(creditsUsage.pcsUsedThisSession)}
-              </div>
-            )}
-          </div>
-          <div style={{ height: '6px', background: 'rgba(255, 255, 255, 0.1)', borderRadius: '3px', overflow: 'hidden' }}>
-            <div style={{ height: '100%', background: 'linear-gradient(90deg, rgba(244, 67, 54, 0.8) 0%, rgba(244, 67, 54, 0.4) 100%)', width: '100%' }} />
-          </div>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-            <button onClick={() => setLimitsState(prev => ({ ...prev, showLimitDetails: true }))} style={{ padding: '8px 16px', background: 'transparent', border: '1px solid rgba(244, 67, 54, 0.3)', borderRadius: '4px', color: 'rgba(244, 67, 54, 0.8)', cursor: 'pointer', fontSize: '12px', fontWeight: 500, transition: 'all 0.15s ease' }} onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(244, 67, 54, 0.1)'; e.currentTarget.style.borderColor = 'rgba(244, 67, 54, 0.5)'; }} onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(244, 67, 54, 0.3)'; }} type="button">View Details</button>
-            <button onClick={() => { setCreditsUsage(prev => ({ ...prev, pcsUsedThisSession: prev.pcsUsedThisSession + 500, dollarUsedThisSession: prev.dollarUsedThisSession + 5 })); setLimitsState(prev => ({ ...prev, limitMonthlyTriggered: false })); conversation.open(); }} style={{ padding: '8px 16px', background: 'rgba(76, 175, 80, 0.2)', border: '1px solid rgba(76, 175, 80, 0.4)', borderRadius: '4px', color: 'rgba(76, 175, 80, 0.9)', cursor: 'pointer', fontSize: '12px', fontWeight: 500, transition: 'all 0.15s ease' }} onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(76, 175, 80, 0.3)'; e.currentTarget.style.borderColor = 'rgba(76, 175, 80, 0.6)'; }} onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(76, 175, 80, 0.2)'; e.currentTarget.style.borderColor = 'rgba(76, 175, 80, 0.4)'; }} type="button">💳 Buy Credits ($5 min) - MANDATORY</button>
-          </div>
-        </div>
-      )}
-
-      {/* Limits Details Modal */}
-      {limitsState.showLimitDetails && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setLimitsState(prev => ({ ...prev, showLimitDetails: false }))}>
-          <div style={{ background: 'rgba(248, 113, 113, 0.15)', border: '1px solid rgba(248, 113, 113, 0.4)', borderRadius: '12px', padding: '28px', maxWidth: '520px', width: '90%', boxShadow: '0 20px 60px rgba(248, 113, 113, 0.2)' }} onClick={(e) => e.stopPropagation()}>
-            {/* Red Caution Header */}
-            <div style={{ fontSize: '20px', fontWeight: '700', color: 'rgba(255,255,255,0.95)', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '24px' }}>⚠️</span>
-              {limitsState.activeLimit === '5hr' ? '5-Hour' : limitsState.activeLimit === 'weekly' ? 'Weekly' : 'Monthly'} Limit Reached
-            </div>
-
-            {/* Countdown Timer - RED BACKGROUND */}
-            <div style={{ padding: '16px', background: 'rgba(248, 113, 113, 0.25)', borderRadius: '8px', border: '1px solid rgba(248, 113, 113, 0.5)', marginBottom: '20px', textAlign: 'center' }}>
-              <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.8)', marginBottom: '8px', fontWeight: 600 }}>Resets in</div>
-              <div style={{ fontSize: '36px', fontWeight: 700, color: 'rgba(255,255,255,0.95)', fontFamily: 'monospace' }}>
-                {limitsState.countdownTime}
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {/* Try Again - Disabled (Red) until reset */}
-              <button
-                disabled
-                style={{
-                  padding: '12px 16px',
-                  background: 'rgba(248, 113, 113, 0.3)',
-                  border: '1px solid rgba(248, 113, 113, 0.5)',
-                  borderRadius: '6px',
-                  color: 'rgba(255,255,255,0.9)',
-                  cursor: 'not-allowed',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  opacity: 0.6
-                }}
-                type="button"
-              >
-                Try Again
-              </button>
-
-              {/* Get Credits - Only show in initial mode */}
-              {limitsState.limitCardMode === 'initial' && (
-                <button
-                  onClick={() => {}}
-                  style={{
-                    padding: '12px 16px',
-                    background: 'rgba(76, 175, 80, 0.3)',
-                    border: '1px solid rgba(76, 175, 80, 0.5)',
-                    borderRadius: '6px',
-                    color: 'rgba(76, 175, 80, 0.9)',
-                    cursor: 'pointer',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    transition: 'all 0.15s ease'
-                  }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.background = 'rgba(76, 175, 80, 0.4)';
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.background = 'rgba(76, 175, 80, 0.3)';
-                  }}
-                  type="button"
-                >
-                  Get Credits
-                </button>
+              {/* File context selector for hands-on coding */}
+              {windowCtx.context.project && (
+                <FileContextSelector />
               )}
-            </div>
 
-            {/* Close button */}
-            <button
-              onClick={() => setLimitsState(prev => ({ ...prev, showLimitDetails: false }))}
-              style={{
-                width: '100%',
-                marginTop: '12px',
-                padding: '10px 16px',
-                background: 'transparent',
-                border: '1px solid rgba(255,255,255,0.12)',
-                borderRadius: '6px',
-                color: 'rgba(255,255,255,0.6)',
-                cursor: 'pointer',
-                fontSize: '12px',
-                transition: 'all 0.15s ease'
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)';
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.background = 'transparent';
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)';
-              }}
-              type="button"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 9 Limit Bars - 3 for each limit type (5hrs, weekly, monthly) at 30%, 15%, 0% thresholds */}
-      {(() => {
-        const limits = [
-          { type: '5hr', usage: entitlement?.usage5hPc || 0, limit: entitlement?.limit5hPc || 1, label: '5hrs' },
-          { type: 'weekly', usage: entitlement?.usageWeeklyPc || 0, limit: entitlement?.limitWeeklyPc || 1, label: 'weekly' },
-          { type: 'monthly', usage: entitlement?.usageMonthlyPc || 0, limit: entitlement?.limitMonthlyPc || 1, label: 'monthly' }
-        ];
-
-        const bars: React.ReactNode[] = [];
-
-        limits.forEach(({ type, usage, limit, label }) => {
-          const remainingPercent = Math.max(0, Math.round(100 - (usage / limit) * 100));
-          const isAtLimit = remainingPercent <= 0;
-          const isAt15 = remainingPercent <= 15 && remainingPercent > 0;
-          const isAt30 = remainingPercent <= 30 && remainingPercent > 15;
-
-          // Show bar at 30% remaining
-          if (isAt30 && !limitsState.closedBars[`${type}-30`]) {
-            bars.push(
-              <div key={`${type}-30`} style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '10px 16px', borderBottom: '1px solid rgba(255, 193, 7, 0.3)',
-                minHeight: '40px', backgroundColor: 'rgba(255, 193, 7, 0.05)'
-              }}>
-                <span style={{ color: 'rgba(255, 193, 7, 0.9)', fontSize: '13px', fontWeight: 600, flex: 1 }}>
-                  ⚠️ Approaching limit 30% remaining on {label}
-                </span>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button onClick={() => setLimitsState(prev => ({ ...prev, showLimitDetails: true }))}
-                    style={{
-                      background: 'rgba(76, 175, 80, 0.3)', border: '1px solid rgba(76, 175, 80, 0.5)',
-                      borderRadius: '4px', padding: '6px 14px', color: 'rgba(76, 175, 80, 0.9)',
-                      cursor: 'pointer', fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap'
-                    }} type="button">Get Credits</button>
-                  <button onClick={() => setLimitsState(prev => ({ ...prev, closedBars: { ...prev.closedBars, [`${type}-30`]: true } }))}
-                    style={{ background: 'transparent', border: 'none', color: 'rgba(255, 193, 7, 0.7)',
-                      cursor: 'pointer', fontSize: '16px', padding: '0 8px' }} type="button">×</button>
-                </div>
-              </div>
-            );
-          }
-
-          // Show bar at 15% remaining
-          if (isAt15 && !limitsState.closedBars[`${type}-15`]) {
-            bars.push(
-              <div key={`${type}-15`} style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '10px 16px', borderBottom: '1px solid rgba(255, 193, 7, 0.3)',
-                minHeight: '40px', backgroundColor: 'rgba(255, 193, 7, 0.05)'
-              }}>
-                <span style={{ color: 'rgba(255, 193, 7, 0.9)', fontSize: '13px', fontWeight: 600, flex: 1 }}>
-                  ⚠️ Approaching limit 15% remaining on {label}
-                </span>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button onClick={() => setLimitsState(prev => ({ ...prev, showLimitDetails: true }))}
-                    style={{
-                      background: 'rgba(76, 175, 80, 0.3)', border: '1px solid rgba(76, 175, 80, 0.5)',
-                      borderRadius: '4px', padding: '6px 14px', color: 'rgba(76, 175, 80, 0.9)',
-                      cursor: 'pointer', fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap'
-                    }} type="button">Get Credits</button>
-                  <button onClick={() => setLimitsState(prev => ({ ...prev, closedBars: { ...prev.closedBars, [`${type}-15`]: true } }))}
-                    style={{ background: 'transparent', border: 'none', color: 'rgba(255, 193, 7, 0.7)',
-                      cursor: 'pointer', fontSize: '16px', padding: '0 8px' }} type="button">×</button>
-                </div>
-              </div>
-            );
-          }
-
-          // Show bar at 0% remaining (RED, locks search)
-          if (isAtLimit && !limitsState.closedBars[`${type}-0`]) {
-            bars.push(
-              <div key={`${type}-0`} style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '10px 16px', borderBottom: '1px solid rgba(248, 113, 113, 0.5)',
-                minHeight: '40px', backgroundColor: 'rgba(248, 113, 113, 0.2)'
-              }}>
-                <span style={{ color: 'rgba(248, 113, 113, 0.95)', fontSize: '13px', fontWeight: 600, flex: 1 }}>
-                  ⚠️ Approaching limit 0% remaining on {label}
-                </span>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button onClick={() => setLimitsState(prev => ({ ...prev, showLimitDetails: true }))}
-                    style={{
-                      background: 'rgba(76, 175, 80, 0.3)', border: '1px solid rgba(76, 175, 80, 0.5)',
-                      borderRadius: '4px', padding: '6px 14px', color: 'rgba(76, 175, 80, 0.9)',
-                      cursor: 'pointer', fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap'
-                    }} type="button">Get Credits</button>
-                  <button onClick={() => setLimitsState(prev => ({ ...prev, closedBars: { ...prev.closedBars, [`${type}-0`]: true } }))}
-                    style={{ background: 'transparent', border: 'none', color: 'rgba(248, 113, 113, 0.8)',
-                      cursor: 'pointer', fontSize: '16px', padding: '0 8px' }} type="button">×</button>
-                </div>
-              </div>
-            );
-          }
-        });
-
-        return bars;
-      })()}
-
-      {/* Working State Info Bar - Shows folder, branch, edits, Create PR (only when working) */}
-      {activeTask && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', minHeight: '36px', backgroundColor: 'rgba(77,167,255,0.03)' }}>
-          {/* Left: Folder + Branch + Git Status */}
-          <div style={{ display: 'flex', gap: 16, alignItems: 'center', flex: 1 }}>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: '12px', color: 'rgba(255,255,255,0.7)' }}>
-              {currentWorkingFile && <span>{currentWorkingFile}</span>}
-              {!activeTask?.gitConnected && (
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '3px 8px', background: 'rgba(255,165,0,0.1)', borderRadius: '3px', border: '1px solid rgba(255,165,0,0.2)', cursor: 'pointer' }} title="Connect your git to enable easy push and pull">
-                  <span style={{ fontSize: '12px', color: 'rgba(255,165,0,0.8)' }}>⚠</span>
-                  <span style={{ fontSize: '11px', color: 'rgba(255,165,0,0.7)' }}>connect git</span>
-                </div>
+              {/* Execution strategy choice card - first-time users */}
+              {executionChoicePending && pendingRequest && (
+                <ExecutionChoiceCard
+                  understanding={`I understand you want to: ${pendingRequest.text}`}
+                  onWorkWithMe={() => handleExecutionChoice('work_with_me')}
+                  onAutonomous={() => handleExecutionChoice('autonomous')}
+                  onCancel={handleCancelExecutionChoice}
+                />
               )}
-            </div>
-          </div>
 
-          {/* Right: Create PR Menu + Close */}
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', position: 'relative' }} ref={prMenuRef}>
-            <button
-              style={{
-                background: 'transparent',
-                border: '1px solid rgba(255,255,255,0.12)',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                padding: '5px 10px',
-                color: 'rgba(255,255,255,0.7)',
-                fontSize: '11px',
-                fontWeight: 500,
-                transition: 'all 0.15s ease'
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)';
-                e.currentTarget.style.color = 'rgba(255,255,255,0.85)';
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.background = 'transparent';
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)';
-                e.currentTarget.style.color = 'rgba(255,255,255,0.7)';
-              }}
-              onClick={() => setPrMenuOpen(!prMenuOpen)}
-              type="button"
-            >
-              Create PR ▼
-            </button>
-            {prMenuOpen && (
-              <div style={{
-                position: 'absolute',
-                top: '100%',
-                right: 0,
-                marginTop: '8px',
-                background: 'rgba(12,12,16,0.95)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: '6px',
-                minWidth: '200px',
-                zIndex: 100,
-                boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
-                backdropFilter: 'blur(12px)',
-              }}>
-                <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">Manually create a PR</button>
-                <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">Create a draft PR</button>
-                <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">Create PR</button>
-              </div>
-            )}
-            <button
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'rgba(255,255,255,0.5)',
-                cursor: 'pointer',
-                fontSize: '16px',
-                padding: '4px 6px',
-                transition: 'color 0.15s ease'
-              }}
-              onMouseOver={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.7)'}
-              onMouseOut={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}
-              onClick={() => {}}
-              type="button"
-              title="Close working state"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-      )}
+              {/* Messages container - conversation history */}
+              <div className={styles.transcript}>
+                {snapshot.messages.map((message, idx) => {
+                  const timestamp = message.createdAt ? new Date(message.createdAt) : new Date();
+                  const now = new Date();
+                  const diffMs = now.getTime() - timestamp.getTime();
+                  const diffMins = Math.floor(diffMs / 60000);
+                  const timeDisplay = diffMins === 0 ? 'just now' : diffMins < 60 ? `${diffMins}m ago` : `${Math.floor(diffMins / 60)}h ago`;
 
-      {/* Contextual Governance Panel - Phase 10 */}
-      <div style={{ padding: '0 16px', paddingTop: '12px' }}>
-        <ContextualGovernancePanel />
-      </div>
-
-      {/* Contextual Plan Panel - Phase 11 */}
-      <div style={{ padding: '0 16px' }}>
-        <ContextualPlanPanel />
-      </div>
-
-      {/* Contextual Live Cards — only when there are open cards */}
-      {openCards && openCards.length > 0 && (
-        <div data-interactive="true" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', minHeight: 0, overflow: 'hidden' }}>
-          <CardGrid
-            cards={openCards}
-            onRemoveCard={onRemoveCard || (() => {})}
-            onAddCard={() => {}}
-            expandedCardId={expandedCardId || null}
-            onExpandCard={onExpandCard || (() => {})}
-            onCollapseCard={onCollapseCard || (() => {})}
-          />
-        </div>
-      )}
-
-      <div className={styles.composer}>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={[...SUPPORTED_FILE_EXTENSIONS, ...SUPPORTED_IMAGE_EXTENSIONS].join(',')}
-          style={{ display: 'none' }}
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) void handleFileChosen(file);
-            event.target.value = '';
-          }}
-        />
-
-        {/* Top row: Attach, Mode Picker, Execute Mode */}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button
-            type="button"
-            className={styles.attachBtn}
-            onClick={handleAttachClick}
-            title="Attach a text file or reference image for Paw to read"
-            aria-label="Attach a file or image"
-          >
-            📎
-          </button>
-          <div className={styles.modePickerWrap} ref={modeMenuRef}>
-            <button
-              type="button"
-              className={styles.modePickerBtn}
-              onClick={() => setModeMenuOpen((open) => !open)}
-              aria-haspopup="listbox"
-              aria-expanded={modeMenuOpen}
-              title="Execution mode — controls when Paw asks before acting"
-            >
-              <span>{activeModeDescriptor.label}</span>
-              <span className={styles.modePickerChevron}>{modeMenuOpen ? '▴' : '▾'}</span>
-            </button>
-            {modeMenuOpen && (
-              <div className={styles.modePickerMenu} role="listbox">
-                {EXECUTION_MODE_CATALOG.map((mode) => {
-                  const disabled = mode.id === 'bypass' && !bypassPermissionsEnabled;
-                  const selected = mode.id === activeExecutionMode;
                   return (
-                    <button
-                      key={mode.id}
-                      type="button"
-                      role="option"
-                      aria-selected={selected}
-                      disabled={disabled}
-                      className={`${styles.modePickerOption} ${selected ? styles.modePickerOptionSelected : ''}`}
-                      onClick={() => {
-                        if (disabled) return;
-                        onSetExecutionMode?.(mode.id);
-                        setModeMenuOpen(false);
-                      }}
-                    >
-                      <span className={styles.modePickerOptionCheck}>{selected ? '✓' : ''}</span>
-                      <span className={styles.modePickerOptionText}>
-                        <span className={styles.modePickerOptionLabel}>{mode.label}</span>
-                        <span className={styles.modePickerOptionDesc}>
-                          {disabled ? 'Enable in Settings → Advanced' : mode.description}
-                        </span>
-                      </span>
-                    </button>
+                    <div key={idx} className={`${styles.message} ${styles[message.role]}`}>
+                      <div className={styles.messageContent}>
+                        {message.role === 'user' ? (
+                          <div>{message.content}</div>
+                        ) : (
+                          <div>
+                            {message.content && <span>{message.content}</span>}
+                            {message.extensions && message.extensions.length > 0 && (
+                              <ExtensionRenderer
+                                extensions={message.extensions}
+                                onExpand={handleExtensionExpand}
+                                onAction={handleExtensionAction}
+                              />
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div className={styles.messageActions}>
+                        <span className={styles.messageTime} title={timestamp.toLocaleString()}>⏱ {timeDisplay}</span>
+                        <button className={styles.messageActionBtn} onClick={() => navigator.clipboard.writeText(message.content)} title="Copy">⎘</button>
+                        <button className={styles.messageActionBtn} onClick={() => {}} title="Pin">⚐</button>
+                        <button className={styles.messageActionBtn} onClick={() => {
+                          const forkedMessages = snapshot.messages.slice(0, idx + 1);
+                          console.log('Fork session from message', idx, '- messages:', forkedMessages);
+                          ipc.forkConversation?.(forkedMessages);
+                        }} title="Fork session">⎇</button>
+                      </div>
+                    </div>
                   );
                 })}
+
+                {isStreaming && (
+                  <div className={styles.streaming}>
+                    PawOS is working...
+                  </div>
+                )}
               </div>
-            )}
+
+              {/* Contextual work surfaces - shown when active */}
+              {proposedPlan && (
+                <ContextualPlanPanel
+                  plan={proposedPlan}
+                  onApprove={() => onPlanDecision?.(proposedPlan.id, 'approved', '')}
+                  onDeny={() => onPlanDecision?.(proposedPlan.id, 'rejected', '')}
+                  onRevise={() => {}}
+                />
+              )}
+
+              {/* Governance approval panel - contextual */}
+              <ContextualGovernancePanel
+                onApprove={(approvalId) => {
+                  // Handled via IPC
+                }}
+                onDeny={(approvalId) => {
+                  // Handled via IPC
+                }}
+              />
           </div>
-        </div>
-
-        {/* Chat bar with Input + Controls - Clean modern design with left/right spacing */}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', padding: '0 16px', paddingBottom: '12px' }}>
-
-          {/* Resume button (Speech output) */}
-          {snapshot.speechPlaybackState === 'paused' && (
-            <button
-              type="button"
-              className={styles.listenBtn}
-              onClick={() => {
-                const msg = latestMessage;
-                if (msg && msg.role === 'assistant') {
-                  onSpeakMessage(msg.content);
-                }
-              }}
-              title="Resume speech output"
-              style={{ fontSize: '14px', flexShrink: 0 }}
-            >
-              ▶️
-            </button>
           )}
-
-          {/* Send button - LEFT side (disabled only when limit reaches 0%) */}
-          {(() => {
-            const is5hrAtLimit = !!(entitlement?.usage5hPc && entitlement?.limit5hPc && (entitlement.usage5hPc / entitlement.limit5hPc) >= 1);
-            const isWeeklyAtLimit = !!(entitlement?.usageWeeklyPc && entitlement?.limitWeeklyPc && (entitlement.usageWeeklyPc / entitlement.limitWeeklyPc) >= 1);
-            const isMonthlyAtLimit = !!(entitlement?.usageMonthlyPc && entitlement?.limitMonthlyPc && (entitlement.usageMonthlyPc / entitlement.limitMonthlyPc) >= 1);
-            const isAnyAtLimit = is5hrAtLimit || isWeeklyAtLimit || isMonthlyAtLimit;
-
-            return (
-              <button
-                className={styles.sendBtn}
-                onClick={send}
-                type="button"
-                disabled={isAnyAtLimit}
-                style={{
-                  background: isAnyAtLimit ? 'rgba(248,113,113,0.2)' : draft.trim() ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)',
-                  transition: 'all 0.2s ease',
-                  flexShrink: 0,
-                  opacity: isAnyAtLimit ? 0.5 : 1,
-                  cursor: isAnyAtLimit ? 'not-allowed' : 'pointer',
-                  order: -1
-                }}
-                title={isAnyAtLimit ? 'Send disabled - limit reached (0%). Buy credits or wait for reset.' : 'Send message'}
-              >
-                Send
-              </button>
-            );
-          })()}
-
-          {/* Text input - takes available space, clean and prominent */}
-          <div style={{ display: 'flex', flex: 1, minWidth: 0, gap: '8px', alignItems: 'flex-end' }}>
-            <textarea
-              ref={textareaRef}
-              className={styles.input}
-              rows={1}
-              autoFocus
-              value={draft}
-              onChange={(event) => {
-                const text = event.target.value;
-                setDraft(text);
-                if (!text) setWasPasted(false);
-
-                // Line-counting logic for large prompt detection
-                if (text.trim()) {
-                  const lineCount = text.split('\n').length;
-                  // Store line count in data attr for later use (if >700 lines)
-                  if (textareaRef.current) {
-                    textareaRef.current.setAttribute('data-line-count', String(lineCount));
-                  }
-                }
-
-                resizeTextarea();
-              }}
-              onPaste={handlePaste}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey) {
-                  event.preventDefault();
-                  send();
-                }
-              }}
-              placeholder="Type or describe what you need"
-              style={{ flex: 1, minWidth: 0 }}
-            />
-            {/* File context pill - shows attached file */}
-            <FileContextSelector mode="compact" />
-          </div>
-
-          {/* Microphone button - RIGHT side, records and transcribes */}
-          <button
-            type="button"
-            onClick={() => {
-              setVoiceState(prev => ({ ...prev, isRecording: !prev.isRecording }));
-            }}
-            style={{
-              background: voiceState.isRecording ? 'rgba(248, 113, 113, 0.2)' : 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '6px 8px',
-              fontSize: '16px',
-              color: voiceState.isRecording ? 'rgba(248, 113, 113, 0.9)' : 'rgba(255,255,255,0.6)',
-              transition: 'all 0.15s ease',
-              borderRadius: '4px',
-              flexShrink: 0
-            }}
-            onMouseOver={(e) => !voiceState.isRecording && (e.currentTarget.style.color = 'rgba(255,255,255,0.8)')}
-            onMouseOut={(e) => !voiceState.isRecording && (e.currentTarget.style.color = 'rgba(255,255,255,0.6)')}
-            title={voiceState.isRecording ? 'Recording... (click to stop)' : 'Record audio (will be transcribed)'}
-          >
-            🎤
-          </button>
-
-          {/* Speaker button - RIGHT side, toggles voice output */}
-          <div style={{ position: 'relative' }}>
-            <button
-              type="button"
-              onClick={() => {
-                if (voiceState.speakerEnabled) {
-                  setVoiceState(prev => ({ ...prev, speakerEnabled: false, autoSend: false }));
-                } else {
-                  setVoiceState(prev => ({ ...prev, showSpeakerMenu: true }));
-                }
-              }}
-              style={{
-                background: voiceState.speakerEnabled ? 'rgba(77, 167, 255, 0.2)' : 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '6px 8px',
-                fontSize: '16px',
-                color: voiceState.speakerEnabled ? 'rgba(77, 167, 255, 0.9)' : 'rgba(255,255,255,0.6)',
-                transition: 'all 0.15s ease',
-                borderRadius: '4px',
-                flexShrink: 0
-              }}
-              onMouseOver={(e) => (e.currentTarget.style.color = voiceState.speakerEnabled ? 'rgba(77, 167, 255, 0.9)' : 'rgba(255,255,255,0.8)')}
-              onMouseOut={(e) => (e.currentTarget.style.color = voiceState.speakerEnabled ? 'rgba(77, 167, 255, 0.9)' : 'rgba(255,255,255,0.6)')}
-              title={voiceState.speakerEnabled ? `Speaker ON (2x PC cost, ${voiceState.autoSend ? 'auto-send' : 'manual send'})` : 'Speaker OFF (click to enable)'}
-            >
-              🔊
-            </button>
-
-            {/* Speaker options menu */}
-            {voiceState.showSpeakerMenu && (
-              <div style={{ position: 'absolute', bottom: '100%', right: 0, marginBottom: '8px', background: 'rgba(20,20,24,0.95)', border: '1px solid rgba(77,167,255,0.2)', borderRadius: '8px', zIndex: 100, boxShadow: '0 8px 24px rgba(0,0,0,0.3)', backdropFilter: 'blur(12px)', minWidth: '220px', padding: '8px' }}>
-                <button
-                  onClick={() => {
-                    setVoiceState(prev => ({ ...prev, speakerEnabled: true, autoSend: true, showSpeakerMenu: false }));
-                  }}
-                  style={{
-                    display: 'block',
-                    width: '100%',
-                    padding: '10px 12px',
-                    background: 'transparent',
-                    border: 'none',
-                    borderRadius: '6px',
-                    color: 'rgba(255,255,255,0.8)',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    fontSize: '12px',
-                    marginBottom: '4px',
-                    transition: 'background 0.15s ease'
-                  }}
-                  onMouseOver={(e) => e.currentTarget.style.background = 'rgba(77,167,255,0.1)'}
-                  onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
-                  type="button"
-                >
-                  <div style={{ fontWeight: 600, marginBottom: '2px' }}>✓ Auto-send</div>
-                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>Pawos sends everything automatically (2x PC cost)</div>
-                </button>
-                <button
-                  onClick={() => {
-                    setVoiceState(prev => ({ ...prev, speakerEnabled: true, autoSend: false, showSpeakerMenu: false }));
-                  }}
-                  style={{
-                    display: 'block',
-                    width: '100%',
-                    padding: '10px 12px',
-                    background: 'transparent',
-                    border: 'none',
-                    borderRadius: '6px',
-                    color: 'rgba(255,255,255,0.8)',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    fontSize: '12px',
-                    transition: 'background 0.15s ease'
-                  }}
-                  onMouseOver={(e) => e.currentTarget.style.background = 'rgba(77,167,255,0.1)'}
-                  onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
-                  type="button"
-                >
-                  <div style={{ fontWeight: 600, marginBottom: '2px' }}>◯ Manual send</div>
-                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>You click Send for each message (2x PC cost)</div>
-                </button>
-              </div>
-            )}
-          </div>
         </div>
 
-        {/* Inline Message Queue — shows when message queued during task execution */}
-        {queuedMessage && (
-          <div style={{
-            background: 'rgba(77, 167, 255, 0.1)',
-            border: '1px solid rgba(77, 167, 255, 0.3)',
-            borderRadius: '6px',
-            padding: '8px 12px',
-            marginTop: '8px',
-            marginBottom: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '12px', color: 'rgba(77, 167, 255, 0.9)', marginBottom: '4px', fontWeight: 500 }}>Queued message:</div>
-              <div style={{
-                fontSize: '13px',
-                color: 'rgba(255, 255, 255, 0.8)',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
-              }}>
-                {queuedMessage.text}
-              </div>
+        {/* RIGHT SIDE: Workspace Panels */}
+        {openPanel && (
+          <div className={styles.splitRight}>
+            {/* Panel Header */}
+            <div className={styles.panelHeader}>
+              <span className={styles.panelTitle}>
+                {openPanel === 'terminal' && '⌘ Terminal'}
+                {openPanel === 'browser' && '🌐 Browser'}
+                {openPanel === 'files' && '📁 Files'}
+                {openPanel === 'worktree' && '🌳 Worktree'}
+              </span>
+              <button
+                onClick={() => setOpenPanel(null)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'rgba(255, 255, 255, 0.5)',
+                  cursor: 'pointer',
+                  padding: '2px 4px',
+                  fontSize: '16px'
+                }}
+                title="Close panel"
+              >
+                ✕
+              </button>
             </div>
-            <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-              <button
-                onClick={handleCancelQueue}
-                type="button"
-                title="Cancel (remove from queue)"
-                style={{
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  borderRadius: '4px',
-                  width: '28px',
-                  height: '28px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  color: 'rgba(255, 255, 255, 0.6)',
-                  fontSize: '14px',
-                  transition: 'all 0.15s ease'
-                }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 100, 100, 0.2)';
-                  e.currentTarget.style.color = 'rgba(255, 100, 100, 0.9)';
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                  e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)';
-                }}
-              >
-                ×
-              </button>
-              <button
-                onClick={handleInterruptQueue}
-                type="button"
-                title="Interrupt current task and send queued message"
-                style={{
-                  background: 'rgba(255, 165, 0, 0.1)',
-                  border: '1px solid rgba(255, 165, 0, 0.3)',
-                  borderRadius: '4px',
-                  width: '28px',
-                  height: '28px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  color: 'rgba(255, 165, 0, 0.7)',
-                  fontSize: '14px',
-                  transition: 'all 0.15s ease'
-                }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 165, 0, 0.2)';
-                  e.currentTarget.style.color = 'rgba(255, 165, 0, 0.9)';
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 165, 0, 0.1)';
-                  e.currentTarget.style.color = 'rgba(255, 165, 0, 0.7)';
-                }}
-              >
-                ⏹
-              </button>
+
+            {/* Panel Content */}
+            <div className={styles.panelContent}>
+              {openPanel === 'terminal' && (
+                <div className={styles.panelPlaceholder}>Terminal panel coming soon</div>
+              )}
+              {openPanel === 'browser' && (
+                <div className={styles.panelPlaceholder}>Browser panel coming soon</div>
+              )}
+              {openPanel === 'files' && (
+                <div className={styles.panelPlaceholder}>Files panel coming soon</div>
+              )}
+              {openPanel === 'worktree' && (
+                <div className={styles.panelPlaceholder}>Worktree panel coming soon</div>
+              )}
             </div>
           </div>
         )}
+      </div>
 
-        {/* Bottom Control Row: Accept Edits + Model Selector - Phase 8-9 */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px 0', gap: '12px' }}>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <AcceptEditsControl
-              currentStrategy={activeExecutionMode === 'plan' ? 'plan_first' : activeExecutionMode === 'bypass' ? 'auto_accept' : 'manual'}
-              onStrategyChange={(strategy) => {
-                const modeMap: Record<string, ConversationExecutionMode> = {
-                  'manual': 'manual',
-                  'auto_accept': 'bypass',
-                  'plan_first': 'plan'
-                };
-                onSetExecutionMode?.(modeMap[strategy] || 'manual');
+      {/* ═ UPGRADE MESSAGE BAR ═ */}
+      {showTierUpgradePopup && entitlement && (
+        <div className={styles.upgradeBar}>
+          <button
+            className={styles.upgradeMessage}
+            onClick={() => ipc.openBillingSettings?.()}
+            title="Click to open billing settings"
+          >
+            Limit reached to {Math.round((entitlement.usage5hPc / (entitlement.limit5hPc ?? 1)) * 100)}% •{' '}
+            {entitlement.tier === 'pro_max'
+              ? 'Buy credits: 5x ($100) or 20x ($250)'
+              : entitlement.tier === 'pro'
+              ? 'Upgrade to Pro Max or buy credits: 5x ($100) or 20x ($250)'
+              : 'Upgrade to Pro or Pro Max (no credits option in Go tier)'}
+          </button>
+          <button
+            className={styles.upgradeClose}
+            onClick={() => setShowTierUpgradePopup(false)}
+            title="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* ═ BOTTOM COMPOSER ═ */}
+      <div className={styles.composer}>
+        {/* Input row: textarea + voice + send */}
+        <div className={styles.composerInputRow}>
+          <textarea
+            ref={textareaRef}
+            className={styles.input}
+            placeholder="Describe a task or ask a question..."
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.currentTarget.value);
+              setWasPasted(false);
+            }}
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                if (draft.trim() || wasPasted) {
+                  onSendTranscript(draft);
+                  setDraft('');
+                  setWasPasted(false);
+                }
+              }
+            }}
+            onPaste={() => setWasPasted(true)}
+            disabled={isStreaming}
+          />
+
+          <div className={styles.composerInputControls}>
+            <button
+              className={styles.voiceToggle}
+              onClick={() => {
+                if (!voiceState.isRecording) {
+                  onStartListening();
+                  setVoiceState((prev) => ({ ...prev, isRecording: true }));
+                } else {
+                  onStopListening();
+                  setVoiceState((prev) => ({ ...prev, isRecording: false }));
+                }
               }}
-            />
-            <PlusMenu onAddSlashCommand={() => {}} onAddConnector={() => {}} />
+              type="button"
+              disabled={isStreaming}
+              title={voiceState.isRecording ? 'Stop recording' : 'Start voice input'}
+            >
+              🎤
+            </button>
+
+            <button
+              className={styles.voiceToggle}
+              onClick={() => setVoiceState((prev) => ({ ...prev, speakerEnabled: !prev.speakerEnabled }))}
+              type="button"
+              disabled={isStreaming}
+              title={voiceState.speakerEnabled ? 'Disable read-aloud' : 'Enable read-aloud'}
+            >
+              👋
+            </button>
+
+            <button
+              className={styles.sendBtn}
+              onClick={() => {
+                if (draft.trim() || wasPasted) {
+                  onSendTranscript(draft);
+                  setDraft('');
+                  setWasPasted(false);
+                }
+              }}
+              disabled={(!draft.trim() && !wasPasted) || isStreaming}
+              type="button"
+              title="Send (Ctrl+Enter)"
+            >
+              →
+            </button>
           </div>
+        </div>
+
+        {/* Controls row: + | strategy | model | usage */}
+        <div className={styles.composerControlsRow}>
+          <PlusMenu
+            onAddFiles={() => {}}
+            onAddPhotos={() => {}}
+            onAddFolder={() => {}}
+            onAddConnector={() => {}}
+            onAddSlashCommand={() => {}}
+          />
+
+          <AcceptEditsControl
+            currentStrategy={executionStrategy}
+          />
+
+          <div className={styles.spacer} />
+
           <ModelSelectorWidget
             activePawModel={activePawModel}
             onSelectModel={onSelectModel}
             entitlement={entitlement}
             streamingElapsedSeconds={streamingElapsedSeconds}
           />
-        </div>
 
-        {/* Toolbar: Clean compact bottom toolbar with only essential controls */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderTop: '1px solid rgba(255,255,255,0.06)', marginTop: '8px', gap: '12px', minHeight: '28px' }}>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flex: 1 }}>
-            {/* Add Menu - Compact */}
-            <div style={{ position: 'relative' }} ref={addMenuRef}>
-              <button
-                onClick={() => setAddMenuOpen(!addMenuOpen)}
-                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', cursor: 'pointer', color: 'rgba(255,255,255,0.5)', fontSize: '14px', padding: '4px 8px', borderRadius: '4px', transition: 'all 0.15s ease', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'rgba(255,255,255,0.7)'; }}
-                onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.5)'; }}
-                type="button"
-                title="Add files or enable features"
-              >
-                +
-              </button>
-              {addMenuOpen && (
-                <div style={{ position: 'absolute', bottom: 'calc(100% + 8px)', left: 0, background: 'rgba(20,20,24,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '6px', minWidth: '200px', zIndex: 100, boxShadow: '0 8px 24px rgba(0,0,0,0.3)', backdropFilter: 'blur(12px)', padding: '8px' }}>
-                  <button style={{ display: 'flex', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease', alignItems: 'center', gap: '8px' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0, stroke: 'rgba(255,255,255,0.7)', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' }}>
-                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-                    </svg>
-                    Add files or photos
-                  </button>
-                  <button style={{ display: 'flex', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease', alignItems: 'center', gap: '8px' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0, stroke: 'rgba(255,255,255,0.7)', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' }}>
-                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                      <path d="M12 11v6M9 14h6"/>
-                    </svg>
-                    Add folder
-                  </button>
-                  <div style={{ position: 'relative' }} ref={slashMenuRef}>
+          <div className={styles.usageIndicator}>
+            {(() => {
+              const usage5h = entitlement?.usage5hPc ?? 0;
+              const limit5h = entitlement?.limit5hPc ?? Infinity;
+              const percentage = (usage5h / limit5h) * 100;
+              const isApproachingLimit = percentage >= 65;
+
+              let circleColor = 'rgba(59, 130, 246, 0.8)'; // blue
+              if (percentage >= 90) circleColor = 'rgba(239, 68, 68, 0.8)'; // red
+              else if (percentage >= 65) circleColor = 'rgba(234, 179, 8, 0.8)'; // yellow
+
+              return (
+                <>
+                  {isApproachingLimit && (
                     <button
-                      onClick={() => setSlashCommandsMenuOpen(!slashCommandsMenuOpen)}
-                      style={{ display: 'flex', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease', alignItems: 'center', gap: '8px' }}
-                      onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
-                      onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
-                      type="button"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0, stroke: 'rgba(255,255,255,0.7)', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' }}>
-                        <path d="M6 19l12-14"/>
-                        <path d="M14 6H20V14H14Z"/>
-                        <line x1="16" y1="9" x2="18" y2="9"/>
-                      </svg>
-                      Slash commands
-                    </button>
-                    {slashCommandsMenuOpen && (
-                      <div style={{ position: 'absolute', bottom: 'calc(100% + 8px)', left: 0, background: 'rgba(20,20,24,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '6px', minWidth: '200px', maxHeight: '400px', overflowY: 'auto', zIndex: 100, boxShadow: '0 8px 24px rgba(0,0,0,0.3)', backdropFilter: 'blur(12px)', padding: '8px' }}>
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/new - New chat</button>
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/cd sandbox - Sandbox</button>
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/last session - Last session</button>
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/last edits - Last edits</button>
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/recent edits - Recent edits</button>
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/first edit - First edit</button>
-                        <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '4px 0' }} />
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/rename - Rename session</button>
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/model - Select model</button>
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/wake word - Change wake word</button>
-                        <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '4px 0' }} />
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/get credits - Check credits</button>
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/get usage - Check usage</button>
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/get billing - Billing info</button>
-                        <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '4px 0' }} />
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/feedback - Send feedback</button>
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/report - Report issue</button>
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/help - Help</button>
-                        <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '4px 0' }} />
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/color code - Color coding</button>
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/review - Code review</button>
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/plan - Planning</button>
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/analytics - Analytics</button>
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/architect - Architecture</button>
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/compose - Compose</button>
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/create pr - Create PR</button>
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/deploy - Deploy</button>
-                        <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '4px 0' }} />
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/comment in slack - Slack</button>
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/comment in git - Git comment</button>
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/comment in jira - Jira comment</button>
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">/comment in linear - Linear comment</button>
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ position: 'relative' }} ref={connectorsMenuRef}>
-                    <button
-                      onClick={() => setConnectorsSubmenuOpen(!connectorsSubmenuOpen)}
-                      style={{ display: 'flex', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease', alignItems: 'center', gap: '8px', justifyContent: 'space-between' }}
-                      onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
-                      onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
-                      type="button"
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0, stroke: 'rgba(255,255,255,0.7)', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' }}>
-                          <path d="M3 5h14v10H3z"/>
-                          <polyline points="7 8 9 10 7 12"/>
-                          <polyline points="11 8 13 10 11 12"/>
-                          <rect x="12" y="13" width="3" height="5" rx="0.5"/>
-                          <circle cx="13.5" cy="14.5" r="0.5" fill="rgba(255,255,255,0.7)"/>
-                          <circle cx="13.5" cy="17" r="0.5" fill="rgba(255,255,255,0.7)"/>
-                        </svg>
-                        Connectors
-                      </div>
-                      <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)' }}>▶</span>
-                    </button>
-                    {connectorsSubmenuOpen && (
-                      <div style={{ position: 'absolute', bottom: 'calc(100% + 8px)', left: 0, background: 'rgba(20,20,24,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '6px', minWidth: '200px', zIndex: 100, boxShadow: '0 8px 24px rgba(0,0,0,0.3)', backdropFilter: 'blur(12px)', padding: '8px' }}>
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">
-                          Manage connectors
-                        </button>
-                        <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">
-                          Browse connectors
-                        </button>
-                        <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '4px 0' }} />
-                        {getTierAppropriateConnectors(entitlement?.tier).map((connector) => (
-                          <button key={connector} style={{ display: 'flex', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease', alignItems: 'center', gap: '8px' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">
-                            {getConnectorIcon(connector)}
-                            <span>{connector}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-          <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }} ref={modelMenuRef}>
-            <button
-              onClick={() => setModelMenuOpen(!modelMenuOpen)}
-              style={{ background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: 'rgba(255,255,255,0.5)', fontSize: '12px', padding: 0, transition: 'color 0.15s ease' }}
-              onMouseOver={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.7)'}
-              onMouseOut={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}
-              type="button"
-            >
-              <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: `conic-gradient(${pawCreditsBalanceUsd && pawCreditsBalanceUsd > 50 ? 'rgba(59, 130, 246, 0.7)' : pawCreditsBalanceUsd && pawCreditsBalanceUsd > 20 ? 'rgba(245, 158, 11, 0.7)' : 'rgba(239, 68, 68, 0.7)'} ${pawCreditsBalanceUsd ? Math.min((pawCreditsBalanceUsd / 100) * 100, 100) : 0}%, rgba(255,255,255,0.1) 0%)`, border: '1px solid rgba(255,255,255,0.12)' }} />
-              <span>{activePawModel ? getPawModel(activePawModel)?.label : 'PawOS'}</span>
-            </button>
-            {modelMenuOpen && (
-              <div style={{ position: 'absolute', bottom: 'calc(100% + 8px)', right: 0, background: 'rgba(20,20,24,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '6px', minWidth: '180px', zIndex: 100, boxShadow: '0 8px 24px rgba(0,0,0,0.3)', backdropFilter: 'blur(12px)', padding: '8px' }}>
-                {REASONING_PAW_MODEL_IDS.map((modelId) => {
-                  const model = PAW_MODEL_CATALOG.find(m => m.id === modelId);
-                  if (!model) return null;
-                  return (
-                    <button
-                      key={model.id}
-                      onClick={() => {
-                        onSelectModel?.(model.id);
-                        setModelMenuOpen(false);
-                      }}
-                      style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: activePawModel === model.id ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderRadius: '4px', transition: 'background 0.15s ease', fontWeight: activePawModel === model.id ? '600' : '400' }}
-                      onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
-                      onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
-                      type="button"
-                    >
-                      <span>{activePawModel === model.id ? '✓ ' : ''}{model.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+                      className={styles.usageCircle}
+                      style={{ borderColor: circleColor }}
+                      title={`${Math.round(percentage)}% used - click to upgrade`}
+                      onClick={() => setShowTierUpgradePopup(true)}
+                    />
+                  )}
+                  <span title={`${entitlement?.tier ?? 'Free'} tier - 5h: ${usage5h}/${limit5h} | Week: ${entitlement?.usageWeeklyPc ?? 0}/${entitlement?.limitWeeklyPc ?? 'unlimited'}`}>
+                    {Math.round(percentage)}%
+                  </span>
+                </>
+              );
+            })()}
           </div>
         </div>
       </div>
-
-      <ActivitySidebar
-        activities={activities}
-        selectedActivityId={selectedActivityId}
-        onSelectActivity={setSelectedActivityId}
-        onCloseDetail={() => setSelectedActivityId(null)}
-      />
-      </div>
-
-      {/* Plan Proposal Banner - Paid Tiers Only (Pro, Pro Max, Team, Enterprise) */}
-      {proposedPlan && entitlement?.tier && ['pro', 'pro_max', 'team', 'enterprise'].includes(entitlement.tier) && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: 'rgba(77,167,255,0.08)', borderBottom: '1px solid rgba(77,167,255,0.15)', minHeight: '40px' }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '11px', color: 'rgba(77,167,255,0.7)', fontWeight: '600' }}>🔵 PawOS proposed a plan</div>
-            <div style={{ fontSize: '13px', fontWeight: '700', color: 'rgba(77,167,255,0.95)', marginTop: '2px' }}>{proposedPlan.name}</div>
-          </div>
-          <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-            <button
-              onClick={() => setProposedPlan(null)}
-              style={{ padding: '6px 14px', background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '4px', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: '11px', fontWeight: '600', transition: 'all 0.15s ease' }}
-              onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}
-              onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; }}
-              type="button"
-            >
-              Deny
-            </button>
-            <button
-              onClick={() => { setProposedPlan({ ...proposedPlan, status: 'revising' }); setShowPlanSidebar(true); }}
-              style={{ padding: '6px 14px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '4px', color: 'rgba(255,255,255,0.85)', cursor: 'pointer', fontSize: '11px', fontWeight: '600', transition: 'all 0.15s ease' }}
-              onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.12)'; }}
-              onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}
-              type="button"
-            >
-              Revise
-            </button>
-            <button
-              onClick={() => { setProposedPlan({ ...proposedPlan, status: 'accepted' }); }}
-              style={{ padding: '6px 14px', background: 'rgba(77,167,255,0.2)', border: '1px solid rgba(77,167,255,0.4)', borderRadius: '4px', color: 'rgba(77,167,255,0.9)', cursor: 'pointer', fontSize: '11px', fontWeight: '600', transition: 'all 0.15s ease' }}
-              onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(77,167,255,0.3)'; }}
-              onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(77,167,255,0.2)'; }}
-              type="button"
-            >
-              Accept
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Plan Review Mode - Chat bar opens for revisions (Paid Tiers Only) */}
-      {showPlanSidebar && proposedPlan && entitlement?.tier && ['pro', 'pro_max', 'team', 'enterprise'].includes(entitlement.tier) && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px', background: 'rgba(77,167,255,0.05)', border: '1px solid rgba(77,167,255,0.15)', borderRadius: '8px', marginBottom: '12px' }}>
-          <div>
-            <div style={{ fontSize: '12px', fontWeight: '700', color: 'rgba(77,167,255,0.85)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Reviewing: {proposedPlan.name}</div>
-            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', lineHeight: '1.5' }}>{proposedPlan.content}</div>
-          </div>
-
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', padding: '12px', background: 'rgba(255,255,255,0.04)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <input
-              type="text"
-              value={planRevisionFeedback}
-              onChange={(e) => setPlanRevisionFeedback(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey && planRevisionFeedback.trim()) {
-                  // Send feedback to PawOS
-                  setPlanRevisionFeedback('');
-                }
-              }}
-              placeholder="Describe the changes you want..."
-              style={{ flex: 1, background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.85)', fontSize: '13px', outline: 'none', padding: '0' }}
-            />
-            <button
-              onClick={() => {
-                if (planRevisionFeedback.trim()) {
-                  // Send feedback to PawOS
-                  setPlanRevisionFeedback('');
-                }
-              }}
-              style={{ padding: '6px 14px', background: 'rgba(77,167,255,0.2)', border: '1px solid rgba(77,167,255,0.4)', borderRadius: '4px', color: 'rgba(77,167,255,0.9)', cursor: 'pointer', fontSize: '11px', fontWeight: '600', transition: 'all 0.15s ease', flexShrink: 0 }}
-              onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(77,167,255,0.3)'; }}
-              onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(77,167,255,0.2)'; }}
-              type="button"
-            >
-              Send
-            </button>
-            <button
-              onClick={() => { setShowPlanSidebar(false); setPlanRevisionFeedback(''); }}
-              style={{ padding: '6px 14px', background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '4px', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: '11px', fontWeight: '600', transition: 'all 0.15s ease', flexShrink: 0 }}
-              onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}
-              onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; }}
-              type="button"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Credits Usage Bar - Shows real-time credits consumption (used | remaining) */}
-      {creditsUsage.dollarBought > 0 && (
-        <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', minHeight: '32px', backgroundColor: 'rgba(76, 175, 80, 0.05)', animation: 'slideIn 0.3s ease-out' }}>
-          <span style={{ fontSize: '12px', color: 'rgba(76, 175, 80, 0.9)', fontWeight: 500 }}>
-            💳 {creditsUsage.dollarUsedThisSession.toFixed(1)} used | {dollarRemaining.toFixed(1)} remaining
-          </span>
-        </div>
-      )}
-
-      {/* Bottom Bar: Accept Edits + Model Selector (Claude Code style) */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', minHeight: '44px', backgroundColor: 'rgba(10,10,12,0.6)' }} ref={prMenuRef}>
-        {/* Left: Accept Edits Button */}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'rgba(255,255,255,0.8)',
-              cursor: 'pointer',
-              padding: '6px 12px',
-              fontSize: '13px',
-              fontWeight: 500,
-              transition: 'color 0.15s ease',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6
-            }}
-            onMouseOver={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.95)'}
-            onMouseOut={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.8)'}
-            type="button"
-          >
-            Accept edits
-          </button>
-          <button
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'rgba(255,255,255,0.6)',
-              cursor: 'pointer',
-              fontSize: '16px',
-              padding: '4px 6px',
-              transition: 'color 0.15s ease'
-            }}
-            onMouseOver={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.8)'}
-            onMouseOut={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.6)'}
-            title="Add new edit"
-            type="button"
-          >
-            +
-          </button>
-          <button
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'rgba(255,255,255,0.6)',
-              cursor: 'pointer',
-              fontSize: '14px',
-              padding: '4px 6px',
-              transition: 'color 0.15s ease'
-            }}
-            onMouseOver={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.8)'}
-            onMouseOut={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.6)'}
-            onClick={() => setPrMenuOpen(!prMenuOpen)}
-            type="button"
-          >
-            ▼
-          </button>
-            {prMenuOpen && (
-              <div style={{
-                position: 'absolute',
-                top: '100%',
-                left: 0,
-                marginTop: '8px',
-                background: 'rgba(12,12,16,0.95)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: '6px',
-                minWidth: '200px',
-                zIndex: 100,
-                boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
-                backdropFilter: 'blur(12px)',
-              }}>
-                <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">Manually create a PR</button>
-                <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">Create a draft PR</button>
-                <button style={{ display: 'block', width: '100%', padding: '8px 12px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', textAlign: 'left', fontSize: '12px', transition: 'background 0.15s ease' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'} onMouseOut={(e) => e.currentTarget.style.background = 'transparent'} type="button">Create PR</button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Right: Model Selector + Usage Circle */}
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }} ref={modelMenuRef}>
-          <button
-            type="button"
-            onClick={() => setModelMenuOpen((open) => !open)}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'rgba(255,255,255,0.7)',
-              cursor: 'pointer',
-              padding: '6px 10px',
-              fontSize: '12px',
-              fontWeight: 500,
-              transition: 'color 0.15s ease',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6
-            }}
-            onMouseOver={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.9)'}
-            onMouseOut={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.7)'}
-          >
-            {activePawModelDescriptor?.label || 'Model'}
-          </button>
-
-          {/* Usage Circle Indicator */}
-          <div
-            style={{
-              width: '16px',
-              height: '16px',
-              borderRadius: '50%',
-              background: `conic-gradient(
-                rgba(77, 167, 255, 0.8) 0deg ${(entitlement?.usage5hPc ?? 0) / (entitlement?.limit5hPc ?? 1) * 360}deg,
-                rgba(255, 255, 255, 0.1) ${(entitlement?.usage5hPc ?? 0) / (entitlement?.limit5hPc ?? 1) * 360}deg
-              )`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer'
-            }}
-            title={`Usage: ${entitlement?.usage5hPc ?? 0}/${entitlement?.limit5hPc ?? '∞'} PC (5h)`}
-            onMouseOver={(e) => {
-              e.currentTarget.style.opacity = '0.8';
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.opacity = '1';
-            }}
-          >
-            <div
-              style={{
-                width: '10px',
-                height: '10px',
-                borderRadius: '50%',
-                background: 'rgba(10, 10, 12, 0.8)'
-              }}
-            />
-          </div>
-        </div>
-      </div>
-
-
-      {/* Permissions Modal */}
-      {permissionsOpen && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setPermissionsOpen(false)}>
-          <div style={{ background: 'rgba(20,20,24,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '28px', maxWidth: '520px', width: '90%', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.5)', backdropFilter: 'blur(12px)' }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ fontSize: '18px', fontWeight: '700', color: 'rgba(255,255,255,0.95)', marginBottom: '20px' }}>Allow PawOS Permissions</div>
-            <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)', marginBottom: '12px', lineHeight: '1.6' }}>
-              PawOS needs permission to perform actions. Grant access to capabilities you want to enable:
-            </div>
-            <div style={{ fontSize: '11px', color: 'rgba(255,165,0,0.7)', marginBottom: '20px', padding: '8px 12px', background: 'rgba(255,165,0,0.1)', borderRadius: '6px', border: '1px solid rgba(255,165,0,0.2)' }}>
-              💡 Press Alt+Enter to allow all permissions at once
-            </div>
-
-            {/* Permissions List - Organized by Category */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
-              {[
-                { category: 'File Access', items: [
-                  { key: 'readFiles', label: 'Read Files', desc: 'Read file contents from your project' },
-                  { key: 'readCurrentCode', label: 'Read Current Code', desc: 'Access code currently being edited' },
-                  { key: 'modifyFiles', label: 'Modify Files', desc: 'Write changes to project files' },
-                ]},
-                { category: 'Analysis', items: [
-                  { key: 'analyzeTicket', label: 'Analyze Tickets', desc: 'Read and analyze ticket/issue content' },
-                  { key: 'analyzeRepo', label: 'Analyze Repository', desc: 'Read repository code and structure' },
-                  { key: 'analyzeGitHistory', label: 'Analyze Git History', desc: 'Access commit history and changes' },
-                ]},
-                { category: 'Code Execution', items: [
-                  { key: 'editCode', label: 'Edit Code', desc: 'Edit and modify code files' },
-                  { key: 'runCode', label: 'Run Code', desc: 'Execute code and tests' },
-                  { key: 'executeScripts', label: 'Execute Scripts', desc: 'Run automation scripts' },
-                  { key: 'executeShell', label: 'Execute Shell', desc: 'Run shell commands' },
-                ]},
-                { category: 'Git & Version Control', items: [
-                  { key: 'commitChanges', label: 'Commit Changes', desc: 'Create git commits' },
-                  { key: 'pushCode', label: 'Push Code', desc: 'Push changes to remote repository' },
-                  { key: 'createBranches', label: 'Create Branches', desc: 'Create and switch git branches' },
-                  { key: 'createPullRequests', label: 'Create Pull Requests', desc: 'Create pull requests/merge requests' },
-                ]},
-                { category: 'Meeting & Communication', items: [
-                  { key: 'recordMeeting', label: 'Record Meeting', desc: 'Record audio from your meetings' },
-                  { key: 'recordSummary', label: 'Generate Meeting Summary', desc: 'Create summaries from recordings' },
-                ]},
-                { category: 'Data & Context', items: [
-                  { key: 'accessText', label: 'Access Text Content', desc: 'Read and process text files' },
-                  { key: 'processImages', label: 'Process Images', desc: 'Analyze and process image files' },
-                  { key: 'accessWebsites', label: 'Access Websites', desc: 'Fetch content from web URLs' },
-                  { key: 'accessAPIs', label: 'Access APIs', desc: 'Call external APIs and services' },
-                  { key: 'storeData', label: 'Store Data', desc: 'Save data to local storage' },
-                  { key: 'shareContext', label: 'Share Context', desc: 'Share conversation context' },
-                ]},
-              ].map(({ category, items }) => (
-                <div key={category}>
-                  <div style={{ fontSize: '11px', fontWeight: '700', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>{category}</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {items.map(({ key, label, desc }) => (
-                <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', cursor: 'pointer' }} onClick={() => setPermissions({ ...permissions, [key]: !permissions[key as keyof typeof permissions] })}>
-                  <input
-                    type="checkbox"
-                    checked={permissions[key as keyof typeof permissions]}
-                    onChange={() => {}}
-                    style={{ cursor: 'pointer', width: '18px', height: '18px', accentColor: '#4da7ff' }}
-                  />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '13px', fontWeight: '600', color: 'rgba(255,255,255,0.85)' }}>{label}</div>
-                    <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.55)' }}>{desc}</div>
-                  </div>
-                </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Buttons - Like Claude */}
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', alignItems: 'center' }}>
-              <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>
-                <span style={{ marginRight: '12px' }}>ESC</span>
-                <span>Alt+Enter</span>
-              </div>
-              <button
-                onClick={() => setPermissionsOpen(false)}
-                style={{ padding: '10px 20px', background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '6px', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: '13px', fontWeight: '600', transition: 'all 0.15s ease' }}
-                onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; }}
-                onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; }}
-                type="button"
-              >
-                Deny
-              </button>
-              <button
-                onClick={() => setPermissionsOpen(false)}
-                style={{ padding: '10px 20px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '6px', color: 'rgba(255,255,255,0.85)', cursor: 'pointer', fontSize: '13px', fontWeight: '600', transition: 'all 0.15s ease' }}
-                onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.12)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; }}
-                onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; }}
-                type="button"
-              >
-                Allow Once
-              </button>
-              <button
-                onClick={() => {
-                  setPermissions({
-                    readFiles: true,
-                    readCurrentCode: true,
-                    analyzeTicket: true,
-                    analyzeRepo: true,
-                    analyzeGitHistory: true,
-                    recordMeeting: true,
-                    recordSummary: true,
-                    editCode: true,
-                    modifyFiles: true,
-                    runCode: true,
-                    executeScripts: true,
-                    executeShell: true,
-                    pushCode: true,
-                    commitChanges: true,
-                    createBranches: true,
-                    createPullRequests: true,
-                    accessText: true,
-                    processImages: true,
-                    accessWebsites: true,
-                    accessAPIs: true,
-                    storeData: true,
-                    shareContext: true,
-                  });
-                  setPermissionsOpen(false);
-                }}
-                style={{ padding: '10px 20px', background: 'rgba(77,167,255,0.2)', border: '1px solid rgba(77,167,255,0.4)', borderRadius: '6px', color: 'rgba(77,167,255,0.9)', cursor: 'pointer', fontSize: '13px', fontWeight: '600', transition: 'all 0.15s ease' }}
-                onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(77,167,255,0.3)'; e.currentTarget.style.borderColor = 'rgba(77,167,255,0.6)'; }}
-                onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(77,167,255,0.2)'; e.currentTarget.style.borderColor = 'rgba(77,167,255,0.4)'; }}
-                type="button"
-              >
-                Allow
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Tier Upgrade Popup - For Go Tier Users */}
-      {showTierUpgradePopup && entitlement?.tier === 'go' && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setShowTierUpgradePopup(false)}>
-          <div style={{ background: 'rgba(20,20,24,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '28px', maxWidth: '520px', width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.5)', backdropFilter: 'blur(12px)' }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ fontSize: '16px', fontWeight: '700', color: 'rgba(255,255,255,0.95)', marginBottom: '16px' }}>Current Tier: Go (Free)</div>
-            <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.75)', lineHeight: '1.6', marginBottom: '24px', paddingBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-              In current Tier I have access to analyse and plan only. I can't have access to edit or view code.
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setShowTierUpgradePopup(false)}
-                style={{ padding: '10px 20px', background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '6px', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: '13px', fontWeight: '600', transition: 'all 0.15s ease' }}
-                onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; }}
-                onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; }}
-                type="button"
-              >
-                Later
-              </button>
-              <button
-                onClick={() => { setShowTierUpgradePopup(false); onUpgrade?.(); }}
-                style={{ padding: '10px 20px', background: 'rgba(77,167,255,0.2)', border: '1px solid rgba(77,167,255,0.4)', borderRadius: '6px', color: 'rgba(77,167,255,0.9)', cursor: 'pointer', fontSize: '13px', fontWeight: '600', transition: 'all 0.15s ease' }}
-                onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(77,167,255,0.3)'; e.currentTarget.style.borderColor = 'rgba(77,167,255,0.6)'; }}
-                onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(77,167,255,0.2)'; e.currentTarget.style.borderColor = 'rgba(77,167,255,0.4)'; }}
-                type="button"
-              >
-                Get Now
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Feedback Modal */}
-      {feedbackModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setFeedbackModalOpen(false)}>
-          <div style={{ background: 'rgba(20,20,24,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', padding: '24px', maxWidth: '480px', width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.5)', backdropFilter: 'blur(12px)' }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ fontSize: '16px', fontWeight: '600', color: 'rgba(255,255,255,0.9)', marginBottom: '16px' }}>Send feedback</div>
-            <textarea
-              value={feedbackText}
-              onChange={(e) => setFeedbackText(e.target.value)}
-              placeholder="Describe the issue"
-              style={{ width: '100%', height: '120px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '6px', color: 'rgba(255,255,255,0.8)', padding: '12px', fontSize: '13px', fontFamily: 'inherit', resize: 'none', boxSizing: 'border-box' }}
-            />
-            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', marginTop: '12px', marginBottom: '16px', lineHeight: '1.4' }}>
-              This report will include your description and the current session transcript. We may use these to debug related issues and improve Claude Code.
-            </div>
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => {
-                  setFeedbackModalOpen(false);
-                  setFeedbackText('');
-                }}
-                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '4px', padding: '8px 16px', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: '12px', transition: 'all 0.15s ease' }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
-                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)';
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)';
-                }}
-                type="button"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  setFeedbackModalOpen(false);
-                  setFeedbackText('');
-                }}
-                style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '4px', padding: '8px 16px', color: 'rgba(255,255,255,0.8)', cursor: 'pointer', fontSize: '12px', fontWeight: '500', transition: 'all 0.15s ease' }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.15)';
-                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)';
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
-                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)';
-                }}
-                type="button"
-              >
-                Send
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </section>
   );
 }
