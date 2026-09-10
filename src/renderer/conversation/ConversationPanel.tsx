@@ -345,6 +345,10 @@ export function ConversationPanel({
   const [showPlanSidebar, setShowPlanSidebar] = useState(false);
   const [showTierUpgradePopup, setShowTierUpgradePopup] = useState(false);
   const [openPanel, setOpenPanel] = useState<'terminal' | 'browser' | 'files' | 'worktree' | null>(null);
+  const [projectPath, setProjectPath] = useState<string>('');
+  const [gitBranches, setGitBranches] = useState<string[]>([]);
+  const [gitCommits, setGitCommits] = useState<string[]>([]);
+  const [projectFiles, setProjectFiles] = useState<string[]>([]);
   // Incognito Mode (Go tier only): Private session, doesn't persist data or history
   // BUT still calculates Paw Computes usage in real-time (no free pass)
   const [incognitoMode, setIncognitoMode] = useState(false);
@@ -455,6 +459,31 @@ export function ConversationPanel({
 
   // Activity sidebar
   const { activities, selectedActivityId, setSelectedActivityId, hasActivity } = useActivityStream(snapshot);
+
+  // Load project data when panels open
+  useEffect(() => {
+    if (!openPanel) return;
+
+    const loadData = async () => {
+      try {
+        // These would call ipc handlers that execute shell commands
+        // For now, use placeholder data that shows the structure
+        const path = await ipc.getProjectPath?.() || '/c/Users/APPLE/Downloads/PawOS';
+        const branches = await ipc.getGitBranches?.() || ['main', 'claude/session-1', 'claude/session-2'];
+        const commits = await ipc.getGitCommits?.() || ['5ca0f64: Add panel content', '01ed9c7: Remove Microsoft', '39bd40f: Split layout'];
+        const files = await ipc.getProjectFiles?.() || ['src/', 'dist/', 'package.json', '.env', '.git/'];
+
+        setProjectPath(path);
+        setGitBranches(branches);
+        setGitCommits(commits);
+        setProjectFiles(files);
+      } catch (err) {
+        console.log('Could not load project data:', err);
+      }
+    };
+
+    loadData();
+  }, [openPanel, ipc]);
 
   // Message extension handlers
   const handleExtensionExpand = (request: ExtensionExpandRequest) => {
@@ -1233,62 +1262,161 @@ export function ConversationPanel({
             {/* Panel Content */}
             <div className={styles.panelContent}>
               {openPanel === 'terminal' && (
-                <div>
-                  <div className={styles.panelPlaceholder}>
-                    ⌘ Terminal output will appear here
+                <div style={{ fontSize: '11px' }}>
+                  <div style={{
+                    padding: '12px 16px',
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+                    fontFamily: 'monospace',
+                    color: 'rgba(255, 255, 255, 0.7)',
+                  }}>
+                    $ pwd
                   </div>
                   <div style={{
                     padding: '12px 16px',
-                    fontSize: '11px',
-                    color: 'rgba(255, 255, 255, 0.5)',
                     fontFamily: 'monospace',
-                    borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+                    color: 'rgba(255, 255, 255, 0.5)',
+                    fontSize: '10px',
                   }}>
-                    Ready to execute commands...
+                    {projectPath || 'Loading project path...'}
+                  </div>
+                  <div style={{
+                    padding: '12px 16px',
+                    borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+                    color: 'rgba(255, 255, 255, 0.4)',
+                  }}>
+                    Ready to execute commands
                   </div>
                 </div>
               )}
               {openPanel === 'browser' && (
-                <div>
-                  <div className={styles.panelPlaceholder}>
-                    🌐 Browser preview will appear here
+                <div style={{ padding: '12px 16px', fontSize: '11px' }}>
+                  <div style={{
+                    color: 'rgba(255, 255, 255, 0.7)',
+                    marginBottom: '12px',
+                    fontWeight: 600,
+                  }}>
+                    Dev Servers
                   </div>
                   <div style={{
-                    padding: '12px 16px',
-                    fontSize: '11px',
-                    color: 'rgba(255, 255, 255, 0.5)',
+                    padding: '8px',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    borderRadius: '4px',
+                    color: 'rgba(255, 255, 255, 0.6)',
+                    marginBottom: '12px',
+                    fontSize: '10px',
+                    fontFamily: 'monospace',
                   }}>
-                    Navigate to URLs or view previews
+                    http://localhost:3000 - React Dev
+                  </div>
+                  <div style={{
+                    padding: '8px',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    borderRadius: '4px',
+                    color: 'rgba(255, 255, 255, 0.6)',
+                    fontSize: '10px',
+                    fontFamily: 'monospace',
+                  }}>
+                    http://localhost:5000 - API Server
+                  </div>
+                  <div style={{
+                    marginTop: '12px',
+                    color: 'rgba(255, 255, 255, 0.4)',
+                    fontSize: '10px',
+                  }}>
+                    Navigate to URLs or view app previews
                   </div>
                 </div>
               )}
               {openPanel === 'files' && (
-                <div>
-                  <div className={styles.panelPlaceholder}>
-                    📁 Project files and workspace
-                  </div>
+                <div style={{ fontSize: '11px' }}>
                   <div style={{
                     padding: '12px 16px',
-                    fontSize: '11px',
-                    color: 'rgba(255, 255, 255, 0.5)',
-                    borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+                    color: 'rgba(255, 255, 255, 0.7)',
+                    fontWeight: 600,
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
                   }}>
-                    Browse and open files from your project
+                    Project Files
+                  </div>
+                  <div style={{ padding: '8px 16px' }}>
+                    {projectFiles.length > 0 ? (
+                      projectFiles.map((file, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            padding: '4px 0',
+                            color: 'rgba(255, 255, 255, 0.6)',
+                            fontSize: '10px',
+                            cursor: 'pointer',
+                            transition: 'color 0.15s',
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.color = 'rgba(255, 255, 255, 0.8)'}
+                          onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)'}
+                        >
+                          {file.endsWith('/') ? '📁' : '📄'} {file}
+                        </div>
+                      ))
+                    ) : (
+                      <div style={{ color: 'rgba(255, 255, 255, 0.4)' }}>Loading files...</div>
+                    )}
                   </div>
                 </div>
               )}
               {openPanel === 'worktree' && (
-                <div>
-                  <div className={styles.panelPlaceholder}>
-                    🌳 Git workspace and branches
+                <div style={{ fontSize: '11px' }}>
+                  <div style={{
+                    padding: '12px 16px',
+                    color: 'rgba(255, 255, 255, 0.7)',
+                    fontWeight: 600,
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+                  }}>
+                    Git Branches
+                  </div>
+                  <div style={{ padding: '8px 16px' }}>
+                    {gitBranches.length > 0 ? (
+                      gitBranches.map((branch, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            padding: '4px 0',
+                            color: branch.includes('*') ? 'rgba(120, 150, 200, 0.8)' : 'rgba(255, 255, 255, 0.5)',
+                            fontSize: '10px',
+                            fontFamily: 'monospace',
+                          }}
+                        >
+                          {branch.includes('*') ? '● ' : '  '}{branch}
+                        </div>
+                      ))
+                    ) : (
+                      <div style={{ color: 'rgba(255, 255, 255, 0.4)' }}>Loading branches...</div>
+                    )}
                   </div>
                   <div style={{
                     padding: '12px 16px',
-                    fontSize: '11px',
-                    color: 'rgba(255, 255, 255, 0.5)',
+                    color: 'rgba(255, 255, 255, 0.7)',
+                    fontWeight: 600,
                     borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
                   }}>
-                    View branches, commits, and workspace state
+                    Recent Commits
+                  </div>
+                  <div style={{ padding: '8px 16px' }}>
+                    {gitCommits.length > 0 ? (
+                      gitCommits.map((commit, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            padding: '4px 0',
+                            color: 'rgba(255, 255, 255, 0.5)',
+                            fontSize: '9px',
+                            fontFamily: 'monospace',
+                          }}
+                        >
+                          {commit}
+                        </div>
+                      ))
+                    ) : (
+                      <div style={{ color: 'rgba(255, 255, 255, 0.4)' }}>Loading commits...</div>
+                    )}
                   </div>
                 </div>
               )}
