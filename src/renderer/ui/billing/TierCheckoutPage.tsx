@@ -77,6 +77,7 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
   const [cardNumber, setCardNumber] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
   const [cvv, setCvv] = useState('');
+  const [saveCard, setSaveCard] = useState(false);
 
   // Card brand detection - accurately detects Visa, Mastercard, Rupay
   const detectCardBrand = (number: string) => {
@@ -914,6 +915,17 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
                       />
                     </div>
                   </div>
+
+                  {/* Save card checkbox */}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, fontWeight: 500, color: 'var(--pawos-fg)' }}>
+                    <input
+                      type="checkbox"
+                      checked={saveCard}
+                      onChange={(e) => setSaveCard(e.target.checked)}
+                      style={{ cursor: 'pointer', width: 16, height: 16 }}
+                    />
+                    <span>Save this card for future purchases</span>
+                  </label>
 
                   {savedCards.length > 0 && (
                     <button
