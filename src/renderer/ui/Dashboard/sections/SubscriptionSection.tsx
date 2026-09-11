@@ -426,7 +426,8 @@ export function SubscriptionSection({
                   Cancel
                 </button>
                 <button type="button" onClick={() => {
-                  const isCredits = showCreditsCardForm;
+                  const isCredits = showCreditsCardForm && !showAutonomousCardForm;
+                  const isAutonomous = showAutonomousCardForm && !showCreditsCardForm;
                   const amount = parseFloat(isCredits ? creditsAmount : autonomousAmount);
 
                   setCheckoutIntent({
@@ -453,7 +454,7 @@ export function SubscriptionSection({
                   setShowCreditsCardForm(false);
                   setShowAutonomousCardForm(false);
                 }} style={{ flex: 1, padding: '10px 16px', backgroundColor: '#1967D2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }}>
-                  Pay ₹{Math.round(parseFloat(showCreditsCardForm ? creditsAmount : autonomousAmount) * 95.65).toLocaleString()}
+                  Pay ₹{Math.round(parseFloat(showCreditsCardForm && !showAutonomousCardForm ? creditsAmount : autonomousAmount) * 95.65).toLocaleString()}
                 </button>
               </div>
             </div>
