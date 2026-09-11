@@ -37,7 +37,7 @@ export async function initiateRazorpayTierPayment(
     }
 
     // Create order
-    const result = await ipc.billingCreateNativeSubscriptionCheckout(tier, paymentOptions, accessToken);
+    const result = await ipc.billingCreateNativeTierCheckout(tier, paymentOptions, undefined, accessToken);
 
     if (!result.ok) {
       options.setMessage(`❌ ${result.reason}`);
@@ -102,8 +102,9 @@ function openRazorpayCheckout(result: any, options: TierPaymentHandler, tier: Su
 
 async function handlePaymentSuccess(response: any, result: any, options: TierPaymentHandler, tier: SubscriptionTierId) {
   try {
-    const verifyResult = await ipc.billingVerifyNativeSubscriptionPayment({
-      subscriptionId: result.subscriptionId,
+    const verifyResult = await ipc.billingVerifyNativeTierPayment({
+      tier,
+      orderId: result.orderId,
       paymentId: response.razorpay_payment_id,
       signature: response.razorpay_signature,
     });
