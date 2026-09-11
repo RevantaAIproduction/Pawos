@@ -1212,6 +1212,7 @@ export function NativeBillingCheckoutModal({
         };
 
         // Build payment request for Custom Checkout
+        const userName = sessionData.session?.user?.user_metadata?.name || userEmail.split('@')[0] || 'Customer';
         const paymentData: Record<string, unknown> = {
           order_id: checkout.orderId,
           amount: checkout.amountPaise,
@@ -1221,6 +1222,7 @@ export function NativeBillingCheckoutModal({
           notes: invoiceNotes,
           email: userEmail,
           contact: mobileNumber,
+          customer_name: userName,
         };
 
         // Add method-specific parameters
@@ -1409,6 +1411,7 @@ export function NativeBillingCheckoutModal({
       });
 
       // Build the payment request for Custom Checkout
+      const paymentUserName = sessionData.session?.user?.user_metadata?.name || userEmail.split('@')[0] || 'Customer';
       const paymentData: Record<string, unknown> = {
         order_id: checkout.orderId,
         amount: checkout.amountPaise,
@@ -1416,6 +1419,7 @@ export function NativeBillingCheckoutModal({
         method: paymentMethod,
         email: userEmail,
         contact: mobileNumber,
+        customer_name: paymentUserName,
       };
 
       // Add method-specific parameters
