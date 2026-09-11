@@ -198,18 +198,20 @@ export function SubscriptionSection({
         key: checkout.keyId,
       }) as any;
 
-      const paymentData = {
+      const paymentData: Record<string, any> = {
         order_id: checkout.orderId,
         amount: checkout.amountPaise,
         currency: checkout.currency,
-        method: 'card',
-        description: isCredits ? 'Usage Credits' : 'Autonomous Credits',
-        notes: {
-          purpose: isCredits ? 'usage_credits' : 'autonomous_credits',
-        },
         email: creditsCardEmail,
         contact: creditsCardPhone,
         customer_name: creditsCardName,
+        description: isCredits ? 'Usage Credits' : 'Autonomous Credits',
+        notes: {
+          purpose: isCredits ? 'usage_credits' : 'autonomous_credits',
+          billing_address: creditsCardAddress,
+          city: creditsCardCity,
+          state: creditsCardState,
+        },
       };
 
       razorpayInstance.on('payment.success', async (response: any) => {
@@ -258,6 +260,7 @@ export function SubscriptionSection({
         setBusy(false);
       });
 
+      // Go directly to OTP form - no payment method selection
       razorpayInstance.createPayment(paymentData);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Payment error');
