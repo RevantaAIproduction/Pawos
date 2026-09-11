@@ -139,21 +139,26 @@ export function SubscriptionSection({
   };
 
   const handleDirectPayment = async () => {
-    const isCredits = showCreditsCardForm && !showAutonomousCardForm;
-    const amount = parseFloat(isCredits ? creditsAmount : autonomousAmount);
+    try {
+      const isCredits = showCreditsCardForm && !showAutonomousCardForm;
+      const amount = parseFloat(isCredits ? creditsAmount : autonomousAmount);
 
-    if (!creditsCardName || !creditsCardEmail || !creditsCardPhone) {
-      setMessage('Please fill in all required fields (name, email, phone)');
-      return;
-    }
+      console.log('Payment initiated:', { isCredits, amount, name: creditsCardName });
 
-    if (!creditsCardNumber || !creditsCardExpiry || !creditsCardCvc) {
-      setMessage('Please fill in all card details');
-      return;
-    }
+      if (!creditsCardName || !creditsCardEmail || !creditsCardPhone) {
+        setMessage('❌ Please fill in all required fields (name, email, phone)');
+        console.warn('Missing required fields');
+        return;
+      }
 
-    setBusy(true);
-    setMessage(null);
+      if (!creditsCardNumber || !creditsCardExpiry || !creditsCardCvc) {
+        setMessage('❌ Please fill in all card details');
+        console.warn('Missing card details');
+        return;
+      }
+
+      setBusy(true);
+      setMessage(null);
 
     try {
       const createOrderFn = isCredits
@@ -187,13 +192,16 @@ export function SubscriptionSection({
 
       loadRazorpay();
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Payment error');
+      const errorMsg = err instanceof Error ? err.message : 'Payment error';
+      console.error('Payment error:', err);
+      setMessage(`❌ ${errorMsg}`);
       setBusy(false);
     }
   };
 
   const openRazorpay = async (checkout: any, isCredits: boolean) => {
     try {
+      console.log('Opening Razorpay:', { orderId: checkout.orderId, amount: checkout.amountPaise });
       const razorpayInstance = new (window.Razorpay as any)({
         key: checkout.keyId,
       }) as any;
@@ -553,6 +561,8 @@ export function SubscriptionSection({
                   </div>
                 </div>
               </div>
+
+              {message && <p style={{ margin: '12px 0', padding: '10px 12px', backgroundColor: message.includes('error') || message.includes('failed') ? 'rgba(239,68,68,0.1)' : 'rgba(76,176,80,0.1)', color: message.includes('error') || message.includes('failed') ? '#ef4444' : '#4cb050', borderRadius: 4, fontSize: '0.9em' }}>{message}</p>}
 
               <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
                 <button type="button" onClick={() => {
