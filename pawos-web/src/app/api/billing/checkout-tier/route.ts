@@ -173,7 +173,6 @@ export async function POST(request: Request) {
   }
 
   const order = await response.json();
-  const amountPaise = Math.round(amountInr * 100);
   return NextResponse.json({
     ok: true,
     orderId: order.id,
