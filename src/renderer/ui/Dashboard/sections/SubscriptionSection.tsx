@@ -426,17 +426,34 @@ export function SubscriptionSection({
                   Cancel
                 </button>
                 <button type="button" onClick={() => {
+                  const isCredits = showCreditsCardForm;
+                  const amount = parseFloat(isCredits ? creditsAmount : autonomousAmount);
+
+                  setCheckoutIntent({
+                    kind: isCredits ? 'usageCredits' : 'autonomousWorkCredits',
+                    amountUsd: amount,
+                    title: isCredits ? 'Buy Usage Credits' : 'Autonomous Work Credits',
+                    cardDetails: {
+                      name: creditsCardName,
+                      email: creditsCardEmail,
+                      country: creditsCardCountry,
+                      phone: creditsCardPhone,
+                      address: creditsCardAddress,
+                      address2: creditsCardAddress2,
+                      city: creditsCardCity,
+                      state: creditsCardState,
+                      pincode: creditsCardPincode,
+                      taxId: creditsCardTaxId,
+                      cardNumber: creditsCardNumber,
+                      expiry: creditsCardExpiry,
+                      cvc: creditsCardCvc,
+                    },
+                  });
+
                   setShowCreditsCardForm(false);
                   setShowAutonomousCardForm(false);
-                  setTimeout(() => {
-                    if (showCreditsCardForm) {
-                      setShowCreditsSummary(true);
-                    } else {
-                      setShowAutonomousSummary(true);
-                    }
-                  }, 100);
                 }} style={{ flex: 1, padding: '10px 16px', backgroundColor: '#1967D2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }}>
-                  Continue to payment
+                  Pay ₹{Math.round(parseFloat(showCreditsCardForm ? creditsAmount : autonomousAmount) * 95.65).toLocaleString()}
                 </button>
               </div>
             </div>
@@ -536,8 +553,8 @@ export function SubscriptionSection({
         </div>
       )}
 
-      {/* Usage Credits Payment Summary */}
-      {showCreditsSummary && (
+      {/* Usage Credits Payment Summary — REMOVED, goes directly to Razorpay */}
+      {false && showCreditsSummary && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div style={{ backgroundColor: '#1a1a1e', borderRadius: 8, padding: 40, maxWidth: 500, boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }}>
             <h2 style={{ fontSize: '1.2em', fontWeight: 700, margin: '0 0 8px 0' }}>Order Details</h2>
@@ -603,8 +620,8 @@ export function SubscriptionSection({
         </div>
       )}
 
-      {/* Autonomous Credits Payment Summary */}
-      {showAutonomousSummary && (
+      {/* Autonomous Credits Payment Summary — REMOVED, goes directly to Razorpay */}
+      {false && showAutonomousSummary && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div style={{ backgroundColor: '#1a1a1e', borderRadius: 8, padding: 40, maxWidth: 500, boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }}>
             <h2 style={{ fontSize: '1.2em', fontWeight: 700, margin: '0 0 8px 0' }}>Order Details</h2>
