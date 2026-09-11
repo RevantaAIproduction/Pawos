@@ -65,18 +65,9 @@ export function SubscriptionSection({
   useEffect(() => {
     if (user.isGuest) return;
     refresh();
-    // Website checkout runs in the system browser, outside this app — there's
-    // no shared account/subscription backend yet for a real push-based sync
-    // (see RazorpayBillingProvider.ts), so refreshing on window focus is the
-    // honest mechanism available today: coming back from checkout re-checks
-    // the plan automatically without the user needing to reopen this page.
     const onFocus = () => refresh();
     window.addEventListener('focus', onFocus);
 
-    // The real push: CheckoutSyncServer.ts fires this the moment a payment
-    // actually completes, via a local loopback callback the checkout page
-    // pings — see UpgradeSection.tsx's startCheckout for where that callback
-    // URL comes from (checkout itself now happens on the dedicated page).
     ipc.onSubscriptionUpdated(() => {
       refresh();
       setMessage('Payment confirmed — your plan has been updated.');
@@ -121,6 +112,7 @@ export function SubscriptionSection({
 
   const renewalDate = subscription?.renewsAt ? new Date(subscription.renewsAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
   const billingPeriod = currentPlan?.billingPeriod === 'month' ? 'Monthly' : currentPlan?.billingPeriod === 'year' ? 'Yearly' : 'N/A';
+  const isProMax = currentTier === 'proMax';
 
   return (
     <div>
@@ -155,133 +147,36 @@ export function SubscriptionSection({
         </div>
       </div>
 
-      {/* Payment Method Section */}
-      <div className={styles.card} style={{ marginTop: 14 }}>
-        <h3 className={styles.cardTitle}>Payment Method</h3>
-        <p className={styles.cardBody} style={{ marginTop: 8 }}>
-          <strong>Visa</strong> •••• <strong>9845</strong>
-        </p>
-        <p className={styles.cardBody} style={{ opacity: 0.7, fontSize: '0.85em', marginTop: 4 }}>Expires 12/2027</p>
-        <button type="button" className={styles.primaryButton} style={{ marginTop: 12 }}>
-          Update Payment Method
-        </button>
-      </div>
-
-      {/* Usage Credits Section */}
-      <div className={styles.card} style={{ marginTop: 14 }}>
-        <h3 className={styles.cardTitle}>Usage Credits</h3>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-          <div>
-            <p className={styles.cardBody} style={{ opacity: 0.7, fontSize: '0.85em', marginBottom: 2 }}>Current Balance</p>
-            <p className={styles.cardBody} style={{ fontWeight: 600, fontSize: '1.2em' }}>$0.00</p>
+      {/* Usage Credits Section - Pro Max Only */}
+      {isProMax && (
+        <div className={styles.card} style={{ marginTop: 14 }}>
+          <h3 className={styles.cardTitle}>Usage Credits</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+            <div>
+              <p className={styles.cardBody} style={{ opacity: 0.7, fontSize: '0.85em', marginBottom: 2 }}>Current Balance</p>
+              <p className={styles.cardBody} style={{ fontWeight: 600, fontSize: '1.2em' }}>$0.00</p>
+            </div>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <button type="button" className={styles.primaryButton}>
+                Buy usage credits
+              </button>
+              <span style={{
+                fontSize: '0.75em',
+                backgroundColor: 'rgba(76, 175, 80, 0.15)',
+                color: '#4cb050',
+                padding: '4px 8px',
+                borderRadius: 4,
+                whiteSpace: 'nowrap'
+              }}>
+                Up to 30% off
+              </span>
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <button type="button" className={styles.primaryButton}>
-              Buy usage credits
-            </button>
-            <span style={{
-              fontSize: '0.75em',
-              backgroundColor: 'rgba(76, 175, 80, 0.15)',
-              color: '#4cb050',
-              padding: '4px 8px',
-              borderRadius: 4,
-              whiteSpace: 'nowrap'
-            }}>
-              Up to 30% off
-            </span>
-          </div>
+          <p className={styles.cardBody} style={{ opacity: 0.65, fontSize: '0.85em', marginTop: 8 }}>
+            Get faster responses with prepaid credits. Unused credits never expire.
+          </p>
         </div>
-        <p className={styles.cardBody} style={{ opacity: 0.65, fontSize: '0.85em', marginTop: 8 }}>
-          Get faster responses with prepaid credits. Unused credits never expire.
-        </p>
-      </div>
-
-      {/* Auto-Reload Section */}
-      <div className={styles.card} style={{ marginTop: 14 }}>
-        <h3 className={styles.cardTitle}>Auto-Reload</h3>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-          <div>
-            <p className={styles.cardBody}>Automatically refill credits when balance runs low</p>
-            <p className={styles.cardBody} style={{ opacity: 0.7, fontSize: '0.85em', marginTop: 4 }}>Add $20 when balance drops below $5</p>
-          </div>
-          <button type="button" className={styles.primaryButton}>
-            Turn on
-          </button>
-        </div>
-      </div>
-
-      {/* Invoices Section */}
-      <div className={styles.card} style={{ marginTop: 14 }}>
-        <h3 className={styles.cardTitle}>Invoices</h3>
-        <div style={{ marginTop: 12, overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9em' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.1)' }}>
-                <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 600, opacity: 0.7 }}>Date</th>
-                <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 600, opacity: 0.7 }}>Total</th>
-                <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 600, opacity: 0.7 }}>Status</th>
-                <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 600, opacity: 0.7 }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                <td style={{ padding: '12px 0' }}>Sep 11, 2026</td>
-                <td style={{ padding: '12px 0' }}>$20.00</td>
-                <td style={{ padding: '12px 0' }}>
-                  <span style={{
-                    fontSize: '0.8em',
-                    backgroundColor: 'rgba(76, 175, 80, 0.15)',
-                    color: '#4cb050',
-                    padding: '4px 8px',
-                    borderRadius: 4
-                  }}>
-                    Paid
-                  </span>
-                </td>
-                <td style={{ padding: '12px 0' }}>
-                  <button type="button" className={styles.chip} style={{ fontSize: '0.85em' }}>Download</button>
-                </td>
-              </tr>
-              <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                <td style={{ padding: '12px 0' }}>Aug 11, 2026</td>
-                <td style={{ padding: '12px 0' }}>$20.00</td>
-                <td style={{ padding: '12px 0' }}>
-                  <span style={{
-                    fontSize: '0.8em',
-                    backgroundColor: 'rgba(76, 175, 80, 0.15)',
-                    color: '#4cb050',
-                    padding: '4px 8px',
-                    borderRadius: 4
-                  }}>
-                    Paid
-                  </span>
-                </td>
-                <td style={{ padding: '12px 0' }}>
-                  <button type="button" className={styles.chip} style={{ fontSize: '0.85em' }}>Download</button>
-                </td>
-              </tr>
-              <tr>
-                <td style={{ padding: '12px 0' }}>Jul 11, 2026</td>
-                <td style={{ padding: '12px 0' }}>$20.00</td>
-                <td style={{ padding: '12px 0' }}>
-                  <span style={{
-                    fontSize: '0.8em',
-                    backgroundColor: 'rgba(76, 175, 80, 0.15)',
-                    color: '#4cb050',
-                    padding: '4px 8px',
-                    borderRadius: 4
-                  }}>
-                    Paid
-                  </span>
-                </td>
-                <td style={{ padding: '12px 0' }}>
-                  <button type="button" className={styles.chip} style={{ fontSize: '0.85em' }}>Download</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+      )}
 
       {/* Plan Features Section */}
       <div className={styles.card} style={{ marginTop: 14 }}>
