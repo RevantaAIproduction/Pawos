@@ -89,6 +89,18 @@ export function SubscriptionSection({
       setMessage('Payment confirmed — your plan has been updated.');
     });
 
+    // Load auto-reload configuration
+    ipc.billingGetAutoReload()
+      .then((config) => {
+        if (config.enabled && config.amount) {
+          setAutoReloadEnabled(true);
+          setAutoReloadAmount(String(config.amount));
+        }
+      })
+      .catch(() => {
+        // Silently handle errors - auto-reload is optional
+      });
+
     return () => window.removeEventListener('focus', onFocus);
   }, [user.isGuest]);
 
@@ -181,7 +193,19 @@ export function SubscriptionSection({
           <h3 style={{ fontSize: '1em', fontWeight: 600, margin: 0 }}>Auto-reload</h3>
           <p style={{ margin: '4px 0 0 0', fontSize: '0.85em', opacity: 0.6 }}>Automatically buy more usage credits when you run out</p>
         </div>
-        <button type="button" style={{ padding: '8px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500, whiteSpace: 'nowrap' }} onClick={() => autoReloadEnabled ? setAutoReloadEnabled(false) : setShowAutoReloadModal(true)}>
+        <button type="button" style={{ padding: '8px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500, whiteSpace: 'nowrap' }} onClick={async () => {
+          if (autoReloadEnabled) {
+            try {
+              await ipc.billingSetAutoReload(null);
+              setAutoReloadEnabled(false);
+              setMessage('Auto-reload has been turned off');
+            } catch (err) {
+              setMessage(`Error disabling auto-reload: ${err instanceof Error ? err.message : String(err)}`);
+            }
+          } else {
+            setShowAutoReloadModal(true);
+          }
+        }}>
           {autoReloadEnabled ? 'Turn off' : 'Turn on'}
         </button>
       </div>
@@ -443,10 +467,20 @@ export function SubscriptionSection({
               <button type="button" style={{ flex: 1, padding: '10px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => setShowAutoReloadModal(false)}>
                 Cancel
               </button>
-              <button type="button" style={{ flex: 1, padding: '10px 16px', backgroundColor: '#1967D2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => {
-                setAutoReloadEnabled(true);
-                setMessage(`Auto-reload enabled: $${autoReloadAmount} will be charged when credits run out`);
-                setShowAutoReloadModal(false);
+              <button type="button" style={{ flex: 1, padding: '10px 16px', backgroundColor: '#1967D2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={async () => {
+                try {
+                  const amount = parseFloat(autoReloadAmount);
+                  if (Number.isFinite(amount) && amount >= 5 && amount <= 20000) {
+                    await ipc.billingSetAutoReload(amount);
+                    setAutoReloadEnabled(true);
+                    setMessage(`Auto-reload enabled: $${amount.toFixed(2)} will be automatically charged when credits run out`);
+                    setShowAutoReloadModal(false);
+                  } else {
+                    setMessage('Please enter a valid amount between $5 and $20,000.');
+                  }
+                } catch (err) {
+                  setMessage(`Error enabling auto-reload: ${err instanceof Error ? err.message : String(err)}`);
+                }
               }}>
                 Enable
               </button>

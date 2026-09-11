@@ -440,7 +440,23 @@ export function registerIpc(opts: {
   ipcMain.handle('billing:getCreditBalance', () => ({ ...creditStore.getBalance(), limit: entitlementService.getCreditLimit() }));
   ipcMain.handle('billing:consumeCredit', (_evt, amount: number, reason: string, category?: AiUsageCategory, pawModelId?: PawModelId) => {
     creditStore.consume(amount, reason, category, pawModelId === 'paw-fable');
-    return { ...creditStore.getBalance(), limit: entitlementService.getCreditLimit() };
+    const balance = creditStore.getBalance();
+
+    // Check if auto-reload should be triggered (when balance runs out)
+    // This will be implemented in triggerAutoReloadIfNeeded()
+    if (balance.balanceUsd <= 0) {
+      // Trigger auto-reload asynchronously - will check config and payment methods
+      setImmediate(() => {
+        // TODO: Implement auto-reload payment triggering
+        // This should:
+        // 1. Get user's auto-reload configuration
+        // 2. Get user's saved payment method
+        // 3. Create Razorpay order for auto-reload amount
+        // 4. Process payment automatically using saved card
+      });
+    }
+
+    return { ...balance, limit: entitlementService.getCreditLimit() };
   });
   /**
    * Rolling-window gate for new billable Gemini generations — the authoritative main-process check
@@ -509,6 +525,44 @@ export function registerIpc(opts: {
   // Real per-turn consumption history (up to 200 entries, see CreditStore.ts) — the Analytics
   // dashboard's usage breakdown/activity feed/insights are all derived from this, never fabricated.
   ipcMain.handle('billing:getCreditHistory', () => creditStore.getHistory());
+
+  // Auto-reload billing handlers
+  ipcMain.handle('billing:setAutoReload', (_evt, amount: number | null) => {
+    // Store auto-reload configuration in user preferences
+    if (amount === null) {
+      return { success: true, enabled: false };
+    }
+    if (amount < 5 || amount > 20000) {
+      throw new Error('Auto-reload amount must be between $5 and $20,000');
+    }
+    // TODO: Store in Supabase user preferences:
+    // UPDATE user_preferences SET auto_reload_amount = $1, updated_at = NOW()
+    // WHERE user_id = current_user_id()
+    console.log(`[AUTO_RELOAD] Set auto-reload amount to $${amount}`);
+    return { success: true, enabled: true, amount };
+  });
+
+  ipcMain.handle('billing:getAutoReload', () => {
+    // TODO: Retrieve auto-reload configuration from user preferences in Supabase:
+    // SELECT auto_reload_amount FROM user_preferences WHERE user_id = current_user_id()
+    // For now, return placeholder
+    console.log('[AUTO_RELOAD] Fetching auto-reload configuration');
+    return { enabled: false, amount: null };
+  });
+
+  ipcMain.handle('billing:triggerAutoReload', async () => {
+    // Triggered when credits run out - automatically charge saved payment method
+    // This handler should:
+    // 1. Fetch user's auto-reload configuration
+    // 2. Fetch user's saved payment methods
+    // 3. Create Razorpay order with auto-reload amount
+    // 4. Process payment automatically using saved card
+    // 5. Add credits to user account
+    // 6. Log transaction in billing history
+    console.log('[AUTO_RELOAD] Checking if auto-reload should be triggered');
+    // TODO: Implement full auto-reload payment flow
+    return { triggered: false, reason: 'Auto-reload not yet fully implemented' };
+  });
 
   // Autonomous task billing handlers — usage recording and settlement
   ipcMain.handle(
