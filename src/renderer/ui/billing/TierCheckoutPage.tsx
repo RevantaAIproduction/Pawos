@@ -160,16 +160,20 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
             // Continue without subscription info
           }
 
-          // Fetch saved cards (non-blocking)
+          // Fetch saved cards (non-blocking) - only show REAL cards, no mocks
           try {
             if ((ipc as any).billingGetNativePaymentMethods) {
               const methods = await Promise.race([
                 (ipc as any).billingGetNativePaymentMethods(),
                 new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
               ]);
-              if (methods?.ok && methods?.methods?.length > 0) {
-                setSavedCards(methods.methods);
-                setSelectedCardId(methods.methods[0].id);
+              // Filter out placeholder/mock cards - keep only real saved cards with valid IDs
+              const realCards = methods?.ok && Array.isArray(methods.methods)
+                ? methods.methods.filter((card: any) => card && card.id && card.id !== 'placeholder' && card.id !== 'mock' && card.last4)
+                : [];
+              if (realCards.length > 0) {
+                setSavedCards(realCards);
+                setSelectedCardId(realCards[0].id);
                 setShowCardForm(false);
               } else {
                 setShowCardForm(true);
