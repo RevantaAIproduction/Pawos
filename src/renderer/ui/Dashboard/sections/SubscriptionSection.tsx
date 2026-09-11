@@ -51,6 +51,9 @@ export function SubscriptionSection({
   const [showCreditsAmountModal, setShowCreditsAmountModal] = useState(false);
   const [creditsAmount, setCreditsAmount] = useState('10');
   const [showCreditsCardForm, setShowCreditsCardForm] = useState(false);
+  const [showAutonomousAmountModal, setShowAutonomousAmountModal] = useState(false);
+  const [autonomousAmount, setAutonomousAmount] = useState('30');
+  const [showAutonomousCardForm, setShowAutonomousCardForm] = useState(false);
   const [creditsCardName, setCreditsCardName] = useState('');
   const [creditsCardEmail, setCreditsCardEmail] = useState('');
   const [creditsCardCountry, setCreditsCardCountry] = useState('India');
@@ -165,27 +168,64 @@ export function SubscriptionSection({
         </div>
       </div>
 
-      {/* Auto-reload */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-        <div>
-          <h3 style={{ fontSize: '1em', fontWeight: 600, margin: 0 }}>Auto-reload</h3>
-          <p style={{ margin: '4px 0 0 0', fontSize: '0.85em', opacity: 0.6 }}>Automatically buy more usage credits when you run out</p>
+      {/* Autonomous Ticket Credit */}
+      <div style={{ marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <h3 style={{ fontSize: '1em', fontWeight: 600, margin: 0 }}>Autonomous Ticket Credit</h3>
+            <p style={{ margin: '4px 0 0 0', fontSize: '0.85em', opacity: 0.6 }}>Buy credits for autonomous ticket resolution</p>
+          </div>
+          <div style={{ position: 'relative', display: 'inline-block' }}>
+            <button
+              type="button"
+              style={{
+                padding: '8px 16px',
+                backgroundColor: currentTier === 'proMax' ? '#404040' : '#606060',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 4,
+                cursor: currentTier === 'proMax' ? 'pointer' : 'not-allowed',
+                fontSize: '0.9em',
+                fontWeight: 500,
+                whiteSpace: 'nowrap',
+                opacity: currentTier === 'proMax' ? 1 : 0.5,
+              }}
+              disabled={currentTier !== 'proMax'}
+              onClick={() => setShowAutonomousAmountModal(true)}
+              onMouseEnter={(e) => {
+                if (currentTier !== 'proMax') {
+                  const tooltip = e.currentTarget.nextElementSibling as HTMLElement;
+                  if (tooltip) tooltip.style.display = 'block';
+                }
+              }}
+              onMouseLeave={(e) => {
+                const tooltip = e.currentTarget.nextElementSibling as HTMLElement;
+                if (tooltip) tooltip.style.display = 'none';
+              }}
+            >
+              Buy credit
+            </button>
+            {currentTier !== 'proMax' && (
+              <div style={{
+                display: 'none',
+                position: 'absolute',
+                bottom: '100%',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                marginBottom: 8,
+                backgroundColor: 'rgba(0,0,0,0.95)',
+                color: '#fff',
+                padding: '8px 12px',
+                borderRadius: 4,
+                fontSize: '0.85em',
+                whiteSpace: 'nowrap',
+                pointerEvents: 'none',
+              }}>
+                Upgrade to Pro Max to unlock
+              </div>
+            )}
+          </div>
         </div>
-        <button type="button" style={{ padding: '8px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500, whiteSpace: 'nowrap' }} onClick={async () => {
-          if (autoReloadEnabled) {
-            try {
-              await ipc.billingSetAutoReload(null);
-              setAutoReloadEnabled(false);
-              setMessage('Auto-reload has been turned off');
-            } catch (err) {
-              setMessage(`Error disabling auto-reload: ${err instanceof Error ? err.message : String(err)}`);
-            }
-          } else {
-            setShowAutoReloadModal(true);
-          }
-        }}>
-          {autoReloadEnabled ? 'Turn off' : 'Turn on'}
-        </button>
       </div>
 
       {/* Usage Credits Amount Modal */}
@@ -331,6 +371,142 @@ export function SubscriptionSection({
                 } else {
                   setMessage('Please fill in all required fields.');
                 }
+              }}>
+                Save payment method
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Autonomous Ticket Credit Amount Modal */}
+      {showAutonomousAmountModal && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: '#1a1a1e', borderRadius: 8, padding: 32, maxWidth: 400, boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }}>
+            <h2 style={{ fontSize: '1.2em', fontWeight: 700, margin: '0 0 8px 0' }}>Buy autonomous credits</h2>
+            <p style={{ fontSize: '0.9em', opacity: 0.7, margin: '0 0 20px 0', lineHeight: 1.5 }}>
+              Enter the amount of autonomous ticket credits you want to purchase ($30 - $20,000).
+            </p>
+
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ fontSize: '0.85em', opacity: 0.7, marginBottom: 8, display: 'block' }}>Amount (USD)</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: '1.1em', opacity: 0.8 }}>$</span>
+                <input
+                  type="number"
+                  min="30"
+                  max="20000"
+                  value={autonomousAmount}
+                  onChange={(e) => setAutonomousAmount(e.target.value)}
+                  style={{ flex: 1, padding: '8px 12px', backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: '#fff', fontSize: '1em' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button type="button" style={{ flex: 1, padding: '10px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => setShowAutonomousAmountModal(false)}>
+                Cancel
+              </button>
+              <button type="button" style={{ flex: 1, padding: '10px 16px', backgroundColor: '#1967D2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => {
+                const amount = parseFloat(autonomousAmount);
+                if (Number.isFinite(amount) && amount >= 30 && amount <= 20000) {
+                  setShowAutonomousAmountModal(false);
+                  setTimeout(() => {
+                    setShowAutonomousCardForm(true);
+                  }, 100);
+                } else {
+                  setMessage('Please enter a valid amount between $30 and $20,000.');
+                }
+              }}>
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Autonomous Ticket Credit Card Form Modal */}
+      {showAutonomousCardForm && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: '#1a1a1e', borderRadius: 8, padding: 32, maxWidth: 500, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }}>
+            <h2 style={{ fontSize: '1.2em', fontWeight: 700, margin: '0 0 8px 0' }}>Enter card details</h2>
+            <p style={{ fontSize: '0.9em', opacity: 0.7, margin: '0 0 20px 0', lineHeight: 1.5 }}>
+              Provide your card and billing information to complete the payment.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <label style={{ fontSize: '0.85em', opacity: 0.7, marginBottom: 4, display: 'block' }}>Full name <span style={{ color: '#d32f2f' }}>*</span></label>
+                <input type="text" placeholder="Your name" style={{ width: '100%', padding: '8px 12px', backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: '#fff', fontSize: '0.9em', boxSizing: 'border-box' }} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.85em', opacity: 0.7, marginBottom: 4, display: 'block' }}>Email</label>
+                <input type="email" placeholder="john@example.com" style={{ width: '100%', padding: '8px 12px', backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: '#fff', fontSize: '0.9em', boxSizing: 'border-box' }} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.85em', opacity: 0.7, marginBottom: 4, display: 'block' }}>Country or region <span style={{ color: '#d32f2f' }}>*</span></label>
+                <select style={{ width: '100%', padding: '8px 12px', backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: '#fff', fontSize: '0.9em', boxSizing: 'border-box' }}>
+                  <option value="India" style={{ backgroundColor: '#1a1a1e', color: '#fff' }}>India</option>
+                  <option value="United States" style={{ backgroundColor: '#1a1a1e', color: '#fff' }}>United States</option>
+                  <option value="United Kingdom" style={{ backgroundColor: '#1a1a1e', color: '#fff' }}>United Kingdom</option>
+                  <option value="Canada" style={{ backgroundColor: '#1a1a1e', color: '#fff' }}>Canada</option>
+                  <option value="Australia" style={{ backgroundColor: '#1a1a1e', color: '#fff' }}>Australia</option>
+                </select>
+              </div>
+
+              <div style={{ backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 4, padding: 12, marginBottom: 4 }}>
+                <p style={{ margin: 0, fontSize: '0.85em', opacity: 0.7 }}>Selected country</p>
+                <p style={{ margin: '4px 0 0 0', fontSize: '1em', fontWeight: 500 }}>India</p>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.85em', opacity: 0.7, marginBottom: 4, display: 'block' }}>Phone number <span style={{ color: '#d32f2f' }}>*</span></label>
+                <input type="tel" placeholder="+1 (555) 123-4567" style={{ width: '100%', padding: '8px 12px', backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: '#fff', fontSize: '0.9em', boxSizing: 'border-box' }} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.85em', opacity: 0.7, marginBottom: 4, display: 'block' }}>Address line 1 <span style={{ color: '#d32f2f' }}>*</span></label>
+                <input type="text" placeholder="Start typing your address" style={{ width: '100%', padding: '8px 12px', backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: '#fff', fontSize: '0.9em', boxSizing: 'border-box' }} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.85em', opacity: 0.7, marginBottom: 4, display: 'block' }}>Business tax ID (Optional)</label>
+                <input type="text" placeholder="GST/Tax ID" style={{ width: '100%', padding: '8px 12px', backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: '#fff', fontSize: '0.9em', boxSizing: 'border-box' }} />
+              </div>
+
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.12)' }}>
+                <h4 style={{ fontSize: '0.9em', fontWeight: 600, margin: '0 0 12px 0' }}>Payment method</h4>
+
+                <div>
+                  <label style={{ fontSize: '0.85em', opacity: 0.7, marginBottom: 4, display: 'block' }}>Card number</label>
+                  <input type="text" placeholder="1234 5678 9012 3456" maxLength={16} style={{ width: '100%', padding: '8px 12px', backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: '#fff', fontSize: '0.9em', boxSizing: 'border-box', letterSpacing: '2px' }} />
+                </div>
+
+                <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: '0.85em', opacity: 0.7, marginBottom: 4, display: 'block' }}>Expiration date</label>
+                    <input type="text" placeholder="MM/YY" maxLength={5} style={{ width: '100%', padding: '8px 12px', backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: '#fff', fontSize: '0.9em', boxSizing: 'border-box' }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: '0.85em', opacity: 0.7, marginBottom: 4, display: 'block' }}>Security code</label>
+                    <input type="text" placeholder="CVC" maxLength={4} style={{ width: '100%', padding: '8px 12px', backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: '#fff', fontSize: '0.9em', boxSizing: 'border-box' }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
+              <button type="button" style={{ flex: 1, padding: '10px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => setShowAutonomousCardForm(false)}>
+                Cancel
+              </button>
+              <button type="button" style={{ flex: 1, padding: '10px 16px', backgroundColor: '#1967D2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => {
+                setShowAutonomousCardForm(false);
+                setTimeout(() => {
+                  const amount = parseFloat(autonomousAmount);
+                  setCheckoutIntent({ kind: 'autonomousWorkCredits', amountUsd: amount, title: 'Autonomous Work Credits' });
+                }, 100);
               }}>
                 Save payment method
               </button>
