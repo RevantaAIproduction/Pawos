@@ -46,6 +46,7 @@ export function SubscriptionSection({
   const [message, setMessage] = useState<string | null>(null);
   const [showAutoReloadModal, setShowAutoReloadModal] = useState(false);
   const [autoReloadAmount, setAutoReloadAmount] = useState('10');
+  const [autoReloadEnabled, setAutoReloadEnabled] = useState(false);
 
   const refresh = () => {
     ipc.billingGetPricing().then(setPricing).catch(() => {});
@@ -109,7 +110,7 @@ export function SubscriptionSection({
           <p style={{ margin: '0 0 4px 0', fontSize: '0.9em', opacity: 0.7 }}>{billingPeriod}</p>
           <p style={{ margin: 0, fontSize: '0.85em', opacity: 0.6 }}>Your subscription will auto renew on {renewalDate}.</p>
         </div>
-        <button type="button" style={{ padding: '8px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }}>
+        <button type="button" style={{ padding: '8px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={onUpgrade}>
           Adjust plan
         </button>
       </div>
@@ -119,10 +120,10 @@ export function SubscriptionSection({
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ width: 32, height: 32, backgroundColor: 'rgba(25, 103, 210, 0.2)', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1em', color: '#1967D2' }}>💳</div>
           <div>
-            <p style={{ margin: 0, fontSize: '0.9em', fontWeight: 500 }}>Visa •••• 9845</p>
+            <p style={{ margin: 0, fontSize: '0.9em', fontWeight: 500 }}>Payment method not configured</p>
           </div>
         </div>
-        <button type="button" style={{ padding: '8px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }}>
+        <button type="button" style={{ padding: '8px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => ipc.billingOpenCheckoutPortal()}>
           Update
         </button>
       </div>
@@ -139,7 +140,7 @@ export function SubscriptionSection({
             <p style={{ margin: '4px 0 0 0', fontSize: '0.85em', opacity: 0.6 }}>Current balance</p>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button type="button" style={{ padding: '8px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }}>
+            <button type="button" style={{ padding: '8px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => ipc.billingOpenCheckoutPortal()}>
               Buy usage credits
             </button>
             <span style={{ fontSize: '0.75em', backgroundColor: '#1967D2', color: 'white', padding: '4px 10px', borderRadius: 3, whiteSpace: 'nowrap', fontWeight: 600 }}>
@@ -155,8 +156,8 @@ export function SubscriptionSection({
           <h3 style={{ fontSize: '1em', fontWeight: 600, margin: 0 }}>Auto-reload</h3>
           <p style={{ margin: '4px 0 0 0', fontSize: '0.85em', opacity: 0.6 }}>Automatically buy more usage credits when you run out</p>
         </div>
-        <button type="button" style={{ padding: '8px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500, whiteSpace: 'nowrap' }} onClick={() => setShowAutoReloadModal(true)}>
-          Turn on
+        <button type="button" style={{ padding: '8px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500, whiteSpace: 'nowrap' }} onClick={() => autoReloadEnabled ? setAutoReloadEnabled(false) : setShowAutoReloadModal(true)}>
+          {autoReloadEnabled ? 'Turn off' : 'Turn on'}
         </button>
       </div>
 
@@ -189,6 +190,7 @@ export function SubscriptionSection({
                 Cancel
               </button>
               <button type="button" style={{ flex: 1, padding: '10px 16px', backgroundColor: '#1967D2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => {
+                setAutoReloadEnabled(true);
                 setMessage(`Auto-reload enabled: $${autoReloadAmount} will be charged when credits run out`);
                 setShowAutoReloadModal(false);
               }}>
