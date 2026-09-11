@@ -206,8 +206,10 @@ export function SubscriptionSection({
               <button type="button" style={{ flex: 1, padding: '10px 16px', backgroundColor: '#1967D2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => {
                 const amount = parseFloat(creditsAmount);
                 if (Number.isFinite(amount) && amount >= 5 && amount <= 20000) {
-                  setCheckoutIntent({ kind: 'usageCredits', amountUsd: amount, title: 'Buy Usage Credits' });
                   setShowCreditsAmountModal(false);
+                  setTimeout(() => {
+                    setCheckoutIntent({ kind: 'usageCredits', amountUsd: amount, title: 'Buy Usage Credits' });
+                  }, 100);
                 } else {
                   setMessage('Please enter a valid amount between $5 and $20,000.');
                 }

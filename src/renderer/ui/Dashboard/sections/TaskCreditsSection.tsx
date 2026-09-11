@@ -99,8 +99,10 @@ export function TaskCreditsSection({ user }: { user: AuthUser }) {
     setError(null);
     setMessage(null);
     setBusy(false);
-    setCheckoutIntent({ kind: 'autonomousWorkCredits', amountUsd: parsed, title: 'Autonomous Work Credits' });
     setShowAmountModal(false);
+    setTimeout(() => {
+      setCheckoutIntent({ kind: 'autonomousWorkCredits', amountUsd: parsed, title: 'Autonomous Work Credits' });
+    }, 100);
   }
 
   if (user.isGuest) return null;
