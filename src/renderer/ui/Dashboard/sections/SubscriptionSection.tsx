@@ -97,11 +97,10 @@ export function SubscriptionSection({
   const currentPlan = pricing?.plans.find((p) => p.id === currentTier);
   const renewalDate = subscription?.renewsAt ? new Date(subscription.renewsAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
   const billingPeriod = currentPlan?.billingPeriod === 'month' ? 'Monthly' : currentPlan?.billingPeriod === 'year' ? 'Yearly' : 'N/A';
-  const isProMax = currentTier === 'proMax';
 
   return (
     <div>
-      {/* Pro plan */}
+      {/* Current plan */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         <div>
           <h2 style={{ fontSize: '1.4em', fontWeight: 700, margin: '0 0 6px 0', letterSpacing: '-0.5px' }}>{currentPlan?.label ?? '…'}</h2>
@@ -113,7 +112,7 @@ export function SubscriptionSection({
         </button>
       </div>
 
-      {/* Payment */}
+      {/* Payment methods */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ width: 32, height: 32, backgroundColor: 'rgba(25, 103, 210, 0.2)', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1em', color: '#1967D2' }}>💳</div>
@@ -126,29 +125,27 @@ export function SubscriptionSection({
         </button>
       </div>
 
-      {/* Usage credits - Pro Max Only */}
-      {isProMax && (
-        <div style={{ marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-          <h3 style={{ fontSize: '1em', fontWeight: 600, margin: '0 0 8px 0' }}>Usage credits</h3>
-          <p style={{ margin: '0 0 16px 0', fontSize: '0.85em', opacity: 0.65, lineHeight: 1.5 }}>
-            Buy usage credits so your team can keep using Claude when they hit a plan limit. Your monthly spend limit still applies.
-          </p>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-            <div>
-              <p style={{ margin: 0, fontSize: '1.6em', fontWeight: 700, letterSpacing: '-0.5px' }}>$0.00</p>
-              <p style={{ margin: '4px 0 0 0', fontSize: '0.85em', opacity: 0.6 }}>Current balance</p>
-            </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <button type="button" style={{ padding: '8px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }}>
-                Buy usage credits
-              </button>
-              <span style={{ fontSize: '0.75em', backgroundColor: '#1967D2', color: 'white', padding: '4px 10px', borderRadius: 3, whiteSpace: 'nowrap', fontWeight: 600 }}>
-                Up to 30% off
-              </span>
-            </div>
+      {/* Usage credits */}
+      <div style={{ marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+        <h3 style={{ fontSize: '1em', fontWeight: 600, margin: '0 0 8px 0' }}>Usage credits</h3>
+        <p style={{ margin: '0 0 16px 0', fontSize: '0.85em', opacity: 0.65, lineHeight: 1.5 }}>
+          Buy usage credits so your team can keep using Claude when they hit a plan limit. Your monthly spend limit still applies.
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+          <div>
+            <p style={{ margin: 0, fontSize: '1.6em', fontWeight: 700, letterSpacing: '-0.5px' }}>$0.00</p>
+            <p style={{ margin: '4px 0 0 0', fontSize: '0.85em', opacity: 0.6 }}>Current balance</p>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button type="button" style={{ padding: '8px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }}>
+              Buy usage credits
+            </button>
+            <span style={{ fontSize: '0.75em', backgroundColor: '#1967D2', color: 'white', padding: '4px 10px', borderRadius: 3, whiteSpace: 'nowrap', fontWeight: 600 }}>
+              Up to 30% off
+            </span>
           </div>
         </div>
-      )}
+      </div>
 
       {/* Auto-reload */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
@@ -179,7 +176,6 @@ export function SubscriptionSection({
           </table>
         </div>
       </div>
-
 
       {/* Cancellation */}
       <div style={{ paddingBottom: 0 }}>

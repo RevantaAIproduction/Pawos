@@ -129,127 +129,24 @@ export function TaskCreditsSection({ user }: { user: AuthUser }) {
     return null;
   }
 
-  const monthToDate = autonomousTaskBillingService.monthToDateTotal(events);
   const balanceUsd = balance?.balanceUsd ?? 0;
-  const ticketsUsedCount = balance?.ticketsUsedCount ?? 0;
-  const nextTicketPrice = getTicketUnitPriceUsd(ticketsUsedCount + 1);
+
+  if (tier !== 'pro' && tier !== 'proMax') {
+    return null;
+  }
 
   return (
     <>
-    <div className={styles.card}>
-      <h3 className={styles.cardTitle}>Autonomous Ticket System</h3>
-      <p className={styles.cardBody} style={{ marginTop: 6, marginBottom: 12 }}>
-        Top up any dollar amount into a Ticket Balance — never for chat, research, meetings,
-        documents, browser automation, or manual coding help. Funds are deducted only once a ticket
-        investigation reaches successful completion, at the current volume-tiered rate for your
-        account (currently ${nextTicketPrice.toFixed(2)}/ticket). Available for tickets from Jira,
-        Linear, and GitHub Issues.
-      </p>
-
-      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 14 }}>
+    <div style={{ marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <p className={styles.cardBody} style={{ fontSize: 12, color: '#96969e' }}>Ticket balance</p>
-          <p style={{ fontSize: 18, fontWeight: 600 }}>${balanceUsd.toFixed(2)}</p>
+          <h3 style={{ fontSize: '1em', fontWeight: 600, margin: 0 }}>Autonomous Ticket Credit</h3>
+          <p style={{ margin: '4px 0 0 0', fontSize: '0.85em', opacity: 0.6 }}>Current balance: ${balanceUsd.toFixed(2)}</p>
         </div>
-        <div>
-          <p className={styles.cardBody} style={{ fontSize: 12, color: '#96969e' }}>Total completed</p>
-          <p style={{ fontSize: 18, fontWeight: 600 }}>{totalCompleted}</p>
-        </div>
-        <div>
-          <p className={styles.cardBody} style={{ fontSize: 12, color: '#96969e' }}>Spend this month</p>
-          <p style={{ fontSize: 18, fontWeight: 600 }}>${monthToDate.toFixed(2)}</p>
-        </div>
-      </div>
-
-      {balanceUsd < nextTicketPrice && (
-        <p style={{ color: '#e0c28c', fontSize: 12.5, marginBottom: 10 }}>
-          Balance can&apos;t cover the next ticket at the current rate (${nextTicketPrice.toFixed(2)}) — add funds below before
-          starting a new Autonomous Ticket investigation.
-        </p>
-      )}
-
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-        {pricingConfig.topupPresetsUsd.map((n) => (
-          <button
-            key={n}
-            type="button"
-            onClick={() => setAmountInput(String(n))}
-            style={{
-              padding: '6px 14px',
-              borderRadius: 999,
-              fontSize: 12.5,
-              fontWeight: 600,
-              cursor: 'pointer',
-              background: amountInput === String(n) ? 'rgba(124,156,255,0.15)' : 'rgba(255,255,255,0.04)',
-              border: amountInput === String(n) ? '1px solid #7c9cff' : '1px solid rgba(255,255,255,0.12)',
-              color: amountInput === String(n) ? '#cdd8ff' : '#e8e8ec',
-            }}
-          >
-            ${n}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 13, color: '#96969e' }}>$</span>
-        <input
-          style={inputStyle}
-          type="number"
-          min={pricingConfig.minTopupUsd}
-          max={pricingConfig.maxTopupUsd}
-          value={amountInput}
-          onChange={(e) => setAmountInput(e.target.value)}
-          disabled={tier !== 'proMax'}
-        />
-        <button type="button" className={styles.primaryButton} disabled={busy || tier !== 'proMax'} onClick={addFunds}>
-          {busy ? 'Opening checkout…' : 'Add funds'}
+        <button type="button" style={{ padding: '8px 16px', backgroundColor: tier === 'proMax' ? '#404040' : '#606060', color: '#fff', border: 'none', borderRadius: 4, cursor: tier === 'proMax' ? 'pointer' : 'not-allowed', fontSize: '0.9em', fontWeight: 500, whiteSpace: 'nowrap', opacity: tier === 'proMax' ? 1 : 0.5 }} disabled={tier !== 'proMax'} onClick={addFunds}>
+          {busy ? 'Opening checkout…' : 'Buy credit'}
         </button>
-        <span style={{ fontSize: 12, color: '#96969e' }}>
-          Minimum ${pricingConfig.minTopupUsd}
-        </span>
       </div>
-      {message && <p style={{ color: '#8ce0a8', fontSize: 12.5, marginBottom: 10 }}>{message}</p>}
-
-      <div style={{ marginTop: 14, marginBottom: 6 }}>
-        <p className={styles.cardBody} style={{ fontSize: 12, color: '#96969e' }}>Top-up history</p>
-      </div>
-      {topups.length === 0 ? (
-        <p className={styles.cardBody}>No top-ups yet.</p>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 180, overflowY: 'auto', marginBottom: 14 }}>
-          {topups.map((t) => (
-            <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-              <span>${t.amountUsd.toFixed(2)}</span>
-              <span style={{ color: '#96969e' }}>{new Date(t.toppedUpAt).toLocaleDateString()}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div style={{ marginBottom: 6 }}>
-        <p className={styles.cardBody} style={{ fontSize: 12, color: '#96969e' }}>Ticket usage history</p>
-      </div>
-      {events.length === 0 ? (
-        <p className={styles.cardBody}>No completed tickets yet.</p>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 280, overflowY: 'auto' }}>
-          {events.map((e) => (
-            <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-              <span>
-                {e.ticketId ?? '(no ticket)'} · {Math.round(e.durationSeconds / 60)}m
-                {e.completionSource === 'connector_verified' && (
-                  <span style={{ marginLeft: 8, padding: '1px 6px', borderRadius: 999, fontSize: 10.5, fontWeight: 600, background: 'rgba(140,224,168,0.15)', color: '#8ce0a8' }}>
-                    Verified
-                  </span>
-                )}
-              </span>
-              <span>${e.amountUsd.toFixed(2)}</span>
-              <span style={{ color: '#96969e' }}>{new Date(e.createdAt).toLocaleDateString()}</span>
-            </div>
-          ))}
-        </div>
-      )}
-      {error && <p style={{ color: '#e08c8c', fontSize: 12.5, marginTop: 10 }}>{error}</p>}
     </div>
     {checkoutIntent && (
       <NativeBillingCheckoutModal
