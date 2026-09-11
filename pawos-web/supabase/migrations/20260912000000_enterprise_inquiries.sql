@@ -17,14 +17,21 @@ CREATE TABLE IF NOT EXISTS enterprise_inquiries (
 );
 
 -- Indexes for faster queries
-CREATE INDEX idx_enterprise_inquiries_email ON enterprise_inquiries(email);
-CREATE INDEX idx_enterprise_inquiries_status ON enterprise_inquiries(status);
-CREATE INDEX idx_enterprise_inquiries_created_at ON enterprise_inquiries(created_at DESC);
-CREATE INDEX idx_enterprise_inquiries_user_id ON enterprise_inquiries(user_id);
+CREATE INDEX IF NOT EXISTS idx_enterprise_inquiries_email ON enterprise_inquiries(email);
+CREATE INDEX IF NOT EXISTS idx_enterprise_inquiries_status ON enterprise_inquiries(status);
+CREATE INDEX IF NOT EXISTS idx_enterprise_inquiries_created_at ON enterprise_inquiries(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_enterprise_inquiries_user_id ON enterprise_inquiries(user_id);
 
 -- RLS: Users can only see their own inquiries
 ALTER TABLE enterprise_inquiries ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view their own inquiries" ON enterprise_inquiries;
+DROP POLICY IF EXISTS "Users can insert their own inquiries" ON enterprise_inquiries;
+DROP POLICY IF EXISTS "Admins can view all inquiries" ON enterprise_inquiries;
+DROP POLICY IF EXISTS "Admins can update inquiries" ON enterprise_inquiries;
+
+-- Create RLS policies
 CREATE POLICY "Users can view their own inquiries"
   ON enterprise_inquiries FOR SELECT
   USING (auth.uid() = user_id);
