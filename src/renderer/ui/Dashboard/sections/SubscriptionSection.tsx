@@ -48,6 +48,8 @@ export function SubscriptionSection({
   const [showAutoReloadModal, setShowAutoReloadModal] = useState(false);
   const [autoReloadAmount, setAutoReloadAmount] = useState('10');
   const [autoReloadEnabled, setAutoReloadEnabled] = useState(false);
+  const [showCreditsAmountModal, setShowCreditsAmountModal] = useState(false);
+  const [creditsAmount, setCreditsAmount] = useState('10');
   const [checkoutIntent, setCheckoutIntent] = useState<NativeBillingCheckoutIntent | null>(null);
 
   const refresh = () => {
@@ -143,7 +145,7 @@ export function SubscriptionSection({
             <p style={{ margin: '4px 0 0 0', fontSize: '0.85em', opacity: 0.6 }}>Current balance</p>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button type="button" style={{ padding: '8px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => setCheckoutIntent({ kind: 'usageCredits', title: 'Buy Usage Credits' })}>
+            <button type="button" style={{ padding: '8px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => setShowCreditsAmountModal(true)}>
               Buy usage credits
             </button>
             <span style={{ fontSize: '0.75em', backgroundColor: '#1967D2', color: 'white', padding: '4px 10px', borderRadius: 3, whiteSpace: 'nowrap', fontWeight: 600 }}>
@@ -163,6 +165,50 @@ export function SubscriptionSection({
           {autoReloadEnabled ? 'Turn off' : 'Turn on'}
         </button>
       </div>
+
+      {/* Usage Credits Amount Modal */}
+      {showCreditsAmountModal && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: '#1a1a1e', borderRadius: 8, padding: 32, maxWidth: 400, boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }}>
+            <h2 style={{ fontSize: '1.2em', fontWeight: 700, margin: '0 0 8px 0' }}>Buy usage credits</h2>
+            <p style={{ fontSize: '0.9em', opacity: 0.7, margin: '0 0 20px 0', lineHeight: 1.5 }}>
+              Enter the amount of usage credits you want to purchase ($5 - $20,000).
+            </p>
+
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ fontSize: '0.85em', opacity: 0.7, marginBottom: 8, display: 'block' }}>Amount (USD)</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: '1.1em', opacity: 0.8 }}>$</span>
+                <input
+                  type="number"
+                  min="5"
+                  max="20000"
+                  value={creditsAmount}
+                  onChange={(e) => setCreditsAmount(e.target.value)}
+                  style={{ flex: 1, padding: '8px 12px', backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: '#fff', fontSize: '1em' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button type="button" style={{ flex: 1, padding: '10px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => setShowCreditsAmountModal(false)}>
+                Cancel
+              </button>
+              <button type="button" style={{ flex: 1, padding: '10px 16px', backgroundColor: '#1967D2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => {
+                const amount = parseFloat(creditsAmount);
+                if (Number.isFinite(amount) && amount >= 5 && amount <= 20000) {
+                  setCheckoutIntent({ kind: 'usageCredits', amountUsd: amount, title: 'Buy Usage Credits' });
+                  setShowCreditsAmountModal(false);
+                } else {
+                  setMessage('Please enter a valid amount between $5 and $20,000.');
+                }
+              }}>
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Auto-reload Modal */}
       {showAutoReloadModal && (
