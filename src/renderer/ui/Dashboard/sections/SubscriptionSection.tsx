@@ -76,6 +76,10 @@ export function SubscriptionSection({
   const [creditsCardCountry, setCreditsCardCountry] = useState('India');
   const [creditsCardPhone, setCreditsCardPhone] = useState('');
   const [creditsCardAddress, setCreditsCardAddress] = useState('');
+  const [creditsCardAddress2, setCreditsCardAddress2] = useState('');
+  const [creditsCardCity, setCreditsCardCity] = useState('');
+  const [creditsCardState, setCreditsCardState] = useState('');
+  const [creditsCardPincode, setCreditsCardPincode] = useState('');
   const [creditsCardTaxId, setCreditsCardTaxId] = useState('');
   const [creditsCardNumber, setCreditsCardNumber] = useState('');
   const [creditsCardExpiry, setCreditsCardExpiry] = useState('');
@@ -233,17 +237,33 @@ export function SubscriptionSection({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Full name <span style={{ color: '#ef4444' }}>*</span></label>
-                <input type="text" placeholder="Your full name" style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }} />
+                <input
+                  type="text"
+                  placeholder="Your full name"
+                  value={creditsCardName}
+                  onChange={(e) => setCreditsCardName(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }}
+                />
               </div>
 
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Email <span style={{ color: '#ef4444' }}>*</span></label>
-                <input type="email" placeholder="your@email.com" style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }} />
+                <input
+                  type="email"
+                  placeholder="your@email.com"
+                  value={creditsCardEmail}
+                  onChange={(e) => setCreditsCardEmail(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }}
+                />
               </div>
 
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Country or region <span style={{ color: '#ef4444' }}>*</span></label>
-                <select style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }}>
+                <select
+                  value={creditsCardCountry}
+                  onChange={(e) => setCreditsCardCountry(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }}
+                >
                   <option value="India">India</option>
                   <option value="United States">United States</option>
                   <option value="United Kingdom">United Kingdom</option>
@@ -254,38 +274,80 @@ export function SubscriptionSection({
 
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Phone number <span style={{ color: '#ef4444' }}>*</span></label>
-                <input type="tel" placeholder="+1 (555) 123-4567" style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }} />
+                <input
+                  type="tel"
+                  placeholder="+1 (555) 123-4567"
+                  value={creditsCardPhone}
+                  onChange={(e) => setCreditsCardPhone(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }}
+                />
               </div>
 
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Address line 1 <span style={{ color: '#ef4444' }}>*</span></label>
-                <input type="text" placeholder="Start typing your address" style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }} />
+                <input
+                  type="text"
+                  placeholder="Start typing your address"
+                  value={creditsCardAddress}
+                  onChange={(e) => setCreditsCardAddress(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }}
+                />
               </div>
 
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Address line 2</label>
-                <input type="text" placeholder="Apartment, suite, etc. (optional)" style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }} />
+                <input
+                  type="text"
+                  placeholder="Apartment, suite, etc. (optional)"
+                  value={creditsCardAddress2}
+                  onChange={(e) => setCreditsCardAddress2(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }}
+                />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>City <span style={{ color: '#ef4444' }}>*</span></label>
-                  <input type="text" placeholder="City" style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }} />
+                  <input
+                    type="text"
+                    placeholder="City"
+                    value={creditsCardCity}
+                    onChange={(e) => setCreditsCardCity(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }}
+                  />
                 </div>
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>PIN <span style={{ color: '#ef4444' }}>*</span></label>
-                  <input type="text" placeholder="Postal code" style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }} />
+                  <input
+                    type="text"
+                    placeholder="Postal code"
+                    value={creditsCardPincode}
+                    onChange={(e) => setCreditsCardPincode(e.target.value)}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }}
+                  />
                 </div>
               </div>
 
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>State <span style={{ color: '#ef4444' }}>*</span></label>
-                <input type="text" placeholder="State/Province" style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }} />
+                <input
+                  type="text"
+                  placeholder="State/Province"
+                  value={creditsCardState}
+                  onChange={(e) => setCreditsCardState(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }}
+                />
               </div>
 
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Business tax ID (Optional)</label>
-                <input type="text" placeholder="GST/Tax ID" style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }} />
+                <input
+                  type="text"
+                  placeholder="GST/Tax ID"
+                  value={creditsCardTaxId}
+                  onChange={(e) => setCreditsCardTaxId(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }}
+                />
               </div>
 
               <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.12)' }}>
