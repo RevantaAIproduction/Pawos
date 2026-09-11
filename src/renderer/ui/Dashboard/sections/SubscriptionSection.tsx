@@ -54,6 +54,8 @@ export function SubscriptionSection({
   const [showAutonomousAmountModal, setShowAutonomousAmountModal] = useState(false);
   const [autonomousAmount, setAutonomousAmount] = useState('30');
   const [showAutonomousCardForm, setShowAutonomousCardForm] = useState(false);
+  const [showCreditsSummary, setShowCreditsSummary] = useState(false);
+  const [showAutonomousSummary, setShowAutonomousSummary] = useState(false);
   const [creditsCardName, setCreditsCardName] = useState('');
   const [creditsCardEmail, setCreditsCardEmail] = useState('');
   const [creditsCardCountry, setCreditsCardCountry] = useState('India');
@@ -365,8 +367,7 @@ export function SubscriptionSection({
                 if (creditsCardName && creditsCardEmail && creditsCardCountry && creditsCardPhone && creditsCardAddress && creditsCardNumber && creditsCardExpiry && creditsCardCvc) {
                   setShowCreditsCardForm(false);
                   setTimeout(() => {
-                    const amount = parseFloat(creditsAmount);
-                    setCheckoutIntent({ kind: 'usageCredits', amountUsd: amount, title: 'Buy Usage Credits' });
+                    setShowCreditsSummary(true);
                   }, 100);
                 } else {
                   setMessage('Please fill in all required fields.');
@@ -504,11 +505,106 @@ export function SubscriptionSection({
               <button type="button" style={{ flex: 1, padding: '10px 16px', backgroundColor: '#1967D2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => {
                 setShowAutonomousCardForm(false);
                 setTimeout(() => {
+                  setShowAutonomousSummary(true);
+                }, 100);
+              }}>
+                Save payment method
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Usage Credits Payment Summary */}
+      {showCreditsSummary && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: '#1a1a1e', borderRadius: 8, padding: 40, maxWidth: 500, boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }}>
+            <h2 style={{ fontSize: '1.2em', fontWeight: 700, margin: '0 0 8px 0' }}>Order Details</h2>
+
+            <div style={{ backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: 20, marginTop: 20, marginBottom: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: '0.9em', marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
+                <div style={{ opacity: 0.7 }}>Amount</div>
+                <div style={{ fontWeight: 600 }}>${parseFloat(creditsAmount).toFixed(2)}</div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: '0.9em', marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
+                <div style={{ opacity: 0.7 }}>Exchange rate</div>
+                <div style={{ fontWeight: 600 }}>1 USD = ₹95.65</div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: '1em', fontWeight: 700 }}>
+                <div>Total due today</div>
+                <div>₹{Math.round(parseFloat(creditsAmount) * 95.65).toLocaleString()}</div>
+              </div>
+            </div>
+
+            <div style={{ fontSize: '0.85em', color: 'rgba(255,255,255,0.6)', marginBottom: 20, lineHeight: 1.6 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div>ℹ️</div>
+                <div>One-time purchase. Charged in Indian Rupees (INR) at the rate shown above.</div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button type="button" style={{ flex: 1, padding: '10px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => setShowCreditsSummary(false)}>
+                Cancel
+              </button>
+              <button type="button" style={{ flex: 1, padding: '10px 16px', backgroundColor: '#1967D2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => {
+                setShowCreditsSummary(false);
+                setTimeout(() => {
+                  const amount = parseFloat(creditsAmount);
+                  setCheckoutIntent({ kind: 'usageCredits', amountUsd: amount, title: 'Buy Usage Credits' });
+                }, 100);
+              }}>
+                Pay ₹{Math.round(parseFloat(creditsAmount) * 95.65).toLocaleString()}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Autonomous Credits Payment Summary */}
+      {showAutonomousSummary && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: '#1a1a1e', borderRadius: 8, padding: 40, maxWidth: 500, boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }}>
+            <h2 style={{ fontSize: '1.2em', fontWeight: 700, margin: '0 0 8px 0' }}>Order Details</h2>
+
+            <div style={{ backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: 20, marginTop: 20, marginBottom: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: '0.9em', marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
+                <div style={{ opacity: 0.7 }}>Amount</div>
+                <div style={{ fontWeight: 600 }}>${parseFloat(autonomousAmount).toFixed(2)}</div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: '0.9em', marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
+                <div style={{ opacity: 0.7 }}>Exchange rate</div>
+                <div style={{ fontWeight: 600 }}>1 USD = ₹95.65</div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: '1em', fontWeight: 700 }}>
+                <div>Total due today</div>
+                <div>₹{Math.round(parseFloat(autonomousAmount) * 95.65).toLocaleString()}</div>
+              </div>
+            </div>
+
+            <div style={{ fontSize: '0.85em', color: 'rgba(255,255,255,0.6)', marginBottom: 20, lineHeight: 1.6 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div>ℹ️</div>
+                <div>One-time purchase. Charged in Indian Rupees (INR) at the rate shown above.</div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button type="button" style={{ flex: 1, padding: '10px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => setShowAutonomousSummary(false)}>
+                Cancel
+              </button>
+              <button type="button" style={{ flex: 1, padding: '10px 16px', backgroundColor: '#1967D2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => {
+                setShowAutonomousSummary(false);
+                setTimeout(() => {
                   const amount = parseFloat(autonomousAmount);
                   setCheckoutIntent({ kind: 'autonomousWorkCredits', amountUsd: amount, title: 'Autonomous Work Credits' });
                 }, 100);
               }}>
-                Save payment method
+                Pay ₹{Math.round(parseFloat(autonomousAmount) * 95.65).toLocaleString()}
               </button>
             </div>
           </div>
@@ -590,11 +686,11 @@ export function SubscriptionSection({
         <p style={{ margin: '0 0 12px 0', fontSize: '0.85em', opacity: 0.6, lineHeight: 1.5 }}>
           Cancel plan
         </p>
-        <button type="button" style={{ padding: '8px 16px', backgroundColor: '#d32f2f', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => {
+        <button type="button" disabled={currentTier === 'go'} style={{ padding: '8px 16px', backgroundColor: currentTier === 'go' ? '#999999' : '#d32f2f', color: 'white', border: 'none', borderRadius: 4, cursor: currentTier === 'go' ? 'not-allowed' : 'pointer', fontSize: '0.9em', fontWeight: 500, opacity: currentTier === 'go' ? 0.5 : 1 }} onClick={() => {
           if (confirm('Are you sure you want to cancel your subscription? You will lose access to all paid features.')) {
             downgrade('go');
           }
-        }}>
+        }} title={currentTier === 'go' ? 'Already on Go plan' : ''}>
           Cancel
         </button>
       </div>
