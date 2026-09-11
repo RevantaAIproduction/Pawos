@@ -1757,7 +1757,8 @@ export function NativeBillingCheckoutModal({
                 </div>
               )}
 
-              {/* Phone Number Input */}
+              {/* Phone Number Input — skip if already provided via card details */}
+              {!((intent as any).cardDetails?.phone) && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 24 }}>
                 <label style={{ fontSize: 13, fontWeight: 600 }}>Phone number *</label>
                 <input
@@ -1777,6 +1778,7 @@ export function NativeBillingCheckoutModal({
                   }}
                 />
               </div>
+              )}
             </div>
           </div>
 
@@ -1856,7 +1858,8 @@ export function NativeBillingCheckoutModal({
             </button>
           </div>
 
-          {/* Phone Number Input */}
+          {/* Phone Number Input — skip if already provided via card details */}
+          {!((intent as any).cardDetails?.phone) && (
           <div style={{ padding: '0px 24px', marginBottom: 16 }}>
             <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 8 }}>Phone number *</label>
             <input
@@ -1878,6 +1881,7 @@ export function NativeBillingCheckoutModal({
               }}
             />
           </div>
+          )}
 
           {/* Custom Checkout Form */}
           <CustomCheckoutPaymentForm
