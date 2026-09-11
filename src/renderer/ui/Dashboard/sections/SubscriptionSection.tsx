@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
+import { getSupabaseClient } from '../../../auth/supabaseClient';
 import { NativeBillingCheckoutModal, type NativeBillingCheckoutIntent } from '../../billing/NativeBillingCheckoutModal';
 
 declare global {
@@ -160,11 +161,22 @@ export function SubscriptionSection({
       setBusy(true);
       setMessage(null);
 
+      // Get access token from Supabase
+      const supabase = await getSupabaseClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+
+      if (!accessToken) {
+        setMessage('❌ Please sign in again to continue');
+        setBusy(false);
+        return;
+      }
+
       const createOrderFn = isCredits
         ? ipc.billingCreateNativeUsageCreditsCheckout
         : ipc.billingCreateNativeCreditsCheckout;
 
-      const checkout = await createOrderFn(amount);
+      const checkout = await createOrderFn(amount, undefined, accessToken);
 
       if (!checkout.ok) {
         setMessage(`Payment error: ${checkout.reason}`);
