@@ -126,7 +126,7 @@ export function SubscriptionSection({
             <p style={{ margin: 0, fontSize: '0.9em', fontWeight: 500 }}>Payment method not configured</p>
           </div>
         </div>
-        <button type="button" style={{ padding: '8px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }}>
+        <button type="button" style={{ padding: '8px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => setMessage('Payment method management coming soon. Use checkout to add a card.')}>
           Update
         </button>
       </div>
