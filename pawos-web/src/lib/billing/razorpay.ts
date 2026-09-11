@@ -33,8 +33,8 @@ const TEAM_SEAT_PLAN_ENV_VAR: Record<SeatTier, string> = {
 const ENTERPRISE_BASE_PLAN_ENV_VAR = "RAZORPAY_PLAN_ID_ENTERPRISE_BASE";
 
 export function getRazorpayCredentials(): { keyId: string; keySecret: string } | null {
-  const keyId = process.env.RAZORPAY_KEY_ID;
-  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+  const keyId = process.env.RAZORPAY_KEY_ID?.trim();
+  const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim();
   if (!keyId || !keySecret) return null;
   return { keyId, keySecret };
 }
