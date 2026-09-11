@@ -180,18 +180,6 @@ export function SubscriptionSection({
         </div>
       </div>
 
-      {/* Plan Features */}
-      <div style={{ marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-        <h3 style={{ fontSize: '1em', fontWeight: 600, margin: '0 0 12px 0' }}>Plan Features</h3>
-        <ul style={{ margin: 0, paddingLeft: 18 }}>
-          {(currentPlan?.features ?? []).map((f) => (
-            <li key={f} style={{ margin: '4px 0', fontSize: '0.9em', opacity: 0.8 }}>
-              {f}
-            </li>
-          ))}
-        </ul>
-      </div>
-
 
       {/* Cancellation */}
       <div style={{ paddingBottom: 0 }}>

@@ -126,26 +126,7 @@ export function TaskCreditsSection({ user }: { user: AuthUser }) {
   }
 
   if (tier !== 'pro' && tier !== 'proMax') {
-    return (
-      <div style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-        <h3 style={{ fontSize: '1em', fontWeight: 600, margin: '0 0 12px 0' }}>Autonomous Ticket System — Pricing</h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {TICKET_PRICING_TIERS.map((t) => (
-            <div
-              key={t.minTicketNumber}
-              style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9em', padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
-            >
-              <span>
-                {t.maxTicketNumber === null
-                  ? `Tickets ${t.minTicketNumber.toLocaleString()}+`
-                  : `Tickets ${t.minTicketNumber.toLocaleString()}–${t.maxTicketNumber.toLocaleString()}`}
-              </span>
-              <span style={{ fontWeight: 600 }}>${t.pricePerTicketUsd.toFixed(2)}/ticket</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
+    return null;
   }
 
   const monthToDate = autonomousTaskBillingService.monthToDateTotal(events);
