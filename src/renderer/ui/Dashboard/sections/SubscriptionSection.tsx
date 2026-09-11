@@ -160,7 +160,6 @@ export function SubscriptionSection({
       setBusy(true);
       setMessage(null);
 
-    try {
       const createOrderFn = isCredits
         ? ipc.billingCreateNativeUsageCreditsCheckout
         : ipc.billingCreateNativeCreditsCheckout;
