@@ -85,7 +85,10 @@ export async function POST(request: Request) {
       Authorization: razorpayAuthHeader(credentials.keyId, credentials.keySecret),
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(orderPayload.payload),
+    body: JSON.stringify({
+      ...orderPayload.payload,
+      receipt: `ticket-balance-${userId.slice(-8)}-${Date.now().toString().slice(-8)}`,
+    }),
   });
 
   if (!response.ok) {
