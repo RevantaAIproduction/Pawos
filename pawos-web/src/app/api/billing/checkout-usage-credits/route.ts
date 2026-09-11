@@ -94,20 +94,34 @@ export async function POST(request: Request) {
     );
   }
 
+  const requestBody = {
+    ...orderPayload.payload,
+    receipt: `usage-credits-${userId.slice(-8)}-${Date.now().toString().slice(-8)}`,
+  };
+
+  console.log('[Usage Credits Checkout] Creating Razorpay order:', {
+    amount: requestBody.amount,
+    currency: requestBody.currency,
+    productType: requestBody.notes?.productType,
+    amountUsd: requestBody.notes?.amountUsd,
+  });
+
   const response = await fetch("https://api.razorpay.com/v1/orders", {
     method: "POST",
     headers: {
       Authorization: razorpayAuthHeader(credentials.keyId, credentials.keySecret),
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      ...orderPayload.payload,
-      receipt: `usage-credits-${userId.slice(-8)}-${Date.now().toString().slice(-8)}`,
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
     const errorBody = await response.text().catch(() => "");
+    console.error('[Usage Credits Checkout] Razorpay error:', {
+      status: response.status,
+      statusText: response.statusText,
+      body: errorBody,
+    });
     return NextResponse.json(
       { ok: false, reason: `The payment processor rejected the order request: ${errorBody || response.statusText}` },
       { status: 502 }

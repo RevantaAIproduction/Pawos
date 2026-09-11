@@ -33,9 +33,17 @@ const TEAM_SEAT_PLAN_ENV_VAR: Record<SeatTier, string> = {
 const ENTERPRISE_BASE_PLAN_ENV_VAR = "RAZORPAY_PLAN_ID_ENTERPRISE_BASE";
 
 export function getRazorpayCredentials(): { keyId: string; keySecret: string } | null {
-  const keyId = process.env.RAZORPAY_KEY_ID;
-  const keySecret = process.env.RAZORPAY_KEY_SECRET;
-  if (!keyId || !keySecret) return null;
+  const keyId = process.env.RAZORPAY_KEY_ID?.trim();
+  const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim();
+  if (!keyId || !keySecret) {
+    console.warn('[Razorpay Config] Missing credentials:', {
+      hasKeyId: !!keyId,
+      hasKeySecret: !!keySecret,
+      keyIdEnv: process.env.RAZORPAY_KEY_ID ? `set (length: ${process.env.RAZORPAY_KEY_ID.length})` : 'unset',
+      keySecretEnv: process.env.RAZORPAY_KEY_SECRET ? `set (length: ${process.env.RAZORPAY_KEY_SECRET.length})` : 'unset',
+    });
+    return null;
+  }
   return { keyId, keySecret };
 }
 
