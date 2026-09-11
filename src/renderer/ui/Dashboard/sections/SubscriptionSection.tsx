@@ -182,50 +182,20 @@ export function SubscriptionSection({
               type="button"
               style={{
                 padding: '8px 16px',
-                backgroundColor: currentTier === 'proMax' ? '#404040' : '#606060',
+                backgroundColor: '#404040',
                 color: '#fff',
                 border: 'none',
                 borderRadius: 4,
-                cursor: currentTier === 'proMax' ? 'pointer' : 'not-allowed',
+                cursor: 'pointer',
                 fontSize: '0.9em',
                 fontWeight: 500,
                 whiteSpace: 'nowrap',
-                opacity: currentTier === 'proMax' ? 1 : 0.5,
+                opacity: 1,
               }}
-              disabled={currentTier !== 'proMax'}
               onClick={() => setShowAutonomousAmountModal(true)}
-              onMouseEnter={(e) => {
-                if (currentTier !== 'proMax') {
-                  const tooltip = e.currentTarget.nextElementSibling as HTMLElement;
-                  if (tooltip) tooltip.style.display = 'block';
-                }
-              }}
-              onMouseLeave={(e) => {
-                const tooltip = e.currentTarget.nextElementSibling as HTMLElement;
-                if (tooltip) tooltip.style.display = 'none';
-              }}
             >
               Buy credit
             </button>
-            {currentTier !== 'proMax' && (
-              <div style={{
-                display: 'none',
-                position: 'absolute',
-                bottom: '100%',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                marginBottom: 8,
-                backgroundColor: 'rgba(0,0,0,0.95)',
-                color: '#fff',
-                padding: '8px 12px',
-                borderRadius: 4,
-                fontSize: '0.85em',
-                whiteSpace: 'nowrap',
-                pointerEvents: 'none',
-              }}>
-                Upgrade to Pro Max to unlock
-              </div>
-            )}
           </div>
         </div>
       </div>
