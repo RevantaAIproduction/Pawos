@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
+import { NativeBillingCheckoutModal, type NativeBillingCheckoutIntent } from '../billing/NativeBillingCheckoutModal';
 import type { AuthUser } from '../../../auth/AuthTypes';
 import {
   SUBSCRIPTION_TIER_ORDER,
@@ -47,6 +48,7 @@ export function SubscriptionSection({
   const [showAutoReloadModal, setShowAutoReloadModal] = useState(false);
   const [autoReloadAmount, setAutoReloadAmount] = useState('10');
   const [autoReloadEnabled, setAutoReloadEnabled] = useState(false);
+  const [checkoutIntent, setCheckoutIntent] = useState<NativeBillingCheckoutIntent | null>(null);
 
   const refresh = () => {
     ipc.billingGetPricing().then(setPricing).catch(() => {});
@@ -102,6 +104,7 @@ export function SubscriptionSection({
   const billingPeriod = currentPlan?.billingPeriod === 'month' ? 'Monthly' : currentPlan?.billingPeriod === 'year' ? 'Yearly' : 'N/A';
 
   return (
+    <>
     <div>
       {/* Current plan */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
@@ -140,7 +143,7 @@ export function SubscriptionSection({
             <p style={{ margin: '4px 0 0 0', fontSize: '0.85em', opacity: 0.6 }}>Current balance</p>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button type="button" style={{ padding: '8px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }}>
+            <button type="button" style={{ padding: '8px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => setCheckoutIntent({ kind: 'usageCredits', title: 'Buy Usage Credits' })}>
               Buy usage credits
             </button>
             <span style={{ fontSize: '0.75em', backgroundColor: '#1967D2', color: 'white', padding: '4px 10px', borderRadius: 3, whiteSpace: 'nowrap', fontWeight: 600 }}>
@@ -233,5 +236,8 @@ export function SubscriptionSection({
 
       {message && <p style={{ margin: '16px 0 0 0', opacity: 0.8, fontSize: '0.9em', color: '#4cb050' }}>{message}</p>}
     </div>
+
+    {checkoutIntent && <NativeBillingCheckoutModal intent={checkoutIntent} onClose={() => setCheckoutIntent(null)} />}
+    </>
   );
 }
