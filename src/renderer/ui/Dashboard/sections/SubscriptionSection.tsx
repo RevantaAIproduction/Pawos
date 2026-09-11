@@ -229,7 +229,11 @@ export function SubscriptionSection({
         <p style={{ margin: '0 0 12px 0', fontSize: '0.85em', opacity: 0.6, lineHeight: 1.5 }}>
           Cancel plan
         </p>
-        <button type="button" style={{ padding: '8px 16px', backgroundColor: '#d32f2f', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }}>
+        <button type="button" style={{ padding: '8px 16px', backgroundColor: '#d32f2f', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => {
+          if (confirm('Are you sure you want to cancel your subscription? You will lose access to all paid features.')) {
+            downgrade('go');
+          }
+        }}>
           Cancel
         </button>
       </div>
