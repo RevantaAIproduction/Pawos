@@ -74,9 +74,9 @@ export async function submitEnterpriseContact(
       return;
     }
 
-    // Success
+    // Success - no immediate email, user waits for support response
     options.setMessage(
-      `✅ Thank you! Your Enterprise inquiry has been sent to our team.\n\nWe'll contact you at ${formData.email} soon with personalized options and pricing.`
+      `✅ Thank you! Your inquiry has been received.\n\nOur team will review your requirements and contact you at ${formData.email} shortly.`
     );
     options.setBusy(false);
 
