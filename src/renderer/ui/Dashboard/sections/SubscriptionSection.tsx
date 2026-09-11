@@ -20,6 +20,21 @@ const TIER_LABELS: Record<SubscriptionTierId, string> = {
   enterprise: 'Enterprise',
 };
 
+function detectCardBrand(cardNumber: string): 'visa' | 'mastercard' | 'rupay' | 'unknown' {
+  const cleaned = cardNumber.replace(/\s/g, '');
+  if (/^4[0-9]{12}(?:[0-9]{3})?$/.test(cleaned)) return 'visa';
+  if (/^5[1-5][0-9]{14}$/.test(cleaned)) return 'mastercard';
+  if (/^607481[0-9]{10}$/.test(cleaned)) return 'rupay';
+  if (/^9[0-9]{15}$/.test(cleaned)) return 'rupay';
+  return 'unknown';
+}
+
+function formatCardNumber(value: string): string {
+  const cleaned = value.replace(/\s/g, '');
+  const chunks = cleaned.match(/.{1,4}/g) || [];
+  return chunks.join(' ');
+}
+
 function formatPrice(plan: PricingPlan | undefined): string {
   if (!plan) return '…';
   if (plan.seatBased) {
@@ -65,6 +80,7 @@ export function SubscriptionSection({
   const [creditsCardNumber, setCreditsCardNumber] = useState('');
   const [creditsCardExpiry, setCreditsCardExpiry] = useState('');
   const [creditsCardCvc, setCreditsCardCvc] = useState('');
+  const [creditsCardBrand, setCreditsCardBrand] = useState<'visa' | 'mastercard' | 'rupay' | 'unknown'>('unknown');
   const [creditsSaveCard, setCreditsSaveCard] = useState(false);
   const [checkoutIntent, setCheckoutIntent] = useState<NativeBillingCheckoutIntent | null>(null);
 
@@ -278,18 +294,29 @@ export function SubscriptionSection({
                 <div>
                   <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Card number</label>
                   <div style={{ position: 'relative' }}>
-                    <input type="text" placeholder="1234 1234 1234 1234" style={{ width: '100%', padding: '10px 12px 10px 110px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }} />
+                    <input
+                      type="text"
+                      placeholder="1234 1234 1234 1234"
+                      value={creditsCardNumber}
+                      onChange={(e) => {
+                        const formatted = formatCardNumber(e.target.value);
+                        setCreditsCardNumber(formatted);
+                        setCreditsCardBrand(detectCardBrand(formatted));
+                      }}
+                      maxLength={19}
+                      style={{ width: '100%', padding: '10px 12px 10px 110px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }}
+                    />
                     <div style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <svg width="28" height="18" viewBox="0 0 48 32" style={{ borderRadius: 2 }}>
+                      <svg width="28" height="18" viewBox="0 0 48 32" style={{ borderRadius: 2, opacity: creditsCardBrand === 'visa' ? 1 : 0.3 }}>
                         <rect width="48" height="32" fill="#1434CB"/>
                         <text x="24" y="20" textAnchor="middle" fill="white" fontSize="9" fontWeight="bold">VISA</text>
                       </svg>
-                      <svg width="28" height="18" viewBox="0 0 48 32" style={{ borderRadius: 2, opacity: 0.4 }}>
+                      <svg width="28" height="18" viewBox="0 0 48 32" style={{ borderRadius: 2, opacity: creditsCardBrand === 'mastercard' ? 1 : 0.3 }}>
                         <rect width="48" height="32" fill="#EB001B"/>
                         <circle cx="20" cy="16" r="8" fill="white" opacity="0.3"/>
                         <circle cx="28" cy="16" r="8" fill="white" opacity="0.3"/>
                       </svg>
-                      <svg width="28" height="18" viewBox="0 0 48 32" style={{ borderRadius: 2, opacity: 0.4 }}>
+                      <svg width="28" height="18" viewBox="0 0 48 32" style={{ borderRadius: 2, opacity: creditsCardBrand === 'rupay' ? 1 : 0.3 }}>
                         <rect width="48" height="32" fill="white" stroke="#999"/>
                         <text x="24" y="20" textAnchor="middle" fill="#0066CC" fontSize="7" fontWeight="bold">RUPAY</text>
                       </svg>
@@ -300,11 +327,31 @@ export function SubscriptionSection({
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 12 }}>
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Expiration date</label>
-                    <input type="text" placeholder="MM/YY" maxLength={5} style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }} />
+                    <input
+                      type="text"
+                      placeholder="MM/YY"
+                      value={creditsCardExpiry}
+                      onChange={(e) => {
+                        let value = e.target.value.replace(/\D/g, '');
+                        if (value.length >= 2) {
+                          value = value.slice(0, 2) + '/' + value.slice(2, 4);
+                        }
+                        setCreditsCardExpiry(value);
+                      }}
+                      maxLength={5}
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }}
+                    />
                   </div>
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Security code</label>
-                    <input type="text" placeholder="CVC" maxLength={4} style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }} />
+                    <input
+                      type="text"
+                      placeholder="CVC"
+                      value={creditsCardCvc}
+                      onChange={(e) => setCreditsCardCvc(e.target.value.replace(/\D/g, ''))}
+                      maxLength={4}
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }}
+                    />
                   </div>
                 </div>
               </div>
