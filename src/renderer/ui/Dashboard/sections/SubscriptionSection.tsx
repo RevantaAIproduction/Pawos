@@ -50,6 +50,15 @@ export function SubscriptionSection({
   const [autoReloadEnabled, setAutoReloadEnabled] = useState(false);
   const [showCreditsAmountModal, setShowCreditsAmountModal] = useState(false);
   const [creditsAmount, setCreditsAmount] = useState('10');
+  const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
+  const [paymentCardName, setPaymentCardName] = useState('');
+  const [paymentCardNumber, setPaymentCardNumber] = useState('');
+  const [paymentCardEmail, setPaymentCardEmail] = useState('');
+  const [paymentCardPhone, setPaymentCardPhone] = useState('');
+  const [paymentCardAddress, setPaymentCardAddress] = useState('');
+  const [paymentCardCity, setPaymentCardCity] = useState('');
+  const [paymentCardState, setPaymentCardState] = useState('');
+  const [paymentCardZip, setPaymentCardZip] = useState('');
   const [checkoutIntent, setCheckoutIntent] = useState<NativeBillingCheckoutIntent | null>(null);
 
   const refresh = () => {
@@ -128,7 +137,7 @@ export function SubscriptionSection({
             <p style={{ margin: 0, fontSize: '0.9em', fontWeight: 500 }}>Payment method not configured</p>
           </div>
         </div>
-        <button type="button" style={{ padding: '8px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => setMessage('Payment method management coming soon. Use checkout to add a card.')}>
+        <button type="button" style={{ padding: '8px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => setShowPaymentMethodModal(true)}>
           Update
         </button>
       </div>
@@ -204,6 +213,84 @@ export function SubscriptionSection({
                 }
               }}>
                 Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Method Modal */}
+      {showPaymentMethodModal && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: '#1a1a1e', borderRadius: 8, padding: 32, maxWidth: 500, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }}>
+            <h2 style={{ fontSize: '1.2em', fontWeight: 700, margin: '0 0 8px 0' }}>Update payment method</h2>
+            <p style={{ fontSize: '0.9em', opacity: 0.7, margin: '0 0 20px 0', lineHeight: 1.5 }}>
+              Enter your card and billing details to update your payment method.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {/* Name */}
+              <div>
+                <label style={{ fontSize: '0.85em', opacity: 0.7, marginBottom: 4, display: 'block' }}>Full name</label>
+                <input type="text" value={paymentCardName} onChange={(e) => setPaymentCardName(e.target.value)} placeholder="John Doe" style={{ width: '100%', padding: '8px 12px', backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: '#fff', fontSize: '0.9em', boxSizing: 'border-box' }} />
+              </div>
+
+              {/* Email */}
+              <div>
+                <label style={{ fontSize: '0.85em', opacity: 0.7, marginBottom: 4, display: 'block' }}>Email</label>
+                <input type="email" value={paymentCardEmail} onChange={(e) => setPaymentCardEmail(e.target.value)} placeholder="john@example.com" style={{ width: '100%', padding: '8px 12px', backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: '#fff', fontSize: '0.9em', boxSizing: 'border-box' }} />
+              </div>
+
+              {/* Phone */}
+              <div>
+                <label style={{ fontSize: '0.85em', opacity: 0.7, marginBottom: 4, display: 'block' }}>Phone number</label>
+                <input type="tel" value={paymentCardPhone} onChange={(e) => setPaymentCardPhone(e.target.value)} placeholder="+1 (555) 000-0000" style={{ width: '100%', padding: '8px 12px', backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: '#fff', fontSize: '0.9em', boxSizing: 'border-box' }} />
+              </div>
+
+              {/* Card Number */}
+              <div>
+                <label style={{ fontSize: '0.85em', opacity: 0.7, marginBottom: 4, display: 'block' }}>Card number</label>
+                <input type="text" value={paymentCardNumber} onChange={(e) => setPaymentCardNumber(e.target.value.replace(/\D/g, '').slice(0, 16))} placeholder="1234 5678 9012 3456" maxLength={16} style={{ width: '100%', padding: '8px 12px', backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: '#fff', fontSize: '0.9em', boxSizing: 'border-box', letterSpacing: '2px' }} />
+              </div>
+
+              {/* Address */}
+              <div>
+                <label style={{ fontSize: '0.85em', opacity: 0.7, marginBottom: 4, display: 'block' }}>Street address</label>
+                <input type="text" value={paymentCardAddress} onChange={(e) => setPaymentCardAddress(e.target.value)} placeholder="123 Main St" style={{ width: '100%', padding: '8px 12px', backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: '#fff', fontSize: '0.9em', boxSizing: 'border-box' }} />
+              </div>
+
+              {/* City & State */}
+              <div style={{ display: 'flex', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '0.85em', opacity: 0.7, marginBottom: 4, display: 'block' }}>City</label>
+                  <input type="text" value={paymentCardCity} onChange={(e) => setPaymentCardCity(e.target.value)} placeholder="New York" style={{ width: '100%', padding: '8px 12px', backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: '#fff', fontSize: '0.9em', boxSizing: 'border-box' }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '0.85em', opacity: 0.7, marginBottom: 4, display: 'block' }}>State</label>
+                  <input type="text" value={paymentCardState} onChange={(e) => setPaymentCardState(e.target.value)} placeholder="NY" style={{ width: '100%', padding: '8px 12px', backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: '#fff', fontSize: '0.9em', boxSizing: 'border-box' }} />
+                </div>
+              </div>
+
+              {/* ZIP */}
+              <div>
+                <label style={{ fontSize: '0.85em', opacity: 0.7, marginBottom: 4, display: 'block' }}>ZIP code</label>
+                <input type="text" value={paymentCardZip} onChange={(e) => setPaymentCardZip(e.target.value)} placeholder="10001" style={{ width: '100%', padding: '8px 12px', backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: '#fff', fontSize: '0.9em', boxSizing: 'border-box' }} />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
+              <button type="button" style={{ flex: 1, padding: '10px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => setShowPaymentMethodModal(false)}>
+                Cancel
+              </button>
+              <button type="button" style={{ flex: 1, padding: '10px 16px', backgroundColor: '#1967D2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => {
+                if (paymentCardName && paymentCardEmail && paymentCardPhone && paymentCardNumber && paymentCardAddress && paymentCardCity && paymentCardState && paymentCardZip) {
+                  setMessage('Payment method updated successfully.');
+                  setShowPaymentMethodModal(false);
+                } else {
+                  setMessage('Please fill in all required fields.');
+                }
+              }}>
+                Save payment method
               </button>
             </div>
           </div>
