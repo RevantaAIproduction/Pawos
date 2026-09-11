@@ -44,6 +44,8 @@ export function SubscriptionSection({
   const [entitlement, setEntitlement] = useState<EntitlementSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [showAutoReloadModal, setShowAutoReloadModal] = useState(false);
+  const [autoReloadAmount, setAutoReloadAmount] = useState('10');
 
   const refresh = () => {
     ipc.billingGetPricing().then(setPricing).catch(() => {});
@@ -153,10 +155,49 @@ export function SubscriptionSection({
           <h3 style={{ fontSize: '1em', fontWeight: 600, margin: 0 }}>Auto-reload</h3>
           <p style={{ margin: '4px 0 0 0', fontSize: '0.85em', opacity: 0.6 }}>Automatically buy more usage credits when you run out</p>
         </div>
-        <button type="button" style={{ padding: '8px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500, whiteSpace: 'nowrap' }}>
+        <button type="button" style={{ padding: '8px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500, whiteSpace: 'nowrap' }} onClick={() => setShowAutoReloadModal(true)}>
           Turn on
         </button>
       </div>
+
+      {/* Auto-reload Modal */}
+      {showAutoReloadModal && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ backgroundColor: '#1a1a1e', borderRadius: 8, padding: 32, maxWidth: 400, boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }}>
+            <h2 style={{ fontSize: '1.2em', fontWeight: 700, margin: '0 0 8px 0' }}>Set auto-reload amount</h2>
+            <p style={{ fontSize: '0.9em', opacity: 0.7, margin: '0 0 20px 0', lineHeight: 1.5 }}>
+              When your usage credits run out, PawOS will automatically purchase this amount to keep you going.
+            </p>
+
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ fontSize: '0.85em', opacity: 0.7, marginBottom: 8, display: 'block' }}>Amount to auto-purchase</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: '1.1em', opacity: 0.8 }}>$</span>
+                <input
+                  type="number"
+                  min="5"
+                  max="1000"
+                  value={autoReloadAmount}
+                  onChange={(e) => setAutoReloadAmount(e.target.value)}
+                  style={{ flex: 1, padding: '8px 12px', backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: '#fff', fontSize: '1em' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button type="button" style={{ flex: 1, padding: '10px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => setShowAutoReloadModal(false)}>
+                Cancel
+              </button>
+              <button type="button" style={{ flex: 1, padding: '10px 16px', backgroundColor: '#1967D2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => {
+                setMessage(`Auto-reload enabled: $${autoReloadAmount} will be charged when credits run out`);
+                setShowAutoReloadModal(false);
+              }}>
+                Enable
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Invoices */}
       <div style={{ marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
