@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
-import { getSupabaseClient } from '../../../auth/supabaseClient';
-import { initiateRazorpayTierPayment } from './TierPaymentHandler';
-import { initiateRazorpayCreditsPayment } from './CreditsPaymentHandler';
-import { submitEnterpriseContact } from './EnterpriseContactHandler';
-import type { EnterpriseContactForm } from './EnterpriseContactHandler';
+import { TierPurchasePanel } from './TierPurchasePanel';
+import { UsageCreditsPanel } from './UsageCreditsPanel';
+import { AutonomousCreditsPanel } from './AutonomousCreditsPanel';
+import { EnterpriseContactPanel } from './EnterpriseContactPanel';
 
 declare global {
   interface Window {
@@ -68,35 +67,7 @@ export function SubscriptionSection({
   const [pricing, setPricing] = useState<PricingConfig | null>(null);
   const [subscription, setSubscription] = useState<SubscriptionState | null>(null);
   const [entitlement, setEntitlement] = useState<EntitlementSnapshot | null>(null);
-  const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [showAutoReloadModal, setShowAutoReloadModal] = useState(false);
-  const [autoReloadAmount, setAutoReloadAmount] = useState('10');
-  const [autoReloadEnabled, setAutoReloadEnabled] = useState(false);
-  const [showCreditsAmountModal, setShowCreditsAmountModal] = useState(false);
-  const [creditsAmount, setCreditsAmount] = useState('10');
-  const [showCreditsCardForm, setShowCreditsCardForm] = useState(false);
-  const [showAutonomousAmountModal, setShowAutonomousAmountModal] = useState(false);
-  const [autonomousAmount, setAutonomousAmount] = useState('30');
-  const [showAutonomousCardForm, setShowAutonomousCardForm] = useState(false);
-  const [showCreditsSummary, setShowCreditsSummary] = useState(false);
-  const [showAutonomousSummary, setShowAutonomousSummary] = useState(false);
-  const [creditsCardName, setCreditsCardName] = useState('');
-  const [creditsCardEmail, setCreditsCardEmail] = useState('');
-  const [creditsCardCountry, setCreditsCardCountry] = useState('India');
-  const [creditsCardPhone, setCreditsCardPhone] = useState('');
-  const [creditsCardAddress, setCreditsCardAddress] = useState('');
-  const [creditsCardAddress2, setCreditsCardAddress2] = useState('');
-  const [creditsCardCity, setCreditsCardCity] = useState('');
-  const [creditsCardState, setCreditsCardState] = useState('');
-  const [creditsCardPincode, setCreditsCardPincode] = useState('');
-  const [creditsCardTaxId, setCreditsCardTaxId] = useState('');
-  const [creditsCardNumber, setCreditsCardNumber] = useState('');
-  const [creditsCardExpiry, setCreditsCardExpiry] = useState('');
-  const [creditsCardCvc, setCreditsCardCvc] = useState('');
-  const [creditsCardBrand, setCreditsCardBrand] = useState<'visa' | 'mastercard' | 'rupay' | 'unknown'>('unknown');
-  const [creditsSaveCard, setCreditsSaveCard] = useState(false);
-  const [checkoutIntent, setCheckoutIntent] = useState<NativeBillingCheckoutIntent | null>(null);
 
   const refresh = () => {
     ipc.billingGetPricing().then(setPricing).catch(() => {});
