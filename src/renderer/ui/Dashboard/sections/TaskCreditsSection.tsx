@@ -50,6 +50,7 @@ export function TaskCreditsSection({ user }: { user: AuthUser }) {
   });
   const [amountInput, setAmountInput] = useState(String(TICKET_BALANCE_TOPUP_PRESETS_USD[0]));
   const [busy, setBusy] = useState(false);
+  const [showAmountModal, setShowAmountModal] = useState(false);
   const [checkoutIntent, setCheckoutIntent] = useState<NativeBillingCheckoutIntent | null>(null);
 
   function reload() {
@@ -99,6 +100,7 @@ export function TaskCreditsSection({ user }: { user: AuthUser }) {
     setMessage(null);
     setBusy(false);
     setCheckoutIntent({ kind: 'autonomousWorkCredits', amountUsd: parsed, title: 'Autonomous Work Credits' });
+    setShowAmountModal(false);
   }
 
   if (user.isGuest) return null;
@@ -143,11 +145,52 @@ export function TaskCreditsSection({ user }: { user: AuthUser }) {
           <h3 style={{ fontSize: '1em', fontWeight: 600, margin: 0 }}>Autonomous Ticket Credit</h3>
           <p style={{ margin: '4px 0 0 0', fontSize: '0.85em', opacity: 0.6 }}>Current balance: ${balanceUsd.toFixed(2)}</p>
         </div>
-        <button type="button" style={{ padding: '8px 16px', backgroundColor: tier === 'proMax' ? '#404040' : '#606060', color: '#fff', border: 'none', borderRadius: 4, cursor: tier === 'proMax' ? 'pointer' : 'not-allowed', fontSize: '0.9em', fontWeight: 500, whiteSpace: 'nowrap', opacity: tier === 'proMax' ? 1 : 0.5 }} disabled={tier !== 'proMax'} onClick={addFunds}>
+        <button type="button" style={{ padding: '8px 16px', backgroundColor: tier === 'proMax' ? '#404040' : '#606060', color: '#fff', border: 'none', borderRadius: 4, cursor: tier === 'proMax' ? 'pointer' : 'not-allowed', fontSize: '0.9em', fontWeight: 500, whiteSpace: 'nowrap', opacity: tier === 'proMax' ? 1 : 0.5 }} disabled={tier !== 'proMax'} onClick={() => setShowAmountModal(true)}>
           {busy ? 'Opening checkout…' : 'Buy credit'}
         </button>
       </div>
     </div>
+
+    {/* Amount Selection Modal */}
+    {showAmountModal && (
+      <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+        <div style={{ backgroundColor: '#1a1a1e', borderRadius: 8, padding: 32, maxWidth: 400, boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }}>
+          <h2 style={{ fontSize: '1.2em', fontWeight: 700, margin: '0 0 8px 0' }}>Buy ticket credits</h2>
+          <p style={{ fontSize: '0.9em', opacity: 0.7, margin: '0 0 20px 0', lineHeight: 1.5 }}>
+            Enter the amount of ticket credits you want to purchase (${pricingConfig.minTopupUsd} - ${pricingConfig.maxTopupUsd.toLocaleString()}).
+          </p>
+
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ fontSize: '0.85em', opacity: 0.7, marginBottom: 8, display: 'block' }}>Amount (USD)</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: '1.1em', opacity: 0.8 }}>$</span>
+              <input
+                type="number"
+                min={pricingConfig.minTopupUsd}
+                max={pricingConfig.maxTopupUsd}
+                value={amountInput}
+                onChange={(e) => setAmountInput(e.target.value)}
+                style={{ flex: 1, padding: '8px 12px', backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: '#fff', fontSize: '1em' }}
+              />
+            </div>
+            {error && <p style={{ margin: '8px 0 0 0', fontSize: '0.85em', color: '#f44336' }}>{error}</p>}
+          </div>
+
+          <div style={{ display: 'flex', gap: 12 }}>
+            <button type="button" style={{ flex: 1, padding: '10px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={() => {
+              setShowAmountModal(false);
+              setError(null);
+            }}>
+              Cancel
+            </button>
+            <button type="button" style={{ flex: 1, padding: '10px 16px', backgroundColor: '#1967D2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }} onClick={addFunds}>
+              Continue
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     {checkoutIntent && (
       <NativeBillingCheckoutModal
         intent={checkoutIntent}
