@@ -3,9 +3,6 @@ import styles from '../dashboard.module.css';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import { getSupabaseClient } from '../../../auth/supabaseClient';
 import { initiateRazorpayTierPayment } from './TierPaymentHandler';
-import { initiateRazorpayCreditsPayment } from './CreditsPaymentHandler';
-import { submitEnterpriseContact } from './EnterpriseContactHandler';
-import type { EnterpriseContactForm } from './EnterpriseContactHandler';
 
 declare global {
   interface Window {
