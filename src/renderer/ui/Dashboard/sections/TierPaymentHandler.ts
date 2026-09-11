@@ -115,15 +115,26 @@ function openRazorpayCheckout(result: any, options: TierPaymentHandler, tier: Su
       return;
     }
 
-    // Use Razorpay.payment() method
-    if (typeof Razorpay.payment !== 'function') {
-      options.setMessage('❌ Payment method unavailable');
-      options.setBusy(false);
-      return;
-    }
+    console.log('Creating Razorpay instance...');
+    const checkout = new Razorpay(razorpayOptions);
+    console.log('Checkout instance methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(checkout)));
 
-    console.log('Opening Razorpay payment...');
-    Razorpay.payment(razorpayOptions);
+    // Try different methods
+    if (typeof checkout.show === 'function') {
+      console.log('Calling checkout.show()...');
+      checkout.show();
+    } else if (typeof checkout.open === 'function') {
+      console.log('Calling checkout.open()...');
+      checkout.open();
+    } else {
+      console.log('No show/open method, trying sendMessage...');
+      if (typeof checkout.sendMessage === 'function') {
+        checkout.sendMessage('show');
+      } else {
+        options.setMessage('❌ Payment initialization failed');
+        options.setBusy(false);
+      }
+    }
   } catch (error) {
     console.log('Checkout error:', error);
     options.setMessage(`❌ Payment error: ${error instanceof Error ? error.message : String(error)}`);
