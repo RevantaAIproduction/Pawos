@@ -896,6 +896,19 @@ export function NativeBillingCheckoutModal({
     loadUserData();
   }, []);
 
+  // Pre-fill form from card details if provided
+  useEffect(() => {
+    const cardDetails = (intent as any).cardDetails;
+    if (cardDetails) {
+      if (cardDetails.name) setFullName(cardDetails.name);
+      if (cardDetails.email) setEmail(cardDetails.email);
+      if (cardDetails.phone) setMobileNumber(cardDetails.phone);
+      if (cardDetails.country) setCountry(cardDetails.country);
+      if (cardDetails.address) setAddress(cardDetails.address);
+      if (cardDetails.taxId) setTaxId(cardDetails.taxId);
+    }
+  }, [intent]);
+
   // High-value Team/Enterprise order handling (>₹40,000 / $500 USD)
   const isHighValue = useMemo(() => {
     // Team/Enterprise tier purchases ≥$500 → Invoice required
