@@ -115,26 +115,31 @@ function openRazorpayCheckout(result: any, options: TierPaymentHandler, tier: Su
       return;
     }
 
-    console.log('Creating Razorpay instance...');
+    console.log('Creating Razorpay custom checkout...');
     const checkout = new Razorpay(razorpayOptions);
-    console.log('Checkout instance methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(checkout)));
 
-    // Try different methods
-    if (typeof checkout.show === 'function') {
-      console.log('Calling checkout.show()...');
-      checkout.show();
-    } else if (typeof checkout.open === 'function') {
-      console.log('Calling checkout.open()...');
-      checkout.open();
-    } else {
-      console.log('No show/open method, trying sendMessage...');
-      if (typeof checkout.sendMessage === 'function') {
-        checkout.sendMessage('show');
-      } else {
-        options.setMessage('❌ Payment initialization failed');
-        options.setBusy(false);
-      }
+    // Mount checkout to DOM
+    if (typeof checkout.mount !== 'function') {
+      options.setMessage('❌ Payment initialization failed');
+      options.setBusy(false);
+      return;
     }
+
+    // Create container for checkout
+    const container = document.createElement('div');
+    container.id = 'razorpay-checkout-container';
+    container.style.position = 'fixed';
+    container.style.top = '0';
+    container.style.left = '0';
+    container.style.width = '100%';
+    container.style.height = '100%';
+    container.style.zIndex = '9999';
+    container.style.backgroundColor = 'white';
+    document.body.appendChild(container);
+
+    console.log('Mounting Razorpay checkout...');
+    checkout.mount(container);
+    console.log('Razorpay checkout mounted');
   } catch (error) {
     console.log('Checkout error:', error);
     options.setMessage(`❌ Payment error: ${error instanceof Error ? error.message : String(error)}`);
