@@ -177,8 +177,8 @@ export async function POST(request: Request) {
     ok: true,
     orderId: order.id,
     keyId: credentials.keyId,
-    amountUsd: Math.round(amountUsd * 100) / 100, // Round to 2 decimals
-    amountInr: Math.round(amountInr), // Round to whole rupees only
+    amountUsd: Math.round(amountUsd * 100) / 100,
+    amountInr: Math.round(amountInr),
     amountPaise,
     usdInrRate,
     currency: "INR",

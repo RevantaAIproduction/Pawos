@@ -58,7 +58,17 @@ function loadRazorpayAndPay(result: any, options: TierPaymentHandler, tier: Subs
     const script = document.createElement('script');
     script.src = 'https://checkout.razorpay.com/v1/razorpay.js';
     script.async = true;
-    script.onload = () => openRazorpayCheckout(result, options, tier);
+    script.onload = () => {
+      // Wait for Razorpay to be available
+      setTimeout(() => {
+        if (window.Razorpay && typeof window.Razorpay === 'function') {
+          openRazorpayCheckout(result, options, tier);
+        } else {
+          options.setMessage('❌ Payment system failed to initialize');
+          options.setBusy(false);
+        }
+      }, 100);
+    };
     script.onerror = () => {
       options.setMessage('❌ Failed to load payment');
       options.setBusy(false);
@@ -70,6 +80,12 @@ function loadRazorpayAndPay(result: any, options: TierPaymentHandler, tier: Subs
 }
 
 function openRazorpayCheckout(result: any, options: TierPaymentHandler, tier: SubscriptionTierId) {
+  if (!result.keyId || !result.orderId) {
+    options.setMessage('❌ Invalid payment configuration');
+    options.setBusy(false);
+    return;
+  }
+
   const razorpayOptions = {
     key: result.keyId,
     order_id: result.orderId,
@@ -92,10 +108,22 @@ function openRazorpayCheckout(result: any, options: TierPaymentHandler, tier: Su
   };
 
   try {
+    if (!window.Razorpay || typeof window.Razorpay !== 'function') {
+      options.setMessage('❌ Payment system unavailable');
+      options.setBusy(false);
+      return;
+    }
+
     const razorpay = new window.Razorpay(razorpayOptions);
+    if (!razorpay.open || typeof razorpay.open !== 'function') {
+      options.setMessage('❌ Payment initialization failed');
+      options.setBusy(false);
+      return;
+    }
+
     razorpay.open();
   } catch (error) {
-    options.setMessage(`❌ Payment error: ${error}`);
+    options.setMessage(`❌ Payment error: ${error instanceof Error ? error.message : String(error)}`);
     options.setBusy(false);
   }
 }
