@@ -345,6 +345,7 @@ export function ConversationPanel({
   const [showPlanSidebar, setShowPlanSidebar] = useState(false);
   const [showTierUpgradePopup, setShowTierUpgradePopup] = useState(false);
   const [openPanel, setOpenPanel] = useState<'terminal' | 'browser' | 'files' | 'worktree' | null>(null);
+  const [fullscreenPanel, setFullscreenPanel] = useState<'terminal' | 'browser' | 'files' | 'worktree' | null>(null);
   const [projectPath, setProjectPath] = useState<string>('');
   const [gitBranches, setGitBranches] = useState<string[]>([]);
   const [gitCommits, setGitCommits] = useState<string[]>([]);
@@ -1062,28 +1063,37 @@ export function ConversationPanel({
       <div className={styles.premiumHeader}>
         <div className={styles.headerLeft}>
           <CompanionHamburger userEmail={userEmail} entitlement={entitlement} />
-          <div className={styles.pawosLogo}>PawOS</div>
+          <div className={styles.pawosLogo}>
+            {projectPath ? projectPath.split(/[\\/]/).pop() || 'PawOS' : 'PawOS'}
+          </div>
         </div>
 
         <div className={styles.headerCenter}>
           <ProjectContextBar currentWorkingFile={currentWorkingFile} />
         </div>
 
-        {/* Workspace Controls */}
-        <div className={styles.workspaceControls}>
-          <button className={styles.workspaceTab} onClick={() => setOpenPanel(openPanel === 'terminal' ? null : 'terminal')} title="Terminal">
-            ⌘ Terminal
-          </button>
-          <button className={styles.workspaceTab} onClick={() => setOpenPanel(openPanel === 'browser' ? null : 'browser')} title="Browser">
-            🌐 Browser
-          </button>
-          <button className={styles.workspaceTab} onClick={() => setOpenPanel(openPanel === 'files' ? null : 'files')} title="Files">
-            📁 Files
-          </button>
-          <button className={styles.workspaceTab} onClick={() => setOpenPanel(openPanel === 'worktree' ? null : 'worktree')} title="Worktree">
-            🌳 Worktree
-          </button>
-        </div>
+        {/* Workspace Controls - Only show during active conversation for paid tiers */}
+        {hasMessages && entitlement?.tier !== 'go' && (
+          <div className={styles.workspaceControls}>
+            <button className={styles.workspaceTab} onClick={() => setOpenPanel(openPanel === 'terminal' ? null : 'terminal')} title="Terminal">
+              ⌘ Terminal
+            </button>
+            <button className={styles.workspaceTab} onClick={() => setOpenPanel(openPanel === 'browser' ? null : 'browser')} title="Browser">
+              🌐 Browser
+            </button>
+            <button className={styles.workspaceTab} onClick={() => setOpenPanel(openPanel === 'files' ? null : 'files')} title="Files">
+              📁 Files
+            </button>
+            <button className={styles.workspaceTab} onClick={() => setOpenPanel(openPanel === 'worktree' ? null : 'worktree')} title="Worktree">
+              🌳 Worktree
+            </button>
+          </div>
+        )}
+        {isIdleState && entitlement?.tier === 'go' && (
+          <div style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.2)', padding: '0 8px' }}>
+            Workspace panels available in Pro tier
+          </div>
+        )}
 
         <div className={styles.headerRight}>
           <div className={styles.modelSelectorCompact}>
@@ -1243,187 +1253,432 @@ export function ConversationPanel({
                 {openPanel === 'files' && '📁 Files'}
                 {openPanel === 'worktree' && '🌳 Worktree'}
               </span>
-              <button
-                onClick={() => setOpenPanel(null)}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'rgba(255, 255, 255, 0.5)',
-                  cursor: 'pointer',
-                  padding: '2px 4px',
-                  fontSize: '16px'
-                }}
-                title="Close panel"
-              >
-                ✕
-              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => setFullscreenPanel(openPanel)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'rgba(255, 255, 255, 0.5)',
+                    cursor: 'pointer',
+                    padding: '2px 4px',
+                    fontSize: '16px'
+                  }}
+                  title="Open fullscreen"
+                >
+                  ⛶
+                </button>
+                <button
+                  onClick={() => setOpenPanel(null)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'rgba(255, 255, 255, 0.5)',
+                    cursor: 'pointer',
+                    padding: '2px 4px',
+                    fontSize: '16px'
+                  }}
+                  title="Close panel"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
             {/* Panel Content */}
             <div className={styles.panelContent}>
               {openPanel === 'terminal' && (
                 <div style={{ fontSize: '11px' }}>
-                  <div style={{
-                    padding: '12px 16px',
-                    borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-                    fontFamily: 'monospace',
-                    color: 'rgba(255, 255, 255, 0.7)',
-                  }}>
-                    $ pwd
-                  </div>
-                  <div style={{
-                    padding: '12px 16px',
-                    fontFamily: 'monospace',
-                    color: 'rgba(255, 255, 255, 0.5)',
-                    fontSize: '10px',
-                  }}>
-                    {projectPath || 'Loading project path...'}
-                  </div>
-                  <div style={{
-                    padding: '12px 16px',
-                    borderTop: '1px solid rgba(255, 255, 255, 0.06)',
-                    color: 'rgba(255, 255, 255, 0.4)',
-                  }}>
-                    Ready to execute commands
-                  </div>
+                  {currentWorkingFile ? (
+                    <div style={{
+                      padding: '12px 16px',
+                      fontFamily: 'monospace',
+                      color: 'rgba(255, 255, 255, 0.7)',
+                      borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+                      fontSize: '10px',
+                    }}>
+                      {projectPath ? `${projectPath}>` : 'Loading...>'}
+                    </div>
+                  ) : (
+                    <div style={{
+                      padding: '12px 16px',
+                      color: 'rgba(255, 255, 255, 0.3)',
+                      fontSize: '10px',
+                    }}>
+                      Upload a file or start working on a project to use terminal
+                    </div>
+                  )}
                 </div>
               )}
               {openPanel === 'browser' && (
-                <div style={{ padding: '12px 16px', fontSize: '11px' }}>
-                  <div style={{
-                    color: 'rgba(255, 255, 255, 0.7)',
-                    marginBottom: '12px',
-                    fontWeight: 600,
-                  }}>
-                    Dev Servers
-                  </div>
-                  <div style={{
-                    padding: '8px',
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    borderRadius: '4px',
-                    color: 'rgba(255, 255, 255, 0.6)',
-                    marginBottom: '12px',
-                    fontSize: '10px',
-                    fontFamily: 'monospace',
-                  }}>
-                    http://localhost:3000 - React Dev
-                  </div>
-                  <div style={{
-                    padding: '8px',
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    borderRadius: '4px',
-                    color: 'rgba(255, 255, 255, 0.6)',
-                    fontSize: '10px',
-                    fontFamily: 'monospace',
-                  }}>
-                    http://localhost:5000 - API Server
-                  </div>
-                  <div style={{
-                    marginTop: '12px',
-                    color: 'rgba(255, 255, 255, 0.4)',
-                    fontSize: '10px',
-                  }}>
-                    Navigate to URLs or view app previews
-                  </div>
+                <div style={{ fontSize: '11px' }}>
+                  {currentWorkingFile ? (
+                    <>
+                      <div style={{
+                        padding: '12px 16px',
+                        color: 'rgba(255, 255, 255, 0.7)',
+                        fontWeight: 600,
+                        borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+                      }}>
+                        Available Servers
+                      </div>
+                      <div style={{ padding: '8px 16px' }}>
+                        <div style={{
+                          color: 'rgba(255, 255, 255, 0.4)',
+                          fontSize: '10px',
+                        }}>
+                          Dev servers for active project will appear here
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{
+                      padding: '12px 16px',
+                      color: 'rgba(255, 255, 255, 0.3)',
+                      fontSize: '10px',
+                    }}>
+                      Upload a file or start working on a project to see available servers
+                    </div>
+                  )}
                 </div>
               )}
               {openPanel === 'files' && (
                 <div style={{ fontSize: '11px' }}>
-                  <div style={{
-                    padding: '12px 16px',
-                    color: 'rgba(255, 255, 255, 0.7)',
-                    fontWeight: 600,
-                    borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-                  }}>
-                    Project Files
-                  </div>
-                  <div style={{ padding: '8px 16px' }}>
-                    {projectFiles.length > 0 ? (
-                      projectFiles.map((file, i) => (
-                        <div
-                          key={i}
-                          style={{
-                            padding: '4px 0',
-                            color: 'rgba(255, 255, 255, 0.6)',
-                            fontSize: '10px',
-                            cursor: 'pointer',
-                            transition: 'color 0.15s',
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.color = 'rgba(255, 255, 255, 0.8)'}
-                          onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)'}
-                        >
-                          {file.endsWith('/') ? '📁' : '📄'} {file}
-                        </div>
-                      ))
-                    ) : (
-                      <div style={{ color: 'rgba(255, 255, 255, 0.4)' }}>Loading files...</div>
-                    )}
-                  </div>
+                  {currentWorkingFile ? (
+                    <>
+                      <div style={{
+                        padding: '12px 16px',
+                        color: 'rgba(255, 255, 255, 0.7)',
+                        fontWeight: 600,
+                        borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+                      }}>
+                        Project Files
+                      </div>
+                      <div style={{ padding: '8px 16px' }}>
+                        {projectFiles.length > 0 ? (
+                          projectFiles.map((file, i) => (
+                            <div
+                              key={i}
+                              style={{
+                                padding: '4px 0',
+                                color: 'rgba(255, 255, 255, 0.6)',
+                                fontSize: '10px',
+                                cursor: 'pointer',
+                                transition: 'color 0.15s',
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.color = 'rgba(255, 255, 255, 0.8)'}
+                              onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)'}
+                            >
+                              {file.endsWith('/') ? '📁' : '📄'} {file}
+                            </div>
+                          ))
+                        ) : (
+                          <div style={{ color: 'rgba(255, 255, 255, 0.4)' }}>Loading files...</div>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{
+                      padding: '12px 16px',
+                      color: 'rgba(255, 255, 255, 0.3)',
+                      fontSize: '10px',
+                    }}>
+                      Upload a file or start working on a project to see files
+                    </div>
+                  )}
                 </div>
               )}
               {openPanel === 'worktree' && (
                 <div style={{ fontSize: '11px' }}>
-                  <div style={{
-                    padding: '12px 16px',
-                    color: 'rgba(255, 255, 255, 0.7)',
-                    fontWeight: 600,
-                    borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-                  }}>
-                    Git Branches
-                  </div>
-                  <div style={{ padding: '8px 16px' }}>
-                    {gitBranches.length > 0 ? (
-                      gitBranches.map((branch, i) => (
-                        <div
-                          key={i}
-                          style={{
-                            padding: '4px 0',
-                            color: branch.includes('*') ? 'rgba(120, 150, 200, 0.8)' : 'rgba(255, 255, 255, 0.5)',
-                            fontSize: '10px',
-                            fontFamily: 'monospace',
-                          }}
-                        >
-                          {branch.includes('*') ? '● ' : '  '}{branch}
-                        </div>
-                      ))
-                    ) : (
-                      <div style={{ color: 'rgba(255, 255, 255, 0.4)' }}>Loading branches...</div>
-                    )}
-                  </div>
-                  <div style={{
-                    padding: '12px 16px',
-                    color: 'rgba(255, 255, 255, 0.7)',
-                    fontWeight: 600,
-                    borderTop: '1px solid rgba(255, 255, 255, 0.06)',
-                    borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-                  }}>
-                    Recent Commits
-                  </div>
-                  <div style={{ padding: '8px 16px' }}>
-                    {gitCommits.length > 0 ? (
-                      gitCommits.map((commit, i) => (
-                        <div
-                          key={i}
-                          style={{
-                            padding: '4px 0',
-                            color: 'rgba(255, 255, 255, 0.5)',
-                            fontSize: '9px',
-                            fontFamily: 'monospace',
-                          }}
-                        >
-                          {commit}
-                        </div>
-                      ))
-                    ) : (
-                      <div style={{ color: 'rgba(255, 255, 255, 0.4)' }}>Loading commits...</div>
-                    )}
-                  </div>
+                  {currentWorkingFile ? (
+                    <>
+                      <div style={{
+                        padding: '12px 16px',
+                        color: 'rgba(255, 255, 255, 0.7)',
+                        fontWeight: 600,
+                        borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+                      }}>
+                        Git Branches
+                      </div>
+                      <div style={{ padding: '8px 16px' }}>
+                        {gitBranches.length > 0 ? (
+                          gitBranches.map((branch, i) => (
+                            <div
+                              key={i}
+                              style={{
+                                padding: '4px 0',
+                                color: branch.includes('*') ? 'rgba(120, 150, 200, 0.8)' : 'rgba(255, 255, 255, 0.5)',
+                                fontSize: '10px',
+                                fontFamily: 'monospace',
+                              }}
+                            >
+                              {branch.includes('*') ? '● ' : '  '}{branch}
+                            </div>
+                          ))
+                        ) : (
+                          <div style={{ color: 'rgba(255, 255, 255, 0.4)' }}>Loading branches...</div>
+                        )}
+                      </div>
+                      <div style={{
+                        padding: '12px 16px',
+                        color: 'rgba(255, 255, 255, 0.7)',
+                        fontWeight: 600,
+                        borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+                        borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+                      }}>
+                        Recent Commits
+                      </div>
+                      <div style={{ padding: '8px 16px' }}>
+                        {gitCommits.length > 0 ? (
+                          gitCommits.map((commit, i) => (
+                            <div
+                              key={i}
+                              style={{
+                                padding: '4px 0',
+                                color: 'rgba(255, 255, 255, 0.5)',
+                                fontSize: '9px',
+                                fontFamily: 'monospace',
+                              }}
+                            >
+                              {commit}
+                            </div>
+                          ))
+                        ) : (
+                          <div style={{ color: 'rgba(255, 255, 255, 0.4)' }}>Loading commits...</div>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{
+                      padding: '12px 16px',
+                      color: 'rgba(255, 255, 255, 0.3)',
+                      fontSize: '10px',
+                    }}>
+                      Upload a file or start working on a project to see worktree
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           </div>
         )}
       </div>
+
+      {/* ═ FULLSCREEN PANEL OVERLAY ═ */}
+      {fullscreenPanel && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(10, 10, 15, 0.98)',
+          zIndex: 1000,
+          display: 'flex',
+          flexDirection: 'column',
+        }}>
+          {/* Fullscreen Header */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '12px 24px',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+            background: 'rgba(30, 30, 35, 0.5)',
+          }}>
+            <span style={{
+              fontSize: '14px',
+              color: 'rgba(255, 255, 255, 0.7)',
+              fontWeight: 600,
+            }}>
+              {fullscreenPanel === 'terminal' && '⌘ Terminal'}
+              {fullscreenPanel === 'browser' && '🌐 Browser'}
+              {fullscreenPanel === 'files' && '📁 Files'}
+              {fullscreenPanel === 'worktree' && '🌳 Worktree'}
+            </span>
+            <button
+              onClick={() => setFullscreenPanel(null)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'rgba(255, 255, 255, 0.5)',
+                cursor: 'pointer',
+                padding: '4px 8px',
+                fontSize: '20px',
+              }}
+              title="Close fullscreen"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Fullscreen Content */}
+          <div style={{
+            flex: 1,
+            overflow: 'auto',
+            padding: '16px 24px',
+          }}>
+            {fullscreenPanel === 'terminal' && (
+              <div style={{ fontSize: '11px' }}>
+                {currentWorkingFile ? (
+                  <div style={{
+                    fontFamily: 'monospace',
+                    color: 'rgba(255, 255, 255, 0.7)',
+                    fontSize: '12px',
+                  }}>
+                    {projectPath ? `${projectPath}>` : 'Loading...>'}
+                  </div>
+                ) : (
+                  <div style={{
+                    color: 'rgba(255, 255, 255, 0.3)',
+                    fontSize: '12px',
+                  }}>
+                    Upload a file or start working on a project to use terminal
+                  </div>
+                )}
+              </div>
+            )}
+            {fullscreenPanel === 'browser' && (
+              <div style={{ fontSize: '12px' }}>
+                {currentWorkingFile ? (
+                  <>
+                    <div style={{
+                      color: 'rgba(255, 255, 255, 0.7)',
+                      fontWeight: 600,
+                      marginBottom: '12px',
+                    }}>
+                      Available Servers
+                    </div>
+                    <div style={{
+                      color: 'rgba(255, 255, 255, 0.4)',
+                      fontSize: '12px',
+                    }}>
+                      Dev servers for active project will appear here
+                    </div>
+                  </>
+                ) : (
+                  <div style={{
+                    color: 'rgba(255, 255, 255, 0.3)',
+                    fontSize: '12px',
+                  }}>
+                    Upload a file or start working on a project to see available servers
+                  </div>
+                )}
+              </div>
+            )}
+            {fullscreenPanel === 'files' && (
+              <div style={{ fontSize: '12px' }}>
+                {currentWorkingFile ? (
+                  <>
+                    <div style={{
+                      color: 'rgba(255, 255, 255, 0.7)',
+                      fontWeight: 600,
+                      marginBottom: '12px',
+                    }}>
+                      Project Files
+                    </div>
+                    <div>
+                      {projectFiles.length > 0 ? (
+                        projectFiles.map((file, i) => (
+                          <div
+                            key={i}
+                            style={{
+                              padding: '4px 0',
+                              color: 'rgba(255, 255, 255, 0.6)',
+                              fontSize: '11px',
+                              cursor: 'pointer',
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.color = 'rgba(255, 255, 255, 0.8)'}
+                            onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)'}
+                          >
+                            {file.endsWith('/') ? '📁' : '📄'} {file}
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{ color: 'rgba(255, 255, 255, 0.4)' }}>Loading files...</div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{
+                    color: 'rgba(255, 255, 255, 0.3)',
+                    fontSize: '12px',
+                  }}>
+                    Upload a file or start working on a project to see files
+                  </div>
+                )}
+              </div>
+            )}
+            {fullscreenPanel === 'worktree' && (
+              <div style={{ fontSize: '12px' }}>
+                {currentWorkingFile ? (
+                  <>
+                    <div style={{
+                      color: 'rgba(255, 255, 255, 0.7)',
+                      fontWeight: 600,
+                      marginBottom: '12px',
+                    }}>
+                      Git Branches
+                    </div>
+                    <div style={{ marginBottom: '20px' }}>
+                      {gitBranches.length > 0 ? (
+                        gitBranches.map((branch, i) => (
+                          <div
+                            key={i}
+                            style={{
+                              padding: '4px 0',
+                              color: branch.includes('*') ? 'rgba(120, 150, 200, 0.8)' : 'rgba(255, 255, 255, 0.5)',
+                              fontSize: '11px',
+                              fontFamily: 'monospace',
+                            }}
+                          >
+                            {branch.includes('*') ? '● ' : '  '}{branch}
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{ color: 'rgba(255, 255, 255, 0.4)' }}>Loading branches...</div>
+                      )}
+                    </div>
+                    <div style={{
+                      color: 'rgba(255, 255, 255, 0.7)',
+                      fontWeight: 600,
+                      marginBottom: '12px',
+                    }}>
+                      Recent Commits
+                    </div>
+                    <div>
+                      {gitCommits.length > 0 ? (
+                        gitCommits.map((commit, i) => (
+                          <div
+                            key={i}
+                            style={{
+                              padding: '4px 0',
+                              color: 'rgba(255, 255, 255, 0.5)',
+                              fontSize: '10px',
+                              fontFamily: 'monospace',
+                            }}
+                          >
+                            {commit}
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{ color: 'rgba(255, 255, 255, 0.4)' }}>Loading commits...</div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{
+                    color: 'rgba(255, 255, 255, 0.3)',
+                    fontSize: '12px',
+                  }}>
+                    Upload a file or start working on a project to see worktree
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ═ UPGRADE MESSAGE BAR ═ */}
       {showTierUpgradePopup && entitlement && (

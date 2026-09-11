@@ -28,9 +28,7 @@ type Step = 'form' | 'verify' | 'reset-code' | 'reset-new';
 const RESEND_COOLDOWN_SECONDS = 30;
 const OTP_LENGTH = 6;
 
-const COMING_SOON: { label: string; icon: React.ReactNode }[] = [
-  { label: 'Apple', icon: <AppleGlyph /> },
-];
+const COMING_SOON: { label: string; icon: React.ReactNode }[] = [];
 
 const FEATURES = [
   { icon: <ShieldCheckIcon />, title: 'Secure & Private', body: 'Your data stays yours.' },

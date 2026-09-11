@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
-import { PAW_MODEL_CATALOG } from '../../../../shared/ai/PawModelTypes';
 import type { AuthUser } from '../../../auth/AuthTypes';
 import {
   SUBSCRIPTION_TIER_ORDER,
@@ -193,67 +192,6 @@ export function SubscriptionSection({
         </ul>
       </div>
 
-      {/* Available Models */}
-      <div style={{ marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-        <h3 style={{ fontSize: '1em', fontWeight: 600, margin: '0 0 12px 0' }}>Available Models</h3>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {PAW_MODEL_CATALOG.map((m) => {
-            const available = entitlement?.models.includes(m.id) ?? false;
-            return (
-              <span key={m.id} style={{ padding: '6px 12px', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 4, fontSize: '0.85em', opacity: available ? 0.9 : 0.4 }} title={m.description}>
-                {m.label}
-                {m.status === 'comingSoon' ? ' (soon)' : available ? '' : ' (locked)'}
-              </span>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Paw Compute Usage */}
-      <div style={{ marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-        <h3 style={{ fontSize: '1em', fontWeight: 600, margin: '0 0 12px 0' }}>Paw Compute Usage</h3>
-        {entitlement ? (
-          entitlement.pooled ? (
-            <p style={{ margin: 0, opacity: 0.7, fontSize: '0.9em' }}>Pooled organization — usage tracked by your org.</p>
-          ) : (
-            <>
-              <p style={{ margin: '0 0 8px 0', opacity: 0.8, fontSize: '0.9em' }}>
-                <strong>Last 5 hours:</strong> {entitlement.usage5hPc.toFixed(2)} PC used
-                {entitlement.limit5hPc !== null ? ` / ${entitlement.limit5hPc} PC` : ' — no cap'}
-                {entitlement.limit5hPc !== null && (
-                  <span style={{ marginLeft: 6, opacity: 0.6, fontSize: '0.85em' }}>
-                    ({Math.max(0, entitlement.limit5hPc - entitlement.usage5hPc).toFixed(2)} remaining)
-                  </span>
-                )}
-              </p>
-              <p style={{ margin: '0 0 8px 0', opacity: 0.8, fontSize: '0.9em' }}>
-                <strong>Last 7 days:</strong> {entitlement.usageWeeklyPc.toFixed(2)} PC used
-                {entitlement.limitWeeklyPc !== null ? ` / ${entitlement.limitWeeklyPc} PC` : ' — no cap'}
-                {entitlement.limitWeeklyPc !== null && (
-                  <span style={{ marginLeft: 6, opacity: 0.6, fontSize: '0.85em' }}>
-                    ({Math.max(0, entitlement.limitWeeklyPc - entitlement.usageWeeklyPc).toFixed(2)} remaining)
-                  </span>
-                )}
-              </p>
-              {entitlement.fableCreditsRemaining > 0 && (
-                <p style={{ margin: '0 0 8px 0', opacity: 0.8, fontSize: '0.9em' }}>
-                  <strong>Paw Fable credits:</strong> {entitlement.fableCreditsRemaining.toFixed(2)} PC remaining
-                </p>
-              )}
-              <p style={{ margin: '8px 0 0 0', opacity: 0.6, fontSize: '0.85em' }}>
-                1 PC ≈ $0.001 · typical chat turn ≈ 8–32 PC
-              </p>
-              {!entitlement.hasCreditsRemaining && (
-                <p style={{ margin: '8px 0 0 0', opacity: 0.8, fontSize: '0.9em', fontWeight: 600 }}>
-                  Usage limit reached — generation paused until the window rolls forward.
-                </p>
-              )}
-            </>
-          )
-        ) : (
-          <p style={{ margin: 0, opacity: 0.7, fontSize: '0.9em' }}>…</p>
-        )}
-      </div>
 
       {/* Cancellation */}
       <div style={{ paddingBottom: 0 }}>

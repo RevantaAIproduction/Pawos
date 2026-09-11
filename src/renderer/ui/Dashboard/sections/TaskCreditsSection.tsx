@@ -127,31 +127,23 @@ export function TaskCreditsSection({ user }: { user: AuthUser }) {
 
   if (tier !== 'pro' && tier !== 'proMax') {
     return (
-      <div className={styles.card}>
-        <h3 className={styles.cardTitle}>Autonomous Ticket System — Pricing</h3>
-        <p className={styles.cardBody} style={{ marginTop: 6 }}>
-          Available on every paid plan (Pro and above) — upgrade to add funds to a Ticket Balance and let Paw ship
-          real code changes end to end. Funds are only ever deducted once a ticket investigation reaches successful
-          completion, at the volume-tiered rate below.
-        </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12 }}>
+      <div style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+        <h3 style={{ fontSize: '1em', fontWeight: 600, margin: '0 0 12px 0' }}>Autonomous Ticket System — Pricing</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {TICKET_PRICING_TIERS.map((t) => (
             <div
               key={t.minTicketNumber}
-              style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+              style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9em', padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
             >
               <span>
                 {t.maxTicketNumber === null
-                  ? `Ticket ${t.minTicketNumber.toLocaleString()}+`
+                  ? `Tickets ${t.minTicketNumber.toLocaleString()}+`
                   : `Tickets ${t.minTicketNumber.toLocaleString()}–${t.maxTicketNumber.toLocaleString()}`}
               </span>
               <span style={{ fontWeight: 600 }}>${t.pricePerTicketUsd.toFixed(2)}/ticket</span>
             </div>
           ))}
         </div>
-        <p className={styles.cardBody} style={{ fontSize: 11.5, marginTop: 10 }}>
-          Minimum top-up ${MIN_TICKET_BALANCE_TOPUP_USD} once you're on a Pro plan or above.
-        </p>
       </div>
     );
   }
@@ -226,8 +218,9 @@ export function TaskCreditsSection({ user }: { user: AuthUser }) {
           max={pricingConfig.maxTopupUsd}
           value={amountInput}
           onChange={(e) => setAmountInput(e.target.value)}
+          disabled={tier !== 'proMax'}
         />
-        <button type="button" className={styles.primaryButton} disabled={busy} onClick={addFunds}>
+        <button type="button" className={styles.primaryButton} disabled={busy || tier !== 'proMax'} onClick={addFunds}>
           {busy ? 'Opening checkout…' : 'Add funds'}
         </button>
         <span style={{ fontSize: 12, color: '#96969e' }}>
