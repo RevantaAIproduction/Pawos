@@ -172,14 +172,12 @@ export function SubscriptionSection({
         return;
       }
 
-      // Get organization ID from user metadata
-      const organizationId = sessionData.session?.user?.user_metadata?.organization_id;
-
       const createOrderFn = isCredits
         ? ipc.billingCreateNativeUsageCreditsCheckout
         : ipc.billingCreateNativeCreditsCheckout;
 
-      const checkout = await createOrderFn(amount, organizationId, accessToken);
+      // Pass: amount, organizationId (undefined for personal @gmail accounts), accessToken
+      const checkout = await createOrderFn(amount, undefined, accessToken);
 
       if (!checkout.ok) {
         setMessage(`Payment error: ${checkout.reason}`);
