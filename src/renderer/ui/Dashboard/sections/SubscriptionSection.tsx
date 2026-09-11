@@ -194,61 +194,71 @@ export function SubscriptionSection({
 
   const openRazorpay = async (checkout: any, isCredits: boolean) => {
     try {
-      const options = {
+      const razorpayInstance = new (window.Razorpay as any)({
         key: checkout.keyId,
+      }) as any;
+
+      const paymentData = {
         order_id: checkout.orderId,
         amount: checkout.amountPaise,
         currency: checkout.currency,
-        name: 'PawOS',
+        method: 'card',
         description: isCredits ? 'Usage Credits' : 'Autonomous Credits',
-        customer_name: creditsCardName,
-        customer_email: creditsCardEmail,
-        customer_contact: creditsCardPhone,
-        handler: async (response: any) => {
-          try {
-            const verifyFn = isCredits
-              ? ipc.billingVerifyNativeUsageCreditsPayment
-              : ipc.billingVerifyNativeCreditsPayment;
-
-            const result = await verifyFn({
-              orderId: response.razorpay_order_id,
-              paymentId: response.razorpay_payment_id,
-              signature: response.razorpay_signature,
-            });
-
-            if (result.ok) {
-              setMessage('✓ Payment successful! Credits added to your account.');
-              setShowCreditsCardForm(false);
-              setShowAutonomousCardForm(false);
-              setCreditsCardName('');
-              setCreditsCardEmail('');
-              setCreditsCardPhone('');
-              setCreditsCardAddress('');
-              setCreditsCardAddress2('');
-              setCreditsCardCity('');
-              setCreditsCardState('');
-              setCreditsCardPincode('');
-              setCreditsCardCountry('India');
-              setCreditsCardNumber('');
-              setCreditsCardExpiry('');
-              setCreditsCardCvc('');
-              setCreditsAmount('10');
-              setAutonomousAmount('30');
-              refresh();
-            } else {
-              setMessage(`Verification failed: ${result.reason}`);
-            }
-          } catch (err) {
-            setMessage(err instanceof Error ? err.message : 'Verification error');
-          } finally {
-            setBusy(false);
-          }
+        notes: {
+          purpose: isCredits ? 'usage_credits' : 'autonomous_credits',
         },
-        modal: { ondismiss: () => setBusy(false) },
+        email: creditsCardEmail,
+        contact: creditsCardPhone,
+        customer_name: creditsCardName,
       };
 
-      const razorpay = new (window.Razorpay as any)(options);
-      razorpay.open();
+      razorpayInstance.on('payment.success', async (response: any) => {
+        try {
+          const verifyFn = isCredits
+            ? ipc.billingVerifyNativeUsageCreditsPayment
+            : ipc.billingVerifyNativeCreditsPayment;
+
+          const result = await verifyFn({
+            orderId: response.razorpay_order_id,
+            paymentId: response.razorpay_payment_id,
+            signature: response.razorpay_signature,
+          });
+
+          if (result.ok) {
+            setMessage('✓ Payment successful! Credits added to your account.');
+            setShowCreditsCardForm(false);
+            setShowAutonomousCardForm(false);
+            setCreditsCardName('');
+            setCreditsCardEmail('');
+            setCreditsCardPhone('');
+            setCreditsCardAddress('');
+            setCreditsCardAddress2('');
+            setCreditsCardCity('');
+            setCreditsCardState('');
+            setCreditsCardPincode('');
+            setCreditsCardCountry('India');
+            setCreditsCardNumber('');
+            setCreditsCardExpiry('');
+            setCreditsCardCvc('');
+            setCreditsAmount('10');
+            setAutonomousAmount('30');
+            refresh();
+          } else {
+            setMessage(`Verification failed: ${result.reason}`);
+          }
+        } catch (err) {
+          setMessage(err instanceof Error ? err.message : 'Verification error');
+        } finally {
+          setBusy(false);
+        }
+      });
+
+      razorpayInstance.on('payment.error', (error: any) => {
+        setMessage(error.description || 'Payment failed');
+        setBusy(false);
+      });
+
+      razorpayInstance.createPayment(paymentData);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Payment error');
       setBusy(false);
