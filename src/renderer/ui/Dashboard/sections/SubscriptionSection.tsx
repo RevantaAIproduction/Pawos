@@ -138,6 +138,123 @@ export function SubscriptionSection({
     }
   };
 
+  const handleDirectPayment = async () => {
+    const isCredits = showCreditsCardForm && !showAutonomousCardForm;
+    const amount = parseFloat(isCredits ? creditsAmount : autonomousAmount);
+
+    if (!creditsCardName || !creditsCardEmail || !creditsCardPhone) {
+      setMessage('Please fill in all required fields (name, email, phone)');
+      return;
+    }
+
+    if (!creditsCardNumber || !creditsCardExpiry || !creditsCardCvc) {
+      setMessage('Please fill in all card details');
+      return;
+    }
+
+    setBusy(true);
+    setMessage(null);
+
+    try {
+      const createOrderFn = isCredits
+        ? ipc.billingCreateNativeUsageCreditsCheckout
+        : ipc.billingCreateNativeCreditsCheckout;
+
+      const checkout = await createOrderFn(amount);
+
+      if (!checkout.ok) {
+        setMessage(`Payment error: ${checkout.reason}`);
+        setBusy(false);
+        return;
+      }
+
+      // Load and open Razorpay
+      const loadRazorpay = () => {
+        if (!window.Razorpay) {
+          const script = document.createElement('script');
+          script.src = 'https://checkout.razorpay.com/v1/razorpay.js';
+          script.async = true;
+          script.onload = () => openRazorpay(checkout, isCredits);
+          script.onerror = () => {
+            setMessage('Failed to load payment service');
+            setBusy(false);
+          };
+          document.body.appendChild(script);
+        } else {
+          openRazorpay(checkout, isCredits);
+        }
+      };
+
+      loadRazorpay();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Payment error');
+      setBusy(false);
+    }
+  };
+
+  const openRazorpay = async (checkout: any, isCredits: boolean) => {
+    try {
+      const options = {
+        key: checkout.keyId,
+        order_id: checkout.orderId,
+        amount: checkout.amountPaise,
+        currency: checkout.currency,
+        name: 'PawOS',
+        description: isCredits ? 'Usage Credits' : 'Autonomous Credits',
+        customer_name: creditsCardName,
+        customer_email: creditsCardEmail,
+        customer_contact: creditsCardPhone,
+        handler: async (response: any) => {
+          try {
+            const verifyFn = isCredits
+              ? ipc.billingVerifyNativeUsageCreditsPayment
+              : ipc.billingVerifyNativeCreditsPayment;
+
+            const result = await verifyFn({
+              orderId: response.razorpay_order_id,
+              paymentId: response.razorpay_payment_id,
+              signature: response.razorpay_signature,
+            });
+
+            if (result.ok) {
+              setMessage('✓ Payment successful! Credits added to your account.');
+              setShowCreditsCardForm(false);
+              setShowAutonomousCardForm(false);
+              setCreditsCardName('');
+              setCreditsCardEmail('');
+              setCreditsCardPhone('');
+              setCreditsCardAddress('');
+              setCreditsCardAddress2('');
+              setCreditsCardCity('');
+              setCreditsCardState('');
+              setCreditsCardPincode('');
+              setCreditsCardCountry('India');
+              setCreditsCardNumber('');
+              setCreditsCardExpiry('');
+              setCreditsCardCvc('');
+              setCreditsAmount('10');
+              setAutonomousAmount('30');
+              refresh();
+            } else {
+              setMessage(`Verification failed: ${result.reason}`);
+            }
+          } catch (err) {
+            setMessage(err instanceof Error ? err.message : 'Verification error');
+          } finally {
+            setBusy(false);
+          }
+        },
+        modal: { ondismiss: () => setBusy(false) },
+      };
+
+      const razorpay = new (window.Razorpay as any)(options);
+      razorpay.open();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Payment error');
+      setBusy(false);
+    }
+  };
+
   if (user.isGuest) {
     return (
       <div className={styles.card}>
@@ -431,85 +548,7 @@ export function SubscriptionSection({
                 }} style={{ flex: 1, padding: '10px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }}>
                   Cancel
                 </button>
-                <button type="button" onClick={async () => {
-                  const isCredits = showCreditsCardForm && !showAutonomousCardForm;
-                  const amount = parseFloat(isCredits ? creditsAmount : autonomousAmount);
-
-                  setBusy(true);
-                  setMessage(null);
-
-                  try {
-                    // Create order directly
-                    const createOrderFn = isCredits
-                      ? ipc.billingCreateNativeUsageCreditsCheckout
-                      : ipc.billingCreateNativeCreditsCheckout;
-
-                    const checkout = await createOrderFn(amount);
-
-                    if (!checkout.ok) {
-                      setMessage(`Payment error: ${checkout.reason}`);
-                      setBusy(false);
-                      return;
-                    }
-
-                    // Load Razorpay script
-                    if (!window.Razorpay) {
-                      const script = document.createElement('script');
-                      script.src = 'https://checkout.razorpay.com/v1/razorpay.js';
-                      script.onload = () => initRazorpay(checkout);
-                      script.onerror = () => {
-                        setMessage('Failed to load payment service');
-                        setBusy(false);
-                      };
-                      document.body.appendChild(script);
-                    } else {
-                      initRazorpay(checkout);
-                    }
-                  } catch (err) {
-                    setMessage(err instanceof Error ? err.message : 'Payment error');
-                    setBusy(false);
-                  }
-
-                  function initRazorpay(checkout: any) {
-                    const options = {
-                      key: checkout.keyId,
-                      order_id: checkout.orderId,
-                      amount: checkout.amountPaise,
-                      currency: checkout.currency,
-                      name: 'PawOS',
-                      description: isCredits ? 'Usage Credits' : 'Autonomous Credits',
-                      customer_name: creditsCardName,
-                      customer_email: creditsCardEmail,
-                      customer_contact: creditsCardPhone,
-                      handler: async (response: any) => {
-                        const verifyFn = isCredits
-                          ? ipc.billingVerifyNativeUsageCreditsPayment
-                          : ipc.billingVerifyNativeCreditsPayment;
-
-                        const result = await verifyFn({
-                          orderId: response.razorpay_order_id,
-                          paymentId: response.razorpay_payment_id,
-                          signature: response.razorpay_signature,
-                        });
-
-                        if (result.ok) {
-                          setMessage('✓ Payment successful! Credits added to your account.');
-                          setShowCreditsCardForm(false);
-                          setShowAutonomousCardForm(false);
-                          setCreditsAmount('10');
-                          setAutonomousAmount('30');
-                        } else {
-                          setMessage(`Verification failed: ${result.reason}`);
-                        }
-                        setBusy(false);
-                      },
-                      modal: { ondismiss: () => setBusy(false) },
-                    };
-
-                    const razorpay = new (window.Razorpay as any)(options);
-                    razorpay.open();
-                  }
-                }} disabled={busy} style={{ flex: 1, padding: '10px 16px', backgroundColor: busy ? '#606060' : '#1967D2', color: '#fff', border: 'none', borderRadius: 4, cursor: busy ? 'not-allowed' : 'pointer', fontSize: '0.9em', fontWeight: 500 }}>
+                <button type="button" onClick={() => handleDirectPayment()} disabled={busy} style={{ flex: 1, padding: '10px 16px', backgroundColor: busy ? '#606060' : '#1967D2', color: '#fff', border: 'none', borderRadius: 4, cursor: busy ? 'not-allowed' : 'pointer', fontSize: '0.9em', fontWeight: 500 }}>
                   {busy ? 'Processing...' : `Pay ₹${Math.round(parseFloat(showCreditsCardForm && !showAutonomousCardForm ? creditsAmount : autonomousAmount) * 95.65).toLocaleString()}`}
                 </button>
               </div>
