@@ -339,11 +339,6 @@ export function SubscriptionSection({
                 </div>
               </div>
 
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 500, color: '#fff', marginTop: 12 }}>
-                <input type="checkbox" style={{ cursor: 'pointer' }} />
-                <span>Save card for future use</span>
-              </label>
-
               <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
                 <button type="button" onClick={() => {
                   showCreditsCardForm && setShowCreditsCardForm(false);
