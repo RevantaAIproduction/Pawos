@@ -138,8 +138,28 @@ function openRazorpayCheckout(result: any, options: TierPaymentHandler, tier: Su
     document.body.appendChild(container);
 
     console.log('Mounting Razorpay checkout...');
-    checkout.mount(container);
-    console.log('Razorpay checkout mounted');
+    try {
+      checkout.mount(container);
+      console.log('Razorpay checkout mounted successfully');
+
+      // Listen for events
+      if (typeof checkout.on === 'function') {
+        checkout.on('payment.failed', (err: any) => {
+          console.log('Payment failed:', err);
+          options.setMessage(`❌ Payment failed: ${err?.message || 'Unknown error'}`);
+        });
+        checkout.on('payment.success', (response: any) => {
+          console.log('Payment success:', response);
+          handlePaymentSuccess(response, result, options, tier);
+        });
+      }
+    } catch (mountError) {
+      console.log('Mount error:', mountError);
+      options.setMessage(`❌ Checkout mount failed: ${mountError instanceof Error ? mountError.message : String(mountError)}`);
+      options.setBusy(false);
+      // Clean up container
+      document.body.removeChild(container);
+    }
   } catch (error) {
     console.log('Checkout error:', error);
     options.setMessage(`❌ Payment error: ${error instanceof Error ? error.message : String(error)}`);
