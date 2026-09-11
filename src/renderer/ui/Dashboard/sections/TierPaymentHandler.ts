@@ -54,20 +54,20 @@ export async function initiateRazorpayTierPayment(
 }
 
 function loadRazorpayAndPay(result: any, options: TierPaymentHandler, tier: SubscriptionTierId) {
-  if (!window.Razorpay) {
+  if (!(window as any).Razorpay) {
     const script = document.createElement('script');
     script.src = 'https://checkout.razorpay.com/v1/razorpay.js';
     script.async = true;
     script.onload = () => {
       // Wait for Razorpay to be available
       setTimeout(() => {
-        if (window.Razorpay && typeof window.Razorpay === 'function') {
+        if ((window as any).Razorpay) {
           openRazorpayCheckout(result, options, tier);
         } else {
           options.setMessage('❌ Payment system failed to initialize');
           options.setBusy(false);
         }
-      }, 100);
+      }, 500);
     };
     script.onerror = () => {
       options.setMessage('❌ Failed to load payment');
@@ -108,14 +108,28 @@ function openRazorpayCheckout(result: any, options: TierPaymentHandler, tier: Su
   };
 
   try {
-    if (!window.Razorpay || typeof window.Razorpay !== 'function') {
+    const Razorpay = (window as any).Razorpay;
+    if (!Razorpay) {
       options.setMessage('❌ Payment system unavailable');
       options.setBusy(false);
       return;
     }
 
-    console.log('Opening Razorpay checkout...');
-    window.Razorpay.open(razorpayOptions);
+    console.log('Razorpay object:', Razorpay);
+    console.log('Razorpay type:', typeof Razorpay);
+    console.log('Razorpay keys:', Object.keys(Razorpay || {}));
+
+    // Try new Razorpay() approach
+    const instance = new Razorpay(razorpayOptions);
+    console.log('Instance created:', instance);
+    console.log('Instance has open?', typeof instance?.open);
+
+    if (instance && typeof instance.open === 'function') {
+      instance.open();
+    } else {
+      options.setMessage('❌ Payment initialization failed');
+      options.setBusy(false);
+    }
   } catch (error) {
     console.log('Checkout error:', error);
     options.setMessage(`❌ Payment error: ${error instanceof Error ? error.message : String(error)}`);
