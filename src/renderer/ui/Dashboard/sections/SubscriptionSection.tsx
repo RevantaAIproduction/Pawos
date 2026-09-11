@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import { getSupabaseClient } from '../../../auth/supabaseClient';
-import { NativeBillingCheckoutModal, type NativeBillingCheckoutIntent } from '../../billing/NativeBillingCheckoutModal';
+import { initiateRazorpayTierPayment } from './TierPaymentHandler';
 
 declare global {
   interface Window {
