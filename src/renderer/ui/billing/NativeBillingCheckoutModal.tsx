@@ -81,6 +81,21 @@ export type NativeBillingCheckoutIntent =
       amountUsd: number;
       organizationId?: string;
       title?: string;
+      cardDetails?: {
+        name: string;
+        email: string;
+        country: string;
+        phone: string;
+        address: string;
+        address2: string;
+        city: string;
+        state: string;
+        pincode: string;
+        taxId: string;
+        cardNumber: string;
+        expiry: string;
+        cvc: string;
+      };
     }
   | {
       /** Usage Credits — normal Paw Compute top-up, $5 minimum. Ledger: add_usage_credits_service. */
@@ -88,6 +103,21 @@ export type NativeBillingCheckoutIntent =
       amountUsd?: number;
       organizationId?: string;
       title?: string;
+      cardDetails?: {
+        name: string;
+        email: string;
+        country: string;
+        phone: string;
+        address: string;
+        address2: string;
+        city: string;
+        state: string;
+        pincode: string;
+        taxId: string;
+        cardNumber: string;
+        expiry: string;
+        cvc: string;
+      };
     }
   | {
       /**
@@ -1179,6 +1209,7 @@ export function NativeBillingCheckoutModal({
         };
 
         const intentTitle = (intent as any).title;
+        const cardDetails = (intent as any).cardDetails;
         const invoiceNotes: Record<string, any> = {
           // Invoice Details
           invoice_type: intentDescriptions[intent.kind],
@@ -1187,6 +1218,20 @@ export function NativeBillingCheckoutModal({
           // Payment Details
           payment_method: paymentMethod,
           amount_inr: (checkout.amountPaise / 100).toString(),
+
+          // Customer/Billing Details
+          ...(cardDetails && {
+            customer_name: cardDetails.name,
+            customer_email: cardDetails.email,
+            customer_phone: cardDetails.phone,
+            billing_address: cardDetails.address,
+            billing_address2: cardDetails.address2,
+            billing_city: cardDetails.city,
+            billing_state: cardDetails.state,
+            billing_pincode: cardDetails.pincode,
+            billing_country: cardDetails.country,
+            ...(cardDetails.taxId && { tax_id: cardDetails.taxId }),
+          }),
 
           // Tier-specific data
           ...(intent.kind === 'tierPurchase' && {
@@ -1412,15 +1457,23 @@ export function NativeBillingCheckoutModal({
 
       // Build the payment request for Custom Checkout
       const paymentUserName = sessionData.session?.user?.user_metadata?.name || userEmail.split('@')[0] || 'Customer';
+      const cardDetails = (intent as { cardDetails?: Record<string, string> }).cardDetails;
       const paymentData: Record<string, unknown> = {
         order_id: checkout.orderId,
         amount: checkout.amountPaise,
         currency: checkout.currency,
         method: paymentMethod,
-        email: userEmail,
-        contact: mobileNumber,
-        customer_name: paymentUserName,
+        email: cardDetails?.email || userEmail,
+        contact: cardDetails?.phone || mobileNumber,
+        customer_name: cardDetails?.name || paymentUserName,
       };
+
+      // Add card details if provided
+      if (cardDetails && paymentMethod === 'emandate') {
+        paymentData.description = `${cardDetails.name} - ${cardDetails.address}, ${cardDetails.city}, ${cardDetails.state} ${cardDetails.pincode}`;
+        paymentData.customer_notify = 1;
+        paymentData.token = 'emandate';
+      }
 
       // Add method-specific parameters
       if (paymentMethod === 'netbanking' && selectedBankCode) {

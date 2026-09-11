@@ -512,7 +512,26 @@ export function SubscriptionSection({
                 setShowCreditsSummary(false);
                 setTimeout(() => {
                   const amount = parseFloat(creditsAmount);
-                  setCheckoutIntent({ kind: 'usageCredits', amountUsd: amount, title: 'Buy Usage Credits' });
+                  setCheckoutIntent({
+                    kind: 'usageCredits',
+                    amountUsd: amount,
+                    title: 'Buy Usage Credits',
+                    cardDetails: {
+                      name: creditsCardName,
+                      email: creditsCardEmail,
+                      country: creditsCardCountry,
+                      phone: creditsCardPhone,
+                      address: creditsCardAddress,
+                      address2: creditsCardAddress2,
+                      city: creditsCardCity,
+                      state: creditsCardState,
+                      pincode: creditsCardPincode,
+                      taxId: creditsCardTaxId,
+                      cardNumber: creditsCardNumber,
+                      expiry: creditsCardExpiry,
+                      cvc: creditsCardCvc,
+                    },
+                  });
                 }, 100);
               }}>
                 Pay ₹{Math.round(parseFloat(creditsAmount) * 95.65).toLocaleString()}
@@ -560,7 +579,26 @@ export function SubscriptionSection({
                 setShowAutonomousSummary(false);
                 setTimeout(() => {
                   const amount = parseFloat(autonomousAmount);
-                  setCheckoutIntent({ kind: 'autonomousWorkCredits', amountUsd: amount, title: 'Autonomous Work Credits' });
+                  setCheckoutIntent({
+                    kind: 'autonomousWorkCredits',
+                    amountUsd: amount,
+                    title: 'Autonomous Work Credits',
+                    cardDetails: {
+                      name: creditsCardName,
+                      email: creditsCardEmail,
+                      country: creditsCardCountry,
+                      phone: creditsCardPhone,
+                      address: creditsCardAddress,
+                      address2: creditsCardAddress2,
+                      city: creditsCardCity,
+                      state: creditsCardState,
+                      pincode: creditsCardPincode,
+                      taxId: creditsCardTaxId,
+                      cardNumber: creditsCardNumber,
+                      expiry: creditsCardExpiry,
+                      cvc: creditsCardCvc,
+                    },
+                  });
                 }, 100);
               }}>
                 Pay ₹{Math.round(parseFloat(autonomousAmount) * 95.65).toLocaleString()}
