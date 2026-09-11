@@ -230,6 +230,146 @@ export function SubscriptionSection({
         </div>
       </div>
 
+      {/* Tier Checkout Form Component Fallback - Only for credit flows */}
+      {(showCreditsCardForm || showAutonomousCardForm) && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, overflow: 'auto' }}>
+          <div style={{ backgroundColor: '#1a1a1e', borderRadius: 8, padding: 40, maxWidth: 600, width: '90%', margin: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <h2 style={{ fontSize: '1.2em', fontWeight: 700, margin: 0 }}>Billing information</h2>
+              <button type="button" onClick={() => {
+                showCreditsCardForm && setShowCreditsCardForm(false);
+                showAutonomousCardForm && setShowAutonomousCardForm(false);
+              }} style={{ background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: '#fff', opacity: 0.7 }}>
+                ✕
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Full name <span style={{ color: '#ef4444' }}>*</span></label>
+                <input type="text" placeholder="Your full name" style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Email <span style={{ color: '#ef4444' }}>*</span></label>
+                <input type="email" placeholder="your@email.com" style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Country or region <span style={{ color: '#ef4444' }}>*</span></label>
+                <select style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }}>
+                  <option value="India">India</option>
+                  <option value="United States">United States</option>
+                  <option value="United Kingdom">United Kingdom</option>
+                  <option value="Canada">Canada</option>
+                  <option value="Australia">Australia</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Phone number <span style={{ color: '#ef4444' }}>*</span></label>
+                <input type="tel" placeholder="+1 (555) 123-4567" style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Address line 1 <span style={{ color: '#ef4444' }}>*</span></label>
+                <input type="text" placeholder="Start typing your address" style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Address line 2</label>
+                <input type="text" placeholder="Apartment, suite, etc. (optional)" style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }} />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>City <span style={{ color: '#ef4444' }}>*</span></label>
+                  <input type="text" placeholder="City" style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>PIN <span style={{ color: '#ef4444' }}>*</span></label>
+                  <input type="text" placeholder="Postal code" style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }} />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>State <span style={{ color: '#ef4444' }}>*</span></label>
+                <input type="text" placeholder="State/Province" style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Business tax ID (Optional)</label>
+                <input type="text" placeholder="GST/Tax ID" style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }} />
+              </div>
+
+              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.12)' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>Payment method</div>
+
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Card number</label>
+                  <div style={{ position: 'relative' }}>
+                    <input type="text" placeholder="1234 1234 1234 1234" style={{ width: '100%', padding: '10px 12px 10px 110px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }} />
+                    <div style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <svg width="28" height="18" viewBox="0 0 48 32" style={{ borderRadius: 2 }}>
+                        <rect width="48" height="32" fill="#1434CB"/>
+                        <text x="24" y="20" textAnchor="middle" fill="white" fontSize="9" fontWeight="bold">VISA</text>
+                      </svg>
+                      <svg width="28" height="18" viewBox="0 0 48 32" style={{ borderRadius: 2, opacity: 0.4 }}>
+                        <rect width="48" height="32" fill="#EB001B"/>
+                        <circle cx="20" cy="16" r="8" fill="white" opacity="0.3"/>
+                        <circle cx="28" cy="16" r="8" fill="white" opacity="0.3"/>
+                      </svg>
+                      <svg width="28" height="18" viewBox="0 0 48 32" style={{ borderRadius: 2, opacity: 0.4 }}>
+                        <rect width="48" height="32" fill="white" stroke="#999"/>
+                        <text x="24" y="20" textAnchor="middle" fill="#0066CC" fontSize="7" fontWeight="bold">RUPAY</text>
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 12 }}>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Expiration date</label>
+                    <input type="text" placeholder="MM/YY" maxLength={5} style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Security code</label>
+                    <input type="text" placeholder="CVC" maxLength={4} style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: 13, boxSizing: 'border-box' }} />
+                  </div>
+                </div>
+              </div>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 500, color: '#fff', marginTop: 12 }}>
+                <input type="checkbox" style={{ cursor: 'pointer' }} />
+                <span>Save card for future use</span>
+              </label>
+
+              <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
+                <button type="button" onClick={() => {
+                  showCreditsCardForm && setShowCreditsCardForm(false);
+                  showAutonomousCardForm && setShowAutonomousCardForm(false);
+                }} style={{ flex: 1, padding: '10px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }}>
+                  Cancel
+                </button>
+                <button type="button" onClick={() => {
+                  setShowCreditsCardForm(false);
+                  setShowAutonomousCardForm(false);
+                  setTimeout(() => {
+                    if (showCreditsCardForm) {
+                      setShowCreditsSummary(true);
+                    } else {
+                      setShowAutonomousSummary(true);
+                    }
+                  }, 100);
+                }} style={{ flex: 1, padding: '10px 16px', backgroundColor: '#1967D2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }}>
+                  Continue to payment
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Usage Credits Amount Modal */}
       {showCreditsAmountModal && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
