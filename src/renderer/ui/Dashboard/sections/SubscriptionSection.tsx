@@ -151,7 +151,7 @@ export function SubscriptionSection({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         <div>
           <h3 style={{ fontSize: '1em', fontWeight: 600, margin: 0 }}>Auto-reload</h3>
-          <p style={{ margin: '4px 0 0 0', fontSize: '0.85em', opacity: 0.6 }}>Automatically buy more usage credits when you're running low</p>
+          <p style={{ margin: '4px 0 0 0', fontSize: '0.85em', opacity: 0.6 }}>Automatically buy more usage credits when you run out</p>
         </div>
         <button type="button" style={{ padding: '8px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500, whiteSpace: 'nowrap' }}>
           Turn on
