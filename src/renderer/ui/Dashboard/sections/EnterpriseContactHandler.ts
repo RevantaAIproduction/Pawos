@@ -12,7 +12,9 @@ export interface EnterpriseContactForm {
   name: string;
   email: string;
   company: string;
-  requirements: string;
+  phone: string;
+  seatsNeeded: number;
+  message?: string;
 }
 
 export async function submitEnterpriseContact(
@@ -42,8 +44,20 @@ export async function submitEnterpriseContact(
       return;
     }
 
-    if (!formData.requirements?.trim() || formData.requirements.length < 10) {
-      options.setMessage('❌ Please describe your requirements (min 10 characters)');
+    if (!formData.phone?.trim()) {
+      options.setMessage('❌ Phone number is required');
+      options.setBusy(false);
+      return;
+    }
+
+    if (!formData.seatsNeeded || formData.seatsNeeded < 20) {
+      options.setMessage('❌ Minimum 20 seats required');
+      options.setBusy(false);
+      return;
+    }
+
+    if (formData.message && formData.message.length > 5000) {
+      options.setMessage('❌ Message too long (max 5000 characters)');
       options.setBusy(false);
       return;
     }
@@ -64,8 +78,9 @@ export async function submitEnterpriseContact(
       name: formData.name,
       email: formData.email,
       company: formData.company,
-      requirements: formData.requirements,
-      accessToken,
+      phone: formData.phone,
+      seatsNeeded: formData.seatsNeeded,
+      message: formData.message,
     });
 
     if (!result.ok) {
