@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
-import { NativeBillingCheckoutModal, type NativeBillingCheckoutIntent } from '../billing/NativeBillingCheckoutModal';
+import { NativeBillingCheckoutModal, type NativeBillingCheckoutIntent } from '../../billing/NativeBillingCheckoutModal';
 import type { AuthUser } from '../../../auth/AuthTypes';
 import {
   SUBSCRIPTION_TIER_ORDER,
