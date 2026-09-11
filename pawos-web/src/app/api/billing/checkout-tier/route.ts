@@ -131,30 +131,41 @@ export async function POST(request: Request) {
   const usdInrRate = 95.65;
 
   // ---- Create Razorpay Order ----
+  const authHeader = razorpayAuthHeader(credentials.keyId, credentials.keySecret);
+  const amountPaise = Math.round(amountInr * 100);
+  const requestBody = {
+    amount: amountPaise,
+    currency: "INR",
+    receipt: `tier-${tier}-${userId.slice(-8)}-${Date.now().toString().slice(-8)}`,
+    notes: {
+      productType: "tier_purchase",
+      tier,
+      ...(seatTier ? { seatTier } : {}),
+      ...(seatCount ? { seatCount } : {}),
+      ...(proMaxVariant ? { proMaxVariant } : {}),
+      runtimeIds: runtimeIds.length > 0 ? runtimeIds.join(",") : "",
+      userId,
+    },
+  };
+
+  console.log("[Razorpay DEBUG] Creating order with:");
+  console.log("[Razorpay DEBUG] Key ID prefix:", credentials.keyId.substring(0, 15));
+  console.log("[Razorpay DEBUG] Amount (paise):", amountPaise);
+  console.log("[Razorpay DEBUG] Currency:", "INR");
+
   const response = await fetch("https://api.razorpay.com/v1/orders", {
     method: "POST",
     headers: {
-      Authorization: razorpayAuthHeader(credentials.keyId, credentials.keySecret),
+      Authorization: authHeader,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      amount: Math.round(amountInr * 100),
-      currency: "INR",
-      receipt: `tier-${tier}-${userId.slice(-8)}-${Date.now().toString().slice(-8)}`,
-      notes: {
-        productType: "tier_purchase",
-        tier,
-        ...(seatTier ? { seatTier } : {}),
-        ...(seatCount ? { seatCount } : {}),
-        ...(proMaxVariant ? { proMaxVariant } : {}),
-        runtimeIds: runtimeIds.length > 0 ? runtimeIds.join(",") : "",
-        userId,
-      },
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
     const errorBody = await response.text().catch(() => "");
+    console.log("[Razorpay DEBUG] Response status:", response.status);
+    console.log("[Razorpay DEBUG] Response body:", errorBody);
     return NextResponse.json(
       { ok: false, reason: `The payment processor rejected the order request: ${errorBody || response.statusText}` },
       { status: 502 }
