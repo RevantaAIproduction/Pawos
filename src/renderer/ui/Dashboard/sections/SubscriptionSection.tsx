@@ -2,6 +2,12 @@ import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import { NativeBillingCheckoutModal, type NativeBillingCheckoutIntent } from '../../billing/NativeBillingCheckoutModal';
+
+declare global {
+  interface Window {
+    Razorpay?: any;
+  }
+}
 import type { AuthUser } from '../../../auth/AuthTypes';
 import {
   SUBSCRIPTION_TIER_ORDER,
@@ -425,36 +431,86 @@ export function SubscriptionSection({
                 }} style={{ flex: 1, padding: '10px 16px', backgroundColor: '#404040', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }}>
                   Cancel
                 </button>
-                <button type="button" onClick={() => {
+                <button type="button" onClick={async () => {
                   const isCredits = showCreditsCardForm && !showAutonomousCardForm;
-                  const isAutonomous = showAutonomousCardForm && !showCreditsCardForm;
                   const amount = parseFloat(isCredits ? creditsAmount : autonomousAmount);
 
-                  setCheckoutIntent({
-                    kind: isCredits ? 'usageCredits' : 'autonomousWorkCredits',
-                    amountUsd: amount,
-                    title: isCredits ? 'Buy Usage Credits' : 'Autonomous Work Credits',
-                    cardDetails: {
-                      name: creditsCardName,
-                      email: creditsCardEmail,
-                      country: creditsCardCountry,
-                      phone: creditsCardPhone,
-                      address: creditsCardAddress,
-                      address2: creditsCardAddress2,
-                      city: creditsCardCity,
-                      state: creditsCardState,
-                      pincode: creditsCardPincode,
-                      taxId: creditsCardTaxId,
-                      cardNumber: creditsCardNumber,
-                      expiry: creditsCardExpiry,
-                      cvc: creditsCardCvc,
-                    },
-                  });
+                  setBusy(true);
+                  setMessage(null);
 
-                  setShowCreditsCardForm(false);
-                  setShowAutonomousCardForm(false);
-                }} style={{ flex: 1, padding: '10px 16px', backgroundColor: '#1967D2', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '0.9em', fontWeight: 500 }}>
-                  Pay ₹{Math.round(parseFloat(showCreditsCardForm && !showAutonomousCardForm ? creditsAmount : autonomousAmount) * 95.65).toLocaleString()}
+                  try {
+                    // Create order directly
+                    const createOrderFn = isCredits
+                      ? ipc.billingCreateNativeUsageCreditsCheckout
+                      : ipc.billingCreateNativeCreditsCheckout;
+
+                    const checkout = await createOrderFn(amount);
+
+                    if (!checkout.ok) {
+                      setMessage(`Payment error: ${checkout.reason}`);
+                      setBusy(false);
+                      return;
+                    }
+
+                    // Load Razorpay script
+                    if (!window.Razorpay) {
+                      const script = document.createElement('script');
+                      script.src = 'https://checkout.razorpay.com/v1/razorpay.js';
+                      script.onload = () => initRazorpay(checkout);
+                      script.onerror = () => {
+                        setMessage('Failed to load payment service');
+                        setBusy(false);
+                      };
+                      document.body.appendChild(script);
+                    } else {
+                      initRazorpay(checkout);
+                    }
+                  } catch (err) {
+                    setMessage(err instanceof Error ? err.message : 'Payment error');
+                    setBusy(false);
+                  }
+
+                  function initRazorpay(checkout: any) {
+                    const options = {
+                      key: checkout.keyId,
+                      order_id: checkout.orderId,
+                      amount: checkout.amountPaise,
+                      currency: checkout.currency,
+                      name: 'PawOS',
+                      description: isCredits ? 'Usage Credits' : 'Autonomous Credits',
+                      customer_name: creditsCardName,
+                      customer_email: creditsCardEmail,
+                      customer_contact: creditsCardPhone,
+                      handler: async (response: any) => {
+                        const verifyFn = isCredits
+                          ? ipc.billingVerifyNativeUsageCreditsPayment
+                          : ipc.billingVerifyNativeCreditsPayment;
+
+                        const result = await verifyFn({
+                          orderId: response.razorpay_order_id,
+                          paymentId: response.razorpay_payment_id,
+                          signature: response.razorpay_signature,
+                        });
+
+                        if (result.ok) {
+                          setMessage('✓ Payment successful! Credits added to your account.');
+                          setShowCreditsCardForm(false);
+                          setShowAutonomousCardForm(false);
+                          setCreditsAmount('10');
+                          setAutonomousAmount('30');
+                        } else {
+                          setMessage(`Verification failed: ${result.reason}`);
+                        }
+                        setBusy(false);
+                      },
+                      modal: { ondismiss: () => setBusy(false) },
+                    };
+
+                    const razorpay = new (window.Razorpay as any)(options);
+                    razorpay.open();
+                  }
+                }} disabled={busy} style={{ flex: 1, padding: '10px 16px', backgroundColor: busy ? '#606060' : '#1967D2', color: '#fff', border: 'none', borderRadius: 4, cursor: busy ? 'not-allowed' : 'pointer', fontSize: '0.9em', fontWeight: 500 }}>
+                  {busy ? 'Processing...' : `Pay ₹${Math.round(parseFloat(showCreditsCardForm && !showAutonomousCardForm ? creditsAmount : autonomousAmount) * 95.65).toLocaleString()}`}
                 </button>
               </div>
             </div>
