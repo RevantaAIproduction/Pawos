@@ -230,6 +230,7 @@ function createMainWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      devTools: false,
     },
   });
 
@@ -242,8 +243,16 @@ function createMainWindow() {
   mainWindow.once('ready-to-show', () => {
     console.error("[PAWOS WINDOW] ready-to-show fired");
     mainWindow?.show();
-    mainWindow?.webContents.openDevTools();
     console.error("[PAWOS WINDOW] window shown");
+  });
+
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.control && input.shift && input.key.toLowerCase() === 'i') {
+      event.preventDefault();
+    }
+    if (input.key === 'F12') {
+      event.preventDefault();
+    }
   });
 
   mainWindow.on('closed', () => {

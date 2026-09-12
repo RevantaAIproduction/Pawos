@@ -17,16 +17,22 @@ export function AutonomousCreditsPanel({ userEmail, onPaymentComplete, currentTi
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [balanceUsd, setBalanceUsd] = useState<number | null>(null);
+  const [totalPurchasedUsd, setTotalPurchasedUsd] = useState<number>(0);
 
   const fetchBalance = async () => {
     try {
       const balance = await autonomousTaskBillingService.getTicketBalance(null);
       setBalanceUsd(balance.balanceUsd);
+      if (totalPurchasedUsd === 0) {
+        setTotalPurchasedUsd(balance.balanceUsd);
+      }
     } catch (error) {
       console.error('Failed to fetch autonomous credits balance:', error);
       setBalanceUsd(0);
     }
   };
+
+  const usedUsd = totalPurchasedUsd - (balanceUsd ?? 0);
 
   useEffect(() => {
     fetchBalance();
@@ -77,8 +83,12 @@ export function AutonomousCreditsPanel({ userEmail, onPaymentComplete, currentTi
         </p>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
           <div>
-            <div style={{ fontSize: '1.5em', fontWeight: 700, margin: '0 0 4px 0' }}>${balanceUsd !== null ? balanceUsd.toFixed(2) : '...'}</div>
-            <p style={{ fontSize: '0.85em', opacity: 0.6, margin: 0 }}>Current balance</p>
+            <div style={{ fontSize: '1em', fontWeight: 600, margin: '0 0 8px 0' }}>
+              Remaining: ${balanceUsd !== null ? balanceUsd.toFixed(2) : '...'}
+            </div>
+            <div style={{ fontSize: '0.9em', opacity: 0.7 }}>
+              Used: ${usedUsd.toFixed(2)}
+            </div>
           </div>
           <button
             onClick={() => { setStep('amount'); setMessage(null); }}
