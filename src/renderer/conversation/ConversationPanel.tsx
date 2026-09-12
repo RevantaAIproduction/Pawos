@@ -1808,24 +1808,27 @@ export function ConversationPanel({
             {(() => {
               const usage5h = entitlement?.usage5hPc ?? 0;
               const limit5h = entitlement?.limit5hPc ?? Infinity;
-              const percentage = (usage5h / limit5h) * 100;
+              const totalUsage = usage5h + (streamingPawCompute ?? 0);
+              const percentage = (totalUsage / limit5h) * 100;
               const isApproachingLimit = percentage >= 65;
+              const isStreaming = (streamingPawCompute ?? 0) > 0;
 
               let circleColor = 'rgba(120, 150, 200, 0.6)'; // muted blue
               if (percentage >= 90) circleColor = 'rgba(180, 100, 100, 0.6)'; // muted red
               else if (percentage >= 65) circleColor = 'rgba(180, 150, 100, 0.6)'; // muted yellow
+              if (isStreaming) circleColor = 'rgba(76, 175, 80, 0.6)'; // green when streaming
 
               return (
                 <>
-                  {isApproachingLimit && (
+                  {(isApproachingLimit || isStreaming) && (
                     <button
-                      className={styles.usageCircle}
+                      className={`${styles.usageCircle} ${isStreaming ? styles.streaming : ''}`}
                       style={{ borderColor: circleColor }}
-                      title={`${Math.round(percentage)}% used - click to upgrade`}
+                      title={`${Math.round(percentage)}% used${isStreaming ? ` (${streamingPawCompute}PC being used now)` : ''} - click to upgrade`}
                       onClick={() => setShowTierUpgradePopup(true)}
                     />
                   )}
-                  <span title={`${entitlement?.tier ?? 'Free'} tier - 5h: ${usage5h}/${limit5h} | Week: ${entitlement?.usageWeeklyPc ?? 0}/${entitlement?.limitWeeklyPc ?? 'unlimited'}`}>
+                  <span title={`${entitlement?.tier ?? 'Free'} tier - 5h: ${usage5h}${streamingPawCompute ? `+${streamingPawCompute}` : ''}/${limit5h} | Week: ${entitlement?.usageWeeklyPc ?? 0}/${entitlement?.limitWeeklyPc ?? 'unlimited'}`}>
                     {Math.round(percentage)}%
                   </span>
                 </>

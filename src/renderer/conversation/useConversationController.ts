@@ -329,7 +329,10 @@ export function useConversationController(args?: {
           ipc
             .billingRecordTurnUsage(submission, 'conversation-turn', category, activePawModelRef.current)
             .then(() => refreshEntitlement())
-            .catch(() => {});
+            .catch(() => {
+              // Even if billing fails, refresh entitlement to show latest usage
+              refreshEntitlement();
+            });
         }
       },
       executeAction: withAutonomousTaskBilling(withGovernanceGate((request) => ipc.executeAction(request))),
