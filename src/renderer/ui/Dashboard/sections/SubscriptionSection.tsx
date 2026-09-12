@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
-import { TierPurchasePanel } from './TierPurchasePanel';
 import { UsageCreditsPanel } from './UsageCreditsPanel';
 import { AutonomousCreditsPanel } from './AutonomousCreditsPanel';
 import { EnterpriseContactPanel } from './EnterpriseContactPanel';
@@ -121,7 +120,6 @@ export function SubscriptionSection({
       </div>
 
       {/* Payment Panels */}
-      <TierPurchasePanel currentTier={currentTier} userEmail={user.email} onPaymentComplete={refresh} />
       <UsageCreditsPanel userEmail={user.email} onPaymentComplete={refresh} />
       <AutonomousCreditsPanel userEmail={user.email} onPaymentComplete={refresh} />
       <EnterpriseContactPanel userEmail={user.email} onSubmitComplete={refresh} />
