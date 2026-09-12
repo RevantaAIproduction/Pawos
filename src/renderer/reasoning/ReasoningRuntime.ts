@@ -197,6 +197,14 @@ export class ReasoningRuntime {
       rejectCompleted(error);
     };
 
+    // Safety timeout: if response doesn't complete in 30 seconds, reject
+    const timeoutHandle = setTimeout(() => {
+      if (!settled) {
+        console.log('[TRACE-TIMEOUT] Response timeout after 30s, settling with empty response');
+        settleRejected(new Error('Response generation timeout'));
+      }
+    }, 30000);
+
     try {
       this.activeTurnReject = settleRejected;
       this.activeSession = this.provider.streamResponse(
@@ -242,7 +250,17 @@ export class ReasoningRuntime {
             usage = reportedUsage;
           },
           onComplete: (providerResponse) => {
-            if (this.activeTurnId !== turnId) return;
+            clearTimeout(timeoutHandle);
+            if (this.activeTurnId !== turnId) {
+              console.log('[TRACE-IGNORED] onComplete skipped - turnId mismatch', { current: this.activeTurnId, expected: turnId, settled });
+              if (!settled) {
+                // Response arrived but for an old turn - still settle it to avoid hanging
+                console.log('[TRACE-SETTLE-MISMATCH] Settling mismatched turn with empty response');
+                settleResolved({ response: '', assistantMessage: null, toolCalls: [], usage });
+              }
+              return;
+            }
+            console.log('[TRACE-3] onComplete - processing response', { length: providerResponse?.length ?? 0 });
             response = providerResponse || response;
             const toolCallsForMessage = toolCalls.length > 0 ? [...toolCalls] : undefined;
             if (assistantMessage) {
@@ -270,6 +288,7 @@ export class ReasoningRuntime {
             settleResolved(result);
           },
           onError: (error) => {
+            clearTimeout(timeoutHandle);
             if (this.activeTurnId !== turnId) return;
             callbacks.onError?.(error);
             settleRejected(error);
