@@ -800,6 +800,7 @@ export function registerIpc(opts: {
         }
         return {
           ok: true,
+          checkoutUrl: (result as any).checkoutUrl || '',
           keyId: result.keyId,
           orderId: result.orderId,
           amountUsd: result.amountUsd,
@@ -879,6 +880,7 @@ export function registerIpc(opts: {
         }
         return {
           ok: true,
+          checkoutUrl: (result as any).checkoutUrl || '',
           keyId: result.keyId,
           orderId: result.orderId,
           amountUsd: result.amountUsd,
@@ -948,6 +950,7 @@ export function registerIpc(opts: {
         }
         return {
           ok: true,
+          checkoutUrl: (result as any).checkoutUrl || '',
           keyId: result.keyId,
           orderId: result.orderId,
           amountUsd: result.amountUsd ?? 0,
