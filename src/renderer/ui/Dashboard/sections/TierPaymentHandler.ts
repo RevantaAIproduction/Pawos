@@ -89,12 +89,19 @@ function openRazorpayCheckout(result: any, options: TierPaymentHandler, tier: Su
     });
 
     // Create payment with order details
+    const userName = options.userEmail.split('@')[0] || 'Customer';
     const paymentData = {
       order_id: result.orderId,
       amount: result.amountPaise,
       currency: result.currency || 'INR',
       email: options.userEmail,
+      contact: '9000000000', // Placeholder phone for Razorpay
+      customer_name: userName,
       description: `PawOS ${tier} Tier Purchase`,
+      notes: {
+        tier,
+        productType: 'tier_purchase',
+      },
     };
 
     razorpayInstance.createPayment(paymentData);

@@ -96,12 +96,20 @@ function openRazorpayCheckout(result: any, options: CreditsPaymentHandler, isAut
     });
 
     // Create payment with order details
+    const userName = options.userEmail.split('@')[0] || 'Customer';
     const paymentData = {
       order_id: result.orderId,
       amount: result.amountPaise,
       currency: result.currency || 'INR',
       email: options.userEmail,
+      contact: '9000000000', // Placeholder phone for Razorpay
+      customer_name: userName,
       description,
+      notes: {
+        creditType: isAutonomous ? 'autonomous' : 'usage',
+        amount: amountUsd,
+        productType: isAutonomous ? 'autonomous_credits' : 'usage_credits',
+      },
     };
 
     razorpayInstance.createPayment(paymentData);
