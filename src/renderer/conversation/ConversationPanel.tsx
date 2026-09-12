@@ -1719,7 +1719,8 @@ export function ConversationPanel({
               setWasPasted(false);
             }}
             onKeyDown={(e) => {
-              if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
                 if (draft.trim() || wasPasted) {
                   onSendTranscript(draft);
                   setDraft('');
