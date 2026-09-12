@@ -763,18 +763,20 @@ export function registerIpc(opts: {
   ipcMain.handle(
     'billing:createCreditsCheckoutSession',
     (_evt, amountUsd: number, organizationId?: string, callbackUrl?: string, accessToken?: string) => {
-      if (!entitlementService.isFeatureAvailable('autonomousTaskBilling')) {
-        return { ok: false, reason: 'Ticket Balance requires Paw Pro Max or higher.' };
-      }
+      // TODO: Re-enable tier check after testing
+      // if (!entitlementService.isFeatureAvailable('autonomousTaskBilling')) {
+      //   return { ok: false, reason: 'Ticket Balance requires Paw Pro Max or higher.' };
+      // }
       return createCreditsCheckoutUrl(amountUsd, organizationId, callbackUrl, accessToken);
     }
   );
   ipcMain.handle(
     'billing:createNativeCreditsCheckout',
     async (_evt, amountUsd: number, organizationId?: string, accessToken?: string): Promise<NativeCreditsCheckoutResult> => {
-      if (!entitlementService.isFeatureAvailable('autonomousTaskBilling')) {
-        return { ok: false, reason: 'Ticket Balance requires Paw Pro Max or higher.' };
-      }
+      // TODO: Re-enable tier check after testing
+      // if (!entitlementService.isFeatureAvailable('autonomousTaskBilling')) {
+      //   return { ok: false, reason: 'Ticket Balance requires Paw Pro Max or higher.' };
+      // }
       if (!accessToken) return { ok: false, reason: 'Missing PawOS session. Sign in again before adding funds.' };
       try {
         const response = await fetch(`${PAWOS_BILLING_API_BASE_URL}/api/billing/checkout-credits`, {
