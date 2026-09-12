@@ -193,12 +193,11 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
                           {seat.priceCents === null ? 'Custom' : `$${(seat.priceCents / 100).toFixed(0)}/seat/mo`}
                         </span>
                       </div>
-                      <p className={styles.cardBody} style={{ fontSize: 11.5, marginTop: 2 }}>{seat.description}</p>
                       {!isCurrent && !isDowngrade && (plan.id === 'team' || plan.id === 'enterprise') && (
                         <a
                           href={`mailto:pawos@revantaai.com?subject=${encodeURIComponent(`${plan.label} Plan Inquiry`)}`}
                           className={styles.primaryButton}
-                          style={{ marginTop: 8, width: '100%', display: 'block', textAlign: 'center', textDecoration: 'none' }}
+                          style={{ marginTop: 12, width: '100%', display: 'block', textAlign: 'center', textDecoration: 'none' }}
                         >
                           Contact Sales
                         </a>
