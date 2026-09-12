@@ -139,7 +139,8 @@ function openRazorpayCheckout(result: any, options: TierPaymentHandler, tier: Su
 
     console.log('Mounting Razorpay checkout...');
     try {
-      checkout.mount(container);
+      // Try mounting with selector string
+      checkout.mount('#razorpay-checkout-container');
       console.log('Razorpay checkout mounted successfully');
 
       // Listen for events
