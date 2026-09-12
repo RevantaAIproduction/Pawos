@@ -79,32 +79,34 @@ function loadRazorpayAndPay(result: any, options: CreditsPaymentHandler, isAuton
 function openRazorpayCheckout(result: any, options: CreditsPaymentHandler, isAutonomous: boolean, amountUsd: number) {
   const description = isAutonomous ? 'Autonomous Work Credits' : 'Usage Credits';
 
-  const razorpayOptions = {
-    key: result.keyId,
-    order_id: result.orderId,
-    amount: result.amountPaise,
-    currency: result.currency || 'INR',
-    name: 'PawOS',
-    description,
-    prefill: {
-      email: options.userEmail,
-    },
-    handler: async (response: any) => {
-      await handlePaymentSuccess(response, result, options, isAutonomous, amountUsd);
-    },
-    modal: {
-      ondismiss: () => {
-        options.setMessage('Payment cancelled');
-        options.setBusy(false);
-      },
-    },
-  };
-
   try {
-    const razorpay = new window.Razorpay(razorpayOptions);
-    razorpay.open();
+    const razorpayInstance = new window.Razorpay({
+      key: result.keyId,
+    });
+
+    // Register payment success handler
+    razorpayInstance.on('payment.success', async (response: any) => {
+      await handlePaymentSuccess(response, result, options, isAutonomous, amountUsd);
+    });
+
+    // Register payment error handler
+    razorpayInstance.on('payment.error', (error: any) => {
+      options.setMessage(`❌ Payment failed: ${error?.message || 'Unknown error'}`);
+      options.setBusy(false);
+    });
+
+    // Create payment with order details
+    const paymentData = {
+      order_id: result.orderId,
+      amount: result.amountPaise,
+      currency: result.currency || 'INR',
+      email: options.userEmail,
+      description,
+    };
+
+    razorpayInstance.createPayment(paymentData);
   } catch (error) {
-    options.setMessage(`❌ Payment error: ${error}`);
+    options.setMessage(`❌ Payment error: ${error instanceof Error ? error.message : String(error)}`);
     options.setBusy(false);
   }
 }
