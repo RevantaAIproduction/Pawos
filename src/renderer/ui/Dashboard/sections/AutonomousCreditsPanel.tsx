@@ -57,7 +57,7 @@ export function AutonomousCreditsPanel({ userEmail, onPaymentComplete }: Autonom
             onClick={() => { setStep('amount'); setMessage(null); }}
             style={{
               padding: '10px 24px',
-              backgroundColor: '#1967D2',
+              backgroundColor: '#404040',
               color: '#fff',
               border: 'none',
               borderRadius: 4,
