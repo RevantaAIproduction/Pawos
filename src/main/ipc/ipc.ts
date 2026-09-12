@@ -1544,5 +1544,31 @@ export function registerIpc(opts: {
 
   // Mobile Authentication & Pairing — Security Key verification (Phase 2)
   registerMobileAuthHandlers();
+
+  // Razorpay payment window
+  ipcMain.on('open-razorpay-window', (_evt, checkoutUrl: string, orderId: string) => {
+    const { BrowserWindow } = require('electron');
+    const paymentWindow = new BrowserWindow({
+      width: 500,
+      height: 700,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true,
+      },
+      parent: mainWindow,
+      modal: true,
+    });
+
+    paymentWindow.loadURL(checkoutUrl);
+    paymentWindow.show();
+
+    // Listen for payment completion and close window
+    setTimeout(() => {
+      if (!paymentWindow.isDestroyed()) {
+        paymentWindow.close();
+      }
+    }, 600000); // Auto-close after 10 minutes
+  });
 }
 
