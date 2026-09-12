@@ -1,6 +1,8 @@
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import { getSupabaseClient } from '../../../auth/supabaseClient';
 
+const RAZORPAY_SCRIPT_URL = 'https://checkout.razorpay.com/v1/razorpay.js';
+
 declare global {
   interface Window {
     Razorpay?: any;
@@ -61,18 +63,49 @@ export async function initiateRazorpayCreditsPayment(
 }
 
 function loadRazorpayAndPay(result: any, options: CreditsPaymentHandler, isAutonomous: boolean, amountUsd: number) {
-  if (!result.checkoutUrl) {
-    options.setMessage('❌ Payment configuration failed');
-    options.setBusy(false);
-    return;
+  if (!window.Razorpay) {
+    const script = document.createElement('script');
+    script.src = RAZORPAY_SCRIPT_URL;
+    script.async = true;
+    script.onload = () => openRazorpayCheckout(result, options, isAutonomous, amountUsd);
+    script.onerror = () => {
+      options.setMessage('❌ Failed to load payment');
+      options.setBusy(false);
+    };
+    document.body.appendChild(script);
+  } else {
+    openRazorpayCheckout(result, options, isAutonomous, amountUsd);
   }
+}
+
+function openRazorpayCheckout(result: any, options: CreditsPaymentHandler, isAutonomous: boolean, amountUsd: number) {
+  const creditsLabel = isAutonomous ? 'Autonomous Work Credits' : 'Usage Credits';
+  const razorpayOptions = {
+    key: result.keyId,
+    order_id: result.orderId,
+    amount: result.amountPaise,
+    currency: 'INR',
+    name: 'PawOS',
+    description: `${creditsLabel} - $${amountUsd}`,
+    prefill: {
+      email: options.userEmail,
+    },
+    handler: async (response: any) => {
+      await handlePaymentSuccess(response, result, options, isAutonomous, amountUsd);
+    },
+    modal: {
+      ondismiss: () => {
+        options.setMessage('Payment cancelled');
+        options.setBusy(false);
+      },
+    },
+  };
 
   try {
-    // Open Razorpay hosted checkout in a new Electron window
-    ipc.billingOpenRazorpayWindow(result.checkoutUrl, result.orderId);
-    options.setMessage('Opening payment window...');
+    const razorpay = new window.Razorpay(razorpayOptions);
+    razorpay.open();
   } catch (error) {
-    options.setMessage(`❌ Failed to open payment: ${error instanceof Error ? error.message : String(error)}`);
+    options.setMessage(`❌ Payment error: ${error instanceof Error ? error.message : String(error)}`);
     options.setBusy(false);
   }
 }

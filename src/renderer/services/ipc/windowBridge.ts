@@ -293,9 +293,6 @@ export function contextBridge() {
       ipcApi.invoke('billing:verifyNativeTierPayment', params),
     billingCreateHighValueInvoices: async (params: { plan: string; seatTier?: string; seatCount: number; customerName: string; organizationName: string; gstNumber?: string; accessToken?: string }): Promise<any> =>
       ipcApi.invoke('billing:createHighValueInvoices', params),
-    billingOpenRazorpayWindow: async (checkoutUrl: string, orderId: string): Promise<void> => {
-      ipcApi.send('open-razorpay-window', checkoutUrl, orderId);
-    },
     onSubscriptionUpdated: (cb: () => void) => on('billing:subscriptionUpdated', cb),
     onTaskCreditsPurchased: (cb: (payload: { amountUsd?: number; organizationId?: string }) => void) =>
       on('billing:taskCreditsPurchased', cb),
