@@ -16,6 +16,8 @@ export async function seedManagedGeminiKey(): Promise<void> {
     const { gemini } = await ipc.envGetApiKeys();
     if (gemini) {
       aiProviderConfigStore.setApiKey('gemini', gemini);
+      // Ensure Gemini becomes the active provider when key is available
+      aiProviderConfigStore.setActiveProvider('gemini');
     }
   } catch {
     // IPC failure — app continues with local provider, same as a missing key.
