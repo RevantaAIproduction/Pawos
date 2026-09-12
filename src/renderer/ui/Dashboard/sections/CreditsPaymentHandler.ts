@@ -69,8 +69,7 @@ function loadRazorpayAndPay(result: any, options: CreditsPaymentHandler, isAuton
 
   try {
     // Open Razorpay hosted checkout in a new Electron window
-    const { ipcRenderer } = require('electron');
-    ipcRenderer.send('open-razorpay-window', result.checkoutUrl, result.orderId);
+    ipc.billingOpenRazorpayWindow(result.checkoutUrl, result.orderId);
     options.setMessage('Opening payment window...');
   } catch (error) {
     options.setMessage(`❌ Failed to open payment: ${error instanceof Error ? error.message : String(error)}`);
