@@ -108,26 +108,58 @@ export function TierPurchasePanel({ currentTier, userEmail, onPaymentComplete }:
 
       {!selectedTier ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-          {(['pro', 'proMax', 'team'] as SubscriptionTierId[]).map((tier) => (
-            <button
-              key={tier}
-              onClick={() => setSelectedTier(tier)}
-              disabled={currentTier === tier}
-              style={{
-                padding: '12px 16px',
-                backgroundColor: currentTier === tier ? '#666' : '#1967D2',
-                color: '#fff',
-                border: 'none',
-                borderRadius: 4,
-                cursor: currentTier === tier ? 'not-allowed' : 'pointer',
-                fontSize: '0.9em',
-                fontWeight: 500,
-                opacity: currentTier === tier ? 0.6 : 1,
-              }}
-            >
-              Get {tier.charAt(0).toUpperCase() + tier.slice(1)}
-            </button>
-          ))}
+          {(['pro', 'proMax', 'team', 'enterprise'] as SubscriptionTierId[]).map((tier) => {
+            const isContactSales = tier === 'team' || tier === 'enterprise';
+            const tierLabel = tier === 'proMax' ? 'Pro Max' : tier.charAt(0).toUpperCase() + tier.slice(1);
+
+            if (isContactSales) {
+              const subject = encodeURIComponent(`${tierLabel} Plan Inquiry`);
+              const mailtoLink = `mailto:pawos@revantaai.com?subject=${subject}`;
+
+              return (
+                <a
+                  key={tier}
+                  href={mailtoLink}
+                  style={{
+                    padding: '12px 16px',
+                    backgroundColor: '#1967D2',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                    fontSize: '0.9em',
+                    fontWeight: 500,
+                    textDecoration: 'none',
+                    display: 'block',
+                    textAlign: 'center',
+                  }}
+                >
+                  {`Contact Sales`}
+                </a>
+              );
+            }
+
+            return (
+              <button
+                key={tier}
+                onClick={() => setSelectedTier(tier)}
+                disabled={currentTier === tier}
+                style={{
+                  padding: '12px 16px',
+                  backgroundColor: currentTier === tier ? '#666' : '#1967D2',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 4,
+                  cursor: currentTier === tier ? 'not-allowed' : 'pointer',
+                  fontSize: '0.9em',
+                  fontWeight: 500,
+                  opacity: currentTier === tier ? 0.6 : 1,
+                }}
+              >
+                Get {tierLabel}
+              </button>
+            );
+          })}
         </div>
       ) : (
         <div style={{ display: 'flex', gap: 12 }}>
