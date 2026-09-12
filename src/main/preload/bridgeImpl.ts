@@ -296,6 +296,9 @@ export function contextBridge() {
     onTaskCreditsPurchased: (cb: (payload: { amountUsd?: number; organizationId?: string }) => void) => {
       ipcRenderer.on("billing:taskCreditsPurchased", (_evt, payload) => cb(payload));
     },
+    onUsageCreditsPurchased: (cb: (payload: { amountUsd?: number; organizationId?: string }) => void) => {
+      ipcRenderer.on("billing:usageCreditsPurchased", (_evt, payload) => cb(payload));
+    },
 
     onboardingGet: () => ipcRenderer.invoke("onboarding:get") as Promise<OnboardingState>,
     onboardingSetStep: (step: number) => ipcRenderer.invoke("onboarding:setStep", step) as Promise<OnboardingState>,

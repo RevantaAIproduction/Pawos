@@ -45,8 +45,8 @@ function workspaceLabel(record: ExecutionRecord): string | null {
 }
 
 function evidenceCounts(record: ExecutionRecord) {
-  const commands = record.commandEvidence?.length ?? record.commandsExecuted.length;
-  const files = record.fileEvidence?.length ?? record.filesCreated.length + record.filesModified.length;
+  const commands = record.commandEvidence?.length ?? record.commandsExecuted?.length ?? 0;
+  const files = record.fileEvidence?.length ?? (record.filesCreated?.length ?? 0) + (record.filesModified?.length ?? 0);
   const tests = (record.verificationEvidence ?? []).filter((v) => v.type === 'TEST').length;
   const builds = (record.verificationEvidence ?? []).filter((v) => v.type === 'BUILD').length;
   return { commands, files, tests, builds };

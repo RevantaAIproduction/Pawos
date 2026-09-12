@@ -3,6 +3,7 @@ import { SplashScreen } from './Splash/SplashScreen';
 import { AuthScreen } from './Auth/AuthScreen';
 import { Dashboard } from './Dashboard/Dashboard';
 import { OnboardingWizard } from './Onboarding/OnboardingWizard';
+import { ErrorBoundary } from './ErrorBoundary';
 import { useAuth } from '../auth/useAuth';
 import { ipc } from '../services/ipc/ipcBridgeImplementation';
 import { startNotificationDispatcher } from '../mobilePresence/NotificationRuntime';
@@ -139,30 +140,36 @@ export default function AppRoot() {
 
   if (stage === 'auth' || !auth.user) {
     return (
-      <AuthScreen
-        onSignInWithGoogle={() => goToDashboardAfter(auth.signInWithGoogle())}
-        onSignInWithGithub={() => goToDashboardAfter(auth.signInWithGithub())}
-        onSignInWithMicrosoft={() => goToDashboardAfter(auth.signInWithMicrosoft())}
-        onSignInWithEmail={(options) => goToDashboardAfter(auth.signInWithEmail(options))}
-        onCreateEmailAccount={(options) => goToDashboardAfter(auth.createEmailAccount(options))}
-        onRequestPasswordReset={auth.requestPasswordReset}
-        onVerifyPasswordResetCode={auth.verifyPasswordResetCode}
-        onCompletePasswordReset={auth.completePasswordReset}
-        onSendVerificationCode={auth.sendVerificationCode}
-        onVerifyEmailCode={auth.verifyEmailCode}
-        isGoogleSignInAvailable={auth.isGoogleSignInAvailable}
-        isGithubSignInAvailable={auth.isGithubSignInAvailable}
-        isMicrosoftSignInAvailable={auth.isMicrosoftSignInAvailable}
-      />
+      <ErrorBoundary>
+        <AuthScreen
+          onSignInWithGoogle={() => goToDashboardAfter(auth.signInWithGoogle())}
+          onSignInWithGithub={() => goToDashboardAfter(auth.signInWithGithub())}
+          onSignInWithMicrosoft={() => goToDashboardAfter(auth.signInWithMicrosoft())}
+          onSignInWithEmail={(options) => goToDashboardAfter(auth.signInWithEmail(options))}
+          onCreateEmailAccount={(options) => goToDashboardAfter(auth.createEmailAccount(options))}
+          onRequestPasswordReset={auth.requestPasswordReset}
+          onVerifyPasswordResetCode={auth.verifyPasswordResetCode}
+          onCompletePasswordReset={auth.completePasswordReset}
+          onSendVerificationCode={auth.sendVerificationCode}
+          onVerifyEmailCode={auth.verifyEmailCode}
+          isGoogleSignInAvailable={auth.isGoogleSignInAvailable}
+          isGithubSignInAvailable={auth.isGithubSignInAvailable}
+          isMicrosoftSignInAvailable={auth.isMicrosoftSignInAvailable}
+        />
+      </ErrorBoundary>
     );
   }
 
   if (stage === 'onboarding') {
-    return <OnboardingWizard user={auth.user} onFinish={() => setStage('dashboard')} />;
+    return (
+      <ErrorBoundary>
+        <OnboardingWizard user={auth.user} onFinish={() => setStage('dashboard')} />
+      </ErrorBoundary>
+    );
   }
 
   return (
-    <>
+    <ErrorBoundary>
       <NotificationDispatcher user={auth.user} />
       <TicketNotifications user={auth.user} />
       <Dashboard
@@ -175,6 +182,6 @@ export default function AppRoot() {
         onVerifyPasswordResetCode={auth.verifyPasswordResetCode}
         onCompletePasswordReset={auth.completePasswordReset}
       />
-    </>
+    </ErrorBoundary>
   );
 }
