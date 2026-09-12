@@ -86,27 +86,6 @@ function openRazorpayCheckout(result: any, options: TierPaymentHandler, tier: Su
     return;
   }
 
-  const razorpayOptions = {
-    key: result.keyId,
-    order_id: result.orderId,
-    amount: result.amountPaise,
-    currency: result.currency || 'INR',
-    name: 'PawOS',
-    description: `PawOS ${tier} Tier`,
-    prefill: {
-      email: options.userEmail,
-    },
-    handler: async (response: any) => {
-      await handlePaymentSuccess(response, result, options, tier);
-    },
-    modal: {
-      ondismiss: () => {
-        options.setMessage('Payment cancelled');
-        options.setBusy(false);
-      },
-    },
-  };
-
   try {
     const Razorpay = (window as any).Razorpay;
     if (!Razorpay) {
@@ -115,54 +94,23 @@ function openRazorpayCheckout(result: any, options: TierPaymentHandler, tier: Su
       return;
     }
 
-    console.log('Creating Razorpay custom checkout...');
+    const razorpayOptions = {
+      key: result.keyId,
+      order_id: result.orderId,
+      handler: (response: any) => {
+        handlePaymentSuccess(response, result, options, tier);
+      },
+      modal: {
+        ondismiss: () => {
+          options.setMessage('Payment cancelled');
+          options.setBusy(false);
+        },
+      },
+    };
+
     const checkout = new Razorpay(razorpayOptions);
-
-    // Mount checkout to DOM
-    if (typeof checkout.mount !== 'function') {
-      options.setMessage('❌ Payment initialization failed');
-      options.setBusy(false);
-      return;
-    }
-
-    // Create container for checkout
-    const container = document.createElement('div');
-    container.id = 'razorpay-checkout-container';
-    container.style.position = 'fixed';
-    container.style.top = '0';
-    container.style.left = '0';
-    container.style.width = '100%';
-    container.style.height = '100%';
-    container.style.zIndex = '9999';
-    container.style.backgroundColor = 'white';
-    document.body.appendChild(container);
-
-    console.log('Mounting Razorpay checkout...');
-    try {
-      // Try mounting with selector string
-      checkout.mount('#razorpay-checkout-container');
-      console.log('Razorpay checkout mounted successfully');
-
-      // Listen for events
-      if (typeof checkout.on === 'function') {
-        checkout.on('payment.failed', (err: any) => {
-          console.log('Payment failed:', err);
-          options.setMessage(`❌ Payment failed: ${err?.message || 'Unknown error'}`);
-        });
-        checkout.on('payment.success', (response: any) => {
-          console.log('Payment success:', response);
-          handlePaymentSuccess(response, result, options, tier);
-        });
-      }
-    } catch (mountError) {
-      console.log('Mount error:', mountError);
-      options.setMessage(`❌ Checkout mount failed: ${mountError instanceof Error ? mountError.message : String(mountError)}`);
-      options.setBusy(false);
-      // Clean up container
-      document.body.removeChild(container);
-    }
+    checkout.open();
   } catch (error) {
-    console.log('Checkout error:', error);
     options.setMessage(`❌ Payment error: ${error instanceof Error ? error.message : String(error)}`);
     options.setBusy(false);
   }
