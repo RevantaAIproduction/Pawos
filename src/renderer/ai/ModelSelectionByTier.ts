@@ -1,61 +1,65 @@
 import type { PawModelId, SubscriptionTierId } from '../../shared/billing/BillingTypes';
 
 /**
- * Determine the recommended/default Paw model based on subscription tier.
+ * Model Compute Consumption Hierarchy:
+ * - Paw Flash: Normal (20 units) - available with regular tier limits
+ * - Paw Swift: Normal (20 units)
+ * - Paw Core: Double (40 units) - burns 2x
+ * - Paw Fable: Triple (60 units) - burns 3x, ONLY with usage credits
  *
- * Go tier: Paw Fable (reasoning model, usage credits only)
- * Pro/Pro Max/Team/Enterprise: Paw Core (higher capability)
+ * Go tier: Paw Flash (normal consumption, regular limits)
+ * Pro/Pro Max/Team/Enterprise: Paw Core (double consumption, regular limits)
  *
- * Paw Fable can only be used with explicit usage credits purchase,
- * not with regular tier limits.
+ * Paw Fable ONLY available when user has explicit usage credits.
  */
+
 export function getDefaultModelForTier(tier: SubscriptionTierId): PawModelId {
   switch (tier) {
     case 'go':
-      return 'paw-fable'; // Paw Fable - reasoning model for free tier (usage credits only)
+      return 'paw-flash'; // Paw Flash - normal consumption for free tier
     case 'pro':
     case 'proMax':
     case 'team':
     case 'enterprise':
-      return 'paw-core'; // Paw Core - full capability for paid tiers
+      return 'paw-core'; // Paw Core - double consumption for paid tiers
     default:
-      return 'paw-swift'; // Paw Swift as fallback
+      return 'paw-flash'; // Default to Flash as fallback
   }
 }
 
 /**
  * Check if Paw Fable can be used under current conditions.
  *
- * Paw Fable is only available when:
- * - User explicitly has usage credits, OR
- * - User is on Go tier (but usage is limited to available credits)
- *
- * NOT available when using regular tier limits (Pro, Pro Max, etc.)
+ * Paw Fable ONLY works with explicit usage credits, never with regular tier limits.
+ * It burns 3x the compute of normal models (60 units vs 20).
  */
-export function canUsePawFlash(tier: SubscriptionTierId, hasUsageCredits: boolean): boolean {
-  if (tier === 'go') {
-    return true; // Always can use for Go tier
-  }
-  // For paid tiers, only with explicit usage credits purchase
-  return hasUsageCredits;
+export function canUsePawFable(hasUsageCredits: boolean): boolean {
+  return hasUsageCredits; // Only available with usage credits
 }
 
 /**
  * Get list of models available for current tier.
- * Disables Paw Fable if using regular tier limits (not usage credits).
+ * Paw Fable excluded unless user has usage credits (burns 3x compute).
  */
 export function getAvailableModelsForTier(
   tier: SubscriptionTierId,
   hasUsageCredits: boolean
 ): PawModelId[] {
-  const allModels: PawModelId[] = ['paw-flash', 'paw-swift', 'paw-core', 'paw-fable'];
+  // Base models available by tier
+  const baseModels: Record<SubscriptionTierId, PawModelId[]> = {
+    go: ['paw-flash'], // Go tier: only Flash (normal consumption)
+    pro: ['paw-flash', 'paw-swift', 'paw-core'], // Pro: up to Core (double consumption)
+    proMax: ['paw-flash', 'paw-swift', 'paw-core'], // Pro Max: full access except Fable
+    team: ['paw-flash', 'paw-swift', 'paw-core'], // Team: full access except Fable
+    enterprise: ['paw-flash', 'paw-swift', 'paw-core'], // Enterprise: full access except Fable
+  };
 
-  // Filter out Paw Fable if:
-  // - Not Go tier AND
-  // - No usage credits
-  if (tier !== 'go' && !hasUsageCredits) {
-    return allModels.filter((m) => m !== 'paw-fable');
+  const models = baseModels[tier] || ['paw-flash'];
+
+  // Paw Fable ONLY available with usage credits (3x burn)
+  if (hasUsageCredits) {
+    models.push('paw-fable');
   }
 
-  return allModels;
+  return models;
 }

@@ -3,7 +3,7 @@ import styles from './modelSelectorWidget.module.css';
 import type { PawModelId, PawModelDescriptor } from '../../shared/ai/PawModelTypes';
 import { PAW_MODEL_CATALOG, REASONING_PAW_MODEL_IDS } from '../../shared/ai/PawModelTypes';
 import type { EntitlementSnapshot, SubscriptionTierId } from '../../shared/billing/BillingTypes';
-import { canUsePawFlash, getAvailableModelsForTier } from '../../ai/ModelSelectionByTier';
+import { canUsePawFable, getAvailableModelsForTier } from '../../ai/ModelSelectionByTier';
 
 interface ModelSelectorWidgetProps {
   activePawModel?: PawModelId;
@@ -31,9 +31,9 @@ export function ModelSelectorWidget({
 
   const displayName = activePawModel ? MODEL_DISPLAY_NAMES[activePawModel] || 'Paw Core' : 'Paw Core';
 
-  // Check if Paw Flash is available in current tier/credit context
+  // Check if Paw Fable is available (only with usage credits - burns 3x compute)
   const hasUsageCredits = (entitlement?.usageCreditsRemaining ?? 0) > 0;
-  const pawFlashAvailable = canUsePawFlash(tier, hasUsageCredits);
+  const pawFableAvailable = canUsePawFable(hasUsageCredits);
   const availableModels = getAvailableModelsForTier(tier, hasUsageCredits);
 
   // Calculate usage indicator
@@ -60,7 +60,7 @@ export function ModelSelectorWidget({
           {[...new Set(REASONING_PAW_MODEL_IDS), ...PAW_MODEL_CATALOG.map((m) => m.id)]
             .slice(0, 4)
             .map((modelId) => {
-              const isDisabled = modelId === 'paw-fable' && !pawFlashAvailable;
+              const isDisabled = modelId === 'paw-fable' && !pawFableAvailable;
               const disabledReason = isDisabled ? 'Paw Flash only available with usage credits' : '';
 
               return (
