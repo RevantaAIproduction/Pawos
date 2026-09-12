@@ -246,6 +246,13 @@ function createMainWindow() {
     console.error("[PAWOS WINDOW] window shown");
   });
 
+  mainWindow.webContents.on('did-finish-load', () => {
+    setTimeout(() => {
+      mainWindow?.webContents.openDevTools({ mode: 'bottom' });
+      console.error("[PAWOS WINDOW] DevTools opened");
+    }, 500);
+  });
+
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (input.control && input.shift && input.key.toLowerCase() === 'i') {
       event.preventDefault();

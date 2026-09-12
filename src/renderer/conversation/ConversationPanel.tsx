@@ -1173,6 +1173,7 @@ export function ConversationPanel({
 
               {/* Messages container - conversation history */}
               <div className={styles.transcript}>
+                {console.log('[CONVERSATION] Total messages:', snapshot.messages.length, snapshot.messages.map(m => ({ role: m.role, content: m.content?.substring(0, 50) }))) || null}
                 {snapshot.messages.map((message, idx) => {
                   const timestamp = message.createdAt ? new Date(message.createdAt) : new Date();
                   const now = new Date();
