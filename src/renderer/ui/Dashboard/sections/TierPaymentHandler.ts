@@ -54,66 +54,17 @@ export async function initiateRazorpayTierPayment(
 }
 
 function loadRazorpayAndPay(result: any, options: TierPaymentHandler, tier: SubscriptionTierId) {
-  if (!(window as any).Razorpay) {
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/razorpay.js';
-    script.async = true;
-    script.onload = () => {
-      // Wait for Razorpay to be available
-      setTimeout(() => {
-        if ((window as any).Razorpay) {
-          openRazorpayCheckout(result, options, tier);
-        } else {
-          options.setMessage('❌ Payment system failed to initialize');
-          options.setBusy(false);
-        }
-      }, 500);
-    };
-    script.onerror = () => {
-      options.setMessage('❌ Failed to load payment');
-      options.setBusy(false);
-    };
-    document.body.appendChild(script);
-  } else {
-    openRazorpayCheckout(result, options, tier);
-  }
-}
-
-function openRazorpayCheckout(result: any, options: TierPaymentHandler, tier: SubscriptionTierId) {
-  if (!result.keyId || !result.orderId) {
-    options.setMessage('❌ Invalid payment configuration');
+  if (!result.checkoutUrl) {
+    options.setMessage('❌ Payment configuration failed');
     options.setBusy(false);
     return;
   }
 
-  try {
-    const Razorpay = (window as any).Razorpay;
-    if (!Razorpay) {
-      options.setMessage('❌ Payment system unavailable');
-      options.setBusy(false);
-      return;
-    }
+  // Open Razorpay hosted checkout in default browser
+  const { shell } = require('electron');
+  shell.openExternal(result.checkoutUrl);
 
-    const razorpayOptions = {
-      key: result.keyId,
-      order_id: result.orderId,
-      handler: (response: any) => {
-        handlePaymentSuccess(response, result, options, tier);
-      },
-      modal: {
-        ondismiss: () => {
-          options.setMessage('Payment cancelled');
-          options.setBusy(false);
-        },
-      },
-    };
-
-    const checkout = new Razorpay(razorpayOptions);
-    checkout.open();
-  } catch (error) {
-    options.setMessage(`❌ Payment error: ${error instanceof Error ? error.message : String(error)}`);
-    options.setBusy(false);
-  }
+  options.setMessage('Opening payment page...');
 }
 
 async function handlePaymentSuccess(response: any, result: any, options: TierPaymentHandler, tier: SubscriptionTierId) {
