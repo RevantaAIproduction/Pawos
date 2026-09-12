@@ -704,6 +704,7 @@ export class ConversationRuntime {
   }
 
   submitTranscript(transcript: string, context?: SubmittedInputContext) {
+    console.log('[TRACE-1] submitTranscript', { text: transcript.substring(0, 50), state: this.snapshot.state });
     const trimmed = transcript.trim();
     if (!trimmed) {
       return;
@@ -777,6 +778,7 @@ export class ConversationRuntime {
       });
     }
     this.appendMessage('user', trimmed);
+    console.log('[TRACE-2] calling handleTranscript', { text: trimmed.substring(0, 30) });
     void this.handleTranscript(trimmed, context);
   }
 
@@ -1050,7 +1052,14 @@ export class ConversationRuntime {
       this.reasoningTurn = turnHandle;
 
       const result = await turnHandle.completed;
+      console.log('[TRACE-3] turnHandle completed', {
+        hasResponse: !!result.response,
+        responseLength: result.response?.length ?? 0,
+        hasAssistantMsg: !!result.assistantMessage?.content,
+        assistantMsgLength: result.assistantMessage?.content?.length ?? 0
+      });
       turnContext.finalResponse = result.response || result.assistantMessage?.content || turnContext.finalResponse;
+      console.log('[TRACE-4] finalResponse set', { length: turnContext.finalResponse.length, preview: turnContext.finalResponse.substring(0, 50) });
     } catch (error) {
       if (this.closed || currentTurn !== this.turnId || turnFailed) {
         return;
@@ -1139,6 +1148,7 @@ export class ConversationRuntime {
           status: 'final',
         });
       } else {
+        console.log('[TRACE-5] appending assistant message', { length: ctx.finalResponse.length, preview: ctx.finalResponse.substring(0, 50) });
         this.appendMessage('assistant', ctx.finalResponse);
       }
       this.enqueueSpeech(ctx.finalResponse, currentTurn);
