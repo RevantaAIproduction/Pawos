@@ -70,8 +70,6 @@ export type SubscriptionState = {
   runtimeEntitlementPolicyVersion?: number;
   /** Present only when a legacy paid account was converted into explicit source:'plan' grants. */
   runtimeEntitlementsGrandfatheredAt?: number;
-  /** Timestamp when the $40 one-time onboarding benefit was granted (once per user lifetime). */
-  oneTimeBenefitGrantedAt?: number;
 };
 
 /** One of Team's two seat rates — a Team org can mix Standard and Premium seats across members. */
