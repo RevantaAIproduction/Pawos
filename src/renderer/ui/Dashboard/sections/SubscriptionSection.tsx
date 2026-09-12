@@ -3,7 +3,6 @@ import styles from '../dashboard.module.css';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import { UsageCreditsPanel } from './UsageCreditsPanel';
 import { AutonomousCreditsPanel } from './AutonomousCreditsPanel';
-import { EnterpriseContactPanel } from './EnterpriseContactPanel';
 import type { AuthUser } from '../../../auth/AuthTypes';
 import {
   SUBSCRIPTION_TIER_ORDER,
@@ -122,7 +121,6 @@ export function SubscriptionSection({
       {/* Payment Panels */}
       <UsageCreditsPanel userEmail={user.email} onPaymentComplete={refresh} />
       <AutonomousCreditsPanel userEmail={user.email} onPaymentComplete={refresh} />
-      <EnterpriseContactPanel userEmail={user.email} onSubmitComplete={refresh} />
 
       {/* Invoices */}
       <div style={{ marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
