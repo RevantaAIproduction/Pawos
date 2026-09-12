@@ -54,17 +54,39 @@ export async function initiateRazorpayTierPayment(
 }
 
 function loadRazorpayAndPay(result: any, options: TierPaymentHandler, tier: SubscriptionTierId) {
-  if (!result.checkoutUrl) {
-    options.setMessage('❌ Payment configuration failed');
-    options.setBusy(false);
-    return;
+  if (!(window as any).Razorpay) {
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/razorpay.js';
+    script.async = true;
+    script.onload = () => {
+      setTimeout(() => openRazorpayCheckout(result, options, tier), 100);
+    };
+    script.onerror = () => {
+      options.setMessage('❌ Failed to load Razorpay');
+      options.setBusy(false);
+    };
+    document.body.appendChild(script);
+  } else {
+    openRazorpayCheckout(result, options, tier);
   }
+}
 
-  // Open Razorpay hosted checkout in default browser
-  const { shell } = require('electron');
-  shell.openExternal(result.checkoutUrl);
+function openRazorpayCheckout(result: any, options: TierPaymentHandler, tier: SubscriptionTierId) {
+  const rzp = new (window as any).Razorpay({
+    key: result.keyId,
+    order_id: result.orderId,
+    handler: (response: any) => {
+      handlePaymentSuccess(response, result, options, tier);
+    },
+    modal: {
+      ondismiss: () => {
+        options.setMessage('Payment cancelled');
+        options.setBusy(false);
+      },
+    },
+  });
 
-  options.setMessage('Opening payment page...');
+  rzp.open();
 }
 
 async function handlePaymentSuccess(response: any, result: any, options: TierPaymentHandler, tier: SubscriptionTierId) {
