@@ -3,7 +3,7 @@ import styles from './modelSelectorWidget.module.css';
 import type { PawModelId, PawModelDescriptor } from '../../shared/ai/PawModelTypes';
 import { PAW_MODEL_CATALOG, REASONING_PAW_MODEL_IDS } from '../../shared/ai/PawModelTypes';
 import type { EntitlementSnapshot, SubscriptionTierId } from '../../shared/billing/BillingTypes';
-import { canUsePawFable, getAvailableModelsForTier } from '../../ai/ModelSelectionByTier';
+import { canUsePawFable, getAvailableModelsForTier } from '../ai/ModelSelectionByTier';
 
 interface ModelSelectorWidgetProps {
   activePawModel?: PawModelId;
