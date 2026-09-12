@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
 import { initiateRazorpayCreditsPayment } from './CreditsPaymentHandler';
 
+import type { SubscriptionTierId } from '../../../../shared/billing/BillingTypes';
+
 interface AutonomousCreditsProps {
   userEmail: string;
   onPaymentComplete: () => void;
+  currentTier?: SubscriptionTierId;
 }
 
-export function AutonomousCreditsPanel({ userEmail, onPaymentComplete }: AutonomousCreditsProps) {
+export function AutonomousCreditsPanel({ userEmail, onPaymentComplete, currentTier = 'go' }: AutonomousCreditsProps) {
+  const canPurchaseAutonomous = currentTier === 'proMax' || currentTier === 'team' || currentTier === 'enterprise';
   const [step, setStep] = useState<'closed' | 'amount' | 'summary'>('closed');
   const [amount, setAmount] = useState('30');
   const [busy, setBusy] = useState(false);
@@ -55,16 +59,19 @@ export function AutonomousCreditsPanel({ userEmail, onPaymentComplete }: Autonom
           </div>
           <button
             onClick={() => { setStep('amount'); setMessage(null); }}
+            disabled={!canPurchaseAutonomous}
             style={{
               padding: '10px 24px',
-              backgroundColor: '#404040',
+              backgroundColor: canPurchaseAutonomous ? '#404040' : '#666666',
               color: '#fff',
               border: 'none',
               borderRadius: 4,
-              cursor: 'pointer',
+              cursor: canPurchaseAutonomous ? 'pointer' : 'not-allowed',
               fontSize: '0.9em',
               fontWeight: 500,
+              opacity: canPurchaseAutonomous ? 1 : 0.5,
             }}
+            title={!canPurchaseAutonomous ? 'Upgrade to Pro Max or higher to purchase autonomous credits' : ''}
           >
             Buy Autonomous Credits
           </button>

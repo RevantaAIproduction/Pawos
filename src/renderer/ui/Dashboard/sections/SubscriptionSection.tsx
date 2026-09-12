@@ -120,7 +120,7 @@ export function SubscriptionSection({
 
       {/* Payment Panels */}
       <UsageCreditsPanel userEmail={user.email} onPaymentComplete={refresh} />
-      <AutonomousCreditsPanel userEmail={user.email} onPaymentComplete={refresh} />
+      <AutonomousCreditsPanel userEmail={user.email} onPaymentComplete={refresh} currentTier={currentTier} />
 
       {/* Invoices */}
       <div style={{ marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
