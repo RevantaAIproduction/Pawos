@@ -113,7 +113,7 @@ export function TierPurchasePanel({ currentTier, userEmail, onPaymentComplete }:
             const tierLabel = tier === 'proMax' ? 'Pro Max' : tier.charAt(0).toUpperCase() + tier.slice(1);
 
             if (isContactSales) {
-              const subject = encodeURIComponent(`${tierLabel} Plan Inquiry`);
+              const subject = encodeURIComponent(`${tierLabel} Plan`);
               const mailtoLink = `mailto:pawos@revantaai.com?subject=${subject}`;
 
               return (
