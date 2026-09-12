@@ -296,6 +296,8 @@ export function contextBridge() {
     onSubscriptionUpdated: (cb: () => void) => on('billing:subscriptionUpdated', cb),
     onTaskCreditsPurchased: (cb: (payload: { amountUsd?: number; organizationId?: string }) => void) =>
       on('billing:taskCreditsPurchased', cb),
+    onUsageCreditsPurchased: (cb: (payload: { amountUsd?: number; organizationId?: string }) => void) =>
+      on('billing:usageCreditsPurchased', cb),
 
     onboardingGet: async (): Promise<OnboardingState> => ipcApi.invoke('onboarding:get'),
     onboardingSetStep: async (step: number): Promise<OnboardingState> => ipcApi.invoke('onboarding:setStep', step),

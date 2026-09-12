@@ -397,6 +397,9 @@ export const ipc = {
   onTaskCreditsPurchased(cb: (payload: { amountUsd?: number; organizationId?: string }) => void) {
     return getBridge().onTaskCreditsPurchased(cb);
   },
+  onUsageCreditsPurchased(cb: (payload: { amountUsd?: number; organizationId?: string }) => void) {
+    return getBridge().onUsageCreditsPurchased(cb);
+  },
   async onboardingGet(): Promise<OnboardingState> {
     return getBridge().onboardingGet();
   },

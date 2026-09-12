@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { initiateRazorpayCreditsPayment } from './CreditsPaymentHandler';
-
+import { autonomousTaskBillingService } from '../../../organization/AutonomousTaskBillingService';
+import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import type { SubscriptionTierId } from '../../../../shared/billing/BillingTypes';
 
 interface AutonomousCreditsProps {
@@ -15,6 +16,28 @@ export function AutonomousCreditsPanel({ userEmail, onPaymentComplete, currentTi
   const [amount, setAmount] = useState('30');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [balanceUsd, setBalanceUsd] = useState<number | null>(null);
+
+  const fetchBalance = async () => {
+    try {
+      const balance = await autonomousTaskBillingService.getTicketBalance(null);
+      setBalanceUsd(balance.balanceUsd);
+    } catch (error) {
+      console.error('Failed to fetch autonomous credits balance:', error);
+      setBalanceUsd(0);
+    }
+  };
+
+  useEffect(() => {
+    fetchBalance();
+  }, []);
+
+  useEffect(() => {
+    ipc.onTaskCreditsPurchased(() => {
+      fetchBalance();
+      onPaymentComplete();
+    });
+  }, [onPaymentComplete]);
 
   const presets = [30, 60, 100, 150, 200];
   const inrAmount = Math.round(parseFloat(amount) * 95.65);
@@ -54,7 +77,7 @@ export function AutonomousCreditsPanel({ userEmail, onPaymentComplete, currentTi
         </p>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
           <div>
-            <div style={{ fontSize: '1.5em', fontWeight: 700, margin: '0 0 4px 0' }}>$0.00</div>
+            <div style={{ fontSize: '1.5em', fontWeight: 700, margin: '0 0 4px 0' }}>${balanceUsd !== null ? balanceUsd.toFixed(2) : '...'}</div>
             <p style={{ fontSize: '0.85em', opacity: 0.6, margin: 0 }}>Current balance</p>
           </div>
           <button

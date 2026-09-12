@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { initiateRazorpayCreditsPayment } from './CreditsPaymentHandler';
+import { usageCreditsService } from '../../../organization/UsageCreditsService';
+import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 
 interface UsageCreditsProps {
   userEmail: string;
@@ -11,6 +13,28 @@ export function UsageCreditsPanel({ userEmail, onPaymentComplete }: UsageCredits
   const [amount, setAmount] = useState('10');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [balanceUsd, setBalanceUsd] = useState<number | null>(null);
+
+  const fetchBalance = async () => {
+    try {
+      const balance = await usageCreditsService.getBalance();
+      setBalanceUsd(balance.balanceUsd);
+    } catch (error) {
+      console.error('Failed to fetch usage credits balance:', error);
+      setBalanceUsd(0);
+    }
+  };
+
+  useEffect(() => {
+    fetchBalance();
+  }, []);
+
+  useEffect(() => {
+    ipc.onUsageCreditsPurchased(() => {
+      fetchBalance();
+      onPaymentComplete();
+    });
+  }, [onPaymentComplete]);
 
   const presets = [5, 10, 30, 50, 100];
   const inrAmount = Math.round(parseFloat(amount) * 95.65);
@@ -50,7 +74,7 @@ export function UsageCreditsPanel({ userEmail, onPaymentComplete }: UsageCredits
         </p>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
           <div>
-            <div style={{ fontSize: '1.5em', fontWeight: 700, margin: '0 0 4px 0' }}>$0.00</div>
+            <div style={{ fontSize: '1.5em', fontWeight: 700, margin: '0 0 4px 0' }}>${balanceUsd !== null ? balanceUsd.toFixed(2) : '...'}</div>
             <p style={{ fontSize: '0.85em', opacity: 0.6, margin: 0 }}>Current balance</p>
           </div>
           <button
