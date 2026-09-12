@@ -181,14 +181,14 @@ export function useConversationController(args?: {
     applySystemPrompt(canExecute);
   }, [entitlement, applySystemPrompt]);
 
-  // Set default model based on tier on first load — Go tier gets Paw Flash (budget),
+  // Set default model based on tier on first load — Go tier gets Paw Fable (reasoning, usage credits only),
   // paid tiers get Paw Core (full capability). Only runs once when entitlement first loads.
   useEffect(() => {
     if (!entitlement) return;
     const currentModel = aiProviderConfigStore.getActivePawModel();
     const defaultModel = getDefaultModelForTier(entitlement.tier);
     // Only auto-set if user hasn't explicitly selected a model yet (still on default)
-    if (currentModel === 'sonnet-paw') {
+    if (currentModel === 'paw-swift') {
       aiProviderConfigStore.setActivePawModel(defaultModel);
       setActivePawModelState(defaultModel);
     }

@@ -14,10 +14,10 @@ interface ModelSelectorWidgetProps {
 }
 
 const MODEL_DISPLAY_NAMES: Record<PawModelId, string> = {
-  'haiku-paw': 'Paw Flash',
-  'sonnet-paw': 'Paw Swift',
-  'opus-paw': 'Paw Core',
-  'o1-reasoning-paw': 'Paw O1',
+  'paw-flash': 'Paw Flash',
+  'paw-swift': 'Paw Swift',
+  'paw-core': 'Paw Core',
+  'paw-fable': 'Paw Fable',
 };
 
 export function ModelSelectorWidget({
@@ -60,7 +60,7 @@ export function ModelSelectorWidget({
           {[...new Set(REASONING_PAW_MODEL_IDS), ...PAW_MODEL_CATALOG.map((m) => m.id)]
             .slice(0, 4)
             .map((modelId) => {
-              const isDisabled = modelId === 'haiku-paw' && !pawFlashAvailable;
+              const isDisabled = modelId === 'paw-fable' && !pawFlashAvailable;
               const disabledReason = isDisabled ? 'Paw Flash only available with usage credits' : '';
 
               return (
