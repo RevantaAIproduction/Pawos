@@ -344,6 +344,7 @@ export function ConversationPanel({
   const [planRevisionFeedback, setPlanRevisionFeedback] = useState('');
   const [showPlanSidebar, setShowPlanSidebar] = useState(false);
   const [showTierUpgradePopup, setShowTierUpgradePopup] = useState(false);
+  const [usageDropdownOpen, setUsageDropdownOpen] = useState(false);
   const [openPanel, setOpenPanel] = useState<'terminal' | 'browser' | 'files' | 'worktree' | null>(null);
   const [fullscreenPanel, setFullscreenPanel] = useState<'terminal' | 'browser' | 'files' | 'worktree' | null>(null);
   const [projectPath, setProjectPath] = useState<string>('');
@@ -1804,13 +1805,12 @@ export function ConversationPanel({
             tier={entitlement?.tier}
           />
 
-          <div className={styles.usageIndicator}>
+          <div className={styles.usageIndicatorDropdown} style={{ position: 'relative' }}>
             {(() => {
               const usage5h = entitlement?.usage5hPc ?? 0;
               const limit5h = entitlement?.limit5hPc ?? Infinity;
               const totalUsage = usage5h + (streamingPawCompute ?? 0);
               const percentage = (totalUsage / limit5h) * 100;
-              const isApproachingLimit = percentage >= 65;
               const isStreaming = (streamingPawCompute ?? 0) > 0;
 
               let circleColor = 'rgba(120, 150, 200, 0.6)'; // muted blue
@@ -1823,12 +1823,38 @@ export function ConversationPanel({
                   <button
                     className={`${styles.usageCircle} ${isStreaming ? styles.streaming : ''}`}
                     style={{ borderColor: circleColor }}
-                    title={`${entitlement?.tier ?? 'Free'} tier - 5h: ${usage5h}${streamingPawCompute ? `+${streamingPawCompute}` : ''}/${limit5h} PC${isStreaming ? ` (${streamingPawCompute}PC streaming now)` : ''} | Week: ${entitlement?.usageWeeklyPc ?? 0}/${entitlement?.limitWeeklyPc ?? 'unlimited'}`}
-                    onClick={() => setShowTierUpgradePopup(true)}
+                    title="Click to see usage details"
+                    onClick={() => setUsageDropdownOpen(!usageDropdownOpen)}
                   />
-                  <span title={`${entitlement?.tier ?? 'Free'} tier - 5h: ${usage5h}${streamingPawCompute ? `+${streamingPawCompute}` : ''}/${limit5h} | Week: ${entitlement?.usageWeeklyPc ?? 0}/${entitlement?.limitWeeklyPc ?? 'unlimited'}`}>
-                    {Math.round(percentage)}%
-                  </span>
+                  {usageDropdownOpen && (
+                    <div className={styles.usageDropdownMenu}>
+                      <div className={styles.usageHeader}>{entitlement?.tier ?? 'Free'} Tier Usage</div>
+                      <div className={styles.usageRow}>
+                        <span>5-Hour Limit:</span>
+                        <span className={styles.usageValue}>{Math.round(usage5h)}{streamingPawCompute ? `+${streamingPawCompute}` : ''} / {Math.round(limit5h)} PC</span>
+                      </div>
+                      <div className={styles.usageBar}>
+                        <div
+                          className={styles.usageBarFill}
+                          style={{
+                            width: `${Math.min(100, (totalUsage / limit5h) * 100)}%`,
+                            backgroundColor: percentage >= 90 ? '#d64545' : percentage >= 65 ? '#d4a537' : '#4cafe3'
+                          }}
+                        />
+                      </div>
+                      <div className={styles.usagePercentage}>{Math.round(percentage)}%</div>
+                      <div className={styles.usageRow} style={{ marginTop: '12px' }}>
+                        <span>Weekly Limit:</span>
+                        <span className={styles.usageValue}>{Math.round(entitlement?.usageWeeklyPc ?? 0)} / {entitlement?.limitWeeklyPc ?? '∞'} PC</span>
+                      </div>
+                      {isStreaming && (
+                        <div className={styles.usageRow} style={{ marginTop: '12px', color: 'rgba(76, 175, 80, 0.9)' }}>
+                          <span>🟢 Currently using:</span>
+                          <span>{streamingPawCompute} PC</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </>
               );
             })()}
