@@ -194,15 +194,14 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
                         </span>
                       </div>
                       <p className={styles.cardBody} style={{ fontSize: 11.5, marginTop: 2 }}>{seat.description}</p>
-                      {!isCurrent && !isDowngrade && plan.id !== 'team' && (
-                        <button
-                          type="button"
+                      {!isCurrent && !isDowngrade && (plan.id === 'team' || plan.id === 'enterprise') && (
+                        <a
+                          href={`mailto:pawos@revantaai.com?subject=${encodeURIComponent(`${plan.label} Plan Inquiry`)}`}
                           className={styles.primaryButton}
-                          style={{ marginTop: 8, width: '100%' }}
-                          onClick={() => startCheckout(plan.id, seat.seatTier, undefined)}
+                          style={{ marginTop: 8, width: '100%', display: 'block', textAlign: 'center', textDecoration: 'none' }}
                         >
-                          {plan.id === 'enterprise' ? 'Configure Enterprise' : `Get ${seat.label}`}
-                        </button>
+                          Contact Sales
+                        </a>
                       )}
                     </div>
                   ))}
@@ -248,9 +247,13 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
                     Included in your plan
                   </button>
                 ) : plan.id === 'team' && !isCurrent && !isDowngrade ? (
-                  <button type="button" className={styles.primaryButton} onClick={() => setTeamCheckoutSeatTier('standard')}>
-                    Get Team plan
-                  </button>
+                  <a href={`mailto:pawos@revantaai.com?subject=${encodeURIComponent('Team Plan Inquiry')}`} className={styles.primaryButton} style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}>
+                    Contact Sales
+                  </a>
+                ) : plan.id === 'enterprise' && !isCurrent && !isDowngrade ? (
+                  <a href={`mailto:pawos@revantaai.com?subject=${encodeURIComponent('Enterprise Plan Inquiry')}`} className={styles.primaryButton} style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}>
+                    Contact Sales
+                  </a>
                 ) : plan.seatOptions ? null : (
                   <button type="button" className={styles.primaryButton} onClick={() => startCheckout(plan.id, undefined, undefined)}>
                     Get {plan.label}
