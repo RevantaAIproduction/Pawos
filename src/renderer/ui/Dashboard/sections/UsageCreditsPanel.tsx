@@ -48,21 +48,44 @@ export function UsageCreditsPanel({ userEmail, onPaymentComplete }: UsageCredits
         <p style={{ fontSize: '0.85em', opacity: 0.6, margin: '0 0 12px 0', lineHeight: 1.5 }}>
           Pay-as-you-go compute credits. Minimum $5, maximum $20,000 per purchase.
         </p>
-        <button
-          onClick={() => { setStep('amount'); setMessage(null); }}
-          style={{
-            padding: '10px 24px',
-            backgroundColor: '#1967D2',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 4,
-            cursor: 'pointer',
-            fontSize: '0.9em',
-            fontWeight: 500,
-          }}
-        >
-          Buy Usage Credits
-        </button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
+          <div>
+            <div style={{ fontSize: '1.5em', fontWeight: 700, margin: '0 0 4px 0' }}>$0.00</div>
+            <p style={{ fontSize: '0.85em', opacity: 0.6, margin: 0 }}>Current balance</p>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => { setStep('amount'); setMessage(null); }}
+              style={{
+                padding: '10px 24px',
+                backgroundColor: '#404040',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 4,
+                cursor: 'pointer',
+                fontSize: '0.9em',
+                fontWeight: 500,
+              }}
+            >
+              Buy usage credits
+            </button>
+            <button
+              style={{
+                padding: '10px 16px',
+                backgroundColor: '#1967D2',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 4,
+                cursor: 'default',
+                fontSize: '0.8em',
+                fontWeight: 600,
+              }}
+              disabled
+            >
+              Up to 30% off
+            </button>
+          </div>
+        </div>
       </div>
     );
   }

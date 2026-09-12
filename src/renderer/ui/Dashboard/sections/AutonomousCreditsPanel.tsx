@@ -48,21 +48,27 @@ export function AutonomousCreditsPanel({ userEmail, onPaymentComplete }: Autonom
         <p style={{ fontSize: '0.85em', opacity: 0.6, margin: '0 0 12px 0', lineHeight: 1.5 }}>
           Automatic task solving credits. PawOS solves problems autonomously. Minimum $30, maximum $20,000 per purchase.
         </p>
-        <button
-          onClick={() => { setStep('amount'); setMessage(null); }}
-          style={{
-            padding: '10px 24px',
-            backgroundColor: '#1967D2',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 4,
-            cursor: 'pointer',
-            fontSize: '0.9em',
-            fontWeight: 500,
-          }}
-        >
-          Buy Autonomous Credits
-        </button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
+          <div>
+            <div style={{ fontSize: '1.5em', fontWeight: 700, margin: '0 0 4px 0' }}>$0.00</div>
+            <p style={{ fontSize: '0.85em', opacity: 0.6, margin: 0 }}>Current balance</p>
+          </div>
+          <button
+            onClick={() => { setStep('amount'); setMessage(null); }}
+            style={{
+              padding: '10px 24px',
+              backgroundColor: '#1967D2',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 4,
+              cursor: 'pointer',
+              fontSize: '0.9em',
+              fontWeight: 500,
+            }}
+          >
+            Buy Autonomous Credits
+          </button>
+        </div>
       </div>
     );
   }
