@@ -1,7 +1,7 @@
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import { getSupabaseClient } from '../../../auth/supabaseClient';
 
-const RAZORPAY_SCRIPT_URL = 'https://checkout.razorpay.com/v1/razorpay.js';
+const RAZORPAY_SCRIPT_URL = 'https://checkout.razorpay.com/v1/checkout.js';
 
 declare global {
   interface Window {
