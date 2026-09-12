@@ -1214,7 +1214,7 @@ export function ConversationPanel({
 
                 {isStreaming && (
                   <div className={styles.streaming}>
-                    PawOS is working...
+                    ✨ PawOS is responding
                   </div>
                 )}
               </div>
