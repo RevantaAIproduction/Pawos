@@ -93,9 +93,6 @@ export function SubscriptionSection({
 
   return (
     <div style={{ padding: '24px 0' }}>
-      <h2 style={{ fontSize: '1.5em', fontWeight: 700, margin: '0 0 8px 0' }}>Billing</h2>
-      <p style={{ fontSize: '0.9em', opacity: 0.6, margin: '0 0 24px 0' }}>Plan, credits, and usage.</p>
-
       {/* Current Plan Display - Premium UI */}
       <div style={{ marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
