@@ -1787,6 +1787,7 @@ export function ConversationPanel({
             onAddFolder={() => {}}
             onAddConnector={() => {}}
             onAddSlashCommand={() => {}}
+            tier={entitlement?.tier}
           />
 
           <AcceptEditsControl
