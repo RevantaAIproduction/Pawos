@@ -2448,11 +2448,6 @@ export function NativeBillingCheckoutModal({
                 {quantity} {quantity === 1 ? 'seat' : 'seats'}
               </div>
             )}
-            {isSubscription && intent.kind === 'tierPurchase' && ((intent as any).tier === 'pro' || (intent as any).tier === 'proMax' || (intent as any).tier === 'team' || (intent as any).tier === 'enterprise') && (
-              <div style={{ marginTop: 8, padding: '8px 12px', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderRadius: '6px', textAlign: 'center' }}>
-                <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#3b82f6' }}>You get $40</p>
-              </div>
-            )}
           </div>
 
           {/* Seat count picker — team and enterprise only */}
