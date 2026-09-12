@@ -23,7 +23,15 @@ let scriptPath: string | null = null;
 function ensureScriptFile(): string {
   if (scriptPath && fs.existsSync(scriptPath)) return scriptPath;
   scriptPath = path.join(os.tmpdir(), 'pawos-process-window-detector.ps1');
-  fs.writeFileSync(scriptPath, POWERSHELL_SCRIPT, 'utf-8');
+  try {
+    fs.writeFileSync(scriptPath, POWERSHELL_SCRIPT, 'utf-8');
+  } catch (err: any) {
+    // If file is locked by another instance, just use the existing file
+    // EBUSY/EAGAIN means another process has it open
+    if (err.code !== 'EBUSY' && err.code !== 'EAGAIN') {
+      throw err;
+    }
+  }
   return scriptPath;
 }
 
