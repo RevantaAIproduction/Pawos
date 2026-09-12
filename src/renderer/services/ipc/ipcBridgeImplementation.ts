@@ -382,6 +382,9 @@ export const ipc = {
   async billingCreateHighValueInvoices(params: { plan: string; seatTier?: string; seatCount: number; customerName: string; organizationName: string; gstNumber?: string; accessToken?: string }): Promise<{ ok: boolean; reason?: string; plan?: string; seatTier?: string | null; seatCount?: number; monthlyAmountUsd?: number; monthlyAmountInr?: number; invoiceCount?: number; invoices?: Array<{ number: number; amountInr: number; amountUsd: number; invoiceId: string; invoiceUrl: string }>; customerName?: string; organizationName?: string; gstNumber?: string | null; keyId?: string }> {
     return getBridge().billingCreateHighValueInvoices(params);
   },
+  async billingOpenRazorpayWindow(checkoutUrl: string, orderId: string): Promise<void> {
+    return getBridge().billingOpenRazorpayWindow(checkoutUrl, orderId);
+  },
   async billingSetAutoReload(amount: number | null): Promise<{ success: boolean; enabled: boolean; amount?: number }> {
     return getBridge().billingSetAutoReload(amount);
   },
