@@ -1800,6 +1800,7 @@ export function ConversationPanel({
             onSelectModel={onSelectModel}
             entitlement={entitlement}
             streamingElapsedSeconds={streamingElapsedSeconds}
+            tier={entitlement?.tier}
           />
 
           <div className={styles.usageIndicator}>

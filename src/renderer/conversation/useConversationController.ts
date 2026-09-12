@@ -6,6 +6,7 @@ import { ReasoningRuntime } from '../reasoning/ReasoningRuntime';
 import type { ReasoningProvider } from '../reasoning/ReasoningProvider';
 import { aiRouter } from '../ai/AIRouter';
 import { aiProviderConfigStore } from '../ai/AIProviderConfigStore';
+import { getDefaultModelForTier } from '../ai/ModelSelectionByTier';
 import { useIpcBridge } from '../services/ipc/useIpcBridge';
 import { withGovernanceGate } from '../organization/GovernanceGate';
 import { withAutonomousTaskBilling } from '../organization/AutonomousTaskBillingGate';
@@ -179,6 +180,19 @@ export function useConversationController(args?: {
     runtimeRef.current?.setTools(getToolDefinitionsForEntitlement(canExecute));
     applySystemPrompt(canExecute);
   }, [entitlement, applySystemPrompt]);
+
+  // Set default model based on tier on first load — Go tier gets Paw Flash (budget),
+  // paid tiers get Paw Core (full capability). Only runs once when entitlement first loads.
+  useEffect(() => {
+    if (!entitlement) return;
+    const currentModel = aiProviderConfigStore.getActivePawModel();
+    const defaultModel = getDefaultModelForTier(entitlement.tier);
+    // Only auto-set if user hasn't explicitly selected a model yet (still on default)
+    if (currentModel === 'sonnet-paw') {
+      aiProviderConfigStore.setActivePawModel(defaultModel);
+      setActivePawModelState(defaultModel);
+    }
+  }, [entitlement?.tier]); // Only re-run if tier changes (e.g., after upgrade)
 
   const dismissCreditsNotice = useCallback(() => setCreditsNoticeTier(null), []);
 

@@ -103,3 +103,14 @@
   color: rgba(255, 255, 255, 1);
   font-weight: 500;
 }
+
+.menuItem.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.menuItem.disabled:hover {
+  background: none;
+  color: rgba(255, 255, 255, 0.4);
+}
