@@ -1772,7 +1772,7 @@ export function ConversationPanel({
               }}
               disabled={(!draft.trim() && !wasPasted) || isStreaming}
               type="button"
-              title="Send (Ctrl+Enter)"
+              title="Send (Enter)"
             >
               →
             </button>
