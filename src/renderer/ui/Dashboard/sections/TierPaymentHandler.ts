@@ -72,21 +72,36 @@ function loadRazorpayAndPay(result: any, options: TierPaymentHandler, tier: Subs
 }
 
 function openRazorpayCheckout(result: any, options: TierPaymentHandler, tier: SubscriptionTierId) {
-  const rzp = new (window as any).Razorpay({
-    key: result.keyId,
-    order_id: result.orderId,
-    handler: (response: any) => {
-      handlePaymentSuccess(response, result, options, tier);
-    },
-    modal: {
-      ondismiss: () => {
-        options.setMessage('Payment cancelled');
-        options.setBusy(false);
-      },
-    },
-  });
+  try {
+    const razorpayInstance = new (window as any).Razorpay({
+      key: result.keyId,
+    });
 
-  rzp.open();
+    // Register payment success handler
+    razorpayInstance.on('payment.success', (response: any) => {
+      handlePaymentSuccess(response, result, options, tier);
+    });
+
+    // Register payment error handler
+    razorpayInstance.on('payment.error', (error: any) => {
+      options.setMessage(`❌ Payment failed: ${error?.message || 'Unknown error'}`);
+      options.setBusy(false);
+    });
+
+    // Create payment with order details
+    const paymentData = {
+      order_id: result.orderId,
+      amount: result.amountPaise,
+      currency: result.currency || 'INR',
+      email: options.userEmail,
+      description: `PawOS ${tier} Tier Purchase`,
+    };
+
+    razorpayInstance.createPayment(paymentData);
+  } catch (error) {
+    options.setMessage(`❌ Payment error: ${error instanceof Error ? error.message : String(error)}`);
+    options.setBusy(false);
+  }
 }
 
 async function handlePaymentSuccess(response: any, result: any, options: TierPaymentHandler, tier: SubscriptionTierId) {
