@@ -8,7 +8,7 @@ export function useExecutionHistory() {
   const [records, setRecords] = useState<ExecutionRecord[]>([]);
 
   const refresh = useCallback(() => {
-    ipc.listExecutions().then(setRecords).catch(() => {});
+    ipc.executionList().then(setRecords).catch(() => {});
   }, [ipc]);
 
   useEffect(() => {
