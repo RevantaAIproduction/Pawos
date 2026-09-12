@@ -1820,14 +1820,12 @@ export function ConversationPanel({
 
               return (
                 <>
-                  {(isApproachingLimit || isStreaming) && (
-                    <button
-                      className={`${styles.usageCircle} ${isStreaming ? styles.streaming : ''}`}
-                      style={{ borderColor: circleColor }}
-                      title={`${Math.round(percentage)}% used${isStreaming ? ` (${streamingPawCompute}PC being used now)` : ''} - click to upgrade`}
-                      onClick={() => setShowTierUpgradePopup(true)}
-                    />
-                  )}
+                  <button
+                    className={`${styles.usageCircle} ${isStreaming ? styles.streaming : ''}`}
+                    style={{ borderColor: circleColor }}
+                    title={`${entitlement?.tier ?? 'Free'} tier - 5h: ${usage5h}${streamingPawCompute ? `+${streamingPawCompute}` : ''}/${limit5h} PC${isStreaming ? ` (${streamingPawCompute}PC streaming now)` : ''} | Week: ${entitlement?.usageWeeklyPc ?? 0}/${entitlement?.limitWeeklyPc ?? 'unlimited'}`}
+                    onClick={() => setShowTierUpgradePopup(true)}
+                  />
                   <span title={`${entitlement?.tier ?? 'Free'} tier - 5h: ${usage5h}${streamingPawCompute ? `+${streamingPawCompute}` : ''}/${limit5h} | Week: ${entitlement?.usageWeeklyPc ?? 0}/${entitlement?.limitWeeklyPc ?? 'unlimited'}`}>
                     {Math.round(percentage)}%
                   </span>
