@@ -173,10 +173,15 @@ export async function POST(request: Request) {
   }
 
   const order = await response.json();
+
+  // Create Razorpay hosted checkout URL
+  const checkoutUrl = `https://checkout.razorpay.com/?key=${credentials.keyId}&order_id=${order.id}&name=PawOS`;
+
   return NextResponse.json({
     ok: true,
     orderId: order.id,
     keyId: credentials.keyId,
+    checkoutUrl,
     amountUsd: Math.round(amountUsd * 100) / 100,
     amountInr: Math.round(amountInr),
     amountPaise,

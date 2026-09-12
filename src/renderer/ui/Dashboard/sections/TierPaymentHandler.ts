@@ -54,59 +54,19 @@ export async function initiateRazorpayTierPayment(
 }
 
 function loadRazorpayAndPay(result: any, options: TierPaymentHandler, tier: SubscriptionTierId) {
-  if (!(window as any).Razorpay) {
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/razorpay.js';
-    script.async = true;
-    script.onload = () => {
-      setTimeout(() => openRazorpayCheckout(result, options, tier), 100);
-    };
-    script.onerror = () => {
-      options.setMessage('❌ Failed to load Razorpay');
-      options.setBusy(false);
-    };
-    document.body.appendChild(script);
-  } else {
-    openRazorpayCheckout(result, options, tier);
+  if (!result.checkoutUrl) {
+    options.setMessage('❌ Payment configuration failed');
+    options.setBusy(false);
+    return;
   }
-}
 
-function openRazorpayCheckout(result: any, options: TierPaymentHandler, tier: SubscriptionTierId) {
   try {
-    const razorpayInstance = new (window as any).Razorpay({
-      key: result.keyId,
-    });
-
-    // Register payment success handler
-    razorpayInstance.on('payment.success', (response: any) => {
-      handlePaymentSuccess(response, result, options, tier);
-    });
-
-    // Register payment error handler
-    razorpayInstance.on('payment.error', (error: any) => {
-      options.setMessage(`❌ Payment failed: ${error?.message || 'Unknown error'}`);
-      options.setBusy(false);
-    });
-
-    // Create payment with order details
-    const userName = options.userEmail.split('@')[0] || 'Customer';
-    const paymentData = {
-      order_id: result.orderId,
-      amount: result.amountPaise,
-      currency: result.currency || 'INR',
-      email: options.userEmail,
-      contact: '9000000000', // Placeholder phone for Razorpay
-      customer_name: userName,
-      description: `PawOS ${tier} Tier Purchase`,
-      notes: {
-        tier,
-        productType: 'tier_purchase',
-      },
-    };
-
-    razorpayInstance.createPayment(paymentData);
+    // Open Razorpay hosted checkout in default browser
+    const { shell } = require('electron');
+    shell.openExternal(result.checkoutUrl);
+    options.setMessage('Opening payment page in your browser...');
   } catch (error) {
-    options.setMessage(`❌ Payment error: ${error instanceof Error ? error.message : String(error)}`);
+    options.setMessage(`❌ Failed to open payment page: ${error instanceof Error ? error.message : String(error)}`);
     options.setBusy(false);
   }
 }

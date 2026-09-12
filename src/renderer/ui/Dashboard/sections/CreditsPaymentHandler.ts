@@ -61,60 +61,19 @@ export async function initiateRazorpayCreditsPayment(
 }
 
 function loadRazorpayAndPay(result: any, options: CreditsPaymentHandler, isAutonomous: boolean, amountUsd: number) {
-  if (!window.Razorpay) {
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/razorpay.js';
-    script.async = true;
-    script.onload = () => openRazorpayCheckout(result, options, isAutonomous, amountUsd);
-    script.onerror = () => {
-      options.setMessage('❌ Failed to load payment');
-      options.setBusy(false);
-    };
-    document.body.appendChild(script);
-  } else {
-    openRazorpayCheckout(result, options, isAutonomous, amountUsd);
+  if (!result.checkoutUrl) {
+    options.setMessage('❌ Payment configuration failed');
+    options.setBusy(false);
+    return;
   }
-}
-
-function openRazorpayCheckout(result: any, options: CreditsPaymentHandler, isAutonomous: boolean, amountUsd: number) {
-  const description = isAutonomous ? 'Autonomous Work Credits' : 'Usage Credits';
 
   try {
-    const razorpayInstance = new window.Razorpay({
-      key: result.keyId,
-    });
-
-    // Register payment success handler
-    razorpayInstance.on('payment.success', async (response: any) => {
-      await handlePaymentSuccess(response, result, options, isAutonomous, amountUsd);
-    });
-
-    // Register payment error handler
-    razorpayInstance.on('payment.error', (error: any) => {
-      options.setMessage(`❌ Payment failed: ${error?.message || 'Unknown error'}`);
-      options.setBusy(false);
-    });
-
-    // Create payment with order details
-    const userName = options.userEmail.split('@')[0] || 'Customer';
-    const paymentData = {
-      order_id: result.orderId,
-      amount: result.amountPaise,
-      currency: result.currency || 'INR',
-      email: options.userEmail,
-      contact: '9000000000', // Placeholder phone for Razorpay
-      customer_name: userName,
-      description,
-      notes: {
-        creditType: isAutonomous ? 'autonomous' : 'usage',
-        amount: amountUsd,
-        productType: isAutonomous ? 'autonomous_credits' : 'usage_credits',
-      },
-    };
-
-    razorpayInstance.createPayment(paymentData);
+    // Open Razorpay hosted checkout in default browser
+    const { shell } = require('electron');
+    shell.openExternal(result.checkoutUrl);
+    options.setMessage('Opening payment page in your browser...');
   } catch (error) {
-    options.setMessage(`❌ Payment error: ${error instanceof Error ? error.message : String(error)}`);
+    options.setMessage(`❌ Failed to open payment page: ${error instanceof Error ? error.message : String(error)}`);
     options.setBusy(false);
   }
 }
