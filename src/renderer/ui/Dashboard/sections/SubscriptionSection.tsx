@@ -89,51 +89,37 @@ export function SubscriptionSection({
     );
   }
 
+  const currentPlan = pricing?.plans.find((p) => p.tier === currentTier);
+
   return (
     <div style={{ padding: '24px 0' }}>
-      <h2 style={{ fontSize: '1.2em', fontWeight: 700, margin: '0 0 24px 0' }}>Billing & Subscription</h2>
+      <h2 style={{ fontSize: '1.5em', fontWeight: 700, margin: '0 0 8px 0' }}>Billing</h2>
+      <p style={{ fontSize: '0.9em', opacity: 0.6, margin: '0 0 24px 0' }}>Plan, credits, and usage.</p>
 
-      {/* Current Plan Display */}
+      {/* Current Plan Display - Premium UI */}
       <div style={{ marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-        <h3 style={{ fontSize: '1em', fontWeight: 600, margin: '0 0 16px 0' }}>Current Plan</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
-          {SUBSCRIPTION_TIER_ORDER.map((tier) => {
-            const plan = pricing?.plans.find((p) => p.tier === tier);
-            const isCurrent = currentTier === tier;
-            return (
-              <div
-                key={tier}
-                style={{
-                  padding: 16,
-                  backgroundColor: isCurrent ? 'rgba(25, 103, 210, 0.15)' : 'rgba(255,255,255,0.04)',
-                  border: isCurrent ? '2px solid #1967D2' : '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: 8,
-                }}
-              >
-                <div style={{ fontSize: '0.95em', fontWeight: 600, marginBottom: 4 }}>{TIER_LABELS[tier]}</div>
-                <div style={{ fontSize: '0.85em', opacity: 0.7, marginBottom: 8 }}>{formatPrice(plan)}</div>
-                {isCurrent && <div style={{ fontSize: '0.8em', color: '#4cb050', fontWeight: 500 }}>✓ Current Plan</div>}
-                {!isCurrent && tier !== 'go' && (
-                  <button
-                    onClick={() => downgrade(tier)}
-                    style={{
-                      marginTop: 8,
-                      padding: '6px 12px',
-                      backgroundColor: '#1967D2',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: 4,
-                      cursor: 'pointer',
-                      fontSize: '0.8em',
-                      fontWeight: 500,
-                    }}
-                  >
-                    Switch to {TIER_LABELS[tier]}
-                  </button>
-                )}
-              </div>
-            );
-          })}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <h3 style={{ fontSize: '1.3em', fontWeight: 700, margin: '0 0 4px 0' }}>{TIER_LABELS[currentTier]}</h3>
+            <p style={{ fontSize: '0.9em', opacity: 0.7, margin: '0 0 4px 0' }}>Monthly</p>
+            <p style={{ fontSize: '0.85em', opacity: 0.6, margin: 0 }}>Your subscription will auto renew on N/A.</p>
+          </div>
+          <button
+            onClick={() => onUpgrade()}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: '#404040',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 4,
+              cursor: 'pointer',
+              fontSize: '0.9em',
+              fontWeight: 500,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Adjust plan
+          </button>
         </div>
       </div>
 
