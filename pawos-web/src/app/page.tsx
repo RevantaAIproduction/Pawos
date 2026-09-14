@@ -3,7 +3,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { Button } from "../components/ui/Button";
 import { ConnectionsGraphic } from "../components/ConnectionsGraphic";
-import { HeroAnimation } from "../components/HeroAnimation";
+import { HeroAnimation } from '../components/HeroAnimation';
+import { ParticleField } from '../components/ParticleField';
 
 export const metadata: Metadata = {
   title: "PawOS - The Desktop AI Work Environment",
@@ -16,6 +17,7 @@ export default function Home() {
       {/* 1. HERO */}
       <section className="relative min-h-[90vh] flex flex-col items-center justify-center text-center px-6">
         <HeroAnimation />
+        <ParticleField />
         <div className="relative z-10">
         <h1 className="text-6xl md:text-8xl font-bold tracking-tighter text-white mb-6">
           PawOS
