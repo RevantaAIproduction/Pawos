@@ -1,4 +1,6 @@
-import type { Metadata } from "next";
+﻿const fs = require('fs');
+
+const content = import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "../components/ui/Button";
@@ -248,3 +250,6 @@ export default function Home() {
     </>
   );
 }
+;
+
+fs.writeFileSync('src/app/page.tsx', content);
