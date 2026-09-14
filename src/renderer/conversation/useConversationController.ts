@@ -313,26 +313,27 @@ export function useConversationController(args?: {
       },
       onStateChange: (state) => {
         onStateChangeRef.current?.(state);
-        if (state === 'completed' && !entitlementRef.current?.pooled) {
+        if ((state === 'completed' || state === 'error') && !entitlementRef.current?.pooled) {
           const currentSnapshot = runtimeRef.current?.getSnapshot();
           const lastTaskMessage = currentSnapshot ? [...currentSnapshot.messages].reverse().find((m) => m.task) : undefined;
           const actionTypes = lastTaskMessage?.task?.actions.map((a) => a.type) ?? [];
           const category = categorizeTurn(actionTypes, lastInputSourceRef.current);
-          // Replaces the old flat "1 credit per turn" charge: the renderer only ever hands over raw,
-          // provider-reported usage (never a token count or a Paw Compute amount it computed itself)
-          // — the main process is the sole place that turns real usage into a charge (see ipc.ts's
-          // billing:recordTurnUsage handler / UsageMeteringEngine.recordTurnUsage). A turn that made
-          // zero real Gemini requests (submission missing, or an empty requests array) correctly
-          // charges zero, never a fabricated minimum.
-          const submission = lastTurnUsageRef.current ?? { sessionId: null, runId: null, requests: [] };
+          
+          const submission = lastTurnUsageRef.current;
           lastTurnUsageRef.current = null;
-          ipc
-            .billingRecordTurnUsage(submission, 'conversation-turn', category, activePawModelRef.current)
-            .then(() => refreshEntitlement())
-            .catch(() => {
-              // Even if billing fails, refresh entitlement to show latest usage
-              refreshEntitlement();
-            });
+          console.log('[CHK 8B] useConversationController state transition', { state, hasUsageSubmission: !!submission, requestsLength: submission?.requests.length });
+          
+          if (submission && submission.requests.length > 0) {
+            ipc
+              .billingRecordTurnUsage(submission, 'conversation-turn', category, activePawModelRef.current)
+              .then(() => refreshEntitlement())
+              .catch(() => {
+                refreshEntitlement();
+              });
+          } else {
+            // No verified usage: just release the slot and refresh
+            ipc.billingReleaseGenerationSlot().finally(() => refreshEntitlement());
+          }
         }
       },
       executeAction: withAutonomousTaskBilling(withGovernanceGate((request) => ipc.executeAction(request))),
@@ -480,20 +481,48 @@ export function useConversationController(args?: {
       // PawComputeCapacityStore, and reserves an in-flight slot atomically. This covers both Fable
       // (gates on purchased-credit headroom) and normal turns (gates on rolling PC windows) in one
       // call. Renderer-provided tier, usage, balance, and authorization result are never trusted.
-      ipc
-        .billingCanStartGeneration(activePawModelRef.current)
-        .then((gateResult) => {
-          if (!gateResult.allowed) {
-            setCreditsNoticeTier(entitlementRef.current?.tier ?? 'go');
-            return;
-          }
-          lastInputSourceRef.current = finalContext?.source;
-          runtimeRef.current?.submitTranscript(text, finalContext);
-        })
-        .catch(() => {
-          // IPC failure — fail closed: do not start generation through an unverified gate.
-          setCreditsNoticeTier(entitlementRef.current?.tier ?? 'go');
-        });
+      const tryGate = (retryCount = 0) => {
+        ipc
+          .billingCanStartGeneration(activePawModelRef.current)
+          .then((gateResult) => {
+            if (!gateResult.allowed) {
+              // Distinguish in-flight slot blocking (transient, auto-resolves in <60s) from real
+              // quota exhaustion. In-flight blocking means another generation's slot hasn't been
+              // released yet — retry once after a short delay rather than showing the exhaustion
+              // banner, since the slot will be released when that turn's billingRecordTurnUsage
+              // completes (or auto-releases on its 60s timeout).
+              if (gateResult.reason === 'inflight' && retryCount < 2) {
+                setTimeout(() => tryGate(retryCount + 1), 2000);
+                return;
+              }
+              setCreditsNoticeTier(entitlementRef.current?.tier ?? 'go');
+              return;
+            }
+            lastInputSourceRef.current = finalContext?.source;
+            runtimeRef.current?.submitTranscript(text, finalContext);
+          })
+          .catch(() => {
+            // IPC failure — refresh entitlement to get the real, authoritative state before
+            // deciding whether to block. A transient IPC error should NOT show "More Paw Compute
+            // needed" if the account actually has capacity remaining.
+            ipc.entitlementGetSnapshot().then((snap) => {
+              if (snap.hasCreditsRemaining) {
+                // Authoritative state says capacity remains — fail open rather than block a
+                // legitimate user on a transient IPC error. The generation-time gate in the main
+                // process will still enforce limits if the request actually proceeds.
+                lastInputSourceRef.current = finalContext?.source;
+                runtimeRef.current?.submitTranscript(text, finalContext);
+              } else {
+                setCreditsNoticeTier(snap.tier);
+              }
+              setEntitlement(snap);
+            }).catch(() => {
+              // Both IPC calls failed — fail closed as a last resort.
+              setCreditsNoticeTier(entitlementRef.current?.tier ?? 'go');
+            });
+          });
+      };
+      tryGate();
     },
     []
   );

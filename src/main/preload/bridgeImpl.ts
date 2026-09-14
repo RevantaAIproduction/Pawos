@@ -238,6 +238,8 @@ export function contextBridge() {
       ipcRenderer.invoke("billing:canStartGeneration", pawModelId) as Promise<{ allowed: boolean; reason?: string; pooled?: boolean }>,
     billingRecordTurnUsage: (submission: TurnUsageSubmission, reason: string, category?: AiUsageCategory, pawModelId?: PawModelId) =>
       ipcRenderer.invoke("billing:recordTurnUsage", submission, reason, category, pawModelId) as Promise<{ aggregated: AggregatedTurnUsage; balance: CreditBalance }>,
+    billingReleaseGenerationSlot: () =>
+      ipcRenderer.invoke("billing:releaseGenerationSlot") as Promise<void>,
     billingReportUsageEvent: (
       usage: ProviderUsageMetadata,
       requestType: UsageRequestType,

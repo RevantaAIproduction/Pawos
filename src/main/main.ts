@@ -246,32 +246,16 @@ function createMainWindow() {
     console.error("[PAWOS WINDOW] window shown");
   });
 
-  mainWindow.webContents.on('did-finish-load', () => {
-    setTimeout(() => {
-      mainWindow?.webContents.openDevTools({ mode: 'bottom' });
-      console.error("[PAWOS WINDOW] DevTools opened");
-    }, 500);
-  });
-
-  mainWindow.webContents.on('before-input-event', (event, input) => {
-    if (input.control && input.shift && input.key.toLowerCase() === 'i') {
-      event.preventDefault();
-    }
-    if (input.key === 'F12') {
-      event.preventDefault();
-    }
-  });
-
   mainWindow.on('closed', () => {
     console.error("[PAWOS WINDOW] closed event fired");
     mainWindow = null;
   });
 
-  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-    console.error("[PAWOS WINDOW] did-fail-load", errorCode, errorDescription);
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    console.error(`[PAWOS WINDOW] render-process-gone: ${details.reason}`);
   });
-
-  mainWindow.webContents.on('render-process-gone', () => {
+  
+  mainWindow.webContents.on('crashed', () => {
     console.error("[PAWOS WINDOW] renderer crashed");
   });
 

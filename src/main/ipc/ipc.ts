@@ -506,6 +506,15 @@ export function registerIpc(opts: {
     }
   );
   /**
+   * Explicitly releases an in-flight generation slot without recording any usage.
+   * Separates the slot-release responsibility from billingRecordTurnUsage for error paths.
+   */
+  ipcMain.handle('billing:releaseGenerationSlot', () => {
+    if (!entitlementService.isComputePooled()) {
+      rollingUsageGate.releaseSlot();
+    }
+  });
+  /**
    * Ledger-only usage reporting for a real Gemini request made from a renderer-side call site that
    * has no main-process equivalent (today: SessionClassifier.ts, which lives purely in the renderer
    * and so cannot import UsageMeteringEngine directly). Deliberately does NOT call

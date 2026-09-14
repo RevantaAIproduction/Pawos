@@ -144,6 +144,7 @@ export function createGeminiReasoningProvider(config: GeminiReasoningConfig): Re
         let full = '';
         try {
           const url = `${baseUrl}/models/${model}:streamGenerateContent?alt=sse&key=${encodeURIComponent(config.apiKey)}`;
+          console.log('[CHK 4A] Gemini request sent', { model });
           const res = await fetch(url, {
             method: 'POST',
             signal: controller.signal,
@@ -158,7 +159,9 @@ export function createGeminiReasoningProvider(config: GeminiReasoningConfig): Re
               // for Flash and below, covers typical autonomous task responses without truncating normal
               // conversation responses in non-autonomous contexts. This limit ensures pre-request cost
               // authorization is defensible: max output PC = 8K tokens * pricing.outputPerMillionUsd.
-              maxOutputTokens: 8000,
+              generationConfig: {
+                maxOutputTokens: 8000,
+              },
             }),
           });
           resetIdleTimer();
@@ -177,6 +180,7 @@ export function createGeminiReasoningProvider(config: GeminiReasoningConfig): Re
                 for (const part of parts) {
                   if (typeof part.text === 'string' && part.text) {
                     full += part.text;
+                    console.log('[CHK 4B] SSE text delta received', { deltaLen: part.text.length, cumulativeLength: full.length });
                     callbacks.onDelta(part.text);
                   }
                   if (part.functionCall) {
@@ -196,6 +200,14 @@ export function createGeminiReasoningProvider(config: GeminiReasoningConfig): Re
                 // most recent real number even if the stream is cancelled mid-flight.
                 const usageMetadata = json.usageMetadata;
                 if (usageMetadata && typeof usageMetadata === 'object') {
+                  console.log('[CHK 8A] Gemini usage metadata received', { 
+                    present: true, 
+                    promptTokens: usageMetadata.promptTokenCount, 
+                    cached: usageMetadata.cachedContentTokenCount, 
+                    candidates: usageMetadata.candidatesTokenCount, 
+                    thoughts: usageMetadata.thoughtsTokenCount, 
+                    total: usageMetadata.totalTokenCount 
+                  });
                   callbacks.onUsage?.({
                     provider: 'gemini',
                     model,
@@ -215,9 +227,16 @@ export function createGeminiReasoningProvider(config: GeminiReasoningConfig): Re
           );
 
           clearIdleTimer();
-          if (!controller.signal.aborted) callbacks.onComplete(full);
+          if (!controller.signal.aborted) {
+            console.log('[CHK 4C] Gemini stream completed', { accumulatedLength: full.length });
+            callbacks.onComplete(full);
+          }
         } catch (error) {
           clearIdleTimer();
+          
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          console.error('[CHK 4ERR] Gemini provider failed: ' + errorMsg);
+
           if (!controller.signal.aborted) {
             callbacks.onError(error instanceof Error ? error : new Error('Gemini request failed.'));
           } else {

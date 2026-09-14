@@ -312,6 +312,9 @@ export const ipc = {
   ): Promise<{ aggregated: AggregatedTurnUsage; balance: CreditBalance }> {
     return getBridge().billingRecordTurnUsage(submission, reason, category, pawModelId);
   },
+  async billingReleaseGenerationSlot(): Promise<void> {
+    return getBridge().billingReleaseGenerationSlot();
+  },
   async billingReportUsageEvent(
     usage: ProviderUsageMetadata,
     requestType: UsageRequestType,

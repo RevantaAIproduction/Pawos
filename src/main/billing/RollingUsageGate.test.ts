@@ -229,12 +229,12 @@ describe('RollingUsageGate — canStartGeneration', () => {
     expect(resultA.allowed).toBe(true);
     rollingUsageGate.reserveSlot();
 
-    // Second call while slot is in-flight: must be blocked
-    const resultB = rollingUsageGate.canStartGeneration('pro');
-    expect(resultB.allowed).toBe(false);
-    if (!resultB.allowed) expect(resultB.reason).toMatch(/in progress/i);
+      // Immediate second call: blocked because a slot is in-flight
+      const resultB = rollingUsageGate.canStartGeneration('pro');
+      expect(resultB.allowed).toBe(false);
+      if (!resultB.allowed) expect(resultB.reason).toMatch(/inflight/i);
 
-    // After releasing the slot, generation is allowed again
+      // After releasing the slot, generation is allowed again
     rollingUsageGate.releaseSlot();
     const resultC = rollingUsageGate.canStartGeneration('pro');
     expect(resultC.allowed).toBe(true);

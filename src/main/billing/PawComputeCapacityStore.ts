@@ -15,11 +15,14 @@ export type TierRollingCapacity = {
 export type CapacityTierKey = 'go' | 'pro' | 'proMax' | 'team' | 'teamPremium' | 'enterprise';
 
 export type RollingCapacityConfig = {
+  /** Config schema version for migration (current = 2) */
+  version?: number;
   /** 'team' = Team Standard per-seat; 'teamPremium' = Team Premium per-seat. */
   tiers: Record<CapacityTierKey, TierRollingCapacity>;
 };
 
 const FILE_NAME = 'paw-compute-capacity.json';
+const CURRENT_CONFIG_VERSION = 2;
 
 /**
  * Approved capacity numbers (2026-08-19) — derived from real Gemini calibration on the live PawOS
@@ -40,6 +43,7 @@ const FILE_NAME = 'paw-compute-capacity.json';
  */
 function defaultConfig(): RollingCapacityConfig {
   return {
+    version: CURRENT_CONFIG_VERSION,
     tiers: {
       go:          { window5hPc: 10,    windowWeeklyPc: 50,     pooled: false },
       pro:         { window5hPc: 200,   windowWeeklyPc: 500,    pooled: false },
@@ -61,7 +65,14 @@ class PawComputeCapacityStore {
     try {
       const persisted = JSON.parse(fs.readFileSync(this.file, 'utf-8')) as Partial<RollingCapacityConfig>;
       const defaults = defaultConfig();
-      this.config = { tiers: { ...defaults.tiers, ...(persisted.tiers ?? {}) } };
+      
+      // Migration: if the persisted config is from an older version (e.g. version undefined/1),
+      // discard the stale tier values (like the old Go 132 PC limit) and apply the new defaults.
+      if (persisted.version !== CURRENT_CONFIG_VERSION) {
+        this.config = defaults;
+      } else {
+        this.config = { version: CURRENT_CONFIG_VERSION, tiers: { ...defaults.tiers, ...(persisted.tiers ?? {}) } };
+      }
       this.save();
     } catch {
       this.config = defaultConfig();
@@ -90,7 +101,7 @@ class PawComputeCapacityStore {
   /** Remote-sync override — same pattern as PawComputeConfigStore.applySyncedConfig(). */
   applySyncedConfig(config: RollingCapacityConfig): void {
     const defaults = defaultConfig();
-    this.config = { tiers: { ...defaults.tiers, ...config.tiers } };
+    this.config = { version: CURRENT_CONFIG_VERSION, tiers: { ...defaults.tiers, ...config.tiers } };
     this.save();
   }
 }

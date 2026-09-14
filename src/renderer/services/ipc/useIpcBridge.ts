@@ -126,6 +126,8 @@ export function useIpcBridge() {
         pawModelId?: PawModelId
       ): Promise<{ aggregated: AggregatedTurnUsage; balance: CreditBalance }> =>
         ipc.billingRecordTurnUsage(submission, reason, category, pawModelId),
+      billingReleaseGenerationSlot: async (): Promise<void> =>
+        ipc.billingReleaseGenerationSlot(),
       billingReportUsageEvent: async (
         usage: ProviderUsageMetadata,
         requestType: UsageRequestType,

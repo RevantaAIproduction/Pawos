@@ -197,16 +197,21 @@ export class ReasoningRuntime {
       rejectCompleted(error);
     };
 
-    // Safety timeout: if response doesn't complete in 30 seconds, reject
+    // Outer watchdog timeout (185s). The provider has a 180s idle timeout.
+    // This watchdog ensures that if the provider entirely fails to clean up,
+    // the turn won't hang indefinitely, but it will never race the provider's own timeout.
     const timeoutHandle = setTimeout(() => {
       if (!settled) {
-        console.log('[TRACE-TIMEOUT] Response timeout after 30s, settling with empty response');
+        console.log('[TRACE-TIMEOUT] Response timeout after 185s, settling with empty response');
         settleRejected(new Error('Response generation timeout'));
       }
-    }, 30000);
+    }, 185000);
+
+
 
     try {
       this.activeTurnReject = settleRejected;
+      console.log('[CHK 3] ReasoningRuntime provider invoked', { model: this.provider.id, turnId });
       this.activeSession = this.provider.streamResponse(
         {
           systemPrompt: this.systemPrompt,
@@ -256,7 +261,7 @@ export class ReasoningRuntime {
               if (!settled) {
                 // Response arrived but for an old turn - still settle it to avoid hanging
                 console.log('[TRACE-SETTLE-MISMATCH] Settling mismatched turn with empty response');
-                settleResolved({ response: '', assistantMessage: null, toolCalls: [], usage });
+                settleResolved({ response: '', assistantMessage: createMessage('assistant', '', 'final'), toolCalls: [], usage });
               }
               return;
             }

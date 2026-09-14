@@ -120,7 +120,7 @@ class RollingUsageGate {
       return {
         allowed: false,
         pooled: false,
-        reason: 'Another generation is already in progress — please wait for it to complete',
+        reason: 'inflight',
         usage,
       };
     }

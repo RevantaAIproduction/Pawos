@@ -6,5 +6,3 @@ export type IpcBridge = ReturnType<typeof contextBridge>;
 export function getIpcBridge(): IpcBridge {
   return (window as any).__pawos_ipc__ as IpcBridge;
 }
-
-

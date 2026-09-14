@@ -704,7 +704,7 @@ export class ConversationRuntime {
   }
 
   submitTranscript(transcript: string, context?: SubmittedInputContext) {
-    console.log('[TRACE-1] submitTranscript', { text: transcript.substring(0, 50), state: this.snapshot.state });
+    console.log('[CHK 1] submitTranscript', { turnId: this.turnId, state: this.snapshot.state, closed: this.closed });
     const trimmed = transcript.trim();
     if (!trimmed) {
       return;
@@ -976,6 +976,7 @@ export class ConversationRuntime {
   }
 
   private async handleTranscript(transcript: string, context?: SubmittedInputContext) {
+    console.log('[CHK 2] handleTranscript entry', { turnId: this.turnId, sessionId: this.activeSessionId, state: this.snapshot.state });
     if (this.closed) {
       return;
     }
@@ -1064,15 +1065,23 @@ export class ConversationRuntime {
       if (this.closed || currentTurn !== this.turnId || turnFailed) {
         return;
       }
+      turnFailed = true;
       const message = error instanceof Error ? error.message : 'Failed to compose a response.';
-      // Self-heal, extending the same Recovery Policy this runtime already
-      // applies to tool calls (see MAX_SAME_FAILURE_ATTEMPTS above): a
-      // transient reasoning-provider error (rate limit, network blip) gets
-      // one silent automatic retry before the user ever sees an error —
-      // but only if nothing has streamed yet, since retrying after partial
-      // speech/text output would risk garbled, duplicated narration.
+      console.log('[CHK ERROR] handleTranscript catch', { turnId: this.turnId, errorName: error instanceof Error ? error.name : 'Error', message, usageCount: turnContext.usages.length, assistantMessageId: turnContext.assistantMessageId, accumulatedContentLen: turnContext.finalResponse.length });
       const failureClass = classifyFailure(message);
       const nothingStreamedYet = turnContext.ttsBuffer === '' && turnContext.finalResponse === '';
+
+      // Set the message to final so it doesn't get discarded
+      if (turnContext.assistantMessageId) {
+        this.upsertMessage({
+          id: turnContext.assistantMessageId,
+          role: 'assistant',
+          content: turnContext.finalResponse,
+          createdAt: turnContext.startedAtMs,
+          status: 'final',
+        });
+      }
+
       if (nothingStreamedYet && !NOT_AUTO_RECOVERABLE.has(failureClass)) {
         this.log('recovering-turn', { failureClass, message });
         try {
@@ -1082,10 +1091,16 @@ export class ConversationRuntime {
           turnContext.finalResponse = retryResult.response || retryResult.assistantMessage?.content || turnContext.finalResponse;
         } catch (retryError) {
           if (this.closed || currentTurn !== this.turnId || turnFailed) return;
+          // Report any accumulated usage so the main process releases the in-flight slot
+          // reserved by billingCanStartGeneration — otherwise the slot stays stuck for 60s.
+          this.args.onTurnUsage?.({ sessionId: this.activeSessionId, runId: this.args.autonomousRunId ?? null, requests: turnContext.usages });
           this.failTurn(retryError instanceof Error ? retryError.message : message);
           return;
         }
       } else {
+        // Report any accumulated usage so the main process releases the in-flight slot
+        // reserved by billingCanStartGeneration — otherwise the slot stays stuck for 60s.
+        this.args.onTurnUsage?.({ sessionId: this.activeSessionId, runId: this.args.autonomousRunId ?? null, requests: turnContext.usages });
         this.failTurn(message);
         return;
       }
@@ -1269,6 +1284,7 @@ export class ConversationRuntime {
     return {
       onDelta: (delta, assistantMessage) => {
         if (this.closed || currentTurn !== this.turnId) return;
+        console.log('[CHK 5] ConversationRuntime onDelta', { assistantMessageId: assistantMessage.id, deltaLength: delta.length, cumulativeLength: assistantMessage.content.length });
         this.upsertMessage({
           id: assistantMessage.id,
           role: 'assistant',
@@ -1295,7 +1311,7 @@ export class ConversationRuntime {
         const estimatedPawCompute = estimatePawComputeFromUsage(ctx.usages);
         this.args.onStreamingUsage?.(estimatedPawCompute, elapsedSeconds);
 
-        ctx.finalResponse = result.response || result.assistantMessage?.content || ctx.finalResponse;
+        ctx.finalResponse = result.response || result.assistantMessage?.content;
         if (result.assistantMessage) {
           ctx.assistantMessageId = result.assistantMessage.id;
           this.upsertMessage({

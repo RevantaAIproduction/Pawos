@@ -233,6 +233,8 @@ export function contextBridge() {
       pawModelId?: PawModelId
     ): Promise<{ aggregated: AggregatedTurnUsage; balance: CreditBalance }> =>
       ipcApi.invoke('billing:recordTurnUsage', submission, reason, category, pawModelId),
+    billingReleaseGenerationSlot: async (): Promise<void> =>
+      ipcApi.invoke('billing:releaseGenerationSlot'),
     billingReportUsageEvent: async (
       usage: ProviderUsageMetadata,
       requestType: UsageRequestType,
