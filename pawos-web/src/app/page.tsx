@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Button } from "../components/ui/Button";
 import { ConnectionsGraphic } from "../components/ConnectionsGraphic";
+import { HeroAnimation } from "../components/HeroAnimation";
 
 export const metadata: Metadata = {
   title: "PawOS - The Desktop AI Work Environment",
@@ -14,6 +15,8 @@ export default function Home() {
     <>
       {/* 1. HERO */}
       <section className="relative min-h-[90vh] flex flex-col items-center justify-center text-center px-6">
+        <HeroAnimation />
+        <div className="relative z-10">
         <h1 className="text-6xl md:text-8xl font-bold tracking-tighter text-white mb-6">
           PawOS
         </h1>
@@ -28,10 +31,11 @@ export default function Home() {
             Explore PawOS
           </Button>
         </div>
+        </div>
       </section>
 
       {/* 2. WHAT PAWOS IS */}
-      <section className="py-32 px-6">
+      <section className="py-32 px-6 bg-black relative z-10">
         <div className="mx-auto max-w-4xl text-center">
           <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-8">
             The work is fragmented. The system shouldn't be.
@@ -43,7 +47,7 @@ export default function Home() {
       </section>
 
       {/* 3. UNDERSTAND / COMPANION */}
-      <section className="py-32 px-6">
+      <section className="py-32 px-6 bg-neutral-950 relative z-10">
         <div className="mx-auto max-w-7xl">
           <div className="grid md:grid-cols-2 gap-16 items-center">
             <div>
@@ -62,7 +66,7 @@ export default function Home() {
       </section>
 
       {/* 4. CODE CHANGES */}
-      <section className="py-32 px-6">
+      <section className="py-32 px-6 bg-black relative z-10">
         <div className="mx-auto max-w-7xl">
           <div className="text-center mb-24">
             <h2 className="text-4xl md:text-6xl font-medium tracking-tight text-white">
@@ -86,7 +90,7 @@ export default function Home() {
       </section>
 
       {/* 5. INSTALL SOFTWARE */}
-      <section className="py-32 px-6">
+      <section className="py-32 px-6 bg-neutral-950 relative z-10">
         <div className="mx-auto max-w-7xl">
           <div className="grid md:grid-cols-2 gap-16 items-center">
             <div>
@@ -105,7 +109,7 @@ export default function Home() {
       </section>
 
       {/* 6. PATH FIX */}
-      <section className="py-32 px-6">
+      <section className="py-32 px-6 bg-black relative z-10">
         <div className="mx-auto max-w-7xl">
           <div className="grid md:grid-cols-2 gap-16 items-center">
             <div className="rounded-2xl overflow-hidden border border-neutral-800 shadow-2xl relative order-last md:order-first">
@@ -124,7 +128,7 @@ export default function Home() {
       </section>
 
       {/* 7. JIRA INVESTIGATION */}
-      <section className="py-32 px-6">
+      <section className="py-32 px-6 bg-neutral-950 relative z-10">
         <div className="mx-auto max-w-7xl">
           <div className="grid md:grid-cols-2 gap-16 items-center">
             <div>
@@ -146,7 +150,7 @@ export default function Home() {
       </section>
 
       {/* 8. CROSS-CONNECTION */}
-      <section className="py-32 px-6 relative">
+      <section className="py-32 px-6 bg-black relative z-10 border-t border-neutral-900">
         <div className="mx-auto max-w-5xl text-center mb-16 relative z-10">
           <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-6">
             The work is connected. PawOS connects the context.
@@ -166,7 +170,7 @@ export default function Home() {
       </section>
 
       {/* 10. CURRENT / FUTURE TIMELINE */}
-      <section className="py-32 px-6">
+      <section className="py-32 px-6 bg-neutral-950 relative z-10 border-t border-neutral-900">
         <div className="mx-auto max-w-7xl">
           <div className="text-center mb-20">
             <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-6">
@@ -213,7 +217,7 @@ export default function Home() {
       </section>
 
       {/* 11. BUILDERS / STORY PREVIEW */}
-      <section className="py-32 px-6">
+      <section className="py-32 px-6 bg-black relative z-10 border-t border-neutral-900">
         <div className="mx-auto max-w-4xl text-center">
           <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-6">
             Built by builders.
@@ -228,7 +232,7 @@ export default function Home() {
       </section>
 
       {/* 12. FINAL CTA */}
-      <section className="py-32 px-6 text-center border-t border-neutral-900 mt-20">
+      <section className="py-32 px-6 text-center bg-neutral-950 relative z-10 border-t border-neutral-900">
         <h2 className="text-4xl md:text-6xl font-medium tracking-tight text-white mb-8">
           Your next task starts here.
         </h2>

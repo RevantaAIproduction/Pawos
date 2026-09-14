@@ -1,8 +1,7 @@
-import type { Metadata, Viewport } from "next";
+﻿import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Nav } from "../components/layout/Nav";
-import { GlobalBackground } from "../components/GlobalBackground";
 import { Footer } from "../components/layout/Footer";
 import { Analytics } from "../components/analytics/Analytics";
 import { CookieConsent } from "../components/analytics/CookieConsent";
@@ -26,29 +25,29 @@ const SITE_URL = "https://pawos.app";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "PawOS — Your AI desktop companion",
-    template: "%s — PawOS",
+    default: "PawOS â€” Your AI desktop companion",
+    template: "%s â€” PawOS",
   },
   description:
-    "PawOS is an AI companion that lives on your desktop, plans and executes real work, and helps you code, browse, deploy, and communicate — with autonomous engineering built in.",
+    "PawOS is an AI companion that lives on your desktop, plans and executes real work, and helps you code, browse, deploy, and communicate â€” with autonomous engineering built in.",
   openGraph: {
     type: "website",
     siteName: "PawOS",
-    title: "PawOS — Your AI desktop companion",
+    title: "PawOS â€” Your AI desktop companion",
     description:
       "PawOS is an AI companion that lives on your desktop, plans and executes real work, and helps you code, browse, deploy, and communicate.",
     url: SITE_URL,
   },
   twitter: {
     card: "summary_large_image",
-    title: "PawOS — Your AI desktop companion",
+    title: "PawOS â€” Your AI desktop companion",
     description:
       "PawOS is an AI companion that lives on your desktop, plans and executes real work, and helps you code, browse, deploy, and communicate.",
   },
   robots: { index: true, follow: true },
 };
 
-// Mobile Presence PWA Foundation (MOB-4) — themeColor matches manifest.ts's
+// Mobile Presence PWA Foundation (MOB-4) â€” themeColor matches manifest.ts's
 // background_color/theme_color; viewportFit: 'cover' plus the safe-area
 // CSS in globals.css is what lets /companion sit correctly behind a real
 // phone's notch/home-indicator instead of clipping under it.
@@ -70,7 +69,7 @@ export default async function RootLayout({
     } = await supabase.auth.getUser();
     userEmail = user?.email ?? null;
   } catch {
-    // Supabase not configured (e.g. local dev without env vars) — Nav just
+    // Supabase not configured (e.g. local dev without env vars) â€” Nav just
     // renders signed-out.
   }
 
@@ -86,7 +85,7 @@ export default async function RootLayout({
       "@type": "Offer",
       price: "0",
       priceCurrency: "USD",
-      description: "Paw Go — free tier",
+      description: "Paw Go â€” free tier",
     },
     url: SITE_URL,
   };
@@ -103,8 +102,7 @@ export default async function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col bg-black text-neutral-100">
-        <GlobalBackground />
-        <a
+                <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-blue-500 focus:px-4 focus:py-2 focus:text-black"
         >
@@ -124,3 +122,4 @@ export default async function RootLayout({
     </html>
   );
 }
+
