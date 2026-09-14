@@ -4,7 +4,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Button } from "../ui/Button";
 
 const NAV_ITEMS = [
   {
@@ -15,97 +14,67 @@ const NAV_ITEMS = [
         links: [
           { href: "/companion", label: "Companion" },
           { href: "/features#autonomous-work", label: "Autonomous Work" },
+          { href: "/features#connections", label: "Connections" },
           { href: "/features#projects", label: "Projects" },
         ],
-      },
-      {
-        title: "How PawOS works",
-        links: [
-          { href: "/features#understand", label: "Understand" },
-          { href: "/features#plan", label: "Plan" },
-          { href: "/features#build", label: "Build" },
-          { href: "/features#review", label: "Review" },
-        ],
-      },
+      }
     ],
   },
   {
     label: "Solutions",
     dropdown: [
       {
-        title: "Explore Solutions",
+        title: "For every scale",
         links: [
-          { href: "/pricing#individuals", label: "For individuals" },
-          { href: "/enterprise", label: "For teams" },
-          { href: "/enterprise", label: "For organizations" },
+          { href: "/pricing#individuals", label: "Individuals" },
+          { href: "/enterprise", label: "Teams" },
+          { href: "/enterprise", label: "Organizations" },
+          { href: "/pricing", label: "Pricing" },
         ],
-      },
-      {
-        title: "PawOS plans",
-        links: [
-          { href: "/pricing#pro-max", label: "Pro Max" },
-          { href: "/pricing#team", label: "Team" },
-          { href: "/pricing#enterprise", label: "Enterprise" },
-        ],
-      },
+      }
     ],
   },
   {
     label: "Developers",
     dropdown: [
       {
-        title: "Build with PawOS",
+        title: "Build & Integrate",
         links: [
           { href: "/docs", label: "Documentation" },
-          { href: "/docs/getting-started", label: "Getting Started" },
           { href: "/docs/integrations", label: "Integrations" },
-        ],
-      },
-      {
-        title: "Connect your workflow",
-        links: [
           { href: "/docs/integrations/github", label: "GitHub" },
           { href: "/docs/integrations/jira", label: "Jira" },
           { href: "/docs/integrations/linear", label: "Linear" },
         ],
-      },
+      }
     ],
   },
   {
     label: "Resources",
     dropdown: [
       {
-        title: "Learn",
+        title: "Learn & Track",
         links: [
-          { href: "/docs", label: "Documentation" },
           { href: "/faq", label: "FAQ" },
-          { href: "/features#how-it-works", label: "How PawOS works" },
-        ],
-      },
-      {
-        title: "Product",
-        links: [
           { href: "/changelog", label: "Changelog" },
           { href: "/roadmap", label: "Roadmap" },
+          { href: "/trust", label: "Trust" },
         ],
-      },
+      }
     ],
   },
   {
     label: "Company",
     dropdown: [
       {
-        title: "About PawOS",
-        links: [
-          { href: "/about#our-story", label: "Our story" },
-          { href: "/about#careers", label: "Careers" },
-          { href: "/contact", label: "Contact" },
-        ],
-      },
-      {
         title: "Revanta AI",
-        links: [{ href: "/about#revanta", label: "About Revanta AI" }],
-      },
+        links: [
+          { href: "/about", label: "About" },
+          { href: "/careers", label: "Careers" },
+          { href: "/contact", label: "Contact" },
+          { href: "/about", label: "Revanta AI" },
+        ],
+      }
     ],
   },
 ];
@@ -124,8 +93,8 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
         className={`absolute inset-0 h-screen w-screen bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${activeMenu ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`} 
       />
 
-      <header className="relative bg-black transition-colors duration-300 border-b border-neutral-900">
-        <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+      <header className="relative transition-colors duration-300 bg-transparent">
+        <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-6">
           <Link href="/" className="flex items-center gap-3 font-semibold text-xl tracking-tight text-white" aria-label="PawOS home">
             <Image src="/logo-icon.png" alt="" width={28} height={28} className="rounded-md" priority />
             PawOS
@@ -178,25 +147,25 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
 
         {/* Desktop Dropdown Canvas */}
         <div 
-          className={`hidden md:block absolute left-0 right-0 bg-black border-b border-neutral-900 overflow-hidden transition-all duration-300 origin-top ${
+          className={`hidden md:flex absolute left-0 right-0 bg-black border-b border-neutral-900 overflow-hidden transition-all duration-300 origin-top justify-center ${
             activeMenu ? "opacity-100 max-h-[400px] py-12" : "opacity-0 max-h-0 py-0 border-b-0"
           }`}
         >
-          <div className="mx-auto max-w-7xl px-6">
+          <div className="w-full max-w-7xl px-6">
             {NAV_ITEMS.map((item) => (
               <div 
                 key={item.label} 
-                className={`grid grid-cols-4 gap-12 transition-opacity duration-300 ${
+                className={`flex gap-16 transition-opacity duration-300 ${
                   activeMenu === item.label ? "block opacity-100" : "hidden opacity-0"
                 }`}
               >
                 {item.dropdown.map((section) => (
-                  <div key={section.title} className="col-span-1">
-                    <h3 className="text-sm font-medium text-neutral-500 mb-4">{section.title}</h3>
-                    <ul className="space-y-3">
+                  <div key={section.title}>
+                    <h3 className="text-sm font-medium text-neutral-500 mb-6 uppercase tracking-wider">{section.title}</h3>
+                    <ul className="space-y-4">
                       {section.links.map((link) => (
                         <li key={link.label}>
-                          <Link href={link.href} className="text-lg font-medium text-neutral-200 hover:text-white transition" onClick={() => setActiveMenu(null)}>
+                          <Link href={link.href} className="text-2xl font-medium text-neutral-200 hover:text-white transition" onClick={() => setActiveMenu(null)}>
                             {link.label}
                           </Link>
                         </li>

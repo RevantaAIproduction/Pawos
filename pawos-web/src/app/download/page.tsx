@@ -366,7 +366,7 @@ function OperatingLayerHeroVisual() {
         </div>
 
         <div className="flex flex-col items-center justify-center gap-4">
-          <div className="flex h-36 w-36 flex-col items-center justify-center rounded-[2rem] border border-white/15 bg-neutral-950/95 shadow-[0_0_70px_rgba(96,165,250,0.35)]">
+          <div className="flex h-36 w-36 flex-col items-center justify-center rounded-[2rem] border border-white/15 /95 shadow-[0_0_70px_rgba(96,165,250,0.35)]">
             <Image src="/logo-icon.png" alt="" width={64} height={64} className="rounded-2xl" priority />
             <span className="mt-3 text-sm font-bold">PawOS</span>
             <span className="mt-1 text-[10px] text-neutral-500">Operating layer</span>
@@ -404,7 +404,7 @@ function OperatingLayerHeroVisual() {
 function PhoneSurface() {
   return (
     <div className="w-60 rounded-[2.25rem] border border-white/15 bg-black p-3 shadow-2xl shadow-blue-950/40">
-      <div className="rounded-[1.75rem] border border-white/10 bg-neutral-950 p-4">
+      <div className="rounded-[1.75rem] border border-white/10  p-4">
         <div className="mx-auto mb-4 h-1 w-16 rounded-full bg-white/20" />
         <div className="rounded-2xl bg-blue-300/15 p-4 text-blue-100">
           <p className="text-xs font-bold">PawOS Mobile</p>
@@ -563,7 +563,7 @@ function DownloadSection() {
 
 export default function DownloadPage() {
   return (
-    <div className="overflow-hidden bg-neutral-950 text-neutral-100">
+    <div className="overflow-hidden  text-neutral-100">
       <section className="relative border-b border-white/10">
         <div aria-hidden className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.22),_transparent_34%),radial-gradient(circle_at_top_right,_rgba(16,185,129,0.14),_transparent_32%)]" />
         <Container className="relative py-20 sm:py-28">
@@ -587,7 +587,7 @@ export default function DownloadPage() {
 
       <RuntimeOverview />
 
-      <section className="border-y border-white/10 bg-neutral-900/30 py-20">
+      <section className="border-y border-white/10  py-20">
         <Container>
           <div className="mb-10 max-w-3xl">
             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-blue-300">Coding Runtime</p>
@@ -624,7 +624,7 @@ export default function DownloadPage() {
         </Container>
       </section>
 
-      <section className="border-y border-white/10 bg-neutral-900/30 py-20">
+      <section className="border-y border-white/10  py-20">
         <Container>
           <div className="grid gap-8 lg:grid-cols-2">
             <div>
@@ -666,7 +666,7 @@ export default function DownloadPage() {
         </Container>
       </section>
 
-      <section className="border-y border-white/10 bg-neutral-900/30 py-20">
+      <section className="border-y border-white/10  py-20">
         <Container>
           <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
             <div>
@@ -699,7 +699,7 @@ export default function DownloadPage() {
 
       <DownloadSection />
 
-      <section className="border-y border-white/10 bg-neutral-900/30 py-20">
+      <section className="border-y border-white/10  py-20">
         <Container>
           <div className="grid gap-6 sm:grid-cols-2">
             {SYSTEM_REQUIREMENTS.map((requirement) => (

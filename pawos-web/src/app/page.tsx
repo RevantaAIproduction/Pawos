@@ -1,1 +1,241 @@
-﻿import Image from "next/image"; import { HeroAnimation } from "../components/HeroAnimation"; import { Container } from "../components/ui/Container"; import { Section } from "../components/ui/Section"; import { Button } from "../components/ui/Button";  export default function Home() {   return (     <>       {/* 01 - Hero */}       <section className="relative flex min-h-[90vh] flex-col items-center justify-center overflow-hidden border-b border-neutral-900 bg-black">         <HeroAnimation />         <Container className="relative z-10 flex flex-col items-center py-24 text-center">           <div className="mb-8 overflow-hidden rounded-2xl bg-black/20 p-2 shadow-2xl backdrop-blur-md ring-1 ring-white/10">             <Image src="/logo-icon.png" alt="PawOS Mark" width={64} height={64} className="h-16 w-16 object-contain" />           </div>           <h1 className="mt-2 text-6xl font-medium tracking-tight text-white sm:text-8xl">             PawOS           </h1>           <p className="mt-6 text-2xl font-light text-white/90 sm:text-3xl">             The AI companion that gets work done.</p><div className="mt-12 flex justify-center gap-4"><Button href="/download" className="px-8 py-4 text-base font-medium bg-white text-black hover:bg-neutral-200">Download for Windows &rarr;</Button></div>         </Container>       </section>        {/* 02 - Product Idea */}       <Section id="product-idea" className="bg-black py-32 text-center border-b border-neutral-900">         <h2 className="mx-auto max-w-4xl text-4xl font-medium tracking-tight text-white sm:text-5xl">           PawOS works on the problem, not just the prompt.         </h2>         <p className="mx-auto mt-6 max-w-3xl text-xl text-neutral-400 leading-relaxed">           PawOS doesn't wait in a chat window for you to copy-paste its suggestions. It runs on your machine, understands the project context, and takes real, confirmed action—reading files, writing code, running terminals, diagnosing environment issues, and updating tickets.         </p>       </Section>        {/* 03 - Understand (Overview) */}       <Section className="bg-black py-32 border-b border-neutral-900">         <div className="text-center mb-16">           <h2 className="text-3xl font-medium text-white sm:text-5xl tracking-tight">Start with the whole project.</h2>           <p className="mt-6 text-xl text-neutral-400 max-w-2xl mx-auto">             PawOS builds deep semantic memory across your entire workspace, so you never have to re-explain context when switching tasks or picking up where you left off.           </p>         </div>         <div className="mx-auto max-w-6xl overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950 shadow-2xl relative">           <Image src="/pawos-companion-overview.png" alt="PawOS desktop companion working with a project" width={1920} height={1080} className="w-full object-cover" />         </div>       </Section>        {/* 04 - Build (Code changes) */}       <Section className="bg-black py-32 border-b border-neutral-900">         <Container>           <div className="grid gap-16 lg:grid-cols-2 lg:items-center">             <div>               <h2 className="text-3xl font-medium text-white sm:text-4xl tracking-tight">Built to work on real software problems.</h2>               <p className="mt-6 text-lg text-neutral-400">                 You ask PawOS to fix a problem, like a broken login redirect. PawOS investigates the relevant files, identifies the cause, changes the code, and verifies the result.               </p>               <div className="mt-8 space-y-4">                 <div className="flex items-center gap-4 text-neutral-300"><div className="w-8 h-8 rounded-full bg-neutral-900 flex items-center justify-center border border-neutral-800">1</div> User request</div>                 <div className="flex items-center gap-4 text-neutral-300"><div className="w-8 h-8 rounded-full bg-neutral-900 flex items-center justify-center border border-neutral-800">2</div> PawOS investigates</div>                 <div className="flex items-center gap-4 text-neutral-300"><div className="w-8 h-8 rounded-full bg-blue-900/30 text-blue-400 flex items-center justify-center border border-blue-800">3</div> PawOS changes the code</div>                 <div className="flex items-center gap-4 text-neutral-300"><div className="w-8 h-8 rounded-full bg-emerald-900/30 text-emerald-400 flex items-center justify-center border border-emerald-800">4</div> PawOS verifies</div>               </div>             </div>             <div className="overflow-hidden rounded-2xl border border-neutral-800 shadow-2xl bg-neutral-950">               <Image src="/pawos-companion-code-changes.png" alt="PawOS investigating a coding issue and applying a code change" width={1920} height={1080} className="w-full object-cover" />             </div>           </div>         </Container>       </Section>        {/* 05 - System Work (Install software) */}       <Section className="bg-neutral-950 py-32 border-b border-neutral-900">         <Container>           <div className="grid gap-16 lg:grid-cols-2 lg:items-center">             <div className="overflow-hidden rounded-2xl border border-neutral-800 shadow-2xl bg-black order-last lg:order-first">               <Image src="/pawos-companion-install-python.png" alt="PawOS installing Python and verifying the development environment" width={1920} height={1080} className="w-full object-cover" />             </div>             <div>               <h2 className="text-3xl font-medium text-white sm:text-4xl tracking-tight">Setup the environment, automatically.</h2>               <p className="mt-6 text-lg text-neutral-400">                 PawOS works directly with your local environment where supported. Tell it to install the latest Python release, and it will inspect the environment, handle the installation, and verify the tools are available in your terminal.               </p>             </div>           </div>         </Container>       </Section>        {/* 06 - Path Fix */}       <Section className="bg-black py-32 border-b border-neutral-900">         <Container>           <div className="grid gap-16 lg:grid-cols-2 lg:items-center">             <div>               <h2 className="text-3xl font-medium text-white sm:text-4xl tracking-tight">From a broken path to a verified fix.</h2>               <p className="mt-6 text-lg text-neutral-400">                 When something goes wrong in the system, PawOS diagnoses the issue. If the terminal can't find a tool, PawOS identifies the incorrect PATH configuration, applies the fix, and verifies it works.               </p>             </div>             <div className="overflow-hidden rounded-2xl border border-neutral-800 shadow-2xl bg-neutral-950">               <Image src="/pawos-companion-path-fix.png" alt="PawOS diagnosing and fixing a system PATH issue" width={1920} height={1080} className="w-full object-cover" />             </div>           </div>         </Container>       </Section>        {/* 07 - Jira Ticket */}       <Section className="bg-neutral-950 py-32 border-b border-neutral-900">         <Container>           <div className="grid gap-16 lg:grid-cols-2 lg:items-center">             <div className="overflow-hidden rounded-2xl border border-neutral-800 shadow-2xl bg-black order-last lg:order-first">               <Image src="/pawos-companion-jira-ticket.png" alt="PawOS investigating a Jira ticket" width={1920} height={1080} className="w-full object-cover" />             </div>             <div>               <div className="inline-flex items-center rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-sm font-medium text-blue-300 mb-6">                 Autonomous Ticket Resolution               </div>               <h2 className="text-3xl font-medium text-white sm:text-4xl tracking-tight">Give PawOS the ticket. Follow the work.</h2>               <p className="mt-6 text-lg text-neutral-400">                 Ask PawOS to investigate a connected Jira ticket. It will find the cause, fix the issue, run the relevant checks, and update the ticket with what changed. Autonomous work lets PawOS take a ticket and finish the necessary tasks.               </p>             </div>           </div>         </Container>       </Section>        {/* 08 - Connections */}       <Section className="bg-black py-32 border-b border-neutral-900">         <div className="text-center mb-16">           <h2 className="text-3xl font-medium text-white sm:text-5xl tracking-tight">Your tools. One place to work.</h2>           <p className="mt-6 text-xl text-neutral-400 max-w-2xl mx-auto">             PawOS can work across the tools that surround your code, bringing connected services, integrations, and workspace context into one cohesive environment.           </p>         </div>         <div className="mx-auto max-w-5xl overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950 shadow-2xl">           <Image src="/pawos-connections.png" alt="PawOS connections interface showing connected developer services" width={1920} height={1080} className="w-full object-cover" />         </div>       </Section>        {/* 09 - Permissions & Control */}       <Section className="bg-neutral-950 py-32 border-b border-neutral-900">         <div className="mx-auto max-w-7xl px-6 lg:px-8">           <div className="mx-auto max-w-2xl lg:text-center">             <h2 className="text-base font-semibold leading-7 text-indigo-400">Governance</h2>             <p className="mt-2 text-3xl font-medium tracking-tight text-white sm:text-4xl">               Stay in control while PawOS works.             </p>             <p className="mt-6 text-lg leading-8 text-neutral-400">               PawOS is not a mysterious AI that silently controls your machine. Every action requires explicit permission boundaries, and you approve plans before execution.             </p>           </div>           <div className="mx-auto mt-16 max-w-2xl sm:mt-20 lg:mt-24 lg:max-w-none">             <dl className="grid max-w-xl grid-cols-1 gap-x-8 gap-y-16 lg:max-w-none lg:grid-cols-3">               {[                 { title: "Honest by design", body: "Paw reports what actually happened—never a fabricated success on a task that failed or is still in progress." },                 { title: "Confirmed, not silent", body: "Destructive or system-impacting actions always pause for your explicit Allow or Deny confirmation first." },                 { title: "Verifiable execution", body: "PawOS records the exact terminal commands and file edits, leaving an audit trail of the actual work performed." },               ].map((feature) => (                 <div key={feature.title} className="flex flex-col">                   <dt className="text-lg font-semibold leading-7 text-white">                     {feature.title}                   </dt>                   <dd className="mt-4 flex flex-auto flex-col text-base leading-7 text-neutral-400">                     <p className="flex-auto">{feature.body}</p>                   </dd>                 </div>               ))}             </dl>           </div>         </div>       </Section>        {/* 10 - Why PawOS & Builders */}       <Section className="bg-black py-32 border-b border-neutral-900">         <Container>           <div className="max-w-3xl mx-auto">             <h2 className="text-3xl font-medium text-white sm:text-5xl tracking-tight mb-12">Built for the people building everything else.</h2>                          <div className="prose prose-invert prose-lg text-neutral-400">               <p>                 Software development contains much more work than just writing code. Developers spend their days investigating obscure issues, understanding unfamiliar projects, configuring environments, fixing broken paths, inspecting logs, working through tickets, testing changes, and communicating results.               </p>               <p>                 AI that only responds with text leaves the developer responsible for carrying out the work.               </p>               <p>                 PawOS was built around a different idea: what if an AI companion could understand the actual environment in which the work happens? We designed a persistent desktop companion that works alongside you, taking responsibility for meaningful pieces of work across your entire system.               </p>               <p className="mt-12 text-white font-medium">                 PawOS is being built by Revanta AI.               </p>             </div>           </div>         </Container>       </Section>        {/* 12 - Final CTA */}       <Section className="relative overflow-hidden bg-black py-32 text-center">         <div className="absolute inset-0 z-0 bg-[radial-gradient(ellipse_at_bottom,_rgba(99,102,241,0.15),_transparent_60%)]" />         <h2 className="text-4xl font-medium tracking-tight text-white sm:text-5xl">           Put PawOS to work.         </h2>         <p className="mx-auto mt-6 max-w-2xl text-xl text-neutral-400">           Your next task can start here.         </p>         <div className="mt-10 flex justify-center gap-4">           <Button href="/download" className="px-8 py-4 text-base font-medium bg-white text-black hover:bg-neutral-200">             Download for Windows &rarr;           </Button>           <Button href="/docs" variant="secondary" className="px-8 py-4 text-base font-medium bg-transparent text-white border border-neutral-700 hover:bg-neutral-900">             Explore PawOS           </Button>         </div>       </Section>     </>   ); }
+import type { Metadata } from "next";
+import Image from "next/image";
+import Link from "next/link";
+import { Button } from "../components/ui/Button";
+import { ConnectionsGraphic } from "../components/ConnectionsGraphic";
+
+export const metadata: Metadata = {
+  title: "PawOS - The Desktop AI Work Environment",
+  description: "PawOS connects the different parts of real computer work through one AI companion and execution layer.",
+};
+
+export default function Home() {
+  return (
+    <>
+      {/* 1. HERO */}
+      <section className="relative min-h-[90vh] flex flex-col items-center justify-center text-center px-6">
+        <h1 className="text-6xl md:text-8xl font-bold tracking-tighter text-white mb-6">
+          PawOS
+        </h1>
+        <p className="text-2xl md:text-3xl text-neutral-400 font-light mb-12 max-w-2xl">
+          The AI companion that gets work done.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-4">
+          <Button href="/download" className="px-8 py-4 text-base font-medium bg-white text-black hover:bg-neutral-200">
+            Download for Windows &rarr;
+          </Button>
+          <Button href="/about" variant="secondary" className="px-8 py-4 text-base font-medium bg-transparent text-white border border-neutral-700 hover:bg-neutral-900">
+            Explore PawOS
+          </Button>
+        </div>
+      </section>
+
+      {/* 2. WHAT PAWOS IS */}
+      <section className="py-32 px-6">
+        <div className="mx-auto max-w-4xl text-center">
+          <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-8">
+            The work is fragmented. The system shouldn't be.
+          </h2>
+          <p className="text-xl text-neutral-400 leading-relaxed max-w-3xl mx-auto">
+            PawOS brings the work around your computer together. It acts as an execution layer between you and your tasks—bridging your files, projects, code, terminal, Git, and connected services into one cohesive environment.
+          </p>
+        </div>
+      </section>
+
+      {/* 3. UNDERSTAND / COMPANION */}
+      <section className="py-32 px-6">
+        <div className="mx-auto max-w-7xl">
+          <div className="grid md:grid-cols-2 gap-16 items-center">
+            <div>
+              <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-6">
+                Start with what you need.
+              </h2>
+              <p className="text-lg text-neutral-400">
+                PawOS sits on your desktop, ready to understand what you want to accomplish. Rather than forcing you to translate your goals into ten different tools, you tell PawOS what you're working on. It gathers the surrounding context and prepares to act.
+              </p>
+            </div>
+            <div className="rounded-2xl overflow-hidden border border-neutral-800 shadow-2xl relative">
+              <Image src="/pawos-companion-overview.png" alt="PawOS Companion interface" width={1920} height={1080} className="w-full object-cover" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 4. CODE CHANGES */}
+      <section className="py-32 px-6">
+        <div className="mx-auto max-w-7xl">
+          <div className="grid md:grid-cols-2 gap-16 items-center">
+            <div className="rounded-2xl overflow-hidden border border-neutral-800 shadow-2xl relative order-last md:order-first">
+              <Image src="/pawos-companion-code-changes.png" alt="PawOS making code changes" width={1920} height={1080} className="w-full object-cover" />
+            </div>
+            <div>
+              <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-6">
+                Build alongside you.
+              </h2>
+              <p className="text-lg text-neutral-400">
+                PawOS inspects your project, understands your request, and safely modifies your source code. It doesn't just print a snippet for you to copy; it applies the exact changes where they belong and reports back what it achieved.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 5. INSTALL SOFTWARE */}
+      <section className="py-32 px-6">
+        <div className="mx-auto max-w-7xl">
+          <div className="grid md:grid-cols-2 gap-16 items-center">
+            <div>
+              <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-6">
+                Take care of real work.
+              </h2>
+              <p className="text-lg text-neutral-400">
+                Computer work extends beyond source code. When you need to install the latest stable Python release, PawOS understands the request, interacts with the environment, installs the required software, and verifies that it is available from your terminal.
+              </p>
+            </div>
+            <div className="rounded-2xl overflow-hidden border border-neutral-800 shadow-2xl relative">
+              <Image src="/pawos-companion-install-python.png" alt="PawOS installing software" width={1920} height={1080} className="w-full object-cover" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 6. PATH FIX */}
+      <section className="py-32 px-6">
+        <div className="mx-auto max-w-7xl">
+          <div className="grid md:grid-cols-2 gap-16 items-center">
+            <div className="rounded-2xl overflow-hidden border border-neutral-800 shadow-2xl relative order-last md:order-first">
+              <Image src="/pawos-companion-path-fix.png" alt="PawOS fixing system PATH" width={1920} height={1080} className="w-full object-cover" />
+            </div>
+            <div>
+              <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-6">
+                Diagnose and fix.
+              </h2>
+              <p className="text-lg text-neutral-400">
+                When a command fails because of a misconfigured environment, PawOS steps in. It investigates the broken state, identifies the missing PATH variables, applies the necessary fix, and verifies that the command now works successfully.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 7. JIRA INVESTIGATION */}
+      <section className="py-32 px-6">
+        <div className="mx-auto max-w-7xl">
+          <div className="grid md:grid-cols-2 gap-16 items-center">
+            <div>
+              <div className="inline-flex items-center rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-sm font-medium text-blue-300 mb-6 tracking-wide">
+                AUTONOMOUS TICKET ENGINE
+              </div>
+              <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-6">
+                From a ticket to a resolution.
+              </h2>
+              <p className="text-lg text-neutral-400">
+                Hand PawOS a Jira ticket. It reads the requirements, gathers context from your repository, makes the necessary code changes, verifies them locally, and updates the ticket's state—connecting the external tracker directly to your local execution environment.
+              </p>
+            </div>
+            <div className="rounded-2xl overflow-hidden border border-neutral-800 shadow-2xl relative">
+              <Image src="/pawos-companion-jira-ticket.png" alt="PawOS investigating a Jira ticket" width={1920} height={1080} className="w-full object-cover" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 8. CROSS-CONNECTION */}
+      <section className="py-32 px-6 relative">
+        <div className="mx-auto max-w-5xl text-center mb-16 relative z-10">
+          <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-6">
+            The work is connected. PawOS connects the context.
+          </h2>
+          <p className="text-xl text-neutral-400 max-w-2xl mx-auto">
+            Your workflow already spans across many systems. PawOS provides a layer that understands how they relate to one another.
+          </p>
+        </div>
+        
+        <div className="mx-auto max-w-5xl mb-16">
+          <ConnectionsGraphic />
+        </div>
+
+        <div className="mx-auto max-w-5xl overflow-hidden rounded-2xl border border-neutral-800 shadow-2xl relative z-10">
+          <Image src="/pawos-connections.png" alt="PawOS connections interface" width={1920} height={1080} className="w-full object-cover" />
+        </div>
+      </section>
+
+      {/* 10. CURRENT / FUTURE TIMELINE */}
+      <section className="py-32 px-6">
+        <div className="mx-auto max-w-7xl">
+          <div className="text-center mb-20">
+            <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-6">
+              Honest about what we ship.
+            </h2>
+            <p className="text-xl text-neutral-400 max-w-2xl mx-auto">
+              We separate what you can use today from the architecture we are building for tomorrow.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-12">
+            <div className="p-8 rounded-3xl border border-neutral-800 bg-black/40 backdrop-blur-md">
+              <h3 className="text-2xl font-medium text-white mb-8 flex items-center gap-3">
+                <span className="w-3 h-3 rounded-full bg-emerald-500 ring-4 ring-emerald-500/20"></span>
+                Current Capabilities
+              </h3>
+              <ul className="space-y-4 text-neutral-400">
+                <li className="flex gap-3"><span className="text-emerald-500">✓</span> Desktop Companion & conversation</li>
+                <li className="flex gap-3"><span className="text-emerald-500">✓</span> Local File & Code Operations</li>
+                <li className="flex gap-3"><span className="text-emerald-500">✓</span> Terminal & Environment Execution</li>
+                <li className="flex gap-3"><span className="text-emerald-500">✓</span> Git workflow support</li>
+                <li className="flex gap-3"><span className="text-emerald-500">✓</span> Connected Jira, Linear, and GitHub</li>
+                <li className="flex gap-3"><span className="text-emerald-500">✓</span> Autonomous ticket resolution</li>
+                <li className="flex gap-3"><span className="text-emerald-500">✓</span> Verified billing and auth foundations</li>
+              </ul>
+            </div>
+
+            <div className="p-8 rounded-3xl border border-neutral-800 bg-black/40 backdrop-blur-md">
+              <h3 className="text-2xl font-medium text-white mb-8 flex items-center gap-3">
+                <span className="w-3 h-3 rounded-full bg-blue-500 ring-4 ring-blue-500/20"></span>
+                Building Next
+              </h3>
+              <ul className="space-y-4 text-neutral-400">
+                <li className="flex gap-3"><span className="text-blue-500">→</span> Full coding workspace UI & inline diffs</li>
+                <li className="flex gap-3"><span className="text-blue-500">→</span> Automated browser verification</li>
+                <li className="flex gap-3"><span className="text-blue-500">→</span> Direct autonomous ticket/PR creation</li>
+                <li className="flex gap-3"><span className="text-blue-500">→</span> Broader actions across connected systems</li>
+                <li className="flex gap-3"><span className="text-blue-500">→</span> Collaborative organizational workspaces</li>
+                <li className="flex gap-3"><span className="text-blue-500">→</span> Enterprise governance & SSO</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 11. BUILDERS / STORY PREVIEW */}
+      <section className="py-32 px-6">
+        <div className="mx-auto max-w-4xl text-center">
+          <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-6">
+            Built by builders.
+          </h2>
+          <p className="text-xl text-neutral-400 mb-10 max-w-2xl mx-auto">
+            PawOS is built by people who wanted a system they could actually work with—not another assistant that only explains what you should do, but a companion that understands the relationship between the pieces of work in front of you.
+          </p>
+          <Link href="/about" className="inline-flex items-center gap-2 text-indigo-400 hover:text-indigo-300 font-medium text-lg transition-colors">
+            Read our story <span aria-hidden="true">&rarr;</span>
+          </Link>
+        </div>
+      </section>
+
+      {/* 12. FINAL CTA */}
+      <section className="py-32 px-6 text-center border-t border-neutral-900 mt-20">
+        <h2 className="text-4xl md:text-6xl font-medium tracking-tight text-white mb-8">
+          Your next task starts here.
+        </h2>
+        <div className="flex flex-col sm:flex-row justify-center gap-4">
+          <Button href="/download" className="px-8 py-4 text-base font-medium bg-white text-black hover:bg-neutral-200">
+            Download for Windows &rarr;
+          </Button>
+          <Button href="/docs" variant="secondary" className="px-8 py-4 text-base font-medium bg-transparent text-white border border-neutral-700 hover:bg-neutral-900">
+            Read Documentation
+          </Button>
+        </div>
+      </section>
+    </>
+  );
+}

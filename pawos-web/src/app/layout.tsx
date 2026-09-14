@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Nav } from "../components/layout/Nav";
+import { GlobalBackground } from "../components/GlobalBackground";
 import { Footer } from "../components/layout/Footer";
 import { Analytics } from "../components/analytics/Analytics";
 import { CookieConsent } from "../components/analytics/CookieConsent";
@@ -101,7 +102,8 @@ export default async function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
         />
       </head>
-      <body className="min-h-full flex flex-col bg-neutral-950 text-neutral-100">
+      <body className="min-h-full flex flex-col bg-black text-neutral-100">
+        <GlobalBackground />
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-blue-500 focus:px-4 focus:py-2 focus:text-black"

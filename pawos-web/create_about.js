@@ -1,4 +1,6 @@
-import type { Metadata } from "next";
+﻿const fs = require('fs');
+
+const aboutContent = import type { Metadata } from "next";
 import Image from "next/image";
 import { Button } from "../../components/ui/Button";
 
@@ -72,7 +74,7 @@ export default function AboutPage() {
               <p>
                 This evolution turned PawOS from a chatbot into a cohesive work platform. Conversation led to context. Context led to projects, files, and terminal execution. That expanded to Git, browser verification, and external services. Which finally culminated in autonomous execution and organizational workflows. 
               </p>
-              <p className="text-xl text-white font-medium mt-10 border-l-2 border-indigo-500 pl-6 py-2">
+              <p className="text-xl text-white font-medium mt-10">
                 One workflow, across many systems.
               </p>
             </div>
@@ -129,14 +131,14 @@ export default function AboutPage() {
               <p>
                 When you hand a task to PawOS, it does not blindly begin generating code. The architecture enforces a strict, verifiable lifecycle.
               </p>
-              <div className="flex flex-col md:flex-row items-center justify-between text-sm font-mono text-indigo-300 bg-black/40 border border-neutral-800 rounded-xl p-6 my-10 overflow-x-auto gap-4 whitespace-nowrap">
-                <span>REQUEST</span> <span className="opacity-50">→</span>
-                <span>UNDERSTAND</span> <span className="opacity-50">→</span>
-                <span>CONTEXT</span> <span className="opacity-50">→</span>
-                <span>PLAN</span> <span className="opacity-50">→</span>
-                <span>APPROVE</span> <span className="opacity-50">→</span>
-                <span>EXECUTE</span> <span className="opacity-50">→</span>
-                <span>VALIDATE</span> <span className="opacity-50">→</span>
+              <div className="flex flex-col md:flex-row items-center justify-between text-sm font-mono text-indigo-300 bg-black/40 border border-neutral-800 rounded-xl p-6 my-10 overflow-x-auto gap-4">
+                <span>REQUEST</span> <span>→</span>
+                <span>UNDERSTAND</span> <span>→</span>
+                <span>CONTEXT</span> <span>→</span>
+                <span>PLAN</span> <span>→</span>
+                <span>APPROVE</span> <span>→</span>
+                <span>EXECUTE</span> <span>→</span>
+                <span>VALIDATE</span> <span>→</span>
                 <span>REPORT</span>
               </div>
               <p>
@@ -155,7 +157,7 @@ export default function AboutPage() {
               
               <div className="space-y-12 mt-12">
                 <div>
-                  <div className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-sm font-medium text-emerald-300 mb-6 tracking-wide">
+                  <div className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-sm font-medium text-emerald-300 mb-6">
                     AVAILABLE NOW
                   </div>
                   <ul className="list-disc pl-6 space-y-4">
@@ -168,7 +170,7 @@ export default function AboutPage() {
                 </div>
 
                 <div>
-                  <div className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-sm font-medium text-amber-300 mb-6 tracking-wide">
+                  <div className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-sm font-medium text-amber-300 mb-6">
                     PARTIALLY BUILT / VERIFYING
                   </div>
                   <ul className="list-disc pl-6 space-y-4">
@@ -178,7 +180,7 @@ export default function AboutPage() {
                 </div>
 
                 <div>
-                  <div className="inline-flex items-center rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-sm font-medium text-blue-300 mb-6 tracking-wide">
+                  <div className="inline-flex items-center rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-sm font-medium text-blue-300 mb-6">
                     FUTURE / PLANNED
                   </div>
                   <ul className="list-disc pl-6 space-y-4">
@@ -201,7 +203,7 @@ export default function AboutPage() {
               <p>
                 PawOS connects the context. It merges your user intent with desktop context, project structures, source code, terminal commands, Git history, external issue trackers, and rigorous verification. 
               </p>
-              <div className="my-16 overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950 shadow-2xl relative">
+              <div className="my-16 overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950 shadow-2xl">
                 <Image src="/pawos-connections.png" alt="PawOS connections demonstrating connected developer services" width={1920} height={1080} className="w-full object-cover" />
               </div>
               <p>
@@ -232,12 +234,12 @@ export default function AboutPage() {
               </p>
               <div className="mt-12 p-8 rounded-2xl border border-neutral-800 bg-neutral-900/30 flex flex-col md:flex-row gap-8 items-start">
                 <div className="w-32 h-32 shrink-0 rounded-full bg-neutral-800 overflow-hidden flex items-center justify-center border border-neutral-700">
-                  <span className="text-neutral-500 font-medium text-sm text-center">Revanta AI<br/>Builders</span>
+                  <span className="text-neutral-500 font-medium">Revanta AI</span>
                 </div>
                 <div>
                   <h3 className="text-xl font-medium text-white">Built by people who wanted this themselves.</h3>
                   <p className="text-sm font-medium text-indigo-400 mb-4 mt-2">Founder / Builder, Revanta AI</p>
-                  <p className="text-neutral-400 leading-relaxed italic">
+                  <p className="text-neutral-400 leading-relaxed">
                     "I wanted a system I could actually work with, not another assistant that only explains what I should do. The goal is to make AI useful across the actual computer workflow. Not only generating code, and not only executing commands, but genuinely understanding the relationship between the pieces of work in front of you."
                   </p>
                 </div>
@@ -290,7 +292,7 @@ export default function AboutPage() {
             <p className="mx-auto max-w-2xl text-xl text-neutral-400 mb-12">
               PawOS is an evolving product. Some systems are mature. Some are being verified. Some are intentionally future work. We are building a system that becomes genuinely useful as each layer becomes real.
             </p>
-            <div className="flex flex-col sm:flex-row justify-center gap-4">
+            <div className="flex justify-center gap-4">
               <Button href="/download" className="px-8 py-4 text-base font-medium bg-white text-black hover:bg-neutral-200">
                 Download for Windows &rarr;
               </Button>
@@ -305,3 +307,7 @@ export default function AboutPage() {
     </div>
   );
 }
+;
+
+fs.writeFileSync('src/app/about/page.tsx', aboutContent);
+console.log('About page created.');
