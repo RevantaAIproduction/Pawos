@@ -354,7 +354,7 @@ export function HeroAnimation() {
     // Graceful CSS Fallback
     return (
       <div 
-        className="absolute inset-0 h-full w-full -z-10 opacity-70"
+        className="absolute inset-0 h-full w-full z-0 opacity-70"
         style={{
           background: 'radial-gradient(100% 100% at 50% 0%, rgba(20,40,90,1) 0%, rgba(10,20,45,1) 100%)'
         }}
@@ -367,7 +367,7 @@ export function HeroAnimation() {
   return (
     <canvas
       ref={canvasRef}
-      className="absolute inset-0 h-full w-full object-cover -z-10"
+      className="absolute inset-0 h-full w-full object-cover z-0"
       style={{ touchAction: 'auto' }} // Allow scrolling natively
     />
   );
