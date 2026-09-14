@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "../components/ui/Button";
-import { ConnectionsGraphic } from "../components/ConnectionsGraphic";
+import { ConnectionsWorkflow } from "../components/ConnectionsWorkflow";
 import { HeroAnimation } from '../components/HeroAnimation';
 import { ParticleField } from '../components/ParticleField';
 
@@ -155,15 +155,15 @@ export default function Home() {
       <section className="py-32 px-6 bg-black relative z-10 border-t border-neutral-900">
         <div className="mx-auto max-w-5xl text-center mb-16 relative z-10">
           <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-6">
-            The work is connected. PawOS connects the context.
+            Work doesn't live in one place.
           </h2>
-          <p className="text-xl text-neutral-400 max-w-2xl mx-auto">
-            Your workflow already spans across many systems. PawOS provides a layer that understands how they relate to one another.
+          <p className="text-xl text-neutral-400 max-w-3xl mx-auto leading-relaxed">
+            Your project may begin in a folder, continue in code, depend on a terminal command, pass through Git, and end with a ticket or message. PawOS is built to carry the context across those boundaries.
           </p>
         </div>
         
-        <div className="mx-auto max-w-5xl mb-16">
-          <ConnectionsGraphic />
+        <div className="mx-auto max-w-7xl mb-16">
+          <ConnectionsWorkflow />
         </div>
 
         <div className="mx-auto max-w-5xl overflow-hidden rounded-2xl border border-neutral-800 shadow-2xl relative z-10">
