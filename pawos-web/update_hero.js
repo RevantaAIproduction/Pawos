@@ -1,4 +1,7 @@
-'use client';
+﻿const fs = require('fs');
+let content = fs.readFileSync('src/components/HeroAnimation.tsx', 'utf8');
+
+const newContent = \'use client';
 
 import React, { useEffect, useRef } from 'react';
 
@@ -69,8 +72,8 @@ export function HeroAnimation() {
       canvas.width = rect.width * dpr;
       canvas.height = rect.height * dpr;
       ctx.scale(dpr, dpr);
-      canvas.style.width = `${rect.width}px`;
-      canvas.style.height = `${rect.height}px`;
+      canvas.style.width = \\px\;
+      canvas.style.height = \\px\;
       
       initParticles(rect.width, rect.height);
     };
@@ -248,3 +251,6 @@ export function HeroAnimation() {
     </div>
   );
 }
+\;
+
+fs.writeFileSync('src/components/HeroAnimation.tsx', newContent);
