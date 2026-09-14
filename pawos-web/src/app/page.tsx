@@ -169,65 +169,135 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 10. CURRENT / FUTURE TIMELINE */}
+      {/* 10. PRODUCT EVOLUTION (01 - 05) */}
       <section className="py-32 px-6 bg-neutral-950 relative z-10 border-t border-neutral-900">
         <div className="mx-auto max-w-7xl">
-          <div className="text-center mb-20">
-            <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-6">
-              Honest about what we ship.
+          <div className="text-center mb-24">
+            <h2 className="text-4xl md:text-6xl font-medium tracking-tight text-white mb-6">
+              Where PawOS is today — and where we're taking it.
             </h2>
-            <p className="text-xl text-neutral-400 max-w-2xl mx-auto">
-              We separate what you can use today from the architecture we are building for tomorrow.
+            <p className="text-xl text-neutral-400 max-w-3xl mx-auto leading-relaxed">
+              PawOS already works across your desktop and engineering workflow. We're expanding the same execution layer to connect more of the work around it.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-12">
-            <div className="p-8 rounded-3xl border border-neutral-800 bg-black/40 backdrop-blur-md">
-              <h3 className="text-2xl font-medium text-white mb-8 flex items-center gap-3">
-                <span className="w-3 h-3 rounded-full bg-emerald-500 ring-4 ring-emerald-500/20"></span>
-                Current Capabilities
-              </h3>
-              <ul className="space-y-4 text-neutral-400">
-                <li className="flex gap-3"><span className="text-emerald-500">✓</span> Desktop Companion & conversation</li>
-                <li className="flex gap-3"><span className="text-emerald-500">✓</span> Local File & Code Operations</li>
-                <li className="flex gap-3"><span className="text-emerald-500">✓</span> Terminal & Environment Execution</li>
-                <li className="flex gap-3"><span className="text-emerald-500">✓</span> Git workflow support</li>
-                <li className="flex gap-3"><span className="text-emerald-500">✓</span> Connected Jira, Linear, and GitHub</li>
-                <li className="flex gap-3"><span className="text-emerald-500">✓</span> Autonomous ticket resolution</li>
-                <li className="flex gap-3"><span className="text-emerald-500">✓</span> Verified billing and auth foundations</li>
-              </ul>
+          <div className="max-w-4xl mx-auto space-y-32">
+            
+            {/* 01 */}
+            <div className="flex flex-col md:flex-row gap-8 items-baseline">
+              <div className="text-5xl font-light text-neutral-700 w-24 flex-shrink-0">01</div>
+              <div>
+                <h3 className="text-3xl font-medium text-white mb-4">Work with your computer.</h3>
+                <p className="text-lg text-neutral-400 mb-6 leading-relaxed">
+                  PawOS can understand projects, explore files, work with code, use the terminal, change local files, fix development environments, and help move a task from request to working result.
+                </p>
+                <div className="grid sm:grid-cols-2 gap-4 text-neutral-300">
+                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Understand an existing project</div>
+                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Change and refactor code</div>
+                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Install software and configure environments</div>
+                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Fix paths and development issues</div>
+                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Run commands and verify results</div>
+                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Work with Git and project files</div>
+                </div>
+              </div>
             </div>
 
-            <div className="p-8 rounded-3xl border border-neutral-800 bg-black/40 backdrop-blur-md">
-              <h3 className="text-2xl font-medium text-white mb-8 flex items-center gap-3">
-                <span className="w-3 h-3 rounded-full bg-blue-500 ring-4 ring-blue-500/20"></span>
-                Building Next
-              </h3>
-              <ul className="space-y-4 text-neutral-400">
-                <li className="flex gap-3"><span className="text-blue-500">→</span> Full coding workspace UI & inline diffs</li>
-                <li className="flex gap-3"><span className="text-blue-500">→</span> Automated browser verification</li>
-                <li className="flex gap-3"><span className="text-blue-500">→</span> Direct autonomous ticket/PR creation</li>
-                <li className="flex gap-3"><span className="text-blue-500">→</span> Broader actions across connected systems</li>
-                <li className="flex gap-3"><span className="text-blue-500">→</span> Collaborative organizational workspaces</li>
-                <li className="flex gap-3"><span className="text-blue-500">→</span> Enterprise governance & SSO</li>
-              </ul>
+            {/* 02 */}
+            <div className="flex flex-col md:flex-row gap-8 items-baseline">
+              <div className="text-5xl font-light text-neutral-700 w-24 flex-shrink-0">02</div>
+              <div>
+                <h3 className="text-3xl font-medium text-white mb-4">Work across your tools.</h3>
+                <p className="text-lg text-neutral-400 mb-6 leading-relaxed">
+                  Your work doesn't live in one folder. PawOS connects the systems around the work so context can move with the task.
+                </p>
+                <div className="grid sm:grid-cols-2 gap-4 text-neutral-300">
+                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Jira</div>
+                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Linear</div>
+                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>GitHub</div>
+                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Slack</div>
+                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Files and repositories</div>
+                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Development environments</div>
+                </div>
+              </div>
             </div>
+
+            {/* 03 */}
+            <div className="flex flex-col md:flex-row gap-8 items-baseline">
+              <div className="text-5xl font-light text-neutral-700 w-24 flex-shrink-0">03</div>
+              <div>
+                <h3 className="text-3xl font-medium text-white mb-4">Give PawOS the work.</h3>
+                <p className="text-lg text-neutral-400 mb-6 leading-relaxed">
+                  PawOS can take supported tasks beyond conversation and execute them through its autonomous work system, with permissions, execution controls, and usage accounting around the work.
+                </p>
+                <div className="flex flex-wrap items-center gap-2 text-sm font-medium tracking-wide text-neutral-500 uppercase">
+                  <span>Request</span>
+                  <span>→</span>
+                  <span>Understand</span>
+                  <span>→</span>
+                  <span>Plan</span>
+                  <span>→</span>
+                  <span>Approve</span>
+                  <span>→</span>
+                  <span className="text-white">Execute</span>
+                  <span>→</span>
+                  <span>Verify</span>
+                  <span>→</span>
+                  <span>Report</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 04 */}
+            <div className="flex flex-col md:flex-row gap-8 items-baseline">
+              <div className="text-5xl font-light text-neutral-700 w-24 flex-shrink-0">04</div>
+              <div>
+                <h3 className="text-3xl font-medium text-white mb-4">Connect the organization.</h3>
+                <p className="text-lg text-neutral-400 leading-relaxed">
+                  The next stage is not simply adding more buttons. It's making PawOS useful across teams and organizations — with shared context, permissions, governance, and controlled collaboration.
+                </p>
+              </div>
+            </div>
+
           </div>
+        </div>
+      </section>
+
+      {/* 05 - LARGE CONCEPTUAL STATEMENT */}
+      <section className="py-40 px-6 bg-black relative z-10 border-t border-neutral-900 flex flex-col items-center justify-center text-center">
+        <div className="max-w-5xl mx-auto">
+          <h2 className="text-5xl md:text-7xl font-medium tracking-tight text-white mb-10 leading-tight">
+            PawOS is being built as a work environment, not another chat window.
+          </h2>
+          <p className="text-2xl text-neutral-400 font-light max-w-4xl mx-auto leading-relaxed">
+            The long-term idea is simple: your files, code, projects, tools, tickets, environments, and connected services shouldn't feel like isolated places an AI has to jump between. PawOS should be able to understand the work as a whole and operate across the systems involved in getting it done.
+          </p>
         </div>
       </section>
 
       {/* 11. BUILDERS / STORY PREVIEW */}
       <section className="py-32 px-6 bg-black relative z-10 border-t border-neutral-900">
-        <div className="mx-auto max-w-4xl text-center">
-          <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-6">
-            Built by builders.
-          </h2>
-          <p className="text-xl text-neutral-400 mb-10 max-w-2xl mx-auto">
-            PawOS is built by people who wanted a system they could actually work with—not another assistant that only explains what you should do, but a companion that understands the relationship between the pieces of work in front of you.
-          </p>
-          <Link href="/about" className="inline-flex items-center gap-2 text-indigo-400 hover:text-indigo-300 font-medium text-lg transition-colors">
-            Read our story <span aria-hidden="true">&rarr;</span>
-          </Link>
+        <div className="mx-auto max-w-4xl">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-6">
+              Why we're building PawOS.
+            </h2>
+          </div>
+          <div className="prose prose-invert prose-lg mx-auto text-neutral-400 leading-relaxed mb-12">
+            <p className="mb-6">
+              We started building PawOS because we realized that giving an AI conversational access to a codebase isn't the same thing as giving an AI the ability to do the work.
+            </p>
+            <p className="mb-6">
+              When a developer sits down at a computer, they don't just read code. They install dependencies, they navigate the file system, they run commands in the terminal, they debug failing builds, and they track their work in Jira. The work is connected.
+            </p>
+            <p>
+              We are researching and building an execution platform that doesn't just chat, but actively bridges these fragmented systems—because the future of engineering isn't just an assistant that tells you what to type. It's a companion that understands your computer and acts as an autonomous extension of your environment.
+            </p>
+          </div>
+          <div className="text-center">
+            <Link href="/about" className="inline-flex items-center gap-2 text-indigo-400 hover:text-indigo-300 font-medium text-lg transition-colors">
+              Read the full story <span aria-hidden="true">&rarr;</span>
+            </Link>
+          </div>
         </div>
       </section>
 
