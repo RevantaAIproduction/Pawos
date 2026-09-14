@@ -3,67 +3,77 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Container } from "../ui/Container";
 
-const GROUPS: { title: string; links: { href: string; label: string }[] }[] = [
+const GROUPS = [
   {
     title: "Product",
     links: [
-      { href: "/features", label: "Features" },
+      { href: "/companion", label: "Companion" },
+      { href: "/features#autonomous-work", label: "Autonomous Work" },
+      { href: "/features#projects", label: "Projects" },
+    ],
+  },
+  {
+    title: "Solutions",
+    links: [
+      { href: "/pricing#individuals", label: "Individuals" },
+      { href: "/enterprise", label: "Teams" },
+      { href: "/enterprise", label: "Organizations" },
       { href: "/pricing", label: "Pricing" },
-      { href: "/enterprise", label: "Enterprise" },
-      { href: "/download", label: "Download" },
-      { href: "/changelog", label: "Changelog" },
-      { href: "/roadmap", label: "Roadmap" },
+    ],
+  },
+  {
+    title: "Developers",
+    links: [
+      { href: "/docs", label: "Documentation" },
+      { href: "/docs/integrations", label: "Integrations" },
+      { href: "/docs/integrations/github", label: "GitHub" },
+      { href: "/docs/integrations/jira", label: "Jira" },
+      { href: "/docs/integrations/linear", label: "Linear" },
     ],
   },
   {
     title: "Resources",
     links: [
-      { href: "/docs", label: "Documentation" },
-      { href: "/knowledge-base", label: "Knowledge Base" },
-      { href: "/blog", label: "Blog" },
       { href: "/faq", label: "FAQ" },
-      { href: "/security", label: "Security" },
-      { href: "/status", label: "Status" },
+      { href: "/changelog", label: "Changelog" },
+      { href: "/roadmap", label: "Roadmap" },
     ],
   },
   {
     title: "Company",
     links: [
-      { href: "/about", label: "About" },
-      { href: "/trust", label: "Trust & Transparency" },
-      { href: "/support", label: "Support" },
-      { href: "/support/contact", label: "Contact" },
+      { href: "/about", label: "About PawOS" },
+      { href: "/about#careers", label: "Careers" },
+      { href: "/contact", label: "Contact" },
+      { href: "/about#revanta", label: "Revanta AI" },
     ],
   },
   {
     title: "Legal",
     links: [
-      { href: "/terms", label: "Terms of Service" },
-      { href: "/privacy", label: "Privacy Policy" },
-      { href: "/security", label: "Security" },
+      { href: "/privacy", label: "Privacy" },
+      { href: "/terms", label: "Terms" },
     ],
   },
 ];
 
 export function Footer() {
   const pathname = usePathname();
-  // Same reasoning as Nav.tsx — the documentation shell owns its own chrome entirely.
   if (pathname?.startsWith("/docs")) return null;
 
   return (
-    <footer className="border-t border-neutral-800 bg-neutral-950">
-      <Container className="py-12">
-        <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
+    <footer className="border-t border-neutral-900 bg-black text-sm">
+      <div className="mx-auto max-w-7xl px-6 py-16 sm:py-24">
+        <div className="grid grid-cols-2 gap-x-8 gap-y-16 sm:grid-cols-3 lg:grid-cols-6">
           {GROUPS.map((group) => (
             <div key={group.title}>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-500">{group.title}</h3>
-              <ul className="mt-4 space-y-3">
-                {group.links.map((l) => (
-                  <li key={l.href}>
-                    <Link href={l.href} className="text-sm text-neutral-400 transition hover:text-white">
-                      {l.label}
+              <h3 className="text-white font-medium">{group.title}</h3>
+              <ul className="mt-6 space-y-4">
+                {group.links.map((link) => (
+                  <li key={link.label}>
+                    <Link href={link.href} className="text-neutral-400 transition hover:text-white">
+                      {link.label}
                     </Link>
                   </li>
                 ))}
@@ -71,14 +81,21 @@ export function Footer() {
             </div>
           ))}
         </div>
-        <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-neutral-900 pt-8 text-sm text-neutral-500 sm:flex-row">
-          <div className="flex items-center gap-2">
-            <Image src="/logo-icon.png" alt="" width={20} height={20} className="rounded-md" />
-            <p>© {new Date().getFullYear()} PawOS, a product of Revanta AI. All rights reserved.</p>
+        
+        <div className="mt-24 border-t border-neutral-900 pt-8 flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-3">
+            <Link href="/" aria-label="PawOS home">
+              <Image src="/logo-icon.png" alt="PawOS Logo" width={24} height={24} className="rounded-md" />
+            </Link>
+            <p className="text-neutral-500">
+              PawOS is an AI coding companion by <span className="text-neutral-300">Revanta AI</span>.
+            </p>
           </div>
-          <p>Built for people who want their desktop to do more.</p>
+          <p className="text-neutral-600">
+            &copy; {new Date().getFullYear()} Revanta AI. All rights reserved.
+          </p>
         </div>
-      </Container>
+      </div>
     </footer>
   );
 }
