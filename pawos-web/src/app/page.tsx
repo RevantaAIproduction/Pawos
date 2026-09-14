@@ -57,7 +57,7 @@ export default function Home() {
           </p>
           <div className="mt-12 flex justify-center">
             <Button href="/download" className="px-8 py-4 text-base font-medium bg-white text-black hover:bg-neutral-200">
-              Download for Windows &rarr;
+              Download for Linux &rarr;
             </Button>
           </div>
         </Container>
@@ -168,7 +168,7 @@ export default function Home() {
         </p>
         <div className="mt-10 flex justify-center gap-4">
           <Button href="/download" className="px-8 py-4 text-base font-medium bg-white text-black hover:bg-neutral-200">
-            Download for Windows &rarr;
+            Download for Linux &rarr;
           </Button>
         </div>
       </Section>

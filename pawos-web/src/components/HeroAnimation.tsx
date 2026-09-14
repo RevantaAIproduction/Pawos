@@ -83,23 +83,23 @@ const fragmentShaderSource = `
     st -= diff * pull;
     
     // Atmospheric procedural light
-    float t = u_time * 0.1;
+    float t = u_time * 0.8;
     vec2 q = vec2(0.);
-    q.x = fbm(st + 0.00 * t);
-    q.y = fbm(st + vec2(1.0));
+    q.x = fbm(st + 0.1 * t);
+    q.y = fbm(st + vec2(1.0) + 0.15 * t);
     
     vec2 r = vec2(0.);
-    r.x = fbm(st + 1.0 * q + vec2(1.7, 9.2) + 0.15 * t);
-    r.y = fbm(st + 1.0 * q + vec2(8.3, 2.8) + 0.126 * t);
+    r.x = fbm(st + 1.0 * q + vec2(1.7, 9.2) + 0.2 * t);
+    r.y = fbm(st + 1.0 * q + vec2(8.3, 2.8) + 0.25 * t);
     
     float f = fbm(st + r);
     
-    // Colors inspired by premium light fields
-    vec3 color1 = vec3(0.04, 0.08, 0.18); // Deep soft blue
-    vec3 color2 = vec3(0.12, 0.25, 0.55); // Light blue
-    vec3 color3 = vec3(0.35, 0.2, 0.45);  // Violet
-    vec3 color4 = vec3(0.5, 0.4, 0.65);   // Lavender
-    vec3 whiteLight = vec3(0.85, 0.88, 1.0);
+    // Colors inspired by premium light fields - made more vibrant and fluid
+    vec3 color1 = vec3(0.02, 0.04, 0.12); // Deep space blue
+    vec3 color2 = vec3(0.15, 0.35, 0.75); // Vibrant blue
+    vec3 color3 = vec3(0.45, 0.25, 0.65); // Violet
+    vec3 color4 = vec3(0.65, 0.5, 0.85);  // Lavender
+    vec3 whiteLight = vec3(0.9, 0.95, 1.0);
     
     vec3 col = mix(color1, color2, clamp((f*f)*4.0, 0.0, 1.0));
     col = mix(col, color3, clamp(length(q), 0.0, 1.0));
@@ -108,14 +108,14 @@ const fragmentShaderSource = `
     // Proximity bloom around center PawOS mark
     vec2 center = vec2(0.5) * aspect;
     float centerDist = length(st - center);
-    float glowMask = exp(-centerDist * (2.5 - u_glow * 0.5));
+    float glowMask = exp(-centerDist * (2.0 - u_glow * 0.5));
     
     // Center atmosphere brightening
-    col += whiteLight * glowMask * (0.15 + u_glow * 0.15);
+    col += whiteLight * glowMask * (0.2 + u_glow * 0.2);
     
     // Very soft overall vignette
     float vignette = length(uv - 0.5);
-    col *= 1.0 - vignette * 0.4;
+    col *= 1.0 - vignette * 0.5;
     
     gl_FragColor = vec4(col, 1.0);
   }
