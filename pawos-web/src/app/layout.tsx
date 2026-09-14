@@ -116,8 +116,8 @@ export default async function RootLayout({
         <CookieConsent />
         <Analytics />
         
-        <ServiceWorkerRegistration />
-        <InstallPrompt />
+        
+        
       </body>
     </html>
   );

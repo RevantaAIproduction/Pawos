@@ -24,6 +24,7 @@ export const metadata: Metadata = {
 const DOWNLOAD_PLATFORMS = getDownloadPlatforms();
 
 const SYSTEM_REQUIREMENTS = [
+  { platform: "Windows", spec: "Windows 10 (64-bit) or later, 4 GB RAM minimum.", href: "/download/windows" },
   { platform: "Linux", spec: "Modern glibc-based distribution such as Ubuntu 22.04+.", href: "/download/linux" },
 ];
 
@@ -510,6 +511,7 @@ function DownloadCard({ platform }: { platform: DownloadPlatform }) {
 }
 
 function DownloadSection() {
+  const windows = getPlatform("windows");
   const linux = getPlatform("linux");
 
   return (
@@ -532,13 +534,14 @@ function DownloadSection() {
                 ))}
               </div>
             </div>
-            <div className="grid gap-4 md:grid-cols-1 max-w-sm justify-self-center">
+            <div className="grid gap-4 md:grid-cols-2">
+              {windows && <DownloadCard platform={windows} />}
               {linux && <DownloadCard platform={linux} />}
             </div>
           </div>
           <div className="mt-5 grid gap-3 border-t border-white/10 pt-5 text-xs text-neutral-400 md:grid-cols-4">
             {[
-              ["Linux Only", "PawOS is currently only available for Linux."],
+              ["No Microsoft Store", "PawOS is distributed directly from our website."],
               ["Verify Downloads", "SHA256 hashes will be published with the installers at launch."],
               ["Need Help?", "Visit documentation or contact support."],
               ["Updates", "You will be notified when updates are available."],
@@ -698,7 +701,7 @@ export default function DownloadPage() {
 
       <section className="border-y border-white/10 bg-neutral-900/30 py-20">
         <Container>
-          <div className="grid gap-6 sm:grid-cols-1 max-w-lg mx-auto">
+          <div className="grid gap-6 sm:grid-cols-2">
             {SYSTEM_REQUIREMENTS.map((requirement) => (
               <Link key={requirement.platform} href={requirement.href} className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 transition hover:border-blue-300/40">
                 <h3 className="font-semibold">{requirement.platform}</h3>

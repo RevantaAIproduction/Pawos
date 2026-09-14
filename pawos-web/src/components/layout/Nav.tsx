@@ -146,17 +146,11 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
           </div>
 
           <div className="hidden items-center gap-6 md:flex">
-            {userEmail ? (
-              <Link href="/dashboard" className="text-sm font-medium text-neutral-400 hover:text-white transition">
-                Dashboard
-              </Link>
-            ) : (
-              <Link href="/login" className="text-sm font-medium text-neutral-400 hover:text-white transition">
-                Log in
-              </Link>
-            )}
+            <Link href="/login" className="text-sm font-medium text-neutral-400 hover:text-white transition">
+              Log in
+            </Link>
             <Link href="/download" className="text-sm font-medium text-white transition hover:opacity-80">
-              Download for Linux &#8599;
+              Download for Windows &#8599;
             </Link>
           </div>
 
@@ -243,17 +237,11 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
               
               <div className="border-t border-neutral-800 pt-8 flex flex-col gap-4">
                 <Link href="/download" className="text-xl font-medium text-white" onClick={() => setMobileOpen(false)}>
-                  Download for Linux &#8599;
+                  Download for Windows &#8599;
                 </Link>
-                {userEmail ? (
-                  <Link href="/dashboard" className="text-xl font-medium text-neutral-400 hover:text-white" onClick={() => setMobileOpen(false)}>
-                    Dashboard
-                  </Link>
-                ) : (
-                  <Link href="/login" className="text-xl font-medium text-neutral-400 hover:text-white" onClick={() => setMobileOpen(false)}>
-                    Log in
-                  </Link>
-                )}
+                <Link href="/login" className="text-xl font-medium text-neutral-400 hover:text-white" onClick={() => setMobileOpen(false)}>
+                  Log in
+                </Link>
               </div>
             </div>
           </div>
