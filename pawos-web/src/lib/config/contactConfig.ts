@@ -3,7 +3,6 @@ export const CONTACT_EMAILS = {
   support: "support@revantaai.com",
   hello: "hello@revantaai.com",
   sales: "sales@revantaai.com",
-  enterprise: "enterprise@revantaai.com",
   security: "security@revantaai.com",
   privacy: "privacy@revantaai.com",
   legal: "legal@revantaai.com",

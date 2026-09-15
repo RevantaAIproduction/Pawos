@@ -18,7 +18,6 @@ export function ContactForm() {
     
     let targetEmail: string = CONTACT_EMAILS.hello;
     if (category === "support") targetEmail = CONTACT_EMAILS.support;
-    if (category === "enterprise") targetEmail = CONTACT_EMAILS.enterprise;
     if (category === "sales") targetEmail = CONTACT_EMAILS.sales;
 
     window.location.href = `mailto:${targetEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
@@ -41,8 +40,7 @@ export function ContactForm() {
         <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full rounded-lg border border-neutral-800 bg-neutral-900/50 px-4 py-3 text-sm text-neutral-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none transition-colors">
           <option value="general">Product / General Inquiry</option>
           <option value="support">Technical / Developer Support</option>
-          <option value="enterprise">Business / Organizations</option>
-          <option value="sales">Partnerships & Sales</option>
+          <option value="sales">Business & Sales</option>
         </select>
       </div>
       <div>

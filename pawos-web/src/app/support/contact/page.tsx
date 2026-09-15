@@ -4,7 +4,7 @@ import { ContactForm } from './ContactForm';
 
 export const metadata: Metadata = {
   title: 'Contact | PawOS',
-  description: 'Reach the Revanta AI team about PawOS, product questions, technical questions, partnerships, or other legitimate inquiries.',
+  description: 'Reach the Revanta AI team about PawOS, product questions, technical questions, or business inquiries.',
 };
 
 export default function ContactPage() {
@@ -18,7 +18,7 @@ export default function ContactPage() {
             Let's talk about what you're building.
           </h1>
           <p className="text-2xl text-neutral-400 font-light leading-relaxed max-w-3xl mx-auto">
-            Reach the Revanta AI team about PawOS, technical questions, partnerships, enterprise deployments, or general inquiries.
+            Reach the Revanta AI team about PawOS, technical questions, enterprise deployments, or general inquiries.
           </p>
         </div>
       </header>
@@ -45,14 +45,8 @@ export default function ContactPage() {
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-medium text-neutral-200 mb-1">Business & Organizations</h3>
+                  <h3 className="text-lg font-medium text-neutral-200 mb-1">Business & Sales</h3>
                   <p className="text-sm text-neutral-400 mb-2">Enterprise deployments, team rollouts, and pricing.</p>
-                  <a href="mailto:enterprise@revantaai.com" className="text-indigo-400 hover:text-indigo-300 transition-colors font-medium">enterprise@revantaai.com</a>
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-medium text-neutral-200 mb-1">Partnerships & Sales</h3>
-                  <p className="text-sm text-neutral-400 mb-2">Integration partnerships and commercial inquiries.</p>
                   <a href="mailto:sales@revantaai.com" className="text-indigo-400 hover:text-indigo-300 transition-colors font-medium">sales@revantaai.com</a>
                 </div>
 
