@@ -23,7 +23,7 @@ export default function Home() {
           The AI companion that gets work done.
         </p>
         <div className="flex justify-center">
-          <button onClick={() => window.dispatchEvent(new Event('open-download-popup'))} className="px-8 py-4 text-base font-medium bg-white text-black rounded-full hover:bg-neutral-200 transition">
+          <button onClick={() => alert("PawOS for Windows is coming soon! Please check back later to be notified.")} className="px-8 py-4 text-base font-medium bg-white text-black rounded-full hover:bg-neutral-200 transition">
             Download for Windows &rarr;
           </button>
         </div>
@@ -322,7 +322,7 @@ export default function Home() {
           Your next task starts here.
         </h2>
         <div className="flex flex-col sm:flex-row justify-center gap-4">
-          <button onClick={() => window.dispatchEvent(new Event('open-download-popup'))} className="px-8 py-4 text-base font-medium bg-white text-black hover:bg-neutral-200">
+          <button onClick={() => alert("PawOS for Windows is coming soon! Please check back later to be notified.")} className="px-8 py-4 text-base font-medium bg-white text-black hover:bg-neutral-200">
             Download for Windows &rarr;
           </button>
           <Button href="/docs" variant="secondary" className="px-8 py-4 text-base font-medium bg-transparent text-white border border-neutral-700 hover:bg-neutral-900">

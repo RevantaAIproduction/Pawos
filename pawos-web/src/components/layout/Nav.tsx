@@ -189,7 +189,7 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
             <Link href="/login" className="text-sm font-medium text-neutral-400 hover:text-white transition">
               Log in
             </Link>
-            <button onClick={() => window.dispatchEvent(new Event('open-download-popup'))} className="text-sm font-medium text-white transition hover:opacity-80">
+            <button onClick={() => alert("PawOS for Windows is coming soon! Please check back later to be notified.")} className="text-sm font-medium text-white transition hover:opacity-80">
               Download for Windows &#8599;
             </button>
           </div>
@@ -354,7 +354,7 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
               ))}
               
               <div className="border-t border-neutral-800 pt-8 flex flex-col gap-4">
-                <button onClick={() => { window.dispatchEvent(new Event('open-download-popup')); setMobileOpen(false); }} className="text-xl font-medium text-white text-left">
+                <button onClick={() => { alert("PawOS for Windows is coming soon! Please check back later to be notified."); setMobileOpen(false); }} className="text-xl font-medium text-white text-left">
                   Download for Windows &#8599;
                 </button>
                 <Link href="/login" className="text-xl font-medium text-neutral-400 hover:text-white" onClick={() => setMobileOpen(false)}>
