@@ -82,6 +82,9 @@ const NAV_ITEMS = [
 
 export function Nav({ userEmail }: { userEmail: string | null }) {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [recentSearches, setRecentSearches] = useState(["linux download", "documentation", "pricing"]);
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
 
@@ -91,11 +94,11 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
     <div className="sticky top-0 z-50 group" onMouseLeave={() => setActiveMenu(null)}>
       {/* Background that dims the page when a dropdown is open */}
       <div 
-        className={`absolute inset-0 h-screen w-screen bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${activeMenu ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`} 
+        className={`absolute inset-0 h-screen w-screen bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${activeMenu || searchOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`} 
       />
 
       <header className="relative transition-colors duration-300 bg-black">
-        <nav className="mx-auto flex w-full items-center justify-between px-8 md:px-12 py-5">
+        <nav className="flex w-full items-center justify-between px-4 md:px-6 py-5">
           {/* Left Group: Logo + Nav Items */}
           <div className="flex items-center gap-16 lg:gap-24">
           <Link href="/" className="flex items-center gap-3 font-semibold text-xl tracking-tight text-white" aria-label="PawOS home">
@@ -115,8 +118,12 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
                 {item.label}
               </button>
             ))}
-            <button onClick={() => alert("Search functionality coming soon")} className="ml-4 text-neutral-400 hover:text-white transition p-2" aria-label="Search">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <button onClick={() => { setSearchOpen(!searchOpen); setActiveMenu(null); }} className="ml-4 text-neutral-400 hover:text-white transition p-2" aria-label="Search">
+                {searchOpen ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                )}
               </button>
             </div>
           </div>
@@ -159,7 +166,7 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
             activeMenu ? "opacity-100 max-h-[400px] py-12" : "opacity-0 max-h-0 py-0 border-b-0"
           }`}
         >
-          <div className="w-full w-full px-6">
+          <div className="w-full max-w-none px-4 md:px-6">
             {NAV_ITEMS.map((item) => (
               <div 
                 key={item.label} 
