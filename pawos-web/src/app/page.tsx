@@ -1,5 +1,4 @@
 'use client';
-import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "../components/ui/Button";
@@ -7,10 +6,7 @@ import { ConnectionsWorkflow } from "../components/ConnectionsWorkflow";
 import { HeroAnimation } from '../components/HeroAnimation';
 import { ParticleField } from '../components/ParticleField';
 
-export const metadata: Metadata = {
-  title: "PawOS - The Desktop AI Work Environment",
-  description: "PawOS connects the different parts of real computer work through one AI companion and execution layer.",
-};
+
 
 export default function Home() {
   return (
@@ -27,7 +23,7 @@ export default function Home() {
           The AI companion that gets work done.
         </p>
         <div className="flex justify-center">
-          <button onClick={() => alert("PawOS for Windows is coming soon! Please check back later to be notified.")} className="px-8 py-4 text-base font-medium bg-white text-black rounded-full hover:bg-neutral-200 transition">
+          <button onClick={() => window.dispatchEvent(new Event('open-download-popup'))} className="px-8 py-4 text-base font-medium bg-white text-black rounded-full hover:bg-neutral-200 transition">
             Download for Windows &rarr;
           </button>
         </div>
@@ -326,9 +322,9 @@ export default function Home() {
           Your next task starts here.
         </h2>
         <div className="flex flex-col sm:flex-row justify-center gap-4">
-          <Button href="https://revantaai.com/downloads/pawos-windows.exe" className="px-8 py-4 text-base font-medium bg-white text-black hover:bg-neutral-200">
+          <button onClick={() => window.dispatchEvent(new Event('open-download-popup'))} className="px-8 py-4 text-base font-medium bg-white text-black hover:bg-neutral-200">
             Download for Windows &rarr;
-          </Button>
+          </button>
           <Button href="/docs" variant="secondary" className="px-8 py-4 text-base font-medium bg-transparent text-white border border-neutral-700 hover:bg-neutral-900">
             Read Documentation
           </Button>

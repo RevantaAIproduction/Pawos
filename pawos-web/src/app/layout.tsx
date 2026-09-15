@@ -2,6 +2,7 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Nav } from "../components/layout/Nav";
+import { DownloadPopup } from "../components/ui/DownloadPopup";
 import { Footer } from "../components/layout/Footer";
 import { Analytics } from "../components/analytics/Analytics";
 import { CookieConsent } from "../components/analytics/CookieConsent";
@@ -115,6 +116,7 @@ export default async function RootLayout({
         <Footer />
         <CookieConsent />
         <Analytics />
+        <DownloadPopup />
         
         
         
