@@ -94,10 +94,10 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
         className={`absolute inset-0 h-screen w-screen bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${activeMenu ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`} 
       />
 
-      <header className="relative transition-colors duration-300 bg-transparent">
-        <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-6">
+      <header className="relative transition-colors duration-300 bg-black">
+        <nav className="mx-auto flex w-full items-center justify-between px-8 md:px-12 py-5">
           {/* Left Group: Logo + Nav Items */}
-          <div className="flex items-center gap-10">
+          <div className="flex items-center gap-16 lg:gap-24">
           <Link href="/" className="flex items-center gap-3 font-semibold text-xl tracking-tight text-white" aria-label="PawOS home">
             <Image src="/logo-icon.png" alt="" width={28} height={28} className="rounded-md" priority />
             PawOS
@@ -159,7 +159,7 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
             activeMenu ? "opacity-100 max-h-[400px] py-12" : "opacity-0 max-h-0 py-0 border-b-0"
           }`}
         >
-          <div className="w-full max-w-7xl px-6">
+          <div className="w-full w-full px-6">
             {NAV_ITEMS.map((item) => (
               <div 
                 key={item.label} 
