@@ -115,11 +115,16 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
             ))}
           </div>
 
+          
           <div className="hidden items-center gap-6 md:flex">
+            <button className="text-sm font-medium text-neutral-400 hover:text-white transition" onClick={() => alert("Search functionality coming soon")}>
+              Search
+            </button>
             <Link href="/login" className="text-sm font-medium text-neutral-400 hover:text-white transition">
+ className="text-sm font-medium text-neutral-400 hover:text-white transition">
               Log in
             </Link>
-            <Link href="/download" className="text-sm font-medium text-white transition hover:opacity-80">
+            <Link href="https://revantaai.com/downloads/pawos-windows.exe" className="text-sm font-medium text-white transition hover:opacity-80">
               Download for Windows &#8599;
             </Link>
           </div>
@@ -206,7 +211,7 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
               ))}
               
               <div className="border-t border-neutral-800 pt-8 flex flex-col gap-4">
-                <Link href="/download" className="text-xl font-medium text-white" onClick={() => setMobileOpen(false)}>
+                <Link href="https://revantaai.com/downloads/pawos-windows.exe" className="text-xl font-medium text-white" onClick={() => setMobileOpen(false)}>
                   Download for Windows &#8599;
                 </Link>
                 <Link href="/login" className="text-xl font-medium text-neutral-400 hover:text-white" onClick={() => setMobileOpen(false)}>
