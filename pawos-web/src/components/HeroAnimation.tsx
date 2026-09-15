@@ -95,10 +95,10 @@ const fragmentShaderSource = `
     float f = fbm(st + r);
     
     // Colors inspired by premium light fields - made more vibrant and fluid
-    vec3 color1 = vec3(0.02, 0.04, 0.12); // Deep space blue
-    vec3 color2 = vec3(0.15, 0.35, 0.75); // Vibrant blue
-    vec3 color3 = vec3(0.45, 0.25, 0.65); // Violet
-    vec3 color4 = vec3(0.65, 0.5, 0.85);  // Lavender
+    vec3 color1 = vec3(0.01, 0.02, 0.15); // Deep dark blue
+    vec3 color2 = vec3(0.0, 0.35, 1.0); // Vibrant electric blue
+    vec3 color3 = vec3(0.75, 0.05, 0.85); // Vivid magenta
+    vec3 color4 = vec3(0.0, 0.85, 1.0); // Bright cyan
     vec3 whiteLight = vec3(0.9, 0.95, 1.0);
     
     vec3 col = mix(color1, color2, clamp((f*f)*4.0, 0.0, 1.0));

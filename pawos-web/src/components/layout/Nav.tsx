@@ -113,19 +113,20 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
                 {item.label}
               </button>
             ))}
+            <button onClick={() => alert("Search functionality coming soon")} className="ml-4 text-neutral-400 hover:text-white transition p-2" aria-label="Search">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              </button>
           </div>
 
           
           <div className="hidden items-center gap-6 md:flex">
-            <button className="text-sm font-medium text-neutral-400 hover:text-white transition" onClick={() => alert("Search functionality coming soon")}>
-              Search
-            </button>
+            
             <Link href="/login" className="text-sm font-medium text-neutral-400 hover:text-white transition">
               Log in
             </Link>
-            <Link href="https://revantaai.com/downloads/pawos-windows.exe" className="text-sm font-medium text-white transition hover:opacity-80">
+            <button onClick={() => alert("PawOS for Windows is coming soon! Please check back later to be notified.")} className="text-sm font-medium text-white transition hover:opacity-80">
               Download for Windows &#8599;
-            </Link>
+            </button>
           </div>
 
           <button
@@ -210,9 +211,9 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
               ))}
               
               <div className="border-t border-neutral-800 pt-8 flex flex-col gap-4">
-                <Link href="https://revantaai.com/downloads/pawos-windows.exe" className="text-xl font-medium text-white" onClick={() => setMobileOpen(false)}>
+                <button onClick={() => { alert("PawOS for Windows is coming soon! Please check back later to be notified."); setMobileOpen(false); }} className="text-xl font-medium text-white text-left">
                   Download for Windows &#8599;
-                </Link>
+                </button>
                 <Link href="/login" className="text-xl font-medium text-neutral-400 hover:text-white" onClick={() => setMobileOpen(false)}>
                   Log in
                 </Link>
