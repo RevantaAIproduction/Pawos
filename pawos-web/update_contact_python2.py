@@ -1,4 +1,4 @@
-"use client";
+﻿content = '''"use client";
 
 import { useState } from "react";
 import { CONTACT_EMAILS } from "../../../lib/config/contactConfig";
@@ -12,9 +12,7 @@ export function ContactForm() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const subject = `PawOS Inquiry: ${name || "Website Visitor"}`;
-    const body = `${message}
-
-— ${name}${email ? ` (${email})` : ""}`;
+    const body = `${message}\n\n— ${name}${email ? ` (${email})` : ""}`;
     
     let targetEmail = CONTACT_EMAILS.hello;
     if (category === "support") targetEmail = CONTACT_EMAILS.support;
@@ -54,3 +52,9 @@ export function ContactForm() {
     </form>
   );
 }
+'''
+
+with open('src/app/support/contact/ContactForm.tsx', 'w', encoding='utf-8') as f:
+    f.write(content)
+
+print("Updated ContactForm.tsx successfully via Python.")

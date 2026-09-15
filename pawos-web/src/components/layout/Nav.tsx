@@ -71,7 +71,8 @@ const NAV_ITEMS = [
         links: [
           { href: "/about", label: "About" },
           { href: "/careers", label: "Careers" },
-          { href: "/contact", label: "Contact" },
+          
+          { href: "/support/contact", label: "Contact" },
           { href: "/about", label: "Revanta AI" },
         ],
       }
@@ -219,3 +220,4 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
     </div>
   );
 }
+

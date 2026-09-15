@@ -1,4 +1,4 @@
-import React from 'react';
+﻿content = '''import React from 'react';
 import { Metadata } from 'next';
 import { ContactForm } from './ContactForm';
 
@@ -72,3 +72,9 @@ export default function ContactPage() {
     </div>
   );
 }
+'''
+
+with open('src/app/support/contact/page.tsx', 'w', encoding='utf-8') as f:
+    f.write(content)
+
+print("Created /support/contact/page.tsx")

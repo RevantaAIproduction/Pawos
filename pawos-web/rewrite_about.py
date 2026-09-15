@@ -1,4 +1,6 @@
-import React from 'react';
+﻿import json
+
+content = '''import React from 'react';
 import { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -431,3 +433,9 @@ export default function AboutPage() {
     </div>
   );
 }
+'''
+
+with open('src/app/about/page.tsx', 'w', encoding='utf-8') as f:
+    f.write(content)
+
+print("Rewrote About page completely.")

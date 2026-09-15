@@ -36,20 +36,21 @@ const GROUPS = [
   {
     title: "Resources",
     links: [
-      { href: "/docs", label: "Docs" },
+      
       { href: "/faq", label: "FAQ" },
       { href: "/changelog", label: "Changelog" },
       { href: "/roadmap", label: "Roadmap" },
-      { href: "/help", label: "Help" },
+      { href: "/support", label: "Support" },
     ],
   },
   {
     title: "Company",
     links: [
       { href: "/about", label: "About PawOS" },
-      { href: "/about#builders", label: "Builders" },
       { href: "/careers", label: "Careers" },
-      { href: "/contact", label: "Contact" },
+      { href: "/about#builders", label: "Builders" },
+      
+      { href: "/support/contact", label: "Contact" },
       { href: "/about", label: "Revanta AI" },
     ],
   },
@@ -106,3 +107,4 @@ export function Footer() {
     </footer>
   );
 }
+
