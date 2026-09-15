@@ -1,3 +1,4 @@
+'use client';
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -25,13 +26,10 @@ export default function Home() {
         <p className="text-2xl md:text-3xl text-neutral-400 font-light mb-12 max-w-2xl">
           The AI companion that gets work done.
         </p>
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Button href="https://revantaai.com/downloads/pawos-windows.exe" className="px-8 py-4 text-base font-medium bg-white text-black hover:bg-neutral-200">
+        <div className="flex justify-center">
+          <button onClick={() => alert("PawOS for Windows is coming soon! Please check back later to be notified.")} className="px-8 py-4 text-base font-medium bg-white text-black rounded-full hover:bg-neutral-200 transition">
             Download for Windows &rarr;
-          </Button>
-          <Button href="/about" variant="secondary" className="px-8 py-4 text-base font-medium bg-transparent text-white border border-neutral-700 hover:bg-neutral-900">
-            Explore PawOS
-          </Button>
+          </button>
         </div>
         </div>
       </section>

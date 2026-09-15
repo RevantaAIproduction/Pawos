@@ -1,256 +1,42 @@
-﻿const fs = require('fs');
-let content = fs.readFileSync('src/components/HeroAnimation.tsx', 'utf8');
+﻿const fs = require("fs");
+let page = fs.readFileSync("src/app/page.tsx", "utf8");
 
-const newContent = \'use client';
+const oldButtons = `<div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <Button href="https://revantaai.com/downloads/pawos-windows.exe" className="px-8 py-4 text-base font-medium bg-white text-black hover:bg-neutral-200">
+            Download for Windows &rarr;
+          </Button>
+          <Button href="/about" variant="secondary" className="px-8 py-4 text-base font-medium bg-transparent text-white border border-neutral-700 hover:bg-neutral-900">
+            Explore PawOS
+          </Button>
+        </div>`;
 
-import React, { useEffect, useRef } from 'react';
+const newButtons = `<div className="flex justify-center">
+          <button onClick={() => alert("PawOS for Windows is coming soon! Please check back later to be notified.")} className="px-8 py-4 text-base font-medium bg-white text-black rounded-full hover:bg-neutral-200 transition">
+            Download for Windows &rarr;
+          </button>
+        </div>`;
 
-type Particle = {
-  ox: number;
-  oy: number;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  fx: number; // facing x
-  fy: number; // facing y
-  opacity: number;
-};
-
-export function HeroAnimation() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d', { alpha: true });
-    if (!ctx) return;
-
-    let animationId: number;
-    let particles: Particle[] = [];
+if (page.includes(oldButtons)) {
+    page = page.replace(oldButtons, newButtons);
+    // Let's make sure we add 'use client' if it's not there, because we added onClick
+    if (!page.includes("'use client'")) {
+        page = "'use client';\n" + page;
+    }
+    // Remove Metadata export since it conflicts with 'use client' in Next.js app router
+    page = page.replace(/export const metadata: Metadata = [\s\S]*?};\n/g, "");
     
-    // State
-    const SPACING = 35;
-    const INTERACTION_RADIUS = 250;
-    const pointer = { x: -1000, y: -1000, vx: 0, vy: 0, isActive: false };
-    const lastPointer = { x: -1000, y: -1000 };
+    fs.writeFileSync("src/app/page.tsx", page, "utf8");
+    console.log("Updated Hero Buttons.");
+} else {
+    console.log("Could not find exactly. Using fallback regex.");
+    // Fallback if formatting was slightly off
+    page = page.replace(/<div className="flex flex-col sm:flex-row gap-4 justify-center">[\s\S]*?Explore PawOS[\s\S]*?<\/div>/, newButtons);
     
-    const mql = window.matchMedia('(prefers-reduced-motion: reduce)');
-    let reducedMotion = mql.matches;
-    const mqlListener = (e: MediaQueryListEvent) => { reducedMotion = e.matches; };
-    mql.addEventListener('change', mqlListener);
-
-    const initParticles = (width: number, height: number) => {
-      particles = [];
-      const cols = Math.ceil(width / SPACING) + 2;
-      const rows = Math.ceil(height / SPACING) + 2;
-      
-      const offsetX = (width - (cols - 1) * SPACING) / 2;
-      const offsetY = (height - (rows - 1) * SPACING) / 2;
-
-      for (let i = 0; i < cols; i++) {
-        for (let j = 0; j < rows; j++) {
-          const x = offsetX + i * SPACING;
-          const y = offsetY + j * SPACING;
-          particles.push({
-            ox: x, oy: y,
-            x: x, y: y,
-            vx: 0, vy: 0,
-            fx: 1, fy: 0,
-            opacity: 0
-          });
-        }
-      }
-    };
-
-    const resize = () => {
-      if (!canvas || !containerRef.current) return;
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const rect = containerRef.current.getBoundingClientRect();
-      
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      ctx.scale(dpr, dpr);
-      canvas.style.width = \\px\;
-      canvas.style.height = \\px\;
-      
-      initParticles(rect.width, rect.height);
-    };
-
-    window.addEventListener('resize', resize);
-    resize();
-
-    let lastTime = performance.now();
-
-    const render = (now: number) => {
-      const dt = Math.min((now - lastTime) / 1000, 0.05);
-      lastTime = now;
-
-      // Update pointer velocity
-      pointer.vx = (pointer.x - lastPointer.x) / (dt * 1000 || 1);
-      pointer.vy = (pointer.y - lastPointer.y) / (dt * 1000 || 1);
-      lastPointer.x = pointer.x;
-      lastPointer.y = pointer.y;
-
-      const rect = canvas.getBoundingClientRect();
-      ctx.clearRect(0, 0, rect.width, rect.height);
-
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-
-      // Base ambient flow even when pointer is idle
-      const time = now * 0.0005;
-
-      for (let i = 0; i < particles.length; i++) {
-        const p = particles[i];
-
-        if (!reducedMotion) {
-          const dx = pointer.x - p.x;
-          const dy = pointer.y - p.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-
-          if (pointer.isActive && dist < INTERACTION_RADIUS) {
-            const force = 1 - Math.pow(dist / INTERACTION_RADIUS, 1.5);
-            
-            // Drag effect (follows pointer)
-            p.vx += pointer.vx * force * 0.08;
-            p.vy += pointer.vy * force * 0.08;
-            
-            // Subtle repulsion to bend around pointer
-            p.vx -= (dx / dist) * force * 0.8;
-            p.vy -= (dy / dist) * force * 0.8;
-            
-            p.opacity = Math.min(p.opacity + force * 0.15, 1);
-          }
-
-          // Ambient noise (very subtle drift)
-          p.vx += Math.sin(p.ox * 0.01 + time) * 0.02;
-          p.vy += Math.cos(p.oy * 0.01 + time) * 0.02;
-
-          // Spring back
-          p.vx += (p.ox - p.x) * 0.03;
-          p.vy += (p.oy - p.y) * 0.03;
-
-          // Friction
-          p.vx *= 0.88;
-          p.vy *= 0.88;
-
-          p.x += p.vx;
-          p.y += p.vy;
-
-          // Update facing direction
-          const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
-          if (speed > 0.1) {
-            const tx = p.vx / speed;
-            const ty = p.vy / speed;
-            p.fx += (tx - p.fx) * 0.2;
-            p.fy += (ty - p.fy) * 0.2;
-            const flen = Math.sqrt(p.fx * p.fx + p.fy * p.fy);
-            p.fx /= flen;
-            p.fy /= flen;
-          } else {
-            // Slowly return to horizontal if calm
-            p.fx += (1 - p.fx) * 0.02;
-            p.fy += (0 - p.fy) * 0.02;
-            const flen = Math.sqrt(p.fx * p.fx + p.fy * p.fy);
-            p.fx /= flen;
-            p.fy /= flen;
-          }
-
-          p.opacity *= 0.96; // decay
-        }
-
-        // Render
-        const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
-        const drawOpacity = reducedMotion ? 0.1 : Math.max(0.08, p.opacity);
-        
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        ctx.rotate(Math.atan2(p.fy, p.fx));
-        ctx.globalAlpha = drawOpacity;
-        
-        // Dynamic color shifting based on activation
-        if (p.opacity > 0.5) {
-          ctx.strokeStyle = '#e0e7ff'; // Bright white/blue when active
-          ctx.fillStyle = '#e0e7ff';
-        } else {
-          ctx.strokeStyle = '#6366f1'; // Muted indigo otherwise
-          ctx.fillStyle = '#6366f1';
-        }
-
-        ctx.lineWidth = 1.5;
-
-        if (speed > 1.2 && !reducedMotion) {
-          // Active: Chevron
-          ctx.beginPath();
-          ctx.moveTo(-3, -3);
-          ctx.lineTo(2, 0);
-          ctx.lineTo(-3, 3);
-          ctx.stroke();
-        } else if (speed > 0.3 && !reducedMotion) {
-          // Semi-active: Dash
-          ctx.beginPath();
-          ctx.moveTo(-3, 0);
-          ctx.lineTo(3, 0);
-          ctx.stroke();
-        } else {
-          // Idle: Dot
-          ctx.beginPath();
-          ctx.arc(0, 0, 1.2, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        ctx.restore();
-      }
-
-      animationId = requestAnimationFrame(render);
-    };
-
-    animationId = requestAnimationFrame(render);
-
-    const updatePointer = (e: PointerEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      pointer.x = e.clientX - rect.left;
-      pointer.y = e.clientY - rect.top;
-      pointer.isActive = true;
-    };
-
-    const handlePointerMove = (e: PointerEvent) => updatePointer(e);
-    const handlePointerDown = (e: PointerEvent) => updatePointer(e);
-    const handlePointerLeave = () => {
-      pointer.isActive = false;
-    };
-
-    window.addEventListener('pointermove', handlePointerMove, { passive: true });
-    window.addEventListener('pointerdown', handlePointerDown, { passive: true });
-    window.addEventListener('pointerleave', handlePointerLeave, { passive: true });
-
-    return () => {
-      window.removeEventListener('resize', resize);
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerdown', handlePointerDown);
-      window.removeEventListener('pointerleave', handlePointerLeave);
-      mql.removeEventListener('change', mqlListener);
-      cancelAnimationFrame(animationId);
-    };
-  }, []);
-
-  return (
-    <div 
-      ref={containerRef}
-      className="absolute inset-0 h-full w-full z-0 overflow-hidden pointer-events-none"
-      style={{
-        background: 'radial-gradient(100% 100% at 50% 0%, rgba(30, 40, 90, 0.4) 0%, rgba(10, 10, 25, 0.8) 50%, rgba(0, 0, 0, 1) 100%)'
-      }}
-    >
-      <canvas
-        ref={canvasRef}
-        className="absolute inset-0 block pointer-events-none"
-      />
-    </div>
-  );
+    if (!page.includes("'use client'")) {
+        page = "'use client';\n" + page;
+    }
+    page = page.replace(/export const metadata: Metadata = [\s\S]*?};\n/g, "");
+    
+    fs.writeFileSync("src/app/page.tsx", page, "utf8");
+    console.log("Updated Hero Buttons via fallback.");
 }
-\;
-
-fs.writeFileSync('src/components/HeroAnimation.tsx', newContent);
