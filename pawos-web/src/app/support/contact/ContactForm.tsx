@@ -16,7 +16,7 @@ export function ContactForm() {
 
 — ${name}${email ? ` (${email})` : ""}`;
     
-    let targetEmail = CONTACT_EMAILS.hello;
+    let targetEmail: string = CONTACT_EMAILS.hello;
     if (category === "support") targetEmail = CONTACT_EMAILS.support;
     if (category === "enterprise") targetEmail = CONTACT_EMAILS.enterprise;
     if (category === "sales") targetEmail = CONTACT_EMAILS.sales;
