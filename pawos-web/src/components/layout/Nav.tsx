@@ -97,7 +97,7 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
         className={`absolute inset-0 h-screen w-screen bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${activeMenu || searchOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`} 
       />
 
-      <header className="relative transition-colors duration-300 bg-black">
+      <header className={`relative transition-colors duration-300 ${searchOpen || activeMenu ? "bg-black" : "bg-transparent"}`}>
         <nav className="flex w-full items-center justify-between px-4 md:px-6 py-5">
           {/* Left Group: Logo + Nav Items */}
           <div className="flex items-center gap-16 lg:gap-24">
