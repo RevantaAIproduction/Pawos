@@ -121,7 +121,6 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
               Search
             </button>
             <Link href="/login" className="text-sm font-medium text-neutral-400 hover:text-white transition">
- className="text-sm font-medium text-neutral-400 hover:text-white transition">
               Log in
             </Link>
             <Link href="https://revantaai.com/downloads/pawos-windows.exe" className="text-sm font-medium text-white transition hover:opacity-80">
