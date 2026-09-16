@@ -148,10 +148,10 @@ describe('connectivityIpc — direct IPC invocation cannot bypass the connector 
 
   it('connectivity:connect — Go is rejected for github (Pro-and-above) before sdk.connect() ever runs', async () => {
     const connectFn = vi.fn();
-    connectorRegistry.register(makeFakeSdk('github', connectFn));
+    connectorRegistry.register(makeFakeSdk('jira', connectFn));
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'go', status: 'none' });
 
-    const result = await handlers.get('connectivity:connect')!(fakeEvent, 'github', { userId: 'u1' });
+    const result = await handlers.get('connectivity:connect')!(fakeEvent, 'jira', { userId: 'u1' });
 
     expect(result.ok).toBe(false);
     expect(connectFn).not.toHaveBeenCalled();
@@ -251,12 +251,12 @@ describe('connectivityIpc — connectivity:restore cannot reactivate a connector
     expect(authenticateFn).not.toHaveBeenCalled();
   });
 
-  it('3. Go + stored GitHub credential — restore blocked', async () => {
+  it('3. Go + stored Jira credential — restore blocked', async () => {
     const authenticateFn = vi.fn();
-    connectorRegistry.register(makeFakeRestoreSdk('github', authenticateFn));
+    connectorRegistry.register(makeFakeRestoreSdk('jira', authenticateFn));
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'go', status: 'none' });
 
-    const result = await handlers.get('connectivity:restore')!(fakeEvent, 'github', { userId: 'u1' }, storedCredential);
+    const result = await handlers.get('connectivity:restore')!(fakeEvent, 'jira', { userId: 'u1' }, storedCredential);
 
     expect(result.ok).toBe(false);
     expect(authenticateFn).not.toHaveBeenCalled();
@@ -352,3 +352,5 @@ describe('connectivityIpc — connectivity:restore cannot reactivate a connector
     expect(authenticateFn).toHaveBeenCalledWith(storedCredential);
   });
 });
+
+

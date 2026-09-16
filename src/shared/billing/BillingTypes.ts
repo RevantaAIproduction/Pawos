@@ -51,6 +51,8 @@ export type RuntimeEntitlementGrant = {
 export type SubscriptionState = {
   tier: SubscriptionTierId;
   status: SubscriptionStatus;
+  /** Optional overlay for the PawOS Build cohort. */
+  buildEntitlement?: BuildCohortState;
   /** Authenticated PawOS account this local subscription cache belongs to. Missing on legacy device-local files. */
   accountId?: string;
   /** Set only once a real payment provider is configured and a checkout actually completes. */

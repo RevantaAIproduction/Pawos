@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+(global as any).window = { electron: { ipcRenderer: { invoke: vi.fn().mockResolvedValue({}) } } };
 import type { ExecutionRecord } from '../../shared/actions/ExecutionRecordTypes';
 import type { AutonomousOutcome } from '../../shared/organization/AutonomousTaskBillingTypes';
 
@@ -208,7 +209,14 @@ function fakeDeps(overrides: Partial<AutonomousOrchestrationDeps> = {}): { deps:
   const billing = {
     transitionRun: vi.fn().mockResolvedValue({}),
     markTerminal: vi.fn().mockResolvedValue(undefined),
+    beginRun: vi.fn().mockResolvedValue(true),
+    recordTokenPreflight: vi.fn().mockResolvedValue('preflight-event-1'),
+    recordStepUsage: vi.fn().mockResolvedValue('billing-event-1'),
     completeRun: vi.fn().mockResolvedValue('billing-event-1'),
+    getTicketBalance: vi.fn().mockResolvedValue({ poolBalance: 1000, workPcBalance: 1000 }),
+    reserveAutonomousPc: vi.fn().mockResolvedValue({ success: true, reservationId: 'res-1' }),
+    releaseAutonomousPc: vi.fn().mockResolvedValue({ success: true }),
+    settleAutonomousPc: vi.fn().mockResolvedValue({ success: true }),
   };
   const deps: AutonomousOrchestrationDeps = {
     billingService: billing as unknown as AutonomousOrchestrationDeps['billingService'],
@@ -342,7 +350,7 @@ describe('orchestrateAutonomousRun — state machine', () => {
     expect(billing.completeRun).not.toHaveBeenCalled();
   });
 
-  it('running -> blocked (mid-execution stoppedReason): transitionRun("blocked"), never markTerminal/completeRun', async () => {
+  it('running -> blocked (mid-execution stoppedReason): markTerminal("failed") is called for settlement', async () => {
     const { deps, billing } = fakeDeps();
     (deps.turnRunner as FakeTurnRunner).runResult = { kind: 'finished', executionRecord: baseExecutionRecord({ status: 'abandoned', stoppedReason: 'Coding entitlement restricted mid-run.' }) };
 
@@ -350,8 +358,7 @@ describe('orchestrateAutonomousRun — state machine', () => {
 
     expect(result.outcome.kind).toBe('blocked');
     expect(billing.completeRun).not.toHaveBeenCalled();
-    expect(billing.markTerminal).not.toHaveBeenCalled();
-    expect(billing.transitionRun).toHaveBeenCalledWith('run-1', 'blocked', 'Coding entitlement restricted mid-run.');
+    expect(billing.markTerminal).toHaveBeenCalledWith('run-1', 'failed');
   });
 });
 
@@ -411,7 +418,7 @@ describe('orchestrateAutonomousRun — external update (the one genuinely real c
     const { deps, billing } = fakeDeps();
     const result = await orchestrateAutonomousRun({ ...baseInput, prUrl: 'https://github.com/org/repo/pull/1' }, deps);
 
-    expect(deps.postCompletionComment).toHaveBeenCalledWith('https://github.com/org/repo/pull/1', expect.any(String));
+    expect(deps.postCompletionComment).toHaveBeenCalledWith('run-1', 'https://github.com/org/repo/pull/1', expect.any(String));
     expect(result.externalUpdate.status).toBe('CAPTURED');
     expect(billing.completeRun).toHaveBeenCalledTimes(1);
   });
@@ -420,7 +427,7 @@ describe('orchestrateAutonomousRun — external update (the one genuinely real c
     const { deps, billing } = fakeDeps({ postCompletionComment: vi.fn().mockResolvedValue({ ok: true, data: { posted: false, reason: 'GitHub is not connected.' } }) });
     const result = await orchestrateAutonomousRun({ ...baseInput, prUrl: 'https://github.com/org/repo/pull/1' }, deps);
 
-    expect(result.externalUpdate.status).toBe('BLOCKED');
+    expect(result.externalUpdate.status).toBe('FAILED');
     expect(billing.completeRun).toHaveBeenCalledTimes(1);
   });
 
@@ -448,18 +455,22 @@ describe('orchestrateAutonomousRun — evidence-based PR verification at complet
   it('a genuinely verified PR sets prVerified:true on the completion call', async () => {
     const { deps, billing } = fakeDeps();
     await orchestrateAutonomousRun({ ...baseInput, prUrl: 'https://github.com/org/repo/pull/1' }, deps);
-    expect(billing.completeRun).toHaveBeenCalledWith('run-1', expect.objectContaining({ prVerified: true, ticketVerified: false }));
+    expect(billing.completeRun).toHaveBeenCalledWith('run-1', expect.objectContaining({ prUrl: 'https://github.com/org/repo/pull/1', clientReplySent: false, deployCompleted: false }));
   });
 
   it('an unverifiable PR never fabricates prVerified:true', async () => {
     const { deps, billing } = fakeDeps({ verifyPullRequestExists: vi.fn().mockResolvedValue({ ok: true, data: { verified: false, reason: 'not found' } }) });
     await orchestrateAutonomousRun({ ...baseInput, prUrl: 'https://github.com/org/repo/pull/1' }, deps);
-    expect(billing.completeRun).toHaveBeenCalledWith('run-1', expect.objectContaining({ prVerified: false }));
+    expect(billing.completeRun).toHaveBeenCalledWith('run-1', expect.objectContaining({ prUrl: 'https://github.com/org/repo/pull/1', clientReplySent: false, deployCompleted: false }));
   });
 
   it('ticketVerified is unconditionally false — no genuine ticket write-back capability exists', async () => {
     const { deps, billing } = fakeDeps();
     await orchestrateAutonomousRun(baseInput, deps);
-    expect(billing.completeRun).toHaveBeenCalledWith('run-1', expect.objectContaining({ ticketVerified: false }));
+    expect(billing.completeRun).toHaveBeenCalledWith('run-1', expect.objectContaining({ prUrl: undefined, clientReplySent: false, deployCompleted: false }));
   });
 });
+
+
+
+

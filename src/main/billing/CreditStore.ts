@@ -31,7 +31,7 @@ function freshWeek(): Pick<State, 'usedThisWeek' | 'weekResetsAt'> {
   return { usedThisWeek: 0, weekResetsAt: Date.now() + WEEK_MS };
 }
 
-const MAX_HISTORY = 100;
+
 
 /**
  * AI credit usage tracking — records consumption against the tier's real

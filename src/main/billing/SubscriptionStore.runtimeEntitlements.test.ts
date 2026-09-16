@@ -172,16 +172,25 @@ describe('SubscriptionStore — runtime entitlement grants', () => {
   });
 
   it('requires authoritative organization sync before Team or Enterprise becomes effective', async () => {
+    vi.doMock('./OrganizationTierVerification', () => ({
+      verifyRealOrganizationTier: vi.fn().mockImplementation(async (token, orgId) => {
+        if (orgId === 'org-team') return { ok: true, tier: 'team' };
+        if (orgId === 'org-enterprise') return { ok: true, tier: 'enterprise' };
+        return { ok: false, reason: 'Invalid org' };
+      })
+    }));
+
     const { subscriptionStore } = await import('./SubscriptionStore');
     subscriptionStore.init();
 
     subscriptionStore.reconcileForAccount('acct-member');
     expect(subscriptionStore.getEffective().tier).toBe('go');
 
-    subscriptionStore.syncFromOrganization('team', 'standard');
+    await subscriptionStore.syncFromOrganization('fake-token', 'org-team', 'standard');
     expect(subscriptionStore.getEffective()).toMatchObject({ tier: 'team', status: 'active', seatTier: 'standard' });
 
-    subscriptionStore.syncFromOrganization('enterprise');
+    await subscriptionStore.syncFromOrganization('fake-token', 'org-enterprise');
     expect(subscriptionStore.getEffective()).toMatchObject({ tier: 'enterprise', status: 'active' });
   });
 });
+

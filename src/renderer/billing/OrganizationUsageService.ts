@@ -37,6 +37,27 @@ export const organizationUsageService = {
     return { usedAmount: row?.used_amount ?? amount, monthlyLimit: row?.monthly_limit ?? null };
   },
 
+  /** Throws if the Enterprise API budget is exhausted. */
+  async checkEnterpriseApiBudget(organizationId: string): Promise<void> {
+    const supabase = await getSupabaseClient();
+    const { data, error } = await supabase.from('organizations').select('api_budget_usd, api_usage_usd').eq('id', organizationId).single();
+    if (error) throw error;
+    if (data.api_usage_usd >= data.api_budget_usd) {
+      throw new Error('Enterprise API budget exceeded');
+    }
+  },
+
+  /** Records actual USD cost against the Enterprise API budget. */
+  async recordEnterpriseApiUsage(organizationId: string, costUsd: number): Promise<boolean> {
+    const supabase = await getSupabaseClient();
+    const { data, error } = await supabase.rpc('record_enterprise_api_usage', {
+      p_org_id: organizationId,
+      p_cost_usd: costUsd,
+    });
+    if (error) throw error;
+    return !!data;
+  },
+
   /** Read-only view for a usage dashboard — does not itself enforce anything. */
   async getSummary(organizationId: string): Promise<CapabilityUsageSummary[]> {
     const supabase = await getSupabaseClient();
@@ -54,16 +75,16 @@ export const organizationUsageService = {
     });
   },
 
-  async consumeGoRefresh(deviceHash: string): Promise<boolean> {
+  async consumeGoRefresh(deviceId: string): Promise<boolean> {
     const supabase = await getSupabaseClient();
-    const { data, error } = await supabase.rpc('consume_go_refresh', { p_device_hash: deviceHash });
+    const { data, error } = await supabase.rpc('consume_go_refresh', { p_device_id: deviceId });
     if (error) throw error;
     return !!data;
   },
 
-  async getGoRefreshesRemaining(deviceHash: string): Promise<number> {
+  async getGoRefreshesRemaining(deviceId: string): Promise<number> {
     const supabase = await getSupabaseClient();
-    const { data, error } = await supabase.rpc('get_go_refreshes', { p_device_hash: deviceHash });
+    const { data, error } = await supabase.rpc('get_go_refreshes', { p_device_id: deviceId });
     if (error) return 0;
     return (data as number) ?? 0;
   }

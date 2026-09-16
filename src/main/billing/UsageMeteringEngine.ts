@@ -64,6 +64,16 @@ export function computeNormalizedCompute(usage: ProviderUsageMetadata): number {
 
 const activeTimeRegistry = new Map<string, { start: number; end?: number }>();
 
+// Cleanup leaked requests (e.g. cancelled/failed requests that never record usage)
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, req] of activeTimeRegistry.entries()) {
+    if (now - req.start > 10 * 60 * 1000) { // 10 min timeout
+      activeTimeRegistry.delete(id);
+    }
+  }
+}, 60000).unref();
+
 export function reportRequestStart(requestId: string): void {
   if (!activeTimeRegistry.has(requestId)) {
     activeTimeRegistry.set(requestId, { start: Date.now() });

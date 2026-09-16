@@ -20,6 +20,10 @@ const GO_FEATURES: FeatureId[] = [
   'basicWorkspace',
   'basicFileManagement',
   'localRuntimeFeatures',
+  'connectGithub',
+  'connectVercel',
+  'connectGoogleWorkspace',
+  'connectMicrosoft',
 ];
 
 const AI_MODELS: PawModelId[] = [
@@ -187,8 +191,9 @@ export const PLAN_DERIVED_RUNTIME_ENTITLEMENTS: Record<SubscriptionTierId, Runti
  * check) — not the previous "zero AI models, zero AI credits" design,
  * which the Intelligence Layer architecture explicitly reversed.
  */
-const TIER_ENTITLEMENTS: Record<SubscriptionTierId, Omit<TierEntitlements, 'monthlyCreditLimit' | 'weeklyCreditLimit' | 'seatTier'>> = {
-  go: { tier: 'go', models: ['paw-flash'], features: GO_FEATURES },
+const TIER_ENTITLEMENTS: Record<SubscriptionTierId, Omit<TierEntitlements, 'monthlyCreditLimit' | 
+'weeklyCreditLimit' | 'seatTier'>> = {
+  go: { tier: 'go', models: ['paw-flash', 'paw-voice'], features: GO_FEATURES },
   pro: { tier: 'pro', models: AI_MODELS, features: PRO_FEATURES },
   proMax: { tier: 'proMax', models: AI_MODELS, features: PRO_MAX_FEATURES },
   team: { tier: 'team', models: AI_MODELS, features: TEAM_FEATURES },
@@ -240,7 +245,22 @@ class EntitlementService {
    * feature sets, the only real difference is usage capacity (see the
    * Usage & Entitlement Engine, MOB-3), never a feature gap.
    */
-  public currentProMaxVariant(): \'5x\' | \'20x\' | undefined {\n    return subscriptionStore.getEffective().proMaxVariant as \'5x\' | \'20x\' | undefined;\n  }\n\n  getEntitlements(): TierEntitlements {
+  public currentProMaxVariant(): '5x' | '20x' | undefined {
+    return subscriptionStore.getEffective().proMaxVariant as '5x' | '20x' | undefined;
+  }
+
+  getEntitlements(): TierEntitlements {
+    const buildEntitlement = subscriptionStore.getEffective().buildEntitlement;
+    if (buildEntitlement && buildEntitlement.active) {
+      return {
+        tier: 'go',
+        models: AI_MODELS, // Build has all models
+        features: [...GO_FEATURES, 'advancedRuntimes'],
+        monthlyCreditLimit: null,
+        weeklyCreditLimit: null,
+      };
+    }
+
     const tier = this.currentTier();
     const base = TIER_ENTITLEMENTS[tier];
     const seatTier = this.getSeatTier();
@@ -366,7 +386,8 @@ class EntitlementService {
   hasCreditsRemaining(pawModelId?: PawModelId): boolean {
     if (this.isComputePooled()) return true;
     if (pawModelId === 'paw-fable') return this.getFableCreditsRemaining() > 0;
-    const tier = this.currentTier();
+    const buildEntitlement = subscriptionStore.getEffective().buildEntitlement;
+    const tier = (buildEntitlement && buildEntitlement.active) ? 'build' : this.currentTier();
     const seatTier = this.getSeatTier();
     const proMaxVariant = this.currentProMaxVariant();
     const check = rollingUsageGate.canStartGeneration(tier, seatTier, Date.now(), proMaxVariant);
@@ -401,10 +422,12 @@ class EntitlementService {
   getSnapshot(): EntitlementSnapshot {
     const entitlements = this.getEntitlements();
     const balance = creditStore.getBalance();
-    const tier = this.currentTier();
+    const buildEntitlement = subscriptionStore.getEffective().buildEntitlement;
+    const tier = (buildEntitlement && buildEntitlement.active) ? 'build' : this.currentTier();
     const seatTier = this.getSeatTier();
     const rolling = rollingUsageGate.getRollingUsage(tier, seatTier, Date.now(), this.currentProMaxVariant());
     return {
+      buildEntitlement: buildEntitlement,
       tier: entitlements.tier,
       models: entitlements.models,
       features: entitlements.features,

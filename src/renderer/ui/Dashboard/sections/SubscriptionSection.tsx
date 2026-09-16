@@ -46,7 +46,7 @@ export function SubscriptionSection({
   const [entitlement, setEntitlement] = useState<EntitlementSnapshot | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [goRefreshesRemaining, setGoRefreshesRemaining] = useState<number | null>(null);
-  const [deviceHash, setDeviceHash] = useState<string | null>(null);
+  const [deviceId, setDeviceHash] = useState<string | null>(null);
 
   const currentTier = subscription?.tier || 'go';
 
@@ -57,10 +57,10 @@ export function SubscriptionSection({
     
     try {
       const identity = await ipc.deviceGetLocalIdentity();
-      if (identity.deviceHash) {
-        setDeviceHash(identity.deviceHash);
+      if (identity.deviceId) {
+        setDeviceHash(identity.deviceId);
         const { organizationUsageService } = await import('../../../billing/OrganizationUsageService');
-        const remaining = await organizationUsageService.getGoRefreshesRemaining(identity.deviceHash);
+        const remaining = await organizationUsageService.getGoRefreshesRemaining(identity.deviceId);
         setGoRefreshesRemaining(remaining);
       }
     } catch (e) {}
@@ -96,8 +96,9 @@ export function SubscriptionSection({
         {entitlement?.buildEntitlement?.active && (
           <div style={{ marginBottom: 32, padding: 16, background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)', borderRadius: 8 }}>
             <h3 style={{ fontSize: '1.1em', fontWeight: 700, margin: '0 0 8px 0', color: '#818cf8' }}>PawOS Build Cohort</h3>
-            <p style={{ margin: '0 0 4px 0', fontSize: '0.9em' }}>Included PC: {entitlement.buildEntitlement.includedPc}</p>
-            <p style={{ margin: '0 0 4px 0', fontSize: '0.9em' }}>Purchased PC: {entitlement.buildEntitlement.purchasedPc}</p>
+            <p style={{ margin: '0 0 4px 0', fontSize: '0.9em' }}>Paw Compute: {Math.round(entitlement.usageWeeklyPc || 0)} / {entitlement.limitWeeklyPc || 1500} PC</p>
+            <p style={{ margin: '0 0 4px 0', fontSize: '0.9em' }}>Active time: {(entitlement.activeHoursUsed7d || 0).toFixed(1)} / {entitlement.activeHoursWeekly || 15}h weekly</p>
+            <p style={{ margin: '0 0 4px 0', fontSize: '0.9em' }}>Active window: {(entitlement.activeHoursUsed5h || 0).toFixed(1)} / {entitlement.activeHours5h || 5}h</p>
             {entitlement.buildEntitlement.exhaustedAt && <p style={{ margin: 0, fontSize: '0.85em', opacity: 0.7 }}>Exhausted at: {new Date(entitlement.buildEntitlement.exhaustedAt).toLocaleString()}</p>}
           </div>
         )}
@@ -114,8 +115,9 @@ export function SubscriptionSection({
         {entitlement?.buildEntitlement?.active && (
           <div style={{ marginBottom: 32, padding: 16, background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)', borderRadius: 8 }}>
             <h3 style={{ fontSize: '1.1em', fontWeight: 700, margin: '0 0 8px 0', color: '#818cf8' }}>PawOS Build Cohort</h3>
-            <p style={{ margin: '0 0 4px 0', fontSize: '0.9em' }}>Included PC: {entitlement.buildEntitlement.includedPc}</p>
-            <p style={{ margin: '0 0 4px 0', fontSize: '0.9em' }}>Purchased PC: {entitlement.buildEntitlement.purchasedPc}</p>
+            <p style={{ margin: '0 0 4px 0', fontSize: '0.9em' }}>Paw Compute: {Math.round(entitlement.usageWeeklyPc || 0)} / {entitlement.limitWeeklyPc || 1500} PC</p>
+            <p style={{ margin: '0 0 4px 0', fontSize: '0.9em' }}>Active time: {(entitlement.activeHoursUsed7d || 0).toFixed(1)} / {entitlement.activeHoursWeekly || 15}h weekly</p>
+            <p style={{ margin: '0 0 4px 0', fontSize: '0.9em' }}>Active window: {(entitlement.activeHoursUsed5h || 0).toFixed(1)} / {entitlement.activeHours5h || 5}h</p>
             {entitlement.buildEntitlement.exhaustedAt && <p style={{ margin: 0, fontSize: '0.85em', opacity: 0.7 }}>Exhausted at: {new Date(entitlement.buildEntitlement.exhaustedAt).toLocaleString()}</p>}
           </div>
         )}
@@ -136,10 +138,11 @@ export function SubscriptionSection({
                   disabled={goRefreshesRemaining <= 0}
                   onClick={async () => {
                     try {
-                      if (!deviceHash) return;
+                      if (!deviceId) return;
                       const { organizationUsageService } = await import('../../../billing/OrganizationUsageService');
-                      const success = await organizationUsageService.consumeGoRefresh(deviceHash);
+                      const success = await organizationUsageService.consumeGoRefresh(deviceId);
                       if (success) {
+                        await ipc.billingMarkGoRefresh();
                         setMessage('✅ Usage refreshed successfully!');
                         refresh();
                       } else {

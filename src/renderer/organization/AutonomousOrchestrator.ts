@@ -1177,7 +1177,7 @@ async function attemptExternalUpdate(
   if (prUrl) {
     const commentBody = `PawOS Autonomous Work completed this ticket${input.ticketId ? ` (${input.ticketId})` : ''}. See the linked Work Record for full evidence (commands run, files changed, validation results).`;
     const result = await deps.postCompletionComment(input.runId, prUrl, commentBody);
-    if (result.ok && result.ok) {
+    if (result.ok && result.data.posted) {
       updates.push(`GitHub PR ${prUrl} commented`);
     } else {
       updates.push(`GitHub PR comment failed: ${result.reason}`);
@@ -1311,3 +1311,4 @@ async function attemptExternalUpdate(
     detail,
   };
 }
+

@@ -3,16 +3,18 @@ import { isConnectorEntitled } from './ConnectorEntitlementGate';
 import { subscriptionStore } from '../billing/SubscriptionStore';
 
 /**
- * The pure predicate behind connectivityIpc.ts's server-side connector gate — mirrors the exact
- * matrix requested for the entitlement finalization pass. Reuses the same `vi.spyOn(subscriptionStore,
- * 'get')` mocking convention already established in EntitlementService.test.ts.
+ * The pure predicate behind connectivityIpc.ts's server-side connector gate
+ * mirrors the exact matrix requested for the entitlement finalization pass.
  */
-describe('ConnectorEntitlementGate — final matrix', () => {
+describe('ConnectorEntitlementGate � final matrix', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('Go: every connector blocked', () => {
+  it('Go: GitHub, Vercel, Google Workspace, Microsoft allowed; others blocked', () => {
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'go', status: 'none' });
-    for (const id of ['github', 'gitlab', 'vercel', 'netlify', 'railway', 'slack', 'googleWorkspace', 'jira', 'linear']) {
+    for (const id of ['github', 'vercel', 'googleWorkspace', 'microsoft']) {
+      expect(isConnectorEntitled(id)).toBe(true);
+    }
+    for (const id of ['gitlab', 'netlify', 'railway', 'slack', 'jira', 'linear']) {
       expect(isConnectorEntitled(id)).toBe(false);
     }
   });

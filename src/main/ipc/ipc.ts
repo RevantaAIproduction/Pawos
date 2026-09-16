@@ -414,6 +414,12 @@ export function registerIpc(opts: {
   // Google Places API key for address autocomplete in billing checkout flow
   ipcMain.handle('billing:getGooglePlacesApiKey', () => process.env.GOOGLE_PLACES_API_KEY || '');
   ipcMain.handle('billing:getSubscription', () => subscriptionStore.getEffective());
+  ipcMain.handle('billing:syncBuildEntitlement', async (_evt, accessToken: string) => {
+    return subscriptionStore.syncBuildEntitlement(accessToken);
+  });
+  ipcMain.handle('billing:clearBuildEntitlement', () => {
+    subscriptionStore.clearBuildEntitlement();
+  });
   // P0-3: reject any string that isn't a real tier id — defense in depth (this path was already
   // non-exploitable on its own since status stays 'none' here, but "arbitrary tier strings rejected"
   // is an explicit audit requirement).
@@ -489,9 +495,9 @@ export function registerIpc(opts: {
     return result;
   });
 
-  /** Clears local usage history for Go refreshes */
-  ipcMain.handle('billing:clearUsageHistory', () => {
-    usageEventStore.clear();
+  /** Marks the time of the last Go refresh, ignoring older usage events for Go tier constraints */
+  ipcMain.handle('billing:markGoRefresh', () => {
+    usageEventStore.setLastGoRefreshAt(Date.now());
   });
   /**
    * Records real Gemini usage for one completed turn. The renderer sends only raw, provider-reported
@@ -504,7 +510,7 @@ export function registerIpc(opts: {
    */
   ipcMain.handle(
     'billing:recordTurnUsage',
-    (_evt, submission: TurnUsageSubmission, reason: string, category?: AiUsageCategory, pawModelId?: PawModelId) => {
+    async (_evt, submission: TurnUsageSubmission, reason: string, category?: AiUsageCategory, pawModelId?: PawModelId) => {
       const isFable = pawModelId === 'paw-fable';
       const tier = entitlementService.currentTier();
       const seatTier = entitlementService.getSeatTier();
@@ -523,6 +529,36 @@ export function registerIpc(opts: {
 
       const aggregated = recordTurnUsage(submission.requests, { sessionId: submission.sessionId, runId: submission.runId }, isFable);
       creditStore.consume(aggregated.totalNormalizedCompute, reason, category, isFable, isPurchased);
+      
+      // Enterprise Server-Authoritative Update
+      if (entitlementService.isComputePooled() && submission.organizationId && submission.accessToken) {
+        const supabaseUrl = process.env.SUPABASE_URL;
+        const anonKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+        if (supabaseUrl && anonKey) {
+          try {
+            // The main process directly calls the authoritative RPC using the trusted 
+            // normalized compute unit it just derived natively, avoiding any client-side math.
+            const response = await fetch(`${supabaseUrl}/rest/v1/rpc/record_enterprise_api_usage`, {
+              method: 'POST',
+              headers: {
+                apikey: anonKey,
+                Authorization: `Bearer ${submission.accessToken}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                p_org_id: submission.organizationId,
+                p_normalized_compute: aggregated.totalNormalizedCompute
+              })
+            });
+            if (!response.ok) {
+              console.error('[Enterprise Billing] Authoritative update failed:', await response.text());
+            }
+          } catch (err) {
+            console.error('[Enterprise Billing] Authoritative update error:', err);
+          }
+        }
+      }
+
       return { aggregated, balance: { ...creditStore.getBalance(), limit: entitlementService.getCreditLimit() } };
     }
   );
@@ -1579,4 +1615,5 @@ export function registerIpc(opts: {
   registerMobileAuthHandlers();
 
 }
+
 

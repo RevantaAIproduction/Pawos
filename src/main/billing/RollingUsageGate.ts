@@ -70,8 +70,13 @@ class RollingUsageGate {
 
   get inflightCount(): number { return this.inflightTimers.length; }
 
-  private sumInWindow(windowMs: number, now: number, isBuild = false): { pc: number; activeMs: number } {
-    const cutoff = now - windowMs;
+  private sumInWindow(windowMs: number, now: number, tier: SubscriptionTierId | 'build'): { pc: number; activeMs: number } {
+    let cutoff = now - windowMs;
+    if (tier === 'go') {
+      const lastRefresh = usageEventStore.getLastGoRefreshAt();
+      if (lastRefresh) cutoff = Math.max(cutoff, lastRefresh);
+    }
+    
     let totalPc = 0;
     let totalActiveMs = 0;
     for (const record of usageEventStore.list()) {
@@ -87,7 +92,8 @@ class RollingUsageGate {
       // work from rolling limits to maintain quota separation.
       // Build tier only counts usage in the Build cohort (e.g. maybe separate runId logic later)
       // but standard tiers exclude autonomous tasks.
-      if (!isBuild && record.runId !== null) continue;
+      const isBuild = tier === 'build';
+      if (!isBuild && record.runId) continue;
       if (record.timestamp >= cutoff) {
         totalPc += record.normalizedCompute;
         totalActiveMs += (record.activeDurationMs ?? 0);
@@ -102,8 +108,8 @@ class RollingUsageGate {
   getRollingUsage(tier: SubscriptionTierId | 'build', seatTier?: SeatTier, now = Date.now(), proMaxVariant?: '5x' | '20x'): RollingUsageSummary {
     const capacity = pawComputeCapacityStore.resolve(tier, seatTier, proMaxVariant);
     
-    const sum5h = this.sumInWindow(WINDOW_5H_MS, now, tier === 'build');
-    const sum7d = this.sumInWindow(WINDOW_7D_MS, now, tier === 'build');
+    const sum5h = this.sumInWindow(WINDOW_5H_MS, now, tier);
+    const sum7d = this.sumInWindow(WINDOW_7D_MS, now, tier);
 
     return {
       usage5h: sum5h.pc,

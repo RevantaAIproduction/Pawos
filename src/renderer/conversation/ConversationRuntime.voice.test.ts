@@ -1,4 +1,4 @@
-﻿import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { ConversationRuntime } from './ConversationRuntime';
 import type { SpeechRecognitionProvider, SpeechRecognitionSession, SpeechRecognitionCallbacks, TextToSpeechProvider } from './SpeechProviders';
 import { ReasoningRuntime } from './ReasoningRuntime';
@@ -58,12 +58,6 @@ describe('Voice Entitlement Invariants (VOICE-001 through VOICE-016)', () => {
     expect(spoken).toContain('Hello World');
   });
 
-  it('VOICE-013 Voice does not grant autonomous-task entitlement', () => {
-    // Voice execution goes through normal submitTranscript which produces a standard chat action.
-    // Execution gating occurs in executeAction and DesktopExecutionEngine, independent of voice input.
-    expect(true).toBe(true);
-  });
-
   it('VOICE-014 Voice generation still uses the applicable tiers normal compute/billing rules', async () => {
     // submitTranscript from voice feeds into the identical reasoningProvider loop, triggering billing:recordTurnUsage.
     const runtime = new ConversationRuntime({
@@ -83,11 +77,6 @@ describe('Voice Entitlement Invariants (VOICE-001 through VOICE-016)', () => {
     const snapshot = runtime.getSnapshot();
     // It feeds into the identical messages array just like typed text.
     expect(snapshot.messages.some(m => m.role === 'user' && m.content === 'this was spoken')).toBe(true);
-  });
-
-  it('VOICE-015 Voice uses the existing ConversationRuntime rather than a parallel conversation architecture', () => {
-    // Verified statically: VoiceController and CompanionExperience both directly call ConversationRuntime.startListening().
-    expect(true).toBe(true);
   });
 
   it('VOICE-016 OS microphone denial is handled separately from subscription entitlement', async () => {

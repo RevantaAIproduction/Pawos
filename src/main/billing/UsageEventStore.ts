@@ -13,6 +13,7 @@ const MAX_ENTRIES = 2000;
 type State = {
   records: NormalizedUsageRecord[];
   recoveryRequired?: boolean;
+  lastGoRefreshAt?: number;
 };
 
 function freshState(): State {
@@ -43,6 +44,15 @@ class UsageEventStore {
 
   private save(): void {
     fs.writeFileSync(this.file, JSON.stringify(this.state, null, 2), 'utf-8');
+  }
+
+  setLastGoRefreshAt(timestamp: number): void {
+    this.state.lastGoRefreshAt = timestamp;
+    this.save();
+  }
+
+  getLastGoRefreshAt(): number | undefined {
+    return this.state.lastGoRefreshAt;
   }
 
   /** Appends one already-normalized record — normalization itself happens in UsageMeteringEngine.ts,

@@ -228,22 +228,75 @@ class SubscriptionStore {
    * 'team' (Standard/Premium); Enterprise seats are uniform, so it's
    * omitted there.
    */
-  syncFromOrganization(orgTier: SubscriptionTierId, seatTier?: SeatTier): SubscriptionState {
-    if (SUBSCRIPTION_TIER_ORDER.indexOf(orgTier) > SUBSCRIPTION_TIER_ORDER.indexOf(this.state.tier)) {
-      this.state = {
-        ...this.state,
-        tier: orgTier,
-        status: 'active',
-        accountId: this.state.accountId,
-        seatTier: orgTier === 'team' ? seatTier : undefined,
-        runtimeEntitlementPolicyVersion: RUNTIME_ENTITLEMENT_POLICY_VERSION,
-      };
+  async syncFromOrganization(
+    accessToken: string,
+    organizationId: string,
+    seatTier?: SeatTier
+  ): Promise<SubscriptionState> {
+    const { verifyRealOrganizationTier } = await import('./OrganizationTierVerification');
+    const result = await verifyRealOrganizationTier(accessToken, organizationId);
+    if (!result.ok) {
+      throw new Error(result.reason);
+    }
+    const { tier } = result;
+
+    const currentOrder = SUBSCRIPTION_TIER_ORDER.indexOf(this.state.tier);
+    const newOrder = SUBSCRIPTION_TIER_ORDER.indexOf(tier);
+
+    this.state = {
+      ...this.state,
+      tier,
+      seatTier,
+      // Only elevate to 'active' if this is an actual upgrade over their personal tier,
+      // rather than blindly granting 'active' just because they belong to *an* org.
+      status: newOrder > currentOrder ? 'active' : this.state.status,
+    };
+    this.save();
+    return this.getEffective();
+  }
+
+  async syncBuildEntitlement(accessToken: string): Promise<{ ok: boolean; state?: any; reason?: string }> {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const anonKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+    if (!supabaseUrl || !anonKey) {
+      return { ok: false, reason: 'Supabase is not configured' };
+    }
+
+    try {
+      const response = await fetch(`${supabaseUrl}/rest/v1/pawos_build_cohort?select=*&is_active=eq.true`, {
+        headers: { apikey: anonKey, Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) return { ok: false, reason: 'Could not fetch build cohort' };
+      const rows = await response.json();
+      if (Array.isArray(rows) && rows.length > 0) {
+        const row = rows[0];
+        this.state = {
+          ...this.state,
+          buildEntitlement: {
+            active: true,
+            cohortId: row.cohort_id,
+            cohortStartDate: row.cohort_start_date ? new Date(row.cohort_start_date).getTime() : undefined,
+            cohortEndDate: row.cohort_end_date ? new Date(row.cohort_end_date).getTime() : undefined,
+            includedPc: Number(row.included_pc) || 1500,
+            purchasedPc: Number(row.purchased_pc) || 0,
+            exhaustedAt: row.exhausted_at ? new Date(row.exhausted_at).getTime() : undefined,
+          }
+        };
+      } else {
+        delete this.state.buildEntitlement;
+      }
       this.save();
-    } else if (orgTier === this.state.tier && orgTier === 'team' && seatTier) {
-      this.state = { ...this.state, seatTier };
+      return { ok: true, state: this.state.buildEntitlement };
+    } catch (e) {
+      return { ok: false, reason: 'Network error' };
+    }
+  }
+
+  clearBuildEntitlement(): void {
+    if (this.state.buildEntitlement) {
+      delete this.state.buildEntitlement;
       this.save();
     }
-    return this.state;
   }
 }
 

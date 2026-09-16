@@ -313,7 +313,7 @@ export function useConversationController(args?: {
       },
       onStateChange: (state) => {
         onStateChangeRef.current?.(state);
-        if ((state === 'completed' || state === 'error') && !entitlementRef.current?.pooled) {
+        if (state === 'completed' || state === 'error') {
           const currentSnapshot = runtimeRef.current?.getSnapshot();
           const lastTaskMessage = currentSnapshot ? [...currentSnapshot.messages].reverse().find((m) => m.task) : undefined;
           const actionTypes = lastTaskMessage?.task?.actions.map((a) => a.type) ?? [];
@@ -324,12 +324,37 @@ export function useConversationController(args?: {
           console.log('[CHK 8B] useConversationController state transition', { state, hasUsageSubmission: !!submission, requestsLength: submission?.requests.length });
           
           if (submission && submission.requests.length > 0) {
-            ipc
-              .billingRecordTurnUsage(submission, 'conversation-turn', category, activePawModelRef.current)
-              .then(() => refreshEntitlement())
-              .catch(() => {
-                refreshEntitlement();
+            // Attach authentication and organization context so the trusted main process
+            // can make the authoritative Enterprise billing RPC call.
+            if (entitlementRef.current?.pooled) {
+              submission.organizationId = organizationIdRef.current;
+              // Dynamically fetch the current session token to pass to the main process
+              import('../auth/supabaseClient').then(({ getSupabaseClient }) => {
+                getSupabaseClient().auth.getSession().then(({ data }) => {
+                  submission.accessToken = data.session?.access_token;
+                  sendSubmission(submission, category);
+                });
               });
+            } else {
+              sendSubmission(submission, category);
+            }
+            
+            function sendSubmission(sub: typeof submission, cat: AiUsageCategory) {
+              ipc
+                .billingRecordTurnUsage(sub, 'conversation-turn', cat, activePawModelRef.current)
+                .then(async ({ balance }) => {
+                  console.log('[CHK 8C] billingRecordTurnUsage succeeded');
+                  
+                  if (!entitlementRef.current?.pooled && balance) {
+                    setCreditsNoticeTier(balance.hasCreditsRemaining ? null : (entitlementRef.current?.tier ?? 'go'));
+                  }
+                  refreshEntitlement();
+                })
+                .catch(() => {
+                  console.log('[CHK 8D] billingRecordTurnUsage failed, falling back to releaseGenerationSlot');
+                  ipc.billingReleaseGenerationSlot().finally(() => refreshEntitlement());
+                });
+            }
           } else {
             // No verified usage: just release the slot and refresh
             ipc.billingReleaseGenerationSlot().finally(() => refreshEntitlement());
