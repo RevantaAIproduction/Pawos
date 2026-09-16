@@ -223,6 +223,9 @@ export function contextBridge() {
     billingGetPricing: () => ipcRenderer.invoke("billing:getPricing") as Promise<PricingConfig>,
     billingGetTicketPricingConfig: () => ipcRenderer.invoke("billing:getTicketPricingConfig") as Promise<TicketPricingConfig>,
     billingGetGooglePlacesApiKey: () => ipcRenderer.invoke("billing:getGooglePlacesApiKey") as Promise<string>,
+    billingReportRequestStart: (requestId: string) => ipcRenderer.invoke("billing:reportRequestStart", requestId) as Promise<void>,
+    billingReportRequestEnd: (requestId: string) => ipcRenderer.invoke("billing:reportRequestEnd", requestId) as Promise<void>,
+    billingClearUsageHistory: () => ipcRenderer.invoke("billing:clearUsageHistory") as Promise<void>,
     billingGetSubscription: () => ipcRenderer.invoke("billing:getSubscription") as Promise<SubscriptionState>,
     billingSetSubscriptionTier: (tier: SubscriptionTierId) =>
       ipcRenderer.invoke("billing:setSubscriptionTier", tier) as Promise<SubscriptionState>,

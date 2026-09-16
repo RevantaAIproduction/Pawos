@@ -82,6 +82,7 @@ export type NormalizedUsageRecord = {
    *  the same real breakdown the charge was computed from. Null when the model reported none. */
   thoughtsTokens: number | null;
   normalizedCompute: number;
+  activeDurationMs: number;
   timestamp: number;
   /** Set by the main-process IPC handler when pawModelId === 'paw-fable'. Fable usage is excluded
    *  from rolling Paw Compute windows — Fable is gated on bonusThisPeriod (Paw Credits) and must
@@ -96,6 +97,7 @@ export type NormalizedUsageRecord = {
  *  tokens the turn actually used. */
 export type AggregatedTurnUsage = {
   totalNormalizedCompute: number;
+  totalActiveDurationMs: number;
   requestCount: number;
   records: NormalizedUsageRecord[];
 };

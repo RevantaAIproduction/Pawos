@@ -145,6 +145,12 @@ export function createGeminiReasoningProvider(config: GeminiReasoningConfig): Re
         try {
           const url = `${baseUrl}/models/${model}:streamGenerateContent?alt=sse&key=${encodeURIComponent(config.apiKey)}`;
           console.log('[CHK 4A] Gemini request sent', { model });
+
+          // Phase 2 Active Time: Server-authoritative measurement of exact AI execution
+          // We report the exact boundaries of the network request so the Main Process can
+          // measure active time using its own clock, completely excluding tool wait times.
+          (globalThis as any).__pawos_ipc__?.billingReportRequestStart(requestId).catch(() => {});
+
           const res = await fetch(url, {
             method: 'POST',
             signal: controller.signal,
@@ -244,6 +250,8 @@ export function createGeminiReasoningProvider(config: GeminiReasoningConfig): Re
             const reason = controller.signal.reason;
             if (reason instanceof Error) callbacks.onError(reason);
           }
+        } finally {
+          (globalThis as any).__pawos_ipc__?.billingReportRequestEnd(requestId).catch(() => {});
         }
       })();
 

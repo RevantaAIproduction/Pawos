@@ -471,15 +471,27 @@ export function registerIpc(opts: {
       const remaining = entitlementService.getFableCreditsRemaining();
       return { allowed: remaining > 0, reason: remaining > 0 ? undefined : 'Paw Fable credits exhausted' };
     }
-    const tier = entitlementService.getEntitlements().tier;
+    const tier = entitlementService.currentTier();
     const seatTier = entitlementService.getSeatTier();
-    const result = rollingUsageGate.canStartGeneration(tier, seatTier);
+    const proMaxVariant = entitlementService.currentProMaxVariant();
+    let result = rollingUsageGate.canStartGeneration(tier, seatTier, Date.now(), proMaxVariant);
+    
+    // Phase 2E: Purchased Compute Credit continuation
+    if (!result.allowed && !result.pooled && entitlementService.getStandardBonusCreditsRemaining() > 0) {
+      result = { ...result, allowed: true, reason: undefined };
+    }
+
     // Reserve an in-flight slot atomically (Node.js single-threaded — no race between the check
     // above and the reserve here). Released by billing:recordTurnUsage or auto-released on timeout.
     if (result.allowed && !result.pooled) {
       rollingUsageGate.reserveSlot();
     }
     return result;
+  });
+
+  /** Clears local usage history for Go refreshes */
+  ipcMain.handle('billing:clearUsageHistory', () => {
+    usageEventStore.clear();
   });
   /**
    * Records real Gemini usage for one completed turn. The renderer sends only raw, provider-reported
@@ -494,14 +506,23 @@ export function registerIpc(opts: {
     'billing:recordTurnUsage',
     (_evt, submission: TurnUsageSubmission, reason: string, category?: AiUsageCategory, pawModelId?: PawModelId) => {
       const isFable = pawModelId === 'paw-fable';
+      const tier = entitlementService.currentTier();
+      const seatTier = entitlementService.getSeatTier();
+      const proMaxVariant = entitlementService.currentProMaxVariant();
+      
       // Release the in-flight slot reserved by billing:canStartGeneration for non-Fable, non-pooled
       // turns. Fable turns gate on purchased-credit headroom and never reserve a rolling-window slot;
       // pooled (Enterprise) turns go through organizationUsageService and also don't reserve one.
       if (!isFable && !entitlementService.isComputePooled()) {
         rollingUsageGate.releaseSlot();
       }
+      
+      // Determine if this turn was unblocked by purchased credits (i.e. rolling quota was exhausted)
+      const check = rollingUsageGate.canStartGeneration(tier, seatTier, Date.now(), proMaxVariant);
+      const isPurchased = !check.allowed && !isFable;
+
       const aggregated = recordTurnUsage(submission.requests, { sessionId: submission.sessionId, runId: submission.runId }, isFable);
-      creditStore.consume(aggregated.totalNormalizedCompute, reason, category, isFable);
+      creditStore.consume(aggregated.totalNormalizedCompute, reason, category, isFable, isPurchased);
       return { aggregated, balance: { ...creditStore.getBalance(), limit: entitlementService.getCreditLimit() } };
     }
   );

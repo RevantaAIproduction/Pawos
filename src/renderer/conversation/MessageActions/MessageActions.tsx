@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import styles from './messageActions.module.css';
 
 interface MessageActionsProps {
@@ -8,6 +8,7 @@ interface MessageActionsProps {
   onChapter?: () => void;
   onWorkFromHere?: () => void;
   onReadAloud?: () => void;
+  onDownloadPdf?: () => void;
   timestamp?: Date;
 }
 
@@ -18,6 +19,7 @@ export function MessageActions({
   onChapter,
   onWorkFromHere,
   onReadAloud,
+  onDownloadPdf,
   timestamp,
 }: MessageActionsProps) {
   const formatTimestamp = (date?: Date) => {
@@ -91,7 +93,20 @@ export function MessageActions({
             <path d="M8 14H16C17.1046 14 18 14.8954 18 16C18 19.3137 15.3137 22 12 22C8.68629 22 6 19.3137 6 16C6 14.8954 6.89543 14 8 14Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </button>
+        {onDownloadPdf && (
+          <button
+            className={styles.action}
+            onClick={onDownloadPdf}
+            title="Download PDF"
+            type="button"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 15V3M12 15L8 11M12 15L16 11M2 17L2 20C2 20.5523 2.44772 21 3 21H21C21.5523 21 22 20.5523 22 20L22 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+        )}
       </div>
     </div>
   );
 }
+

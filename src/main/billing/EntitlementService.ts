@@ -208,7 +208,7 @@ class EntitlementService {
     this.userId = userId;
   }
 
-  private currentTier(): SubscriptionTierId {
+  public currentTier(): SubscriptionTierId {
     const realTier = subscriptionStore.getEffective().tier;
 
     // Check for test tier override (only applies to authorized internal accounts)
@@ -240,7 +240,7 @@ class EntitlementService {
    * feature sets, the only real difference is usage capacity (see the
    * Usage & Entitlement Engine, MOB-3), never a feature gap.
    */
-  getEntitlements(): TierEntitlements {
+  public currentProMaxVariant(): \'5x\' | \'20x\' | undefined {\n    return subscriptionStore.getEffective().proMaxVariant as \'5x\' | \'20x\' | undefined;\n  }\n\n  getEntitlements(): TierEntitlements {
     const tier = this.currentTier();
     const base = TIER_ENTITLEMENTS[tier];
     const seatTier = this.getSeatTier();
@@ -368,13 +368,23 @@ class EntitlementService {
     if (pawModelId === 'paw-fable') return this.getFableCreditsRemaining() > 0;
     const tier = this.currentTier();
     const seatTier = this.getSeatTier();
-    return rollingUsageGate.canStartGeneration(tier, seatTier).allowed;
+    const proMaxVariant = this.currentProMaxVariant();
+    const check = rollingUsageGate.canStartGeneration(tier, seatTier, Date.now(), proMaxVariant);
+    if (check.allowed) return true;
+    
+    return this.getStandardBonusCreditsRemaining() > 0;
   }
 
   /** Real remaining purchased-Paw-Credits headroom for Paw Fable — see BillingTypes.ts's EntitlementSnapshot.fableCreditsRemaining doc comment. Never negative. */
   getFableCreditsRemaining(): number {
     const balance = creditStore.getBalance();
     return Math.max(0, balance.bonusThisPeriod - balance.fableUsedThisPeriod);
+  }
+
+  /** Real remaining purchased headroom for standard models used when included quota is exhausted. */
+  getStandardBonusCreditsRemaining(): number {
+    const balance = creditStore.getBalance();
+    return Math.max(0, balance.bonusThisPeriod - balance.standardPurchasedUsedThisPeriod);
   }
 
   /**
@@ -393,7 +403,7 @@ class EntitlementService {
     const balance = creditStore.getBalance();
     const tier = this.currentTier();
     const seatTier = this.getSeatTier();
-    const rolling = rollingUsageGate.getRollingUsage(tier, seatTier);
+    const rolling = rollingUsageGate.getRollingUsage(tier, seatTier, Date.now(), this.currentProMaxVariant());
     return {
       tier: entitlements.tier,
       models: entitlements.models,
@@ -415,6 +425,11 @@ class EntitlementService {
       limitWeeklyPc: rolling.limit7d,
       usageMonthlyPc: rolling.usage7d, // Use 7d as monthly proxy
       limitMonthlyPc: rolling.limit7d, // Use 7d limit as monthly proxy
+      activeHoursWeekly: rolling.activeHours7d,
+      activeHours5h: rolling.activeHours5h,
+      activeHoursUsed7d: rolling.activeHoursUsed7d,
+      activeHoursUsed5h: rolling.activeHoursUsed5h,
+      // goRefreshesRemaining will be populated by the UI.
     };
   }
 }

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, screen, session } from 'electron';
+﻿import { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, screen, session } from 'electron';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
 import { createTray } from './tray/trayManager';
@@ -77,16 +77,16 @@ process.on("exit", code => console.error("[PAWOS EXIT] exit", code));
 process.on("uncaughtException", error => console.error("[PAWOS ERROR] uncaughtException", error));
 process.on("unhandledRejection", reason => console.error("[PAWOS ERROR] unhandledRejection", reason));
 
-// One constant size, always — the overlay window itself never resizes at
+// One constant size, always â€” the overlay window itself never resizes at
 // runtime. A native window resize inherently reads as "an application
 // window resizing," which is exactly the feel the Workspace Runtime must
 // avoid. This is sized generously enough to host the Workspace Runtime
 // panel (which scrolls internally past ~360px, see taskCard.module.css)
 // alongside the avatar/chat, but the window is mostly transparent and
-// click-through (see setIgnoreMouseEvents below) — growing/shrinking what
+// click-through (see setIgnoreMouseEvents below) â€” growing/shrinking what
 // the user actually perceives happens entirely via CSS on content inside
 // this unchanging canvas (app.module.css), never via setBounds(). Still
-// primary-display-only — multi-monitor targeting is a future concern.
+// primary-display-only â€” multi-monitor targeting is a future concern.
 const MAIN_W = 1280;
 const MAIN_H = 820;
 
@@ -97,7 +97,7 @@ let companionEnabled = false;
 let envVars: Record<string, string> = {};
 
 // Installed at module scope, before app.whenReady() and before any window
-// exists — process.on('uncaughtException'/'unhandledRejection') can fire
+// exists â€” process.on('uncaughtException'/'unhandledRejection') can fire
 // during this earliest startup window, and installing the guard any later
 // would leave that window uncovered.
 installPlatformCrashGuard();
@@ -108,7 +108,7 @@ installPlatformCrashGuard();
 // rather than relaying to a local port, since a remote server can't reach
 // one on this machine. Registering as the pawos:// handler must happen
 // before app.whenReady(). The unpackaged (`electron .`) form needs the exe
-// path + script arg explicitly — Windows can't otherwise reconstruct how to
+// path + script arg explicitly â€” Windows can't otherwise reconstruct how to
 // relaunch a dev build from a protocol click.
 if (process.defaultApp) {
   const scriptArg = process.argv[1];
@@ -122,7 +122,7 @@ if (process.defaultApp) {
 console.error("[PAWOS START] before app.whenReady");
 
 // Windows/Linux deliver a protocol click as a brand-new process launch with
-// the URL in argv — without a single-instance lock, that would open a
+// the URL in argv â€” without a single-instance lock, that would open a
 // second, redundant copy of PawOS instead of handing the URL to the one
 // already running (and already holding the pending OAuth promise).
 // Request single-instance lock. On failure, we'll proceed anyway since this could be:
@@ -163,7 +163,7 @@ app.commandLine.appendSwitch('enable-unsafe-swiftshader');
 /**
  * Renderer console output and crashes are otherwise invisible from the main
  * process's own stdout, which made "the companion didn't appear" reports
- * impossible to diagnose — this makes the actual JS error (if any) show up
+ * impossible to diagnose â€” this makes the actual JS error (if any) show up
  * right here instead of silently vanishing.
  */
 function attachDiagnostics(win: BrowserWindow, label: string) {
@@ -190,7 +190,7 @@ function attachDiagnostics(win: BrowserWindow, label: string) {
 
 function getOverlayBoundsCentered() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
-  // Window size: 75% width × full height, centered horizontally
+  // Window size: 75% width Ã— full height, centered horizontally
   const windowWidth = Math.round(width * 0.75);
   const windowHeight = height;
   const x = Math.round((width - windowWidth) / 2);
@@ -206,7 +206,7 @@ function getOverlayBoundsCentered() {
  * active:true) so its mostly-transparent bounds never block clicks meant
  * for whatever's underneath. Only turned off (interactive) while the
  * cursor is actually over a real, visible region (avatar/chat/workspace
- * panel) — see the mousemove-driven toggle in CompanionExperience.tsx.
+ * panel) â€” see the mousemove-driven toggle in CompanionExperience.tsx.
  */
 function setOverlayInteractive(active: boolean): boolean {
   if (!overlayWindow) return false;
@@ -286,7 +286,7 @@ function createOverlayWindow() {
   attachDiagnostics(overlayWindow, 'companion');
   overlayWindow.loadURL(`${pathToFileURL(path.join(__dirname, '../renderer/index.html')).href}?window=companion`);
 
-  // Click-through by default (see setOverlayInteractive) — the transparent
+  // Click-through by default (see setOverlayInteractive) â€” the transparent
   // canvas must never block the real desktop underneath until the
   // renderer reports the cursor is actually over visible content.
   overlayWindow.setIgnoreMouseEvents(true, { forward: true });
@@ -355,7 +355,7 @@ function createAppTray() {
 app.whenReady().then(async () => {
   console.error("[PAWOS START] app.whenReady entered");
   // Electron auto-generates a default File/Edit/View/Window/Help menu bar when no
-  // application menu is set — that's stock OS chrome, not anything this product defines, and
+  // application menu is set â€” that's stock OS chrome, not anything this product defines, and
   // doesn't belong on a companion app with no File/Edit/View/Window/Help commands to offer. Null
   // removes it entirely rather than building a custom one with nothing real to put in it.
   Menu.setApplicationMenu(null);
@@ -363,17 +363,17 @@ app.whenReady().then(async () => {
 
   // Cold start via a pawos:// click (app wasn't already running): Windows/
   // Linux launch this as a brand-new process with the URL in argv, but that
-  // never fires 'second-instance' (nothing was running to receive it) — only
+  // never fires 'second-instance' (nothing was running to receive it) â€” only
   // this process's own process.argv has it.
   const coldStartUrl = extractProtocolUrlFromArgv(process.argv);
   if (coldStartUrl) handleOAuthProtocolUrl(coldStartUrl);
 
   // Without an explicit handler, Electron denies 'media' (microphone)
-  // permission requests by default for file://-loaded content — which is
+  // permission requests by default for file://-loaded content â€” which is
   // how every window here loads. That silently breaks SpeechRecognition
   // before any audio is ever captured (recognition.start() fails
   // immediately with a 'not-allowed' error). 'notifications' must also be
-  // allowed here — the onboarding wizard's "Enable notifications" step
+  // allowed here â€” the onboarding wizard's "Enable notifications" step
   // calls the real Notification.requestPermission() API, and this handler
   // used to blanket-deny anything other than 'media', so that step always
   // silently resolved to 'denied' with no real OS prompt ever shown.
@@ -386,7 +386,7 @@ app.whenReady().then(async () => {
   // Ensure settings store initialized (creates file on first run)
   SettingsStore.init();
 
-  // Electron's memory of every conversation — rooted at userData, unlike
+  // Electron's memory of every conversation â€” rooted at userData, unlike
   // SettingsStore above (which writes to cwd, a pre-existing gap left as-is
   // here since fixing it is unrelated to this feature).
   conversationSessionStore.init();
@@ -423,21 +423,21 @@ app.whenReady().then(async () => {
   helpActivityStore.init();
   supportConversationStore.init();
 
-  // Connectivity Runtime — populates the registry with real, locally-
+  // Connectivity Runtime â€” populates the registry with real, locally-
   // detected tools (Git, Docker, kubectl, VS Code, etc.) so the
   // Integrations Settings page has real data from first launch, not an
   // always-empty "Detected on this machine" section.
   discoveryService.discoverAndRegister().catch((e) => console.error('[connectivity] discoverAndRegister failed:', e));
 
-  // Connector #1: Jira — the first real ConnectorSDK, bridging this previously-empty registry
+  // Connector #1: Jira â€” the first real ConnectorSDK, bridging this previously-empty registry
   // into the Infrastructure Runtime that InvestigateTicketPlugin actually reads from.
   connectorRegistry.register(jiraConnectorSDK);
 
-  // Connector #2: Google Workspace — first OAuth2/PKCE ConnectorSDK, bridging Drive/Gmail/
+  // Connector #2: Google Workspace â€” first OAuth2/PKCE ConnectorSDK, bridging Drive/Gmail/
   // Calendar/Contacts into the pre-existing officeConnectorRegistry scaffold (OFF-1).
   connectorRegistry.register(googleWorkspaceConnectorSDK);
 
-  // Connectors #3-#9: GitHub/GitLab/Linear/Vercel/Netlify/Railway/Slack — every remaining PawOS
+  // Connectors #3-#9: GitHub/GitLab/Linear/Vercel/Netlify/Railway/Slack â€” every remaining PawOS
   // v1 Connections provider. Signed-in credential persistence is restored by the renderer after
   // it confirms an authenticated Supabase session.
   const oauthConnectorSDKs = [
@@ -455,25 +455,25 @@ app.whenReady().then(async () => {
   }
 
   // .env next to the installed exe (packaged) or at the repo root (dev
-  // checkout, cwd when running `electron .`) — lets the user drop keys in a
+  // checkout, cwd when running `electron .`) â€” lets the user drop keys in a
   // file instead of typing them into the app. PUBLIC_ENV_DEFAULTS covers the
   // non-secret OAuth/Supabase config every install needs (see its own
   // comments for why these specific values are safe to ship); a real .env
   // still overrides them for anyone pointing at a different backend.
   envVars = { ...PUBLIC_ENV_DEFAULTS, ...readEnvFile([path.dirname(app.getPath('exe')), process.cwd(), app.getAppPath()]) };
 
-  // Real bug fix, not a redesign: readEnvFile() only ever returned a plain object — nothing
+  // Real bug fix, not a redesign: readEnvFile() only ever returned a plain object â€” nothing
   // anywhere copied it into process.env. Every process.env[...] lookup elsewhere in the app
   // (OAuthManager's clientIdEnvVar, WebhookManager's CONNECTIVITY_PUBLIC_BASE_URL_ENV_VAR,
   // communication adapters' credentialEnvVar) was silently unreachable via the app's own .env
-  // file convention — it only worked if the value happened to already be a real OS-level
+  // file convention â€” it only worked if the value happened to already be a real OS-level
   // environment variable. This was latent/never-hit until GoogleWorkspaceConnectorSDK became the
   // first registered connector to actually declare an `oauth.clientIdEnvVar`. `.env` file values
   // win over whatever the OS process already had, matching this object's own existing precedence
   // (PUBLIC_ENV_DEFAULTS < .env file).
   Object.assign(process.env, envVars);
 
-  // Staging environment override — if PAWOS_STAGING_URL is set, use it and the staging
+  // Staging environment override â€” if PAWOS_STAGING_URL is set, use it and the staging
   // anon key instead of the default prod Supabase credentials. Allows testing against
   // a staging Supabase project without code changes.
   if (envVars.PAWOS_STAGING_URL && envVars.PAWOS_STAGING_ANON_KEY) {
@@ -497,19 +497,19 @@ app.whenReady().then(async () => {
 
   initInfrastructureConnectors(envVars);
 
-  // RequirementGate — the runtime's general requirement-resolution engine. Two resolvers exist
+  // RequirementGate â€” the runtime's general requirement-resolution engine. Two resolvers exist
   // today (capability access, checked against the Infrastructure/Connectivity Runtime registries
   // above; entitlement access, checked against the subscription tier); future resolver kinds
   // (confirmation/approval/selection/etc.) register here the same way.
   requirementGate.registerResolver(capabilityRequirementResolver);
   requirementGate.registerResolver(entitlementRequirementResolver);
 
-  // Language Provider Registry — the seam DependencyGraphBuilder/FeatureMapBuilder call through
+  // Language Provider Registry â€” the seam DependencyGraphBuilder/FeatureMapBuilder call through
   // instead of hardcoding TypeScript's compiler API directly. TypeScript is the only registered
   // provider today; a future language is a new registerProvider() call here, nothing else.
   languageProviderRegistry.registerProvider(typeScriptLanguageProvider);
 
-  // Domain Concept Registry — the seam DetectDomainConceptsPlugin calls through instead of
+  // Domain Concept Registry â€” the seam DetectDomainConceptsPlugin calls through instead of
   // hardcoding a fixed vocabulary list. Three built-in packs (auth/billing/crudResource) today; a
   // future pack (e.g. notifications, search) is a new registerPack() call here, nothing else.
   for (const pack of BUILTIN_DOMAIN_CONCEPT_PACKS) domainConceptRegistry.registerPack(pack);
@@ -544,7 +544,7 @@ app.whenReady().then(async () => {
     startGoogleSignIn: () => {
       if (!envVars.GOOGLE_CLIENT_ID || !envVars.GOOGLE_REDIRECT_URI) {
         return Promise.reject(
-          new Error('Google sign-in isn’t configured yet — add GOOGLE_CLIENT_ID and GOOGLE_REDIRECT_URI to your .env.')
+          new Error('Google sign-in isnâ€™t configured yet â€” add GOOGLE_CLIENT_ID and GOOGLE_REDIRECT_URI to your .env.')
         );
       }
       return startGoogleSignIn({
@@ -553,7 +553,7 @@ app.whenReady().then(async () => {
       });
     },
     // GitHub sign-in goes through Supabase's own hosted OAuth (GitHub's
-    // OAuth2 has no id_token to bridge with, unlike Google) — see
+    // OAuth2 has no id_token to bridge with, unlike Google) â€” see
     // GitHubOAuthFlow.ts. The renderer builds the authorize URL via
     // supabase.auth.signInWithOAuth() and hands it here; this only needs
     // GITHUB_REDIRECT_URI (the loopback callback), since the Client
@@ -562,7 +562,7 @@ app.whenReady().then(async () => {
     startGithubSignIn: (authorizeUrl: string) => {
       if (!envVars.GITHUB_REDIRECT_URI) {
         return Promise.reject(
-          new Error("GitHub sign-in isn’t configured yet - add GITHUB_REDIRECT_URI to your .env.")
+          new Error("GitHub sign-in isnâ€™t configured yet - add GITHUB_REDIRECT_URI to your .env.")
         );
       }
       return waitForGitHubOAuthCallback(envVars.GITHUB_REDIRECT_URI, authorizeUrl);
@@ -600,10 +600,11 @@ app.on('will-quit', () => {
   stopPlatformResourceSampler();
 });
 
-// Auto start with Windows — reflects the persisted Settings > General toggle
+// Auto start with Windows â€” reflects the persisted Settings > General toggle
 // (GeneralSection.tsx's startWithWindows), not a hardcoded always-on default.
 // electron-builder.yml config uses nsis; also set in main for immediate behavior.
 app.setLoginItemSettings({
   openAtLogin: SettingsStore.getState().startWithWindows,
   path: app.getPath('exe'),
 });
+

@@ -12,6 +12,10 @@ export type RollingUsageSummary = {
   limit5h: number | null;
   usage7d: number;
   limit7d: number | null;
+  activeHours5h: number | null;
+  activeHours7d: number | null;
+  activeHoursUsed5h: number;
+  activeHoursUsed7d: number;
 };
 
 export type GenerationCheckResult =
@@ -66,9 +70,10 @@ class RollingUsageGate {
 
   get inflightCount(): number { return this.inflightTimers.length; }
 
-  private sumInWindow(windowMs: number, now: number): number {
+  private sumInWindow(windowMs: number, now: number, isBuild = false): { pc: number; activeMs: number } {
     const cutoff = now - windowMs;
-    let total = 0;
+    let totalPc = 0;
+    let totalActiveMs = 0;
     for (const record of usageEventStore.list()) {
       if (record.fable) continue;
       // Background (system) Gemini calls — transcription, file classification, session
@@ -80,20 +85,35 @@ class RollingUsageGate {
       // subscription Tier Compute quota. Autonomous usage is recorded with runId set to the
       // autonomous task ID; normal conversations have runId === null. Exclude autonomous
       // work from rolling limits to maintain quota separation.
-      if (record.runId !== null) continue;
-      if (record.timestamp >= cutoff) total += record.normalizedCompute;
+      // Build tier only counts usage in the Build cohort (e.g. maybe separate runId logic later)
+      // but standard tiers exclude autonomous tasks.
+      if (!isBuild && record.runId !== null) continue;
+      if (record.timestamp >= cutoff) {
+        totalPc += record.normalizedCompute;
+        totalActiveMs += (record.activeDurationMs ?? 0);
+      }
     }
-    return Math.round(total * 10_000) / 10_000;
+    return {
+      pc: Math.round(totalPc * 10_000) / 10_000,
+      activeMs: totalActiveMs,
+    };
   }
 
-  getRollingUsage(tier: SubscriptionTierId, seatTier?: SeatTier, now = Date.now()): RollingUsageSummary {
-    const capacity = pawComputeCapacityStore.resolve(tier, seatTier);
+  getRollingUsage(tier: SubscriptionTierId | 'build', seatTier?: SeatTier, now = Date.now(), proMaxVariant?: '5x' | '20x'): RollingUsageSummary {
+    const capacity = pawComputeCapacityStore.resolve(tier, seatTier, proMaxVariant);
+    
+    const sum5h = this.sumInWindow(WINDOW_5H_MS, now, tier === 'build');
+    const sum7d = this.sumInWindow(WINDOW_7D_MS, now, tier === 'build');
 
     return {
-      usage5h:  this.sumInWindow(WINDOW_5H_MS, now),
-      limit5h:  capacity.window5hPc,
-      usage7d:  this.sumInWindow(WINDOW_7D_MS, now),
-      limit7d:  capacity.windowWeeklyPc,
+      usage5h: sum5h.pc,
+      limit5h: capacity.window5hPc,
+      usage7d: sum7d.pc,
+      limit7d: capacity.windowWeeklyPc,
+      activeHoursUsed5h: sum5h.activeMs / (1000 * 60 * 60),
+      activeHours5h: capacity.window5hActiveHours,
+      activeHoursUsed7d: sum7d.activeMs / (1000 * 60 * 60),
+      activeHours7d: capacity.windowWeeklyActiveHours,
     };
   }
 
@@ -103,9 +123,9 @@ class RollingUsageGate {
    * (Enterprise) the local gate always returns allowed=true and callers must go through
    * organizationUsageService instead.
    */
-  canStartGeneration(tier: SubscriptionTierId, seatTier?: SeatTier, now = Date.now()): GenerationCheckResult {
-    const capacity = pawComputeCapacityStore.resolve(tier, seatTier);
-    const usage = this.getRollingUsage(tier, seatTier, now);
+  canStartGeneration(tier: SubscriptionTierId | 'build', seatTier?: SeatTier, now = Date.now(), proMaxVariant?: '5x' | '20x'): GenerationCheckResult {
+    const capacity = pawComputeCapacityStore.resolve(tier, seatTier, proMaxVariant);
+    const usage = this.getRollingUsage(tier, seatTier, now, proMaxVariant);
 
     if (capacity.pooled) {
       return { allowed: true, pooled: true, deferTo: 'organizationUsageService', usage };
@@ -139,6 +159,24 @@ class RollingUsageGate {
         allowed: false,
         pooled: false,
         reason: `Weekly Paw Compute limit reached (${usage.usage7d.toFixed(2)} / ${capacity.windowWeeklyPc} PC in the last 7 days)`,
+        usage,
+      };
+    }
+    
+    if (capacity.window5hActiveHours !== null && usage.activeHoursUsed5h >= capacity.window5hActiveHours) {
+      return {
+        allowed: false,
+        pooled: false,
+        reason: `5-hour Active Time limit reached (${usage.activeHoursUsed5h.toFixed(2)} / ${capacity.window5hActiveHours} h in the last 5 hours)`,
+        usage,
+      };
+    }
+
+    if (capacity.windowWeeklyActiveHours !== null && usage.activeHoursUsed7d >= capacity.windowWeeklyActiveHours) {
+      return {
+        allowed: false,
+        pooled: false,
+        reason: `Weekly Active Time limit reached (${usage.activeHoursUsed7d.toFixed(2)} / ${capacity.windowWeeklyActiveHours} h in the last 7 days)`,
         usage,
       };
     }

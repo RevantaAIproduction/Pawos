@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   SettingsState,
   FeedbackSubmission,
   HelpActivityState,
@@ -213,7 +213,7 @@ export function contextBridge() {
     billingGetPricing: async (): Promise<PricingConfig> => ipcApi.invoke('billing:getPricing'),
     billingGetTicketPricingConfig: async (): Promise<TicketPricingConfig> => ipcApi.invoke('billing:getTicketPricingConfig'),
     billingGetGooglePlacesApiKey: async (): Promise<string> => ipcApi.invoke('billing:getGooglePlacesApiKey'),
-    billingGetSubscription: async (): Promise<SubscriptionState> => ipcApi.invoke('billing:getSubscription'),
+    billingClearUsageHistory: () => Promise.resolve(),\n    billingGetSubscription: async (): Promise<SubscriptionState> => ipcApi.invoke('billing:getSubscription'),
     billingSetSubscriptionTier: async (tier: SubscriptionTierId): Promise<SubscriptionState> =>
       ipcApi.invoke('billing:setSubscriptionTier', tier),
     billingSyncTierFromOrganization: async (accessToken: string, organizationId: string, seatTier?: SeatTier): Promise<SubscriptionState> =>
@@ -443,7 +443,7 @@ export function contextBridge() {
     adminHydrateTestTier: async (input: { userId: string; realTier: string; testTier: string }): Promise<{ ok: boolean; reason?: string }> =>
       ipcApi.invoke('admin:hydrateTestTier', input),
 
-    // Enterprise Billing — Inquiry & Checkout
+    // Enterprise Billing â€” Inquiry & Checkout
     enterpriseSubmitInquiry: async (request: { name: string; email: string; company: string; phone: string; seatsNeeded: number; message?: string }): Promise<{ ok: boolean; inquiryId?: string; reason?: string }> =>
       ipcApi.invoke('enterprise:submitInquiry', request),
     enterpriseCreateOrder: async (request: { inquiryId?: string; seatsCount: number; spendingLimitPerUserCents: number; startingBalanceCents: number }): Promise<{ ok: boolean; orderId?: string; totalDueCents?: number; invoiceNumber?: string; reason?: string }> =>
@@ -472,3 +472,5 @@ export function contextBridge() {
       on('governance:denied', cb),
   };
 }
+
+

@@ -1,6 +1,6 @@
-/** This device's own locally-generated identity — persisted once per install, independent of which PawOS account is currently signed in. */
 export type LocalDeviceIdentity = {
   deviceId: string;
+  deviceHash?: string;
   deviceName: string;
   platform: string;
 };

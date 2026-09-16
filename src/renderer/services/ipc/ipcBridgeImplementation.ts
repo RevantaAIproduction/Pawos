@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   SettingsState,
   FeedbackSubmission,
   SupportConversationTurn,
@@ -280,7 +280,7 @@ export const ipc = {
   async billingGetGooglePlacesApiKey(): Promise<string> {
     return getBridge().billingGetGooglePlacesApiKey();
   },
-  async billingGetSubscription(): Promise<SubscriptionState> {
+  async billingClearUsageHistory(): Promise<void> {\n    return getBridge().billingClearUsageHistory();\n  }\n\n  async billingGetSubscription(): Promise<SubscriptionState> {
     return getBridge().billingGetSubscription();
   },
   async billingSetSubscriptionTier(tier: SubscriptionTierId): Promise<SubscriptionState> {
@@ -294,6 +294,12 @@ export const ipc = {
   },
   async billingResetSubscription(): Promise<SubscriptionState> {
     return getBridge().billingResetSubscription();
+  },
+    async billingSyncBuildEntitlement(accessToken: string): Promise<{ ok: boolean; state?: any; reason?: string }> {
+    return getBridge().billingSyncBuildEntitlement(accessToken);
+  },
+  async billingClearBuildEntitlement(): Promise<{ ok: boolean }> {
+    return getBridge().billingClearBuildEntitlement();
   },
   async billingGetCreditBalance(): Promise<CreditBalance> {
     return getBridge().billingGetCreditBalance();
@@ -634,7 +640,7 @@ export const ipc = {
     return getBridge().adminHydrateTestTier(input);
   },
 
-  // Enterprise Billing — Inquiry & Checkout
+  // Enterprise Billing â€” Inquiry & Checkout
   async enterpriseSubmitInquiry(request: { name: string; email: string; company: string; phone: string; seatsNeeded: number; message?: string }): Promise<{ ok: boolean; inquiryId?: string; reason?: string }> {
     return getBridge().enterpriseSubmitInquiry(request);
   },
@@ -787,3 +793,5 @@ export const ipc = {
 export type IpcApi = typeof ipc;
 
 export type IpcSettings = SettingsState;
+
+

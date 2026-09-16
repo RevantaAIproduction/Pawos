@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import styles from './conversationPanel.module.css';
 import type { ConversationSnapshot, SubmittedInputContext } from './ConversationTypes';
 import { conversationStateLabels } from './ConversationTypes';
@@ -40,9 +40,10 @@ import { AcceptEditsControl } from './AcceptEditsControl';
 import { ModelSelectorWidget } from './ModelSelectorWidget';
 import { ContextualGovernancePanel } from './ContextualGovernancePanel';
 import { ContextualPlanPanel } from './ContextualPlanPanel';
+import { MessageActions } from './MessageActions/MessageActions';
 
 /** Reasoning models are genuinely selectable (they change which model actually answers); the rest
- *  of the catalog are automatic, specialized routers Paw invokes per-need — shown for transparency
+ *  of the catalog are automatic, specialized routers Paw invokes per-need â€” shown for transparency
  *  only, never clickable, mirroring AISettingsPage.tsx's own "Default reasoning model" vs. "All Paw
  *  models" split. */
 type ModelUiState = 'available' | 'locked' | 'exhausted' | 'comingSoon';
@@ -54,12 +55,12 @@ function getModelUiState(model: PawModelDescriptor, entitlement: EntitlementSnap
   return 'available';
 }
 
-/** Below this, a paste is probably just a short phrase someone copied — above it, it reads as reference material to skim/summarize rather than a spoken command. */
+/** Below this, a paste is probably just a short phrase someone copied â€” above it, it reads as reference material to skim/summarize rather than a spoken command. */
 const PASTE_LENGTH_THRESHOLD = 200;
 
-/** Plain-text-readable formats only — full document/spreadsheet parsing (PDF, docx, xlsx) is real future work, not something to fake here. Images are handled separately below (Reference Intelligence), not as text. */
+/** Plain-text-readable formats only â€” full document/spreadsheet parsing (PDF, docx, xlsx) is real future work, not something to fake here. Images are handled separately below (Reference Intelligence), not as text. */
 const SUPPORTED_FILE_EXTENSIONS = ['.txt', '.csv', '.json', '.md', '.log'];
-/** Reference material for Reference/Image Intelligence (a screenshot, mockup, logo) — analyzed via analyze_reference_image, never read as text. */
+/** Reference material for Reference/Image Intelligence (a screenshot, mockup, logo) â€” analyzed via analyze_reference_image, never read as text. */
 const SUPPORTED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
 const MAX_FILE_CHARS = 20_000;
 
@@ -238,7 +239,7 @@ export function ConversationPanel({
   onSetVoiceOutputEnabled: (enabled: boolean) => void;
   onStopSpeechPlayback: () => void;
   onSpeakMessage: (text: string) => void;
-  /** "Retry failed step" in a Task Card's Details panel — re-runs one action from its own recorded request. */
+  /** "Retry failed step" in a Task Card's Details panel â€” re-runs one action from its own recorded request. */
   onRetryAction?: (taskId: string, actionId: string) => void;
   /** "Open" next to a file/folder a Task Card touched. */
   onOpenPath?: (path: string, kind: 'file' | 'folder') => void;
@@ -252,23 +253,23 @@ export function ConversationPanel({
   ) => Promise<{ ok: boolean; message?: string }> | void;
   /** "Connect in Settings" for a capability with no inline form yet. */
   onNavigateToSettingsConnector?: (connectorId: string) => void;
-  /** "Add Funds" on a balance-restricted Autonomous Work failure — opens the Ticket Balance wallet (Settings → Billing). */
+  /** "Add Funds" on a balance-restricted Autonomous Work failure â€” opens the Ticket Balance wallet (Settings â†’ Billing). */
   onOpenTicketBalance?: () => void;
   onPlanDecision?: (planId: string, decision: 'approved' | 'rejected', message: string) => void;
   /** Set when the last submit was blocked by the entitlement/credit gate (see useConversationController). */
   creditsNoticeTier?: SubscriptionTierId | null;
-  /** Only meaningful when tier === 'team' — which seat rate determines the exhaustion notice's upgrade target. */
+  /** Only meaningful when tier === 'team' â€” which seat rate determines the exhaustion notice's upgrade target. */
   creditsNoticeSeatTier?: SeatTier;
-  /** True only for Enterprise (pooled Paw Compute) — see EntitlementSnapshot.pooled. */
+  /** True only for Enterprise (pooled Paw Compute) â€” see EntitlementSnapshot.pooled. */
   creditsNoticePooled?: boolean;
   /** Whether the Pro Max -> Enterprise "Contact Sales" path is reachable from this screen. */
   enterpriseContactAvailable?: boolean;
   onDismissCreditsNotice?: () => void;
-  /** Opens the in-app upgrade flow for the next tier up — omit where there's no real navigation target yet. */
+  /** Opens the in-app upgrade flow for the next tier up â€” omit where there's no real navigation target yet. */
   onUpgrade?: () => void;
-  /** Opens the Paw Compute top-up flow — omit where there's no real navigation target yet. */
+  /** Opens the Paw Compute top-up flow â€” omit where there's no real navigation target yet. */
   onBuyCompute?: () => void;
-  /** Opens the Enterprise info/signup page — omit where there's no real navigation target yet. */
+  /** Opens the Enterprise info/signup page â€” omit where there's no real navigation target yet. */
   onContactSales?: () => void;
   onContactAdmin?: () => void;
   onRequestMoreCompute?: () => void;
@@ -277,12 +278,12 @@ export function ConversationPanel({
   onUseCredits?: () => void;
   redeemingCredits?: boolean;
   redeemCreditsError?: string | null;
-  /** The composer's mode picker — see ExecutionModeTypes.ts. Defaults to Auto (today's behavior) when omitted. */
+  /** The composer's mode picker â€” see ExecutionModeTypes.ts. Defaults to Auto (today's behavior) when omitted. */
   executionMode?: ConversationExecutionMode;
   onSetExecutionMode?: (mode: ConversationExecutionMode) => void;
-  /** Whether the Settings-only "Bypass permissions" toggle is currently on — gates whether that mode is selectable at all. */
+  /** Whether the Settings-only "Bypass permissions" toggle is currently on â€” gates whether that mode is selectable at all. */
   bypassPermissionsEnabled?: boolean;
-  /** The composer's model picker — see PawModelTypes.ts/AIRouter.ts. Authoritative for what's actually
+  /** The composer's model picker â€” see PawModelTypes.ts/AIRouter.ts. Authoritative for what's actually
    *  selectable/locked/exhausted; the renderer never grants access on its own (see selectModel in
    *  useConversationController.ts and the submitTranscript backstop it also adds). */
   entitlement?: EntitlementSnapshot | null;
@@ -790,11 +791,11 @@ export function ConversationPanel({
   const latestMessage = useMemo(() => snapshot.messages[snapshot.messages.length - 1], [snapshot.messages]);
 
   // Action narration (system lines) get appended just like any other
-  // message — without this, they scroll out of view the moment the
+  // message â€” without this, they scroll out of view the moment the
   // transcript overflows its fixed height, so the user never actually
-  // sees "Installing X…" / "Setting Y…" happen even though it's right
-  // there in the DOM. Every new message — including in-place narration
-  // updates from streaming to final — should keep the latest one in view.
+  // sees "Installing Xâ€¦" / "Setting Yâ€¦" happen even though it's right
+  // there in the DOM. Every new message â€” including in-place narration
+  // updates from streaming to final â€” should keep the latest one in view.
   useEffect(() => {
     const el = transcriptRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -831,7 +832,7 @@ export function ConversationPanel({
   }, [snapshot.messages]);
 
   // While performing an action, show what's actually happening ("Opening VS
-  // Code…") instead of the generic "Performing action" — Desktop Status
+  // Codeâ€¦") instead of the generic "Performing action" â€” Desktop Status
   // should always name the real activity, not just the state machine's name for it.
   const latestSystemMessage = useMemo(
     () => [...snapshot.messages].reverse().find((m) => m.role === 'system'),
@@ -930,7 +931,7 @@ export function ConversationPanel({
       false // not a strategy change request (already handled above)
     );
 
-    // If user has a strategy AND request is actionable → apply strategy automatically
+    // If user has a strategy AND request is actionable â†’ apply strategy automatically
     if (hasExistingStrategy && isActionable) {
       const temporaryMode = executionStrategy === 'handsOn' ? 'acceptEdits' : 'plan';
       const contextWithMode: SubmittedInputContext = {
@@ -945,14 +946,14 @@ export function ConversationPanel({
       return;
     }
 
-    // First-time actionable request with no strategy → show choice card
+    // First-time actionable request with no strategy â†’ show choice card
     if (!hasExistingStrategy && isActionable) {
       setPendingRequest({ text, context });
       setExecutionChoicePending(true);
       return;
     }
 
-    // Non-actionable request → normal submission
+    // Non-actionable request â†’ normal submission
     onSendTranscript(text, context);
     setDraft('');
     lastSyncedVoiceDraftRef.current = '';
@@ -1025,7 +1026,7 @@ export function ConversationPanel({
     setAttachError(null);
     try {
       const imageDataUrl = await readImageAsDataUrl(file);
-      onSendTranscript(`📎 ${file.name || 'pasted image'}`, { source: 'image', imageDataUrl });
+      onSendTranscript(`ðŸ“Ž ${file.name || 'pasted image'}`, { source: 'image', imageDataUrl });
     } catch {
       setAttachError('I could not read that image.');
     }
@@ -1048,10 +1049,10 @@ export function ConversationPanel({
     const content = await file.text();
     const truncated = content.length > MAX_FILE_CHARS;
     const reasoningText = truncated
-      ? `${content.slice(0, MAX_FILE_CHARS)}\n\n[Truncated — the file continues beyond this point.]`
+      ? `${content.slice(0, MAX_FILE_CHARS)}\n\n[Truncated â€” the file continues beyond this point.]`
       : content;
 
-    onSendTranscript(`📎 ${file.name}`, { reasoningText, source: 'file' });
+    onSendTranscript(`ðŸ“Ž ${file.name}`, { reasoningText, source: 'file' });
   };
 
 
@@ -1077,16 +1078,16 @@ export function ConversationPanel({
         {hasMessages && entitlement?.tier !== 'go' && (
           <div className={styles.workspaceControls}>
             <button className={styles.workspaceTab} onClick={() => setOpenPanel(openPanel === 'terminal' ? null : 'terminal')} title="Terminal">
-              ⌘ Terminal
+              âŒ˜ Terminal
             </button>
             <button className={styles.workspaceTab} onClick={() => setOpenPanel(openPanel === 'browser' ? null : 'browser')} title="Browser">
-              🌐 Browser
+              ðŸŒ Browser
             </button>
             <button className={styles.workspaceTab} onClick={() => setOpenPanel(openPanel === 'files' ? null : 'files')} title="Files">
-              📁 Files
+              ðŸ“ Files
             </button>
             <button className={styles.workspaceTab} onClick={() => setOpenPanel(openPanel === 'worktree' ? null : 'worktree')} title="Worktree">
-              🌳 Worktree
+              ðŸŒ³ Worktree
             </button>
           </div>
         )}
@@ -1106,12 +1107,12 @@ export function ConversationPanel({
             />
           </div>
           <button className={styles.closeBtn} onClick={onClose} type="button" title="Close">
-            ✕
+            âœ•
           </button>
         </div>
       </div>
 
-      {/* ═ SPLIT LAYOUT: Conversation (left) + Panel (right) ═ */}
+      {/* â• SPLIT LAYOUT: Conversation (left) + Panel (right) â• */}
       <div className={styles.splitContainer}>
         {/* LEFT SIDE: Conversation & Idle State */}
         <div className={styles.splitLeft}>
@@ -1199,23 +1200,61 @@ export function ConversationPanel({
                           </div>
                         )}
                       </div>
-                      <div className={styles.messageActions}>
-                        <span className={styles.messageTime} title={timestamp.toLocaleString()}>⏱ {timeDisplay}</span>
-                        <button className={styles.messageActionBtn} onClick={() => navigator.clipboard.writeText(message.content)} title="Copy">⎘</button>
-                        <button className={styles.messageActionBtn} onClick={() => {}} title="Pin">⚐</button>
-                        <button className={styles.messageActionBtn} onClick={() => {
-                          const forkedMessages = snapshot.messages.slice(0, idx + 1);
-                          console.log('Fork session from message', idx, '- messages:', forkedMessages);
-                          ipc.forkConversation?.(forkedMessages);
-                        }} title="Fork session">⎇</button>
-                      </div>
+                                              <MessageActions
+                          messageId={message.id}
+                          timestamp={new Date(message.createdAt)}
+                          onCopy={() => navigator.clipboard.writeText(message.content)}
+                          onDownloadPdf={
+                            (message.role === 'assistant' && message.content.toLowerCase().includes('ats analysis')) 
+                              ? async () => {
+                                  try {
+                                    // Structured extraction for PDF
+                                    const lines = message.content.split('\n');
+                                    const docData = {
+                                      title: 'ATS Analysis Result',
+                                      sections: [{ paragraphs: lines }]
+                                    };
+                                    // Assume window.ipc exposes the generated functions
+                                    const ipcAny = window.ipc as any;
+                                    const res = await ipcAny.billingGenerateBuildResumeAtsPdf(docData);
+                                    if (res?.ok) {
+                                      // Success
+                                    } else if (!res?.canceled) {
+                                      console.error(res?.reason || 'Failed to generate PDF');
+                                    }
+                                  } catch (e) {
+                                    console.error(e);
+                                  }
+                                }
+                              : (message.role === 'assistant' && message.content.toLowerCase().includes('rewritten resume'))
+                              ? async () => {
+                                  try {
+                                    const lines = message.content.split('\n');
+                                    const docData = {
+                                      title: 'Rewritten Resume',
+                                      sections: [{ paragraphs: lines }]
+                                    };
+                                    const ipcAny = window.ipc as any;
+                                    const res = await ipcAny.billingGenerateBuildResumeRewritePdf(docData);
+                                    if (res?.ok) {
+                                      // Success
+                                    } else if (!res?.canceled) {
+                                      console.error(res?.reason || 'Failed to generate PDF');
+                                    }
+                                  } catch (e) {
+                                    console.error(e);
+                                  }
+                                }
+                              : undefined
+                          }
+                        />
                     </div>
                   );
                 })}
 
                 {isStreaming && (
                   <div className={styles.streaming}>
-                    ✨ PawOS is responding
+                    âœ¨ PawOS is responding
                   </div>
                 )}
               </div>
@@ -1249,10 +1288,10 @@ export function ConversationPanel({
             {/* Panel Header */}
             <div className={styles.panelHeader}>
               <span className={styles.panelTitle}>
-                {openPanel === 'terminal' && '⌘ Terminal'}
-                {openPanel === 'browser' && '🌐 Browser'}
-                {openPanel === 'files' && '📁 Files'}
-                {openPanel === 'worktree' && '🌳 Worktree'}
+                {openPanel === 'terminal' && 'âŒ˜ Terminal'}
+                {openPanel === 'browser' && 'ðŸŒ Browser'}
+                {openPanel === 'files' && 'ðŸ“ Files'}
+                {openPanel === 'worktree' && 'ðŸŒ³ Worktree'}
               </span>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button
@@ -1267,7 +1306,7 @@ export function ConversationPanel({
                   }}
                   title="Open fullscreen"
                 >
-                  ⛶
+                  â›¶
                 </button>
                 <button
                   onClick={() => setOpenPanel(null)}
@@ -1281,7 +1320,7 @@ export function ConversationPanel({
                   }}
                   title="Close panel"
                 >
-                  ✕
+                  âœ•
                 </button>
               </div>
             </div>
@@ -1370,7 +1409,7 @@ export function ConversationPanel({
                               onMouseEnter={(e) => e.currentTarget.style.color = 'rgba(255, 255, 255, 0.8)'}
                               onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)'}
                             >
-                              {file.endsWith('/') ? '📁' : '📄'} {file}
+                              {file.endsWith('/') ? 'ðŸ“' : 'ðŸ“„'} {file}
                             </div>
                           ))
                         ) : (
@@ -1413,7 +1452,7 @@ export function ConversationPanel({
                                 fontFamily: 'monospace',
                               }}
                             >
-                              {branch.includes('*') ? '● ' : '  '}{branch}
+                              {branch.includes('*') ? 'â— ' : '  '}{branch}
                             </div>
                           ))
                         ) : (
@@ -1465,7 +1504,7 @@ export function ConversationPanel({
         )}
       </div>
 
-      {/* ═ FULLSCREEN PANEL OVERLAY ═ */}
+      {/* â• FULLSCREEN PANEL OVERLAY â• */}
       {fullscreenPanel && (
         <div style={{
           position: 'fixed',
@@ -1492,10 +1531,10 @@ export function ConversationPanel({
               color: 'rgba(255, 255, 255, 0.7)',
               fontWeight: 600,
             }}>
-              {fullscreenPanel === 'terminal' && '⌘ Terminal'}
-              {fullscreenPanel === 'browser' && '🌐 Browser'}
-              {fullscreenPanel === 'files' && '📁 Files'}
-              {fullscreenPanel === 'worktree' && '🌳 Worktree'}
+              {fullscreenPanel === 'terminal' && 'âŒ˜ Terminal'}
+              {fullscreenPanel === 'browser' && 'ðŸŒ Browser'}
+              {fullscreenPanel === 'files' && 'ðŸ“ Files'}
+              {fullscreenPanel === 'worktree' && 'ðŸŒ³ Worktree'}
             </span>
             <button
               onClick={() => setFullscreenPanel(null)}
@@ -1509,7 +1548,7 @@ export function ConversationPanel({
               }}
               title="Close fullscreen"
             >
-              ✕
+              âœ•
             </button>
           </div>
 
@@ -1592,7 +1631,7 @@ export function ConversationPanel({
                             onMouseEnter={(e) => e.currentTarget.style.color = 'rgba(255, 255, 255, 0.8)'}
                             onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)'}
                           >
-                            {file.endsWith('/') ? '📁' : '📄'} {file}
+                            {file.endsWith('/') ? 'ðŸ“' : 'ðŸ“„'} {file}
                           </div>
                         ))
                       ) : (
@@ -1633,7 +1672,7 @@ export function ConversationPanel({
                               fontFamily: 'monospace',
                             }}
                           >
-                            {branch.includes('*') ? '● ' : '  '}{branch}
+                            {branch.includes('*') ? 'â— ' : '  '}{branch}
                           </div>
                         ))
                       ) : (
@@ -1681,7 +1720,7 @@ export function ConversationPanel({
         </div>
       )}
 
-      {/* ═ UPGRADE MESSAGE BAR ═ */}
+      {/* â• UPGRADE MESSAGE BAR â• */}
       {showTierUpgradePopup && entitlement && (
         <div className={styles.upgradeBar}>
           <button
@@ -1689,7 +1728,7 @@ export function ConversationPanel({
             onClick={() => ipc.openBillingSettings?.()}
             title="Click to open billing settings"
           >
-            Limit reached to {Math.round((entitlement.usage5hPc / (entitlement.limit5hPc ?? 1)) * 100)}% •{' '}
+            Limit reached to {Math.round((entitlement.usage5hPc / (entitlement.limit5hPc ?? 1)) * 100)}% â€¢{' '}
             {entitlement.tier === 'pro_max'
               ? 'Buy credits: 5x ($100) or 20x ($250)'
               : entitlement.tier === 'pro'
@@ -1701,12 +1740,12 @@ export function ConversationPanel({
             onClick={() => setShowTierUpgradePopup(false)}
             title="Dismiss"
           >
-            ✕
+            âœ•
           </button>
         </div>
       )}
 
-      {/* ═ BOTTOM COMPOSER ═ */}
+      {/* â• BOTTOM COMPOSER â• */}
       <div className={styles.composer}>
         {/* Input row: textarea + voice + send */}
         <div className={styles.composerInputRow}>
@@ -1749,7 +1788,7 @@ export function ConversationPanel({
               disabled={isStreaming}
               title={voiceState.isRecording ? 'Stop recording' : 'Start voice input'}
             >
-              🎤
+              ðŸŽ¤
             </button>
 
             <button
@@ -1759,7 +1798,7 @@ export function ConversationPanel({
               disabled={isStreaming}
               title={voiceState.speakerEnabled ? 'Disable read-aloud' : 'Enable read-aloud'}
             >
-              👋
+              ðŸ‘‹
             </button>
 
             <button
@@ -1775,7 +1814,7 @@ export function ConversationPanel({
               type="button"
               title="Send (Enter)"
             >
-              →
+              â†’
             </button>
           </div>
         </div>
@@ -1845,11 +1884,11 @@ export function ConversationPanel({
                       <div className={styles.usagePercentage}>{Math.round(percentage)}%</div>
                       <div className={styles.usageRow} style={{ marginTop: '12px' }}>
                         <span>Weekly Limit:</span>
-                        <span className={styles.usageValue}>{Math.round(entitlement?.usageWeeklyPc ?? 0)} / {entitlement?.limitWeeklyPc ?? '∞'} PC</span>
+                        <span className={styles.usageValue}>{Math.round(entitlement?.usageWeeklyPc ?? 0)} / {entitlement?.limitWeeklyPc ?? 'âˆž'} PC</span>
                       </div>
                       {isStreaming && (
                         <div className={styles.usageRow} style={{ marginTop: '12px', color: 'rgba(76, 175, 80, 0.9)' }}>
-                          <span>🟢 Currently using:</span>
+                          <span>ðŸŸ¢ Currently using:</span>
                           <span>{streamingPawCompute} PC</span>
                         </div>
                       )}
@@ -1864,3 +1903,4 @@ export function ConversationPanel({
     </section>
   );
 }
+

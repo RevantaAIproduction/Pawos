@@ -62,6 +62,21 @@ export function computeNormalizedCompute(usage: ProviderUsageMetadata): number {
   return round(realUsdCost * pawComputeConfigStore.getPawComputePerUsd());
 }
 
+const activeTimeRegistry = new Map<string, { start: number; end?: number }>();
+
+export function reportRequestStart(requestId: string): void {
+  if (!activeTimeRegistry.has(requestId)) {
+    activeTimeRegistry.set(requestId, { start: Date.now() });
+  }
+}
+
+export function reportRequestEnd(requestId: string): void {
+  const req = activeTimeRegistry.get(requestId);
+  if (req && !req.end) {
+    req.end = Date.now();
+  }
+}
+
 /**
  * Records one real Gemini usage report as a durable, append-only NormalizedUsageRecord and returns
  * it. One call per real Gemini API request — never per turn (see recordTurnUsage below for the
@@ -86,6 +101,16 @@ export function recordUsageEvent(
     const existing = usageEventStore.findByRequestId(usage.requestId);
     if (existing) return existing;
   }
+  
+  let activeDurationMs = 0;
+  if (usage.requestId) {
+    const req = activeTimeRegistry.get(usage.requestId);
+    if (req) {
+      activeDurationMs = (req.end || Date.now()) - req.start;
+      activeTimeRegistry.delete(usage.requestId);
+    }
+  }
+
   const record: NormalizedUsageRecord = {
     usageEventId: uuidv4(),
     requestId: usage.requestId,
@@ -100,6 +125,7 @@ export function recordUsageEvent(
     totalTokens: usage.totalTokens,
     thoughtsTokens: usage.thoughtsTokens,
     normalizedCompute: computeNormalizedCompute(usage),
+    activeDurationMs,
     timestamp: Date.now(),
     ...(fable ? { fable: true } : {}),
   };
@@ -123,5 +149,6 @@ export function recordTurnUsage(
 ): AggregatedTurnUsage {
   const records = requests.map(({ usage, requestType }) => recordUsageEvent(usage, requestType, context, fable));
   const totalNormalizedCompute = round(records.reduce((sum, r) => sum + r.normalizedCompute, 0));
-  return { totalNormalizedCompute, requestCount: records.length, records };
+  const totalActiveDurationMs = records.reduce((sum, r) => sum + r.activeDurationMs, 0);
+  return { totalNormalizedCompute, totalActiveDurationMs, requestCount: records.length, records };
 }

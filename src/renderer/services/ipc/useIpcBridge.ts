@@ -113,7 +113,7 @@ export function useIpcBridge() {
         ipc.entitlementGetModelTierRequirements(),
       entitlementGetFeatureTierRequirements: async (): Promise<Partial<Record<FeatureId, SubscriptionTierId>>> =>
         ipc.entitlementGetFeatureTierRequirements(),
-      billingGetSubscription: async (): Promise<SubscriptionState> => ipc.billingGetSubscription(),
+      billingClearUsageHistory: async (): Promise<void> => ipc.billingClearUsageHistory(),\n      billingGetSubscription: async (): Promise<SubscriptionState> => ipc.billingGetSubscription(),
       billingGetGooglePlacesApiKey: async (): Promise<string> => ipc.billingGetGooglePlacesApiKey(),
       billingCanStartGeneration: async (pawModelId?: PawModelId): Promise<{ allowed: boolean; reason?: string; pooled?: boolean }> =>
         ipc.billingCanStartGeneration(pawModelId),

@@ -53,4 +53,18 @@ export const organizationUsageService = {
       return { capability, limit: row?.monthly_limit ?? null, used: row?.used_amount ?? 0, periodResetsAt, pooled: true };
     });
   },
+
+  async consumeGoRefresh(deviceHash: string): Promise<boolean> {
+    const supabase = await getSupabaseClient();
+    const { data, error } = await supabase.rpc('consume_go_refresh', { p_device_hash: deviceHash });
+    if (error) throw error;
+    return !!data;
+  },
+
+  async getGoRefreshesRemaining(deviceHash: string): Promise<number> {
+    const supabase = await getSupabaseClient();
+    const { data, error } = await supabase.rpc('get_go_refreshes', { p_device_hash: deviceHash });
+    if (error) return 0;
+    return (data as number) ?? 0;
+  }
 };

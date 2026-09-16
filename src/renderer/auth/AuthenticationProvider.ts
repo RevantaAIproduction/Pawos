@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   AuthService,
   AuthUser,
   EmailCreateAccountOptions,
@@ -18,12 +18,12 @@ const SUPABASE_SESSION_KEY = 'pawos:supabase:session';
 
 /**
  * The one place the rest of PawOS touches for authentication (via useAuth)
- * — routes each call to whichever real IdentityProvider it needs. Nothing
+ * â€” routes each call to whichever real IdentityProvider it needs. Nothing
  * outside this file should import GoogleAuthProvider/EmailAuthProvider
  * directly; that's the whole point of the interface.
  *
  * Email accounts are real Supabase-backed sessions (server-issued JWTs,
- * Supabase's own client persists/refreshes them) — getCurrentUser() checks
+ * Supabase's own client persists/refreshes them) â€” getCurrentUser() checks
  * that directly rather than trusting a local copy. Guest and Google
  * sessions have no external session of their own, so those stay as a
  * local profile record in localStorage.
@@ -35,6 +35,20 @@ const SUPABASE_SESSION_KEY = 'pawos:supabase:session';
  */
 export class AuthenticationProvider implements AuthService {
   private emailProvider = new EmailAuthProvider();
+  constructor() {
+    // Listen for background token refreshes or external sign-outs to keep Build state synced
+    getSupabaseClient().then(supabase => {
+      supabase.auth.onAuthStateChange(async (event, session) => {
+        if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
+          if (session?.access_token) {
+            await ipc.billingSyncBuildEntitlement(session.access_token).catch(() => {});
+          }
+        } else if (event === 'SIGNED_OUT') {
+          await ipc.billingClearBuildEntitlement().catch(() => {});
+        }
+      });
+    }).catch(() => {});
+  }
   private googleProvider = new GoogleAuthProvider();
   private githubProvider = new GitHubAuthProvider();
   private microsoftProvider = new MicrosoftAuthProvider();
@@ -134,8 +148,11 @@ export class AuthenticationProvider implements AuthService {
     window.localStorage.removeItem(STORAGE_KEY);
     window.localStorage.removeItem(REMEMBER_KEY);
     await this.emailProvider.signOut(); // clears the real Supabase session too, not just the local mirror
+    
+    // Clear Build state to prevent inheritance by the next user
+    await ipc.billingClearBuildEntitlement().catch(() => {});
     // Local subscription state (subscription.json) is one file per device install, not namespaced
-    // per account — without this reset, an account that once joined/created a Team/Enterprise org
+    // per account â€” without this reset, an account that once joined/created a Team/Enterprise org
     // (syncFromOrganization only ever raises the tier, never lowers it) would leave every
     // subsequently signed-in account on this device looking like a Team member. A fresh sign-in
     // starts clean; that account's own real org membership (if any) re-elevates it correctly.
@@ -152,7 +169,7 @@ export class AuthenticationProvider implements AuthService {
 
   async getCurrentUser(): Promise<AuthUser | null> {
     if (!this.readRememberMe()) {
-      // "Remember Me" was off last time — require signing in again, and
+      // "Remember Me" was off last time â€” require signing in again, and
       // make sure a real Supabase session doesn't linger unused.
       window.localStorage.removeItem(STORAGE_KEY);
       await this.emailProvider.signOut().catch(() => {});
@@ -194,3 +211,7 @@ export class AuthenticationProvider implements AuthService {
 }
 
 export const authService = new AuthenticationProvider();
+
+
+
+

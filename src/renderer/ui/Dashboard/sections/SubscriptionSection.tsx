@@ -22,10 +22,10 @@ const TIER_LABELS: Record<SubscriptionTierId, string> = {
 };
 
 function formatPrice(plan: PricingPlan | undefined): string {
-  if (!plan) return '…';
+  if (!plan) return 'â€¦';
   if (plan.seatBased) {
-    const range = plan.maxSeats ? `${plan.minSeats}–${plan.maxSeats} members` : `${plan.minSeats}+ users`;
-    return plan.priceCents === null ? `Custom pricing — ${range}` : `$${(plan.priceCents / 100).toFixed(2)}/seat/${plan.billingPeriod} — ${range}`;
+    const range = plan.maxSeats ? `${plan.minSeats}â€“${plan.maxSeats} members` : `${plan.minSeats}+ users`;
+    return plan.priceCents === null ? `Custom pricing â€” ${range}` : `$${(plan.priceCents / 100).toFixed(2)}/seat/${plan.billingPeriod} â€” ${range}`;
   }
   if (plan.priceCents === null) return 'Pricing not finalized yet';
   if (plan.priceCents === 0) return 'Free';
@@ -45,13 +45,25 @@ export function SubscriptionSection({
   const [subscription, setSubscription] = useState<SubscriptionState | null>(null);
   const [entitlement, setEntitlement] = useState<EntitlementSnapshot | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [goRefreshesRemaining, setGoRefreshesRemaining] = useState<number | null>(null);
+  const [deviceHash, setDeviceHash] = useState<string | null>(null);
 
   const currentTier = subscription?.tier || 'go';
 
-  const refresh = () => {
+  const refresh = async () => {
     ipc.billingGetPricing().then(setPricing).catch(() => {});
     ipc.billingGetSubscription().then(setSubscription).catch(() => {});
     ipc.entitlementGetSnapshot().then(setEntitlement).catch(() => {});
+    
+    try {
+      const identity = await ipc.deviceGetLocalIdentity();
+      if (identity.deviceHash) {
+        setDeviceHash(identity.deviceHash);
+        const { organizationUsageService } = await import('../../../billing/OrganizationUsageService');
+        const remaining = await organizationUsageService.getGoRefreshesRemaining(identity.deviceHash);
+        setGoRefreshesRemaining(remaining);
+      }
+    } catch (e) {}
   };
 
   useEffect(() => {
@@ -62,7 +74,7 @@ export function SubscriptionSection({
 
     ipc.onSubscriptionUpdated(() => {
       refresh();
-      setMessage('✅ Payment confirmed — your plan has been updated.');
+      setMessage('âœ… Payment confirmed â€” your plan has been updated.');
     });
 
     return () => window.removeEventListener('focus', onFocus);
@@ -72,15 +84,23 @@ export function SubscriptionSection({
     try {
       await ipc.billingSetSubscriptionTier(tier);
       refresh();
-      setMessage(`✅ Switched to ${TIER_LABELS[tier]}.`);
+      setMessage(`âœ… Switched to ${TIER_LABELS[tier]}.`);
     } catch (error) {
-      setMessage(`❌ Failed to switch plan: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setMessage(`âŒ Failed to switch plan: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
   if (user.isGuest) {
     return (
-      <div style={{ padding: '24px 0' }}>
+            <div style={{ padding: '24px 0' }}>
+        {entitlement?.buildEntitlement?.active && (
+          <div style={{ marginBottom: 32, padding: 16, background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)', borderRadius: 8 }}>
+            <h3 style={{ fontSize: '1.1em', fontWeight: 700, margin: '0 0 8px 0', color: '#818cf8' }}>PawOS Build Cohort</h3>
+            <p style={{ margin: '0 0 4px 0', fontSize: '0.9em' }}>Included PC: {entitlement.buildEntitlement.includedPc}</p>
+            <p style={{ margin: '0 0 4px 0', fontSize: '0.9em' }}>Purchased PC: {entitlement.buildEntitlement.purchasedPc}</p>
+            {entitlement.buildEntitlement.exhaustedAt && <p style={{ margin: 0, fontSize: '0.85em', opacity: 0.7 }}>Exhausted at: {new Date(entitlement.buildEntitlement.exhaustedAt).toLocaleString()}</p>}
+          </div>
+        )}
         <h2 style={{ fontSize: '1.2em', fontWeight: 700, margin: '0 0 8px 0' }}>Subscription</h2>
         <p style={{ fontSize: '0.9em', opacity: 0.6, margin: '0 0 16px 0' }}>Sign in to manage your subscription.</p>
       </div>
@@ -90,7 +110,15 @@ export function SubscriptionSection({
   const currentPlan = pricing?.plans.find((p) => p.tier === currentTier);
 
   return (
-    <div style={{ padding: '24px 0' }}>
+          <div style={{ padding: '24px 0' }}>
+        {entitlement?.buildEntitlement?.active && (
+          <div style={{ marginBottom: 32, padding: 16, background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)', borderRadius: 8 }}>
+            <h3 style={{ fontSize: '1.1em', fontWeight: 700, margin: '0 0 8px 0', color: '#818cf8' }}>PawOS Build Cohort</h3>
+            <p style={{ margin: '0 0 4px 0', fontSize: '0.9em' }}>Included PC: {entitlement.buildEntitlement.includedPc}</p>
+            <p style={{ margin: '0 0 4px 0', fontSize: '0.9em' }}>Purchased PC: {entitlement.buildEntitlement.purchasedPc}</p>
+            {entitlement.buildEntitlement.exhaustedAt && <p style={{ margin: 0, fontSize: '0.85em', opacity: 0.7 }}>Exhausted at: {new Date(entitlement.buildEntitlement.exhaustedAt).toLocaleString()}</p>}
+          </div>
+        )}
       {/* Current Plan Display - Premium UI */}
       <div style={{ marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -98,6 +126,43 @@ export function SubscriptionSection({
             <h3 style={{ fontSize: '1.3em', fontWeight: 700, margin: '0 0 4px 0' }}>{TIER_LABELS[currentTier]}</h3>
             <p style={{ fontSize: '0.9em', opacity: 0.7, margin: '0 0 4px 0' }}>Monthly</p>
             <p style={{ fontSize: '0.85em', opacity: 0.6, margin: 0 }}>Your subscription will auto renew on N/A.</p>
+            
+            {currentTier === 'go' && goRefreshesRemaining !== null && (
+              <div style={{ marginTop: 16, padding: 12, background: 'rgba(255,255,255,0.05)', borderRadius: 6 }}>
+                <p style={{ margin: '0 0 8px 0', fontSize: '0.9em' }}>
+                  <strong>Free Refreshes Remaining:</strong> {goRefreshesRemaining} / 3
+                </p>
+                <button
+                  disabled={goRefreshesRemaining <= 0}
+                  onClick={async () => {
+                    try {
+                      if (!deviceHash) return;
+                      const { organizationUsageService } = await import('../../../billing/OrganizationUsageService');
+                      const success = await organizationUsageService.consumeGoRefresh(deviceHash);
+                      if (success) {
+                        setMessage('✅ Usage refreshed successfully!');
+                        refresh();
+                      } else {
+                        setMessage('❌ No refreshes remaining.');
+                      }
+                    } catch (e) {
+                      setMessage(`❌ Failed to refresh: ${e instanceof Error ? e.message : String(e)}`);
+                    }
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    backgroundColor: goRefreshesRemaining > 0 ? '#4cb050' : '#404040',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 4,
+                    cursor: goRefreshesRemaining > 0 ? 'pointer' : 'not-allowed',
+                    fontSize: '0.85em',
+                  }}
+                >
+                  Refresh Usage
+                </button>
+              </div>
+            )}
           </div>
           <button
             onClick={() => onUpgrade()}
@@ -183,7 +248,7 @@ export function SubscriptionSection({
             margin: '16px 0 0 0',
             opacity: 0.8,
             fontSize: '0.9em',
-            color: message.includes('✓') || message.includes('✅') ? '#4cb050' : '#ef4444',
+            color: message.includes('âœ“') || message.includes('âœ…') ? '#4cb050' : '#ef4444',
           }}
         >
           {message}
@@ -192,3 +257,4 @@ export function SubscriptionSection({
     </div>
   );
 }
+

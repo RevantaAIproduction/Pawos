@@ -2,10 +2,10 @@ import type { PawModelId } from '../ai/PawModelTypes';
 
 /**
  * Paw Go / Pro / Pro Max / Team / Enterprise subscription tiers, pricing, feature
- * entitlements, and AI credit tracking — account-level billing concepts.
+ * entitlements, and AI credit tracking â€” account-level billing concepts.
  * Distinct from src/main/execution/CodingModeStore.ts, which is the Coding
  * Intelligence Runtime's own LOCAL Go/Pro capability toggle (approved,
- * frozen-adjacent, and left untouched here) — that store still solely
+ * frozen-adjacent, and left untouched here) â€” that store still solely
  * governs whether the Coding Runtime may execute vs. only plan, independent
  * of which account tier is subscribed. This module is the separate,
  * account-wide layer: which tier the user is subscribed to, what it costs,
@@ -20,7 +20,7 @@ export type ProMaxVariant = '5x' | '20x';
 /**
  * Only meaningful within a 'team' organization: a member's seat determines
  * their usage limits (see EntitlementService). Enterprise seats are
- * uniform — Enterprise's variable cost comes from metered Autonomous
+ * uniform â€” Enterprise's variable cost comes from metered Autonomous
  * Engineering Task usage instead (see AutonomousTaskBillingTypes.ts), not
  * from a seat-tier split.
  */
@@ -55,11 +55,11 @@ export type SubscriptionState = {
   accountId?: string;
   /** Set only once a real payment provider is configured and a checkout actually completes. */
   renewsAt?: number;
-  /** Only meaningful when tier === 'team' — which seat rate this account was invited/assigned at. */
+  /** Only meaningful when tier === 'team' â€” which seat rate this account was invited/assigned at. */
   seatTier?: SeatTier;
-  /** Only meaningful when tier === 'proMax' — which Paw Compute usage multiplier (5x or 20x). */
+  /** Only meaningful when tier === 'proMax' â€” which Paw Compute usage multiplier (5x or 20x). */
   proMaxVariant?: ProMaxVariant;
-  /** Only meaningful when tier === 'pro' — billing frequency (monthly or yearly). */
+  /** Only meaningful when tier === 'pro' â€” billing frequency (monthly or yearly). */
   proBillingFrequency?: 'monthly' | 'yearly';
   runtimeEntitlements?: RuntimeEntitlementGrant[];
   /**
@@ -72,16 +72,16 @@ export type SubscriptionState = {
   runtimeEntitlementsGrandfatheredAt?: number;
 };
 
-/** One of Team's two seat rates — a Team org can mix Standard and Premium seats across members. */
+/** One of Team's two seat rates â€” a Team org can mix Standard and Premium seats across members. */
 export type SeatOption = {
   seatTier: SeatTier;
   label: string;
-  /** null = price not yet decided — "Business Configuration Required". Never a fabricated number. */
+  /** null = price not yet decided â€” "Business Configuration Required". Never a fabricated number. */
   priceCents: number | null;
   description: string;
 };
 
-/** Enterprise's variable cost component — real metered billing via the Autonomous Engineering Task system, not fabricated per-token/API metering. */
+/** Enterprise's variable cost component â€” real metered billing via the Autonomous Engineering Task system, not fabricated per-token/API metering. */
 export type UsageBillingDescriptor = {
   label: string;
   description: string;
@@ -90,9 +90,9 @@ export type UsageBillingDescriptor = {
 export type PricingPlan = {
   id: SubscriptionTierId;
   label: string;
-  /** One-line positioning under the plan name (e.g. "Predictable usage per seat" for Team, "Flexible pooled usage" for Enterprise) — cosmetic only, no pricing logic depends on it. */
+  /** One-line positioning under the plan name (e.g. "Predictable usage per seat" for Team, "Flexible pooled usage" for Enterprise) â€” cosmetic only, no pricing logic depends on it. */
   tagline?: string;
-  /** null = price not yet decided — "Business Configuration Required". Never a fabricated number. For Team this is the Standard seat price; see seatOptions for the full breakdown. For Enterprise this is the per-seat base fee (usage is billed separately, see usageBilling). */
+  /** null = price not yet decided â€” "Business Configuration Required". Never a fabricated number. For Team this is the Standard seat price; see seatOptions for the full breakdown. For Enterprise this is the per-seat base fee (usage is billed separately, see usageBilling). */
   priceCents: number | null;
   currency: string;
   billingPeriod: 'month' | 'year';
@@ -116,44 +116,46 @@ export type PricingConfig = {
 };
 
 /**
- * Editable Ticket Balance top-up configuration — completely separate from PricingConfig/plans
+ * Editable Ticket Balance top-up configuration â€” completely separate from PricingConfig/plans
  * above (subscription pricing). Persisted so new preset amounts (e.g. a future $500 option) can be
  * added later purely as data, without a code change/redeploy. Volume-tiered per-ticket pricing
- * itself (TICKET_PRICING_TIERS in AutonomousTaskBillingTypes.ts) is not part of this config — only
+ * itself (TICKET_PRICING_TIERS in AutonomousTaskBillingTypes.ts) is not part of this config â€” only
  * the top-up amounts offered and the enforced minimum.
  */
 export type TicketPricingConfig = {
   topupPresetsUsd: number[];
   minTopupUsd: number;
-  /** Maximum single top-up, in USD. Client-side UX hinting only — the server (pawos-web's checkout-credits/credit-ticket-balance routes and the add_ticket_balance_service() SQL RPC) remains the sole authority. */
+  /** Maximum single top-up, in USD. Client-side UX hinting only â€” the server (pawos-web's checkout-credits/credit-ticket-balance routes and the add_ticket_balance_service() SQL RPC) remains the sole authority. */
   maxTopupUsd: number;
 };
 
 export type CreditBalance = {
-  /** Always null here — CreditStore itself never stores a limit; EntitlementService resolves the real one from UsageQuotaConfigStore. */
+  /** Always null here â€” CreditStore itself never stores a limit; EntitlementService resolves the real one from UsageQuotaConfigStore. */
   limit: number | null;
   usedThisPeriod: number;
-  /** Bonus Paw Compute headroom granted for the current period only (e.g. via Referral Credits redemption) — added on top of the tier's own configured limit, never replacing it. */
+  /** Bonus Paw Compute headroom granted for the current period only (e.g. via Referral Credits redemption) â€” added on top of the tier's own configured limit, never replacing it. */
   bonusThisPeriod: number;
   periodResetsAt: number;
-  /** Weekly-cadence counter, tracked independently of usedThisPeriod (monthly) — resets on its own weekly boundary. Real usage since the last weekly reset, regardless of whether the account's tier has a configured weekly limit at all. */
+  /** Weekly-cadence counter, tracked independently of usedThisPeriod (monthly) â€” resets on its own weekly boundary. Real usage since the last weekly reset, regardless of whether the account's tier has a configured weekly limit at all. */
   usedThisWeek: number;
   weekResetsAt: number;
   /**
-   * Paw Fable's own consumption counter — completely independent of usedThisPeriod/usedThisWeek,
+   * Paw Fable's own consumption counter â€” completely independent of usedThisPeriod/usedThisWeek,
    * since Fable never draws from the tier's included Paw Compute allowance. Fable turns increment
    * only this counter, against bonusThisPeriod (the purchased/redeemed Paw Credits pool) as the
    * ceiling; every other model's turn never touches this counter either direction. Resets alongside
-   * bonusThisPeriod at the same monthly boundary — see CreditStore.freshPeriod().
+   * bonusThisPeriod at the same monthly boundary â€” see CreditStore.freshPeriod().
    */
   fableUsedThisPeriod: number;
+  /** Standard model consumption that occurred while the included tier quota was exhausted, drawn against bonusThisPeriod. */
+  standardPurchasedUsedThisPeriod: number;
 };
 
 export type CreditConsumptionRecord = {
   amount: number;
   reason: string;
   at: number;
-  /** Absent on records written before category tracking existed — the Analytics dashboard treats
+  /** Absent on records written before category tracking existed â€” the Analytics dashboard treats
    *  a missing category as 'chat' rather than fabricating a more specific one. See
    *  src/shared/billing/AiUsageCategories.ts for how this is derived. */
   category?: import('./AiUsageCategories').AiUsageCategory;
@@ -191,21 +193,21 @@ export type NativeTierVerificationResult =
  * Extra parameters only meaningful for seat-based tiers. `seatTier` selects
  * Team's Standard/Premium rate for the seats being purchased; `seatCount`
  * is how many seats at that rate. Absent for Go/Pro/Pro Max (flat pricing)
- * and for Enterprise's base fee (Enterprise seats are uniform — its
+ * and for Enterprise's base fee (Enterprise seats are uniform â€” its
  * variable cost is metered Autonomous Engineering Task usage instead).
  */
 export type CheckoutOptions = {
   seatTier?: SeatTier;
   seatCount?: number;
   runtimeIds?: RuntimeEntitlementId[];
-  /** Only meaningful when tier === 'proMax' — which Paw Compute usage multiplier variant. */
+  /** Only meaningful when tier === 'proMax' â€” which Paw Compute usage multiplier variant. */
   proMaxVariant?: ProMaxVariant;
-  /** Only meaningful when tier === 'pro' — one-time payment duration (per month or per year). */
+  /** Only meaningful when tier === 'pro' â€” one-time payment duration (per month or per year). */
   proBillingFrequency?: 'monthly' | 'yearly';
 };
 
 /**
- * Feature-level entitlements — every gate a runtime might need to check
+ * Feature-level entitlements â€” every gate a runtime might need to check
  * (beyond "which Paw models are available", see PawModelId). The
  * EntitlementService (src/main/billing/EntitlementService.ts) is the only
  * place these are evaluated against the current tier; no runtime should
@@ -253,61 +255,71 @@ export type FeatureId =
 
 export type TierEntitlements = {
   tier: SubscriptionTierId;
-  /** Paw Go includes only paw-flash (Think-class planning/analysis); Pro+ unlock the full roster. Empty would mean no AI at all — no tier is configured that way today. */
+  /** Paw Go includes only paw-flash (Think-class planning/analysis); Pro+ unlock the full roster. Empty would mean no AI at all â€” no tier is configured that way today. */
   models: PawModelId[];
   features: FeatureId[];
-  /** null = uncapped. Resolved live from UsageQuotaConfigStore's single 'aiReasoning' config (Pro Max derives 20x Pro automatically) — never a static per-tier literal. */
+  /** null = uncapped. Resolved live from UsageQuotaConfigStore's single 'aiReasoning' config (Pro Max derives 20x Pro automatically) â€” never a static per-tier literal. */
   monthlyCreditLimit: number | null;
-  /** Weekly-cadence cap, additive alongside monthlyCreditLimit — null means this tier has no weekly cap configured (today: every tier except pro/proMax). Resolved the same live way, Pro Max derives 10x Pro's weekly number (a different ratio from the monthly 20x). */
+  /** Weekly-cadence cap, additive alongside monthlyCreditLimit â€” null means this tier has no weekly cap configured (today: every tier except pro/proMax). Resolved the same live way, Pro Max derives 10x Pro's weekly number (a different ratio from the monthly 20x). */
   weeklyCreditLimit: number | null;
-  /** Only set when tier === 'team' — echoes which seat rate produced this entitlement set. */
+  /** Only set when tier === 'team' â€” echoes which seat rate produced this entitlement set. */
   seatTier?: SeatTier;
 };
 
 export const SUBSCRIPTION_TIER_ORDER: SubscriptionTierId[] = ['go', 'pro', 'proMax', 'team', 'enterprise'];
 
-/** The read-only snapshot the UI polls to render plan/models/features/credits — see EntitlementService.ts. */
+/** The read-only snapshot the UI polls to render plan/models/features/credits â€” see EntitlementService.ts. */
+export type BuildCohortState = {
+  active: boolean;
+  includedPc: number;
+  purchasedPc: number;
+  exhaustedAt: string | null;
+  replenishedJustNow?: boolean;
+};
+
 export type EntitlementSnapshot = {
+  /** Optional overlay for the PawOS Build cohort. If active is true, this user belongs to the Build cohort. */
+  buildEntitlement?: BuildCohortState;
   tier: SubscriptionTierId;
   models: PawModelId[];
   features: FeatureId[];
   runtimeEntitlements: RuntimeEntitlementId[];
-  /** Always null — monthly limits replaced by rolling windows. Kept for backward compatibility. */
+  /** Always null â€” monthly limits replaced by rolling windows. Kept for backward compatibility. */
   creditLimit: number | null;
   /** Deprecated: use usage5hPc / usage7dPc instead. Kept for backward compatibility. */
   creditsUsedThisPeriod: number;
-  /** Extra Paw Compute headroom redeemed from Referral Credits ("Paw Credits") for the current period — see EntitlementService.grantComputeBonus(). Always 0 unless the user has redeemed credits this period. */
+  /** Extra Paw Compute headroom redeemed from Referral Credits ("Paw Credits") for the current period â€” see EntitlementService.grantComputeBonus(). Always 0 unless the user has redeemed credits this period. */
   bonusComputeThisPeriod: number;
-  /** True when the account has Paw Compute remaining in both rolling windows (5h and 7d). Always true for pooled (Enterprise) tiers — the real check is server-side. */
+  /** True when the account has Paw Compute remaining in both rolling windows (5h and 7d). Always true for pooled (Enterprise) tiers â€” the real check is server-side. */
   hasCreditsRemaining: boolean;
   /**
-   * True only for Enterprise — the account's Paw Compute allowance is pooled
+   * True only for Enterprise â€” the account's Paw Compute allowance is pooled
    * organization-wide and enforced server-side by
    * increment_organization_usage(), never by this local snapshot's own
    * hasCreditsRemaining (which is unconditionally true for a pooled tier at
    * this layer). Callers that gate a new AI request must, for a pooled
    * tier, call organizationUsageService.recordUsage(orgId, 'aiReasoning', 1)
-   * themselves and treat a thrown error as "blocked" — see
+   * themselves and treat a thrown error as "blocked" â€” see
    * useConversationController.ts.
    */
   pooled: boolean;
-  /** Only set when tier === 'team' — which seat rate (Standard/Premium) this account holds. */
+  /** Only set when tier === 'team' â€” which seat rate (Standard/Premium) this account holds. */
   seatTier?: SeatTier;
-  /** Always null — replaced by rolling windows. Kept for backward compatibility. */
+  /** Always null â€” replaced by rolling windows. Kept for backward compatibility. */
   weeklyCreditLimit: number | null;
   /** Deprecated: use usage7dPc instead. Kept for backward compatibility. */
   creditsUsedThisWeek: number;
   /** Deprecated: no fixed reset boundary in rolling windows. Kept for backward compatibility. */
   weekResetsAt: number;
   /**
-   * Real remaining purchased-Paw-Credits headroom for Paw Fable specifically — max(0,
+   * Real remaining purchased-Paw-Credits headroom for Paw Fable specifically â€” max(0,
    * bonusComputeThisPeriod - fableUsedThisPeriod). Never derived from creditLimit/weeklyCreditLimit
    * or hasCreditsRemaining, since Fable is gated purely on this number: a turn on Paw Fable is
    * blocked once this reaches 0, even if hasCreditsRemaining is still true for every other model.
    */
   fableCreditsRemaining: number;
 
-  // ── Rolling window Paw Compute (the active enforcement system) ──────────────
+  // â”€â”€ Rolling window Paw Compute (the active enforcement system) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   /** Paw Compute consumed in the last 5 hours (rolling). */
   usage5hPc: number;
   /** Maximum Paw Compute allowed in any 5-hour rolling window for this tier. null = no cap. */
@@ -320,4 +332,13 @@ export type EntitlementSnapshot = {
   usageMonthlyPc: number;
   /** Maximum Paw Compute allowed in any rolling month for this tier. null = no cap. */
   limitMonthlyPc: number | null;
+
+  // New Phase 2 Active Time Limits
+  activeHoursWeekly: number | null;
+  activeHours5h: number | null;
+  activeHoursUsed7d: number;
+  activeHoursUsed5h: number;
+  
+  // Go Refreshes
+  goRefreshesRemaining?: number;
 };

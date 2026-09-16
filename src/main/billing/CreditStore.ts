@@ -18,16 +18,20 @@ type State = {
   weekResetsAt: number;
   /** Paw Fable's own consumption, drawn against bonusThisPeriod only — see BillingTypes.ts's CreditBalance.fableUsedThisPeriod doc comment. Resets alongside bonusThisPeriod (same monthly boundary), never independently. */
   fableUsedThisPeriod: number;
+  /** Standard model consumption that occurred while the included tier quota was exhausted, drawn against bonusThisPeriod. */
+  standardPurchasedUsedThisPeriod: number;
   history: CreditConsumptionRecord[];
 };
 
-function freshPeriod(): Pick<State, 'usedThisPeriod' | 'bonusThisPeriod' | 'periodResetsAt' | 'fableUsedThisPeriod' | 'history'> {
-  return { usedThisPeriod: 0, bonusThisPeriod: 0, periodResetsAt: Date.now() + PERIOD_MS, fableUsedThisPeriod: 0, history: [] };
+function freshPeriod(): Pick<State, 'usedThisPeriod' | 'bonusThisPeriod' | 'periodResetsAt' | 'fableUsedThisPeriod' | 'standardPurchasedUsedThisPeriod' | 'history'> {
+  return { usedThisPeriod: 0, bonusThisPeriod: 0, periodResetsAt: Date.now() + PERIOD_MS, fableUsedThisPeriod: 0, standardPurchasedUsedThisPeriod: 0, history: [] };
 }
 
 function freshWeek(): Pick<State, 'usedThisWeek' | 'weekResetsAt'> {
   return { usedThisWeek: 0, weekResetsAt: Date.now() + WEEK_MS };
 }
+
+const MAX_HISTORY = 100;
 
 /**
  * AI credit usage tracking — records consumption against the tier's real
@@ -47,9 +51,15 @@ class CreditStore {
     this.file = path.join(app.getPath('userData'), 'billing', FILE_NAME);
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     try {
-      this.state = { ...freshPeriod(), ...freshWeek(), ...JSON.parse(fs.readFileSync(this.file, 'utf-8')) };
+      const parsed = JSON.parse(fs.readFileSync(this.file, 'utf-8'));
+      this.state = {
+        ...this.state,
+        ...parsed,
+        standardPurchasedUsedThisPeriod: parsed.standardPurchasedUsedThisPeriod ?? 0,
+      };
       this.rolloverIfNeeded();
     } catch {
+      this.state = { ...freshPeriod(), ...freshWeek() };
       this.save();
     }
   }
@@ -70,13 +80,16 @@ class CreditStore {
    * the included Paw Compute allowance in either direction. Every other model call passes `false`
    * (or omits the argument) and behaves exactly as before this counter existed.
    */
-  consume(amount: number, reason: string, category?: AiUsageCategory, isFable = false): void {
+  consume(amount: number, reason: string, category?: AiUsageCategory, isFable = false, isPurchased = false): void {
     this.rolloverIfNeeded();
     if (isFable) {
       this.state.fableUsedThisPeriod += amount;
     } else {
       this.state.usedThisPeriod += amount;
       this.state.usedThisWeek += amount;
+      if (isPurchased) {
+        this.state.standardPurchasedUsedThisPeriod += amount;
+      }
     }
     this.state.history.push({ amount, reason, at: Date.now(), category });
     if (this.state.history.length > MAX_HISTORY) this.state.history = this.state.history.slice(-MAX_HISTORY);
@@ -100,6 +113,7 @@ class CreditStore {
       usedThisWeek: this.state.usedThisWeek,
       weekResetsAt: this.state.weekResetsAt,
       fableUsedThisPeriod: this.state.fableUsedThisPeriod,
+      standardPurchasedUsedThisPeriod: this.state.standardPurchasedUsedThisPeriod,
     };
   }
 
