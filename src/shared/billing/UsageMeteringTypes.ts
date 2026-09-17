@@ -97,9 +97,11 @@ export type NormalizedUsageRecord = {
  *  tokens the turn actually used. */
 export type AggregatedTurnUsage = {
   totalNormalizedCompute: number;
+  newNormalizedCompute: number;
   totalActiveDurationMs: number;
   requestCount: number;
   records: NormalizedUsageRecord[];
+  newRecords: NormalizedUsageRecord[];
 };
 
 /** What the renderer sends for one completed turn — raw, provider-reported usage only. The renderer

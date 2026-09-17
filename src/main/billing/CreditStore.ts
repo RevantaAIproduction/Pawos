@@ -1,106 +1,164 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import { app } from 'electron';
-import type { CreditBalance, CreditConsumptionRecord } from '../../shared/billing/BillingTypes';
-import type { AiUsageCategory } from '../../shared/billing/AiUsageCategories';
+import * as fs from "fs";
+import * as path from "path";
+import { app } from "electron";
+import type { CreditBalance, CreditConsumptionRecord } from "../../shared/billing/BillingTypes";
+import type { AiUsageCategory } from "../../shared/billing/AiUsageCategories";
+import { customerPcToPurchaseUsd } from "../../shared/billing/CustomerPcCommercialModel";
+import { usageEventStore } from "./UsageEventStore";
 
-const FILE_NAME = 'credits.json';
+const FILE_NAME = "credits.json";
 const PERIOD_MS = 30 * 24 * 60 * 60 * 1000;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_HISTORY = 200;
 
-type State = {
-  usedThisPeriod: number;
-  bonusThisPeriod: number;
-  periodResetsAt: number;
-  /** Weekly-cadence counter, tracked and reset entirely independently of the monthly fields above — see BillingTypes.ts's CreditBalance doc comment. */
-  usedThisWeek: number;
-  weekResetsAt: number;
-  /** Paw Fable's own consumption, drawn against bonusThisPeriod only — see BillingTypes.ts's CreditBalance.fableUsedThisPeriod doc comment. Resets alongside bonusThisPeriod (same monthly boundary), never independently. */
-  fableUsedThisPeriod: number;
-  /** Standard model consumption that occurred while the included tier quota was exhausted, drawn against bonusThisPeriod. */
-  standardPurchasedUsedThisPeriod: number;
-  history: CreditConsumptionRecord[];
+export type PendingDeduction = {
+  usageEventId: string;
+  amountUsd: number;
+  timestamp: number;
 };
 
-function freshPeriod(): Pick<State, 'usedThisPeriod' | 'bonusThisPeriod' | 'periodResetsAt' | 'fableUsedThisPeriod' | 'standardPurchasedUsedThisPeriod' | 'history'> {
-  return { usedThisPeriod: 0, bonusThisPeriod: 0, periodResetsAt: Date.now() + PERIOD_MS, fableUsedThisPeriod: 0, standardPurchasedUsedThisPeriod: 0, history: [] };
+type State = {
+  userId: string | null;
+  usedThisPeriod: number;
+  periodResetsAt: number;
+  usedThisWeek: number;
+  weekResetsAt: number;
+  history: CreditConsumptionRecord[];
+  purchasedUsageCreditsUsd: number;
+  pendingDeductions: PendingDeduction[];
+};
+
+function freshPeriod(): Pick<State, "usedThisPeriod" | "periodResetsAt" | "history"> {
+  return { usedThisPeriod: 0, periodResetsAt: Date.now() + PERIOD_MS, history: [] };
 }
 
-function freshWeek(): Pick<State, 'usedThisWeek' | 'weekResetsAt'> {
+function freshWeek(): Pick<State, "usedThisWeek" | "weekResetsAt"> {
   return { usedThisWeek: 0, weekResetsAt: Date.now() + WEEK_MS };
 }
 
-
-
-/**
- * AI credit usage tracking — records consumption against the tier's real
- * monthly limit (resolved by EntitlementService from UsageQuotaConfigStore,
- * never stored here). `bonusThisPeriod` is extra headroom stacked on top of
- * that limit for the current period only, granted by redeeming Referral
- * Credits ("Paw Credits") for more Paw Compute — see grantBonus() and
- * useConversationController.ts's exhaustion flow. It resets to 0 at the
- * same monthly boundary as usedThisPeriod, exactly like a real top-up would
- * — bonus compute doesn't roll over indefinitely.
- */
 class CreditStore {
-  private file = '';
-  private state: State = { ...freshPeriod(), ...freshWeek() };
+  private file = "";
+  private state: State = { ...freshPeriod(), ...freshWeek(), purchasedUsageCreditsUsd: 0, userId: null, pendingDeductions: [] };
 
   init(): void {
-    this.file = path.join(app.getPath('userData'), 'billing', FILE_NAME);
+    if (!app || !app.getPath) return;
+    this.file = path.join(app.getPath("userData"), "billing", FILE_NAME);
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     try {
-      const parsed = JSON.parse(fs.readFileSync(this.file, 'utf-8'));
+      const parsed = JSON.parse(fs.readFileSync(this.file, "utf-8"));
       this.state = {
         ...this.state,
         ...parsed,
-        standardPurchasedUsedThisPeriod: parsed.standardPurchasedUsedThisPeriod ?? 0,
+        purchasedUsageCreditsUsd: parsed.purchasedUsageCreditsUsd ?? 0,
+        pendingDeductions: parsed.pendingDeductions ?? [],
       };
       this.rolloverIfNeeded();
     } catch {
-      this.state = { ...freshPeriod(), ...freshWeek() };
+      this.state = { ...freshPeriod(), ...freshWeek(), purchasedUsageCreditsUsd: 0, userId: null, pendingDeductions: [] };
       this.save();
     }
   }
 
   private save(): void {
-    fs.writeFileSync(this.file, JSON.stringify(this.state, null, 2), 'utf-8');
+    if (!this.file) return;
+    fs.writeFileSync(this.file, JSON.stringify(this.state, null, 2), "utf-8");
   }
 
-  /** Monthly and weekly boundaries are independent — either, both, or neither can roll over on a given check. */
   private rolloverIfNeeded(): void {
     if (Date.now() > this.state.periodResetsAt) this.state = { ...this.state, ...freshPeriod() };
     if (Date.now() > this.state.weekResetsAt) this.state = { ...this.state, ...freshWeek() };
   }
 
-  /**
-   * `isFable` diverts consumption onto the independent fableUsedThisPeriod counter instead of the
-   * tier's own usedThisPeriod/usedThisWeek — Paw Fable turns must never advance, or be blocked by,
-   * the included Paw Compute allowance in either direction. Every other model call passes `false`
-   * (or omits the argument) and behaves exactly as before this counter existed.
-   */
-  consume(amount: number, reason: string, category?: AiUsageCategory, isFable = false, isPurchased = false): void {
+  consume(amount: number, reason: string, category?: AiUsageCategory, isFable = false, isPurchased = false, usageEventId?: string): void {
+    if (!this.state.userId) return; // Anonymous/unauthenticated safety
     this.rolloverIfNeeded();
-    if (isFable) {
-      this.state.fableUsedThisPeriod += amount;
+    if (isFable || isPurchased) {
+      const usdAmount = customerPcToPurchaseUsd(amount);
+      this.state.purchasedUsageCreditsUsd = Math.max(0, this.state.purchasedUsageCreditsUsd - usdAmount);
+      if (usageEventId && usdAmount > 0) {
+        this.state.pendingDeductions.push({ usageEventId, amountUsd: usdAmount, timestamp: Date.now() });
+      }
     } else {
       this.state.usedThisPeriod += amount;
       this.state.usedThisWeek += amount;
-      if (isPurchased) {
-        this.state.standardPurchasedUsedThisPeriod += amount;
-      }
     }
     this.state.history.push({ amount, reason, at: Date.now(), category });
     if (this.state.history.length > MAX_HISTORY) this.state.history = this.state.history.slice(-MAX_HISTORY);
     this.save();
   }
 
-  /** Adds bonus Paw Compute headroom for the current period only — never touches the tier's own configured limit. Amount must already be a real, positive number of compute units; this store has no opinion on where they came from. */
-  grantBonus(amount: number): void {
-    this.rolloverIfNeeded();
-    this.state.bonusThisPeriod += amount;
+  resolvePendingDeduction(usageEventId: string): void {
+    this.state.pendingDeductions = this.state.pendingDeductions.filter(p => p.usageEventId !== usageEventId);
     this.save();
+  }
+
+  getPendingDeductions(): PendingDeduction[] {
+    return [...this.state.pendingDeductions];
+  }
+
+  setPurchasedUsageCreditsUsd(amountUsd: number): void {
+    // The server is authoritative. We update the local cache, then re-apply any STILL-pending local usage
+    // so we dont accidentally grant free usage before those pending ones sync.
+    let effectiveUsd = amountUsd;
+    for (const pending of this.state.pendingDeductions) {
+      effectiveUsd -= pending.amountUsd;
+    }
+    this.state.purchasedUsageCreditsUsd = Math.max(0, effectiveUsd);
+    this.save();
+  }
+
+  reset(): void {
+    this.state = {
+      ...freshPeriod(),
+      ...freshWeek(),
+      userId: null,
+      purchasedUsageCreditsUsd: 0,
+      pendingDeductions: [],
+    };
+    this.save();
+  }
+
+  async syncUsageCredits(accessToken: string, userId: string): Promise<{ ok: boolean; reason?: string }> {
+    this.state.userId = userId;
+    this.save();
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const anonKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+    if (!supabaseUrl || !anonKey) return { ok: false, reason: "Supabase is not configured" };
+    
+    // 1. Flush any pending deductions FIRST
+    for (const pending of [...this.state.pendingDeductions]) {
+       try {
+         const resp = await fetch(`${supabaseUrl}/rest/v1/rpc/deduct_usage_credits`, {
+           method: "POST",
+           headers: { apikey: anonKey, Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+           body: JSON.stringify({ p_amount_usd: pending.amountUsd, p_usage_event_id: pending.usageEventId })
+         });
+         if (resp.ok) {
+           this.resolvePendingDeduction(pending.usageEventId);
+         }
+       } catch (e) {
+         console.error("Failed to flush pending deduction", e);
+       }
+    }
+
+    // 2. Fetch authoritative balance
+    try {
+      const response = await fetch(`${supabaseUrl}/rest/v1/user_usage_credits?select=balance_usd`, {
+        headers: { apikey: anonKey, Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.length > 0) {
+          this.setPurchasedUsageCreditsUsd(data[0].balance_usd);
+        } else {
+          this.setPurchasedUsageCreditsUsd(0);
+        }
+        return { ok: true };
+      }
+      return { ok: false, reason: "Fetch failed" };
+    } catch (e) {
+      return { ok: false, reason: String(e) };
+    }
   }
 
   getBalance(): CreditBalance {
@@ -108,12 +166,10 @@ class CreditStore {
     return {
       limit: null,
       usedThisPeriod: this.state.usedThisPeriod,
-      bonusThisPeriod: this.state.bonusThisPeriod,
       periodResetsAt: this.state.periodResetsAt,
       usedThisWeek: this.state.usedThisWeek,
       weekResetsAt: this.state.weekResetsAt,
-      fableUsedThisPeriod: this.state.fableUsedThisPeriod,
-      standardPurchasedUsedThisPeriod: this.state.standardPurchasedUsedThisPeriod,
+      purchasedUsageCreditsUsd: this.state.purchasedUsageCreditsUsd,
     };
   }
 

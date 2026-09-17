@@ -157,8 +157,22 @@ export function recordTurnUsage(
   context: { sessionId: string | null; runId: string | null },
   fable = false
 ): AggregatedTurnUsage {
-  const records = requests.map(({ usage, requestType }) => recordUsageEvent(usage, requestType, context, fable));
+  const newRecords: NormalizedUsageRecord[] = [];
+  const records = requests.map(({ usage, requestType }) => {
+    let isNew = false;
+    if (!usage.requestId || !usageEventStore.findByRequestId(usage.requestId)) {
+      isNew = true;
+    }
+    const record = recordUsageEvent(usage, requestType, context, fable);
+    if (isNew) {
+      newRecords.push(record);
+    }
+    return record;
+  });
+  
   const totalNormalizedCompute = round(records.reduce((sum, r) => sum + r.normalizedCompute, 0));
+  const newNormalizedCompute = round(newRecords.reduce((sum, r) => sum + r.normalizedCompute, 0));
   const totalActiveDurationMs = records.reduce((sum, r) => sum + r.activeDurationMs, 0);
-  return { totalNormalizedCompute, totalActiveDurationMs, requestCount: records.length, records };
+  
+  return { totalNormalizedCompute, newNormalizedCompute, totalActiveDurationMs, requestCount: records.length, records, newRecords };
 }

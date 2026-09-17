@@ -24,6 +24,7 @@ import { pricingConfigStore } from '../billing/PricingConfigStore';
 import { ticketPricingConfigStore } from '../billing/TicketPricingConfigStore';
 import { subscriptionStore } from '../billing/SubscriptionStore';
 import { rollingUsageGate } from '../billing/RollingUsageGate';
+import { normalizedComputeToCustomerPc, customerPcToPurchaseUsd } from '../../shared/billing/CustomerPcCommercialModel';
 import { creditStore } from '../billing/CreditStore';
 import { recordTurnUsage, recordUsageEvent } from '../billing/UsageMeteringEngine';
 import { usageEventStore } from '../billing/UsageEventStore';
@@ -442,25 +443,12 @@ export function registerIpc(opts: {
   ipcMain.handle('billing:reconcileForAccount', (_evt, accountId: string) => subscriptionStore.reconcileForAccount(accountId));
   // Called on sign-out so a stale, org-elevated tier from a previous account on this device never
   // carries over to the next account that signs in — see SubscriptionStore.reset()'s own comment.
-  ipcMain.handle('billing:resetSubscription', () => subscriptionStore.reset());
+  ipcMain.handle('billing:resetSubscription', () => { subscriptionStore.reset(); creditStore.reset(); });
+  ipcMain.handle('billing:syncUsageCredits', (_evt, accessToken: string) => creditStore.syncUsageCredits(accessToken));
   ipcMain.handle('billing:getCreditBalance', () => ({ ...creditStore.getBalance(), limit: entitlementService.getCreditLimit() }));
   ipcMain.handle('billing:consumeCredit', (_evt, amount: number, reason: string, category?: AiUsageCategory, pawModelId?: PawModelId) => {
     creditStore.consume(amount, reason, category, pawModelId === 'paw-fable');
     const balance = creditStore.getBalance();
-
-    // Check if auto-reload should be triggered (when balance runs out)
-    // This will be implemented in triggerAutoReloadIfNeeded()
-    if (balance.balanceUsd <= 0) {
-      // Trigger auto-reload asynchronously - will check config and payment methods
-      setImmediate(() => {
-        // TODO: Implement auto-reload payment triggering
-        // This should:
-        // 1. Get user's auto-reload configuration
-        // 2. Get user's saved payment method
-        // 3. Create Razorpay order for auto-reload amount
-        // 4. Process payment automatically using saved card
-      });
-    }
 
     return { ...balance, limit: entitlementService.getCreditLimit() };
   });
@@ -528,8 +516,40 @@ export function registerIpc(opts: {
       const isPurchased = !check.allowed && !isFable;
 
       const aggregated = recordTurnUsage(submission.requests, { sessionId: submission.sessionId, runId: submission.runId }, isFable);
-      creditStore.consume(aggregated.totalNormalizedCompute, reason, category, isFable, isPurchased);
+      const customerPc = normalizedComputeToCustomerPc(aggregated.newNormalizedCompute);
+      if (customerPc <= 0) return { ...creditStore.getBalance(), limit: entitlementService.getCreditLimit() };
+      const outboxId = aggregated.newRecords[0].usageEventId; // Durable idempotency key tied to real request
+      creditStore.consume(customerPc, reason, category, isFable, isPurchased, outboxId);
       
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const anonKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+
+      if ((isFable || isPurchased) && submission.accessToken && supabaseUrl && anonKey) {
+        const usdCost = customerPcToPurchaseUsd(customerPc);
+        if (usdCost > 0) {
+          try {
+            const response = await fetch(`${supabaseUrl}/rest/v1/rpc/deduct_usage_credits`, {
+              method: 'POST',
+              headers: {
+                apikey: anonKey,
+                Authorization: `Bearer ${submission.accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ p_amount_usd: usdCost, p_usage_event_id: outboxId }),
+            });
+            if (response.ok) {
+              creditStore.resolvePendingDeduction(outboxId);
+              const newBalanceUsd = await response.json();
+              creditStore.setPurchasedUsageCreditsUsd(newBalanceUsd);
+            } else {
+              console.error("Failed to deduct usage credits:", await response.text());
+            }
+          } catch (e) {
+            console.error("Failed to deduct usage credits:", e);
+          }
+        }
+      }
+
       // Enterprise Server-Authoritative Update
       if (entitlementService.isComputePooled() && submission.organizationId && submission.accessToken) {
         const supabaseUrl = process.env.SUPABASE_URL;

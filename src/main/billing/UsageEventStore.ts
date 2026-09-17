@@ -14,6 +14,10 @@ type State = {
   records: NormalizedUsageRecord[];
   recoveryRequired?: boolean;
   lastGoRefreshAt?: number;
+  goCycleStartAt?: number;
+  goRefreshesUsed?: number;
+  weeklyCycleStartAt?: number;
+  activeWindowStartAt?: number;
 };
 
 function freshState(): State {
@@ -53,6 +57,62 @@ class UsageEventStore {
 
   getLastGoRefreshAt(): number | undefined {
     return this.state.lastGoRefreshAt;
+  }
+
+  getWeeklyCycleStartAt(now = Date.now()): number {
+    if (!this.state.weeklyCycleStartAt) {
+      this.state.weeklyCycleStartAt = now;
+      this.save();
+    }
+    const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+    let changed = false;
+    while (now >= this.state.weeklyCycleStartAt + WEEK_MS) {
+      this.state.weeklyCycleStartAt += WEEK_MS;
+      changed = true;
+    }
+    if (changed) this.save();
+    return this.state.weeklyCycleStartAt;
+  }
+
+  getActiveWindowStartAt(): number {
+    return this.state.activeWindowStartAt || 0;
+  }
+
+  advanceActiveWindow(now = Date.now()): void {
+    this.state.activeWindowStartAt = now;
+    this.save();
+  }
+
+  getGoCycleStatus(now = Date.now()): { cycleStartAt: number; refreshesUsed: number } {
+    let start = this.state.goCycleStartAt;
+    const CYCLE_MS = 14 * 24 * 60 * 60 * 1000;
+    
+    if (!start || now >= start + CYCLE_MS) {
+      start = now;
+      this.state.goCycleStartAt = start;
+      this.state.goRefreshesUsed = 0;
+      this.save();
+    }
+    
+    return {
+      cycleStartAt: start,
+      refreshesUsed: this.state.goRefreshesUsed ?? 0
+    };
+  }
+
+  getGoRefreshesRemaining(now = Date.now()): number {
+    const status = this.getGoCycleStatus(now);
+    return Math.max(0, 3 - status.refreshesUsed);
+  }
+
+  consumeGoRefresh(now = Date.now()): boolean {
+    const status = this.getGoCycleStatus(now);
+    if (status.refreshesUsed >= 3) return false;
+    
+    this.state.goRefreshesUsed = status.refreshesUsed + 1;
+    this.state.lastGoRefreshAt = now;
+    this.save();
+    return true;
   }
 
   /** Appends one already-normalized record — normalization itself happens in UsageMeteringEngine.ts,
@@ -148,3 +208,4 @@ class UsageEventStore {
 }
 
 export const usageEventStore = new UsageEventStore();
+

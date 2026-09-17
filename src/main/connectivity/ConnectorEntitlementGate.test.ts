@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+ï»¿import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isConnectorEntitled } from './ConnectorEntitlementGate';
 import { subscriptionStore } from '../billing/SubscriptionStore';
 
@@ -6,7 +6,7 @@ import { subscriptionStore } from '../billing/SubscriptionStore';
  * The pure predicate behind connectivityIpc.ts's server-side connector gate
  * mirrors the exact matrix requested for the entitlement finalization pass.
  */
-describe('ConnectorEntitlementGate — final matrix', () => {
+describe('ConnectorEntitlementGate - final matrix', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('Go: GitHub, Vercel, Google Workspace, Microsoft allowed; others blocked', () => {
@@ -35,20 +35,18 @@ describe('ConnectorEntitlementGate — final matrix', () => {
     }
   });
 
-  it('Team: every connector allowed except Google Workspace (personal-account capability, deliberately excluded from org tiers)', () => {
+  it('Team: every connector allowed', () => {
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'team', status: 'active', seatTier: 'standard' });
-    for (const id of ['github', 'gitlab', 'vercel', 'netlify', 'railway', 'slack', 'jira', 'linear']) {
+    for (const id of ['github', 'gitlab', 'vercel', 'netlify', 'railway', 'slack', 'jira', 'linear', 'googleWorkspace']) {
       expect(isConnectorEntitled(id)).toBe(true);
     }
-    expect(isConnectorEntitled('googleWorkspace')).toBe(false);
   });
 
-  it('Enterprise: every connector allowed except Google Workspace (personal-account capability, deliberately excluded from org tiers)', () => {
+  it('Enterprise: every connector allowed', () => {
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'enterprise', status: 'active' });
-    for (const id of ['github', 'gitlab', 'vercel', 'netlify', 'railway', 'slack', 'jira', 'linear']) {
+    for (const id of ['github', 'gitlab', 'vercel', 'netlify', 'railway', 'slack', 'jira', 'linear', 'googleWorkspace']) {
       expect(isConnectorEntitled(id)).toBe(true);
     }
-    expect(isConnectorEntitled('googleWorkspace')).toBe(false);
   });
 
   it('an unknown connector id (no CONNECTOR_REQUIRED_FEATURE entry) is honestly unrestricted rather than blocked by default', () => {

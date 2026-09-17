@@ -33,8 +33,8 @@ function defaultConfig(): RollingCapacityConfig {
     version: CURRENT_CONFIG_VERSION,
     tiers: {
       go:          { window5hPc: null,    windowWeeklyPc: 1_000,  window5hActiveHours: null, windowWeeklyActiveHours: 5,   pooled: false },
-      pro:         { window5hPc: null,    windowWeeklyPc: 5_000,  window5hActiveHours: null, windowWeeklyActiveHours: 20,  pooled: false },
-      proMax:      { window5hPc: null,    windowWeeklyPc: 25_000, window5hActiveHours: null, windowWeeklyActiveHours: 30,  pooled: false }, // 5x variant; 20x is 100k/40h
+      pro:         { window5hPc: null,    windowWeeklyPc: 5_000,  window5hActiveHours: 5,    windowWeeklyActiveHours: 20,  pooled: false },
+      proMax:      { window5hPc: null,    windowWeeklyPc: 25_000, window5hActiveHours: 5,    windowWeeklyActiveHours: 30,  pooled: false }, // 5x variant; 20x is 100k/40h
       team:        { window5hPc: null,    windowWeeklyPc: 5_000,  window5hActiveHours: null, windowWeeklyActiveHours: 20,  pooled: true  }, // Handled server-side usually, but defining limits here
       teamPremium: { window5hPc: null,    windowWeeklyPc: 25_000, window5hActiveHours: null, windowWeeklyActiveHours: 30,  pooled: true  },
       enterprise:  { window5hPc: null,    windowWeeklyPc: null,   window5hActiveHours: null, windowWeeklyActiveHours: null, pooled: true  },

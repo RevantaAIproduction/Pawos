@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import styles from '../dashboard.module.css';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import { UsageCreditsPanel } from './UsageCreditsPanel';
@@ -55,104 +55,7 @@ export function SubscriptionSection({
     ipc.billingGetSubscription().then(setSubscription).catch(() => {});
     ipc.entitlementGetSnapshot().then(setEntitlement).catch(() => {});
     
-    try {
-      const identity = await ipc.deviceGetLocalIdentity();
-      if (identity.deviceId) {
-        setDeviceHash(identity.deviceId);
-        const { organizationUsageService } = await import('../../../billing/OrganizationUsageService');
-        const remaining = await organizationUsageService.getGoRefreshesRemaining(identity.deviceId);
-        setGoRefreshesRemaining(remaining);
-      }
-    } catch (e) {}
-  };
-
-  useEffect(() => {
-    if (user.isGuest) return;
-    refresh();
-    const onFocus = () => refresh();
-    window.addEventListener('focus', onFocus);
-
-    ipc.onSubscriptionUpdated(() => {
-      refresh();
-      setMessage('âœ… Payment confirmed â€” your plan has been updated.');
-    });
-
-    return () => window.removeEventListener('focus', onFocus);
-  }, [user.isGuest]);
-
-  const downgrade = async (tier: SubscriptionTierId) => {
-    try {
-      await ipc.billingSetSubscriptionTier(tier);
-      refresh();
-      setMessage(`âœ… Switched to ${TIER_LABELS[tier]}.`);
-    } catch (error) {
-      setMessage(`âŒ Failed to switch plan: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  };
-
-  if (user.isGuest) {
-    return (
-            <div style={{ padding: '24px 0' }}>
-        {entitlement?.buildEntitlement?.active && (
-          <div style={{ marginBottom: 32, padding: 16, background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)', borderRadius: 8 }}>
-            <h3 style={{ fontSize: '1.1em', fontWeight: 700, margin: '0 0 8px 0', color: '#818cf8' }}>PawOS Build Cohort</h3>
-            <p style={{ margin: '0 0 4px 0', fontSize: '0.9em' }}>Paw Compute: {Math.round(entitlement.usageWeeklyPc || 0)} / {entitlement.limitWeeklyPc || 1500} PC</p>
-            <p style={{ margin: '0 0 4px 0', fontSize: '0.9em' }}>Active time: {(entitlement.activeHoursUsed7d || 0).toFixed(1)} / {entitlement.activeHoursWeekly || 15}h weekly</p>
-            <p style={{ margin: '0 0 4px 0', fontSize: '0.9em' }}>Active window: {(entitlement.activeHoursUsed5h || 0).toFixed(1)} / {entitlement.activeHours5h || 5}h</p>
-            {entitlement.buildEntitlement.exhaustedAt && <p style={{ margin: 0, fontSize: '0.85em', opacity: 0.7 }}>Exhausted at: {new Date(entitlement.buildEntitlement.exhaustedAt).toLocaleString()}</p>}
-          </div>
-        )}
-        <h2 style={{ fontSize: '1.2em', fontWeight: 700, margin: '0 0 8px 0' }}>Subscription</h2>
-        <p style={{ fontSize: '0.9em', opacity: 0.6, margin: '0 0 16px 0' }}>Sign in to manage your subscription.</p>
-      </div>
-    );
-  }
-
-  const currentPlan = pricing?.plans.find((p) => p.tier === currentTier);
-
-  return (
-          <div style={{ padding: '24px 0' }}>
-        {entitlement?.buildEntitlement?.active && (
-          <div style={{ marginBottom: 32, padding: 16, background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)', borderRadius: 8 }}>
-            <h3 style={{ fontSize: '1.1em', fontWeight: 700, margin: '0 0 8px 0', color: '#818cf8' }}>PawOS Build Cohort</h3>
-            <p style={{ margin: '0 0 4px 0', fontSize: '0.9em' }}>Paw Compute: {Math.round(entitlement.usageWeeklyPc || 0)} / {entitlement.limitWeeklyPc || 1500} PC</p>
-            <p style={{ margin: '0 0 4px 0', fontSize: '0.9em' }}>Active time: {(entitlement.activeHoursUsed7d || 0).toFixed(1)} / {entitlement.activeHoursWeekly || 15}h weekly</p>
-            <p style={{ margin: '0 0 4px 0', fontSize: '0.9em' }}>Active window: {(entitlement.activeHoursUsed5h || 0).toFixed(1)} / {entitlement.activeHours5h || 5}h</p>
-            {entitlement.buildEntitlement.exhaustedAt && <p style={{ margin: 0, fontSize: '0.85em', opacity: 0.7 }}>Exhausted at: {new Date(entitlement.buildEntitlement.exhaustedAt).toLocaleString()}</p>}
-          </div>
-        )}
-      {/* Current Plan Display - Premium UI */}
-      <div style={{ marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <h3 style={{ fontSize: '1.3em', fontWeight: 700, margin: '0 0 4px 0' }}>{TIER_LABELS[currentTier]}</h3>
-            <p style={{ fontSize: '0.9em', opacity: 0.7, margin: '0 0 4px 0' }}>Monthly</p>
-            <p style={{ fontSize: '0.85em', opacity: 0.6, margin: 0 }}>Your subscription will auto renew on N/A.</p>
-            
-            {currentTier === 'go' && goRefreshesRemaining !== null && (
-              <div style={{ marginTop: 16, padding: 12, background: 'rgba(255,255,255,0.05)', borderRadius: 6 }}>
-                <p style={{ margin: '0 0 8px 0', fontSize: '0.9em' }}>
-                  <strong>Free Refreshes Remaining:</strong> {goRefreshesRemaining} / 3
-                </p>
-                <button
-                  disabled={goRefreshesRemaining <= 0}
-                  onClick={async () => {
-                    try {
-                      if (!deviceId) return;
-                      const { organizationUsageService } = await import('../../../billing/OrganizationUsageService');
-                      const success = await organizationUsageService.consumeGoRefresh(deviceId);
-                      if (success) {
-                        await ipc.billingMarkGoRefresh();
-                        setMessage('✅ Usage refreshed successfully!');
-                        refresh();
-                      } else {
-                        setMessage('❌ No refreshes remaining.');
-                      }
-                    } catch (e) {
-                      setMessage(`❌ Failed to refresh: ${e instanceof Error ? e.message : String(e)}`);
-                    }
-                  }}
-                  style={{
+    
                     padding: '6px 12px',
                     backgroundColor: goRefreshesRemaining > 0 ? '#4cb050' : '#404040',
                     color: '#fff',
@@ -260,4 +163,5 @@ export function SubscriptionSection({
     </div>
   );
 }
+
 

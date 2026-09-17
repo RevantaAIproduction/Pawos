@@ -46,8 +46,7 @@ describe('EntitlementService — Go tier Think-not-Execute redesign', () => {
       periodResetsAt: Date.now() + 1000,
       usedThisWeek: 0,
       weekResetsAt: Date.now() + 1000,
-      fableUsedThisPeriod: 0,
-    });
+          });
 
     expect(entitlementService.hasCreditsRemaining()).toBe(true);
     expect(entitlementService.isFeatureAvailable('advancedRuntimes')).toBe(false);

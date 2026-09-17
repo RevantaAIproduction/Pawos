@@ -199,9 +199,7 @@ export function useConversationController(args?: {
   // Paw Credits ("Referral Credits") balance — fetched lazily only once the exhaustion notice is
   // actually showing, since it requires a real Supabase round trip and most turns never hit this
   // wall. Never fetched for a pooled (Enterprise) account, which has no personal wallet.
-  const [pawCreditsBalanceUsd, setPawCreditsBalanceUsd] = useState(0);
-  const [redeemingCredits, setRedeemingCredits] = useState(false);
-  const [redeemCreditsError, setRedeemCreditsError] = useState<string | null>(null);
+
 
   useEffect(() => {
     if (!creditsNoticeTier || entitlementRef.current?.pooled) return;
@@ -217,27 +215,7 @@ export function useConversationController(args?: {
     };
   }, [creditsNoticeTier]);
 
-  // Redeems the entire current Paw Credits balance for bonus Paw Compute this period — the dollar
-  // deduction happens first, server-side and authoritative (redeem_referral_credits_for_compute());
-  // only after that succeeds does the local compute bonus get granted, so a failure here never
-  // grants compute without actually having spent the credits.
-  const useCreditsForCompute = useCallback(async () => {
-    if (pawCreditsBalanceUsd <= 0) return;
-    setRedeemingCredits(true);
-    setRedeemCreditsError(null);
-    try {
-      const { remainingBalanceUsd } = await referralCreditService.redeemForCompute(pawCreditsBalanceUsd);
-      const units = Math.floor(pawCreditsBalanceUsd * PAW_COMPUTE_UNITS_PER_CREDIT_USD);
-      await ipc.billingGrantComputeBonus(units);
-      setPawCreditsBalanceUsd(remainingBalanceUsd);
-      refreshEntitlement();
-      setCreditsNoticeTier(null);
-    } catch (e) {
-      setRedeemCreditsError(e instanceof Error ? e.message : 'Could not redeem Paw Credits right now.');
-    } finally {
-      setRedeemingCredits(false);
-    }
-  }, [pawCreditsBalanceUsd, ipc, refreshEntitlement]);
+
 
   useEffect(() => {
     // Electron's built-in webkitSpeechRecognition ('browser') cannot
@@ -616,7 +594,7 @@ export function useConversationController(args?: {
     refreshEntitlement,
     entitlement,
     pawCreditsBalanceUsd,
-    useCreditsForCompute,
+    
     redeemingCredits,
     redeemCreditsError,
     executionMode,

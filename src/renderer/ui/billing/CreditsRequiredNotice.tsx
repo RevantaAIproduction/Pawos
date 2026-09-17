@@ -94,10 +94,6 @@ export function CreditsRequiredNotice({
   onContactSales,
   onContactAdmin,
   onRequestMoreCompute,
-  pawCreditsBalanceUsd,
-  onUseCredits,
-  redeeming,
-  redeemError,
 }: {
   tier: SubscriptionTierId;
   seatTier?: SeatTier;
@@ -114,11 +110,6 @@ export function CreditsRequiredNotice({
   onContactSales?: () => void;
   onContactAdmin?: () => void;
   onRequestMoreCompute?: () => void;
-  /** The account's current Paw Credits (Referral Credits) balance in USD — the secondary "Use Paw Credits" link only renders when this is greater than 0. */
-  pawCreditsBalanceUsd?: number;
-  onUseCredits?: () => void;
-  redeeming?: boolean;
-  redeemError?: string | null;
 }) {
   const message = pooled
     ? "Your organization has used all of its pooled Paw Compute for this period. Everything else keeps working — reach out to your organization administrator, or wait for the next monthly reset."
@@ -141,11 +132,6 @@ export function CreditsRequiredNotice({
     <div className={styles.card} style={{ borderColor: 'var(--accent, #6d5efc)' }}>
       <h3 className={styles.cardTitle}>More Paw Compute needed</h3>
       <p className={styles.cardBody}>{message}</p>
-      {redeemError && (
-        <p className={styles.cardBody} style={{ color: 'var(--danger, #e05a5a)' }}>
-          {redeemError}
-        </p>
-      )}
       <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
         {actions.map((action, index) => {
           const handler = handlers[action.id];
@@ -165,20 +151,6 @@ export function CreditsRequiredNotice({
           Got it
         </button>
       </div>
-      {hasCredits && onUseCredits && (
-        <p className={styles.cardBody} style={{ marginTop: 8, fontSize: 12 }}>
-          Or{' '}
-          <button
-            type="button"
-            onClick={onUseCredits}
-            disabled={redeeming}
-            style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent, #6d5efc)', textDecoration: 'underline', cursor: redeeming ? 'default' : 'pointer', font: 'inherit' }}
-          >
-            {redeeming ? 'redeeming your Paw Credits…' : `use your $${(pawCreditsBalanceUsd ?? 0).toFixed(2)} Paw Credits balance`}
-          </button>{' '}
-          to extend this period's Paw Compute.
-        </p>
-      )}
     </div>
   );
 }

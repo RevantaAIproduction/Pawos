@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   SettingsState,
   FeedbackSubmission,
   SupportConversationTurn,
@@ -294,6 +294,9 @@ export const ipc = {
   },
   async billingResetSubscription(): Promise<SubscriptionState> {
     return getBridge().billingResetSubscription();
+  },
+  async billingMarkGoRefresh(): Promise<boolean> {
+    return getBridge().billingMarkGoRefresh();
   },
     async billingSyncBuildEntitlement(accessToken: string): Promise<{ ok: boolean; state?: any; reason?: string }> {
     return getBridge().billingSyncBuildEntitlement(accessToken);

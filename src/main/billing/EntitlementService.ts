@@ -2,7 +2,9 @@ import { subscriptionStore } from './SubscriptionStore';
 import { creditStore } from './CreditStore';
 import { usageQuotaConfigStore } from './UsageQuotaConfigStore';
 import { rollingUsageGate } from './RollingUsageGate';
+import { customerPurchaseUsdToPurchasedPc } from '../../shared/billing/CustomerPcCommercialModel';
 import { testTierOverrideStore } from './TestTierOverrideStore';
+import { usageEventStore } from './UsageEventStore';
 import type {
   EntitlementSnapshot,
   FeatureId,
@@ -123,7 +125,7 @@ const PRO_MAX_FEATURES: FeatureId[] = [
  * "superset of Pro Max" inheritance is deliberately narrowed rather than only extended.
  */
 const TEAM_FEATURES: FeatureId[] = [
-  ...PRO_MAX_FEATURES.filter((feature) => feature !== 'connectGoogleWorkspace'),
+  ...PRO_MAX_FEATURES,
   'sharedWorkspaces',
   'organizationMembers',
   'sharedCompanions',
@@ -383,9 +385,14 @@ class EntitlementService {
    * spent this period) — see getFableCreditsRemaining(). A tier with plenty of included allowance
    * left must still be blocked here if that purchased-credit headroom is exhausted.
    */
+  getPurchasedCreditsRemaining(): number {
+    const balance = creditStore.getBalance();
+    return Math.max(0, customerPurchaseUsdToPurchasedPc(balance.purchasedUsageCreditsUsd));
+  }
+
   hasCreditsRemaining(pawModelId?: PawModelId): boolean {
     if (this.isComputePooled()) return true;
-    if (pawModelId === 'paw-fable') return this.getFableCreditsRemaining() > 0;
+    if (pawModelId === 'paw-fable') return this.getPurchasedCreditsRemaining() > 0;
     const buildEntitlement = subscriptionStore.getEffective().buildEntitlement;
     const tier = (buildEntitlement && buildEntitlement.active) ? 'build' : this.currentTier();
     const seatTier = this.getSeatTier();
@@ -393,30 +400,7 @@ class EntitlementService {
     const check = rollingUsageGate.canStartGeneration(tier, seatTier, Date.now(), proMaxVariant);
     if (check.allowed) return true;
     
-    return this.getStandardBonusCreditsRemaining() > 0;
-  }
-
-  /** Real remaining purchased-Paw-Credits headroom for Paw Fable — see BillingTypes.ts's EntitlementSnapshot.fableCreditsRemaining doc comment. Never negative. */
-  getFableCreditsRemaining(): number {
-    const balance = creditStore.getBalance();
-    return Math.max(0, balance.bonusThisPeriod - balance.fableUsedThisPeriod);
-  }
-
-  /** Real remaining purchased headroom for standard models used when included quota is exhausted. */
-  getStandardBonusCreditsRemaining(): number {
-    const balance = creditStore.getBalance();
-    return Math.max(0, balance.bonusThisPeriod - balance.standardPurchasedUsedThisPeriod);
-  }
-
-  /**
-   * Grants bonus Paw Compute headroom for the current period only — the local half of redeeming
-   * Referral Credits ("Paw Credits") for more compute. The dollar-ledger deduction already happened
-   * in Supabase (redeem_referral_credits_for_compute()) before this is ever called; this method has
-   * no awareness of money at all, it only ever adds usage headroom to whatever the account's tier
-   * already entitles it to — it can never unlock a feature, model, or tier on its own.
-   */
-  grantComputeBonus(units: number): void {
-    creditStore.grantBonus(units);
+    return this.getPurchasedCreditsRemaining() > 0;
   }
 
   getSnapshot(): EntitlementSnapshot {
@@ -434,14 +418,14 @@ class EntitlementService {
       runtimeEntitlements: this.getRuntimeEntitlements(),
       creditLimit: null,                        // superseded by rolling windows
       creditsUsedThisPeriod: balance.usedThisPeriod,
-      bonusComputeThisPeriod: balance.bonusThisPeriod,
+      
       hasCreditsRemaining: this.hasCreditsRemaining(),
       pooled: this.isComputePooled(),
       seatTier: entitlements.seatTier,
       weeklyCreditLimit: null,                  // superseded by rolling windows
       creditsUsedThisWeek: balance.usedThisWeek,
       weekResetsAt: balance.weekResetsAt,
-      fableCreditsRemaining: this.isComputePooled() ? 0 : Math.max(0, balance.bonusThisPeriod - balance.fableUsedThisPeriod),
+      purchasedPcRemaining: this.isComputePooled() ? 0 : this.getPurchasedCreditsRemaining(),
       usage5hPc: rolling.usage5h,
       limit5hPc: rolling.limit5h,
       usageWeeklyPc: rolling.usage7d,
@@ -452,7 +436,7 @@ class EntitlementService {
       activeHours5h: rolling.activeHours5h,
       activeHoursUsed7d: rolling.activeHoursUsed7d,
       activeHoursUsed5h: rolling.activeHoursUsed5h,
-      // goRefreshesRemaining will be populated by the UI.
+      goRefreshesRemaining: usageEventStore.getGoRefreshesRemaining(),
     };
   }
 }
