@@ -20,7 +20,8 @@ import { stashMicrosoftAuthPayload } from "./microsoftAuthRelayStore";
  * next (loopback redirect instead of a pawos:// deep link) is different.
  */
 export function relayGitHubToDesktop(code: string | null, error: string | null): Response {
-  const url = new URL("pawos://github-auth-callback");
+  const url = new URL("https://pawos.revantaai.com/auth/desktop-success");
+  url.searchParams.set("provider", "github");
   
   if (error) {
     url.searchParams.set("error", error);
@@ -89,7 +90,8 @@ const LOCAL_CALLBACK_URL = "http://127.0.0.1:51899/callback";
  */
 export async function relayGoogleToDesktop(code: string | null, error: string | null): Promise<Response> {
   const buildRedirect = (params: Record<string, string>) => {
-    const url = new URL("pawos://google-auth-callback");
+    const url = new URL("https://pawos.revantaai.com/auth/desktop-success");
+    url.searchParams.set("provider", "google");
     for (const [k, v] of Object.entries(params)) {
       if (v) url.searchParams.set(k, v);
     }
