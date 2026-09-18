@@ -145,6 +145,8 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
   const pathname = usePathname();
 
   if (pathname?.startsWith("/docs")) return null;
+  const isCompanionMode = pathname === "/companion";
+  if (isCompanionMode || pathname === "/auth/desktop-success") return null;
 
   return (
     <div className="fixed top-0 left-0 right-0 z-50 group" onMouseLeave={() => setActiveMenu(null)}>

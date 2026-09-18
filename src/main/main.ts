@@ -1,4 +1,4 @@
-﻿import { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, screen, session } from 'electron';
+import { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, screen, session } from 'electron';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
 import { createTray } from './tray/trayManager';
@@ -126,13 +126,12 @@ console.error("[PAWOS START] before app.whenReady");
 // second, redundant copy of PawOS instead of handing the URL to the one
 // already running (and already holding the pending OAuth promise).
 // Request single-instance lock. On failure, we'll proceed anyway since this could be:
-// 1. A stale lock file from a crash
-// 2. The user starting a second instance intentionally
-// Better to launch and handle it than to silently quit.
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
-console.error("[PAWOS LOCK] gotSingleInstanceLock:", gotSingleInstanceLock);
 
-if (gotSingleInstanceLock) {
+if (!gotSingleInstanceLock) {
+  app.quit();
+  process.exit(0);
+} else {
   app.on('second-instance', (_event, argv) => {
     const url = extractProtocolUrlFromArgv(argv);
     if (url) handleOAuthProtocolUrl(url);
@@ -142,9 +141,6 @@ if (gotSingleInstanceLock) {
       mainWindow.focus();
     }
   });
-} else {
-  console.error("[PAWOS LOCK] Could not acquire lock - another instance may be running, but proceeding anyway");
-  // Don't quit - let the app run anyway. Worst case we have two instances, which is better than no instance.
 }
 
 // macOS delivers a protocol click via this event instead of argv/second-instance.

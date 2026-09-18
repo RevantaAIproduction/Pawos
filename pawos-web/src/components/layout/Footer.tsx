@@ -65,7 +65,7 @@ const GROUPS = [
 
 export function Footer() {
   const pathname = usePathname();
-  if (pathname?.startsWith("/docs")) return null;
+  if (pathname?.startsWith("/docs") || pathname === "/auth/desktop-success") return null;
 
   return (
     <footer className="border-t border-neutral-900 bg-black text-sm relative z-10">
