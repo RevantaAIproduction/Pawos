@@ -12,7 +12,7 @@ const PawOSLogo = () => (
   </svg>
 );
 
-export default function DesktopSuccessPage() {
+function DesktopSuccessPageContent() {
   const searchParams = useSearchParams();
   const provider = searchParams.get("provider");
   const ref = searchParams.get("ref");
@@ -84,5 +84,13 @@ export default function DesktopSuccessPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function DesktopSuccessPage() {
+  return (
+    <React.Suspense fallback={<div style={{ padding: 48, textAlign: 'center' }}>Loading...</div>}>
+      <DesktopSuccessPageContent />
+    </React.Suspense>
   );
 }
