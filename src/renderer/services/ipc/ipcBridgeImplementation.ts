@@ -280,7 +280,11 @@ export const ipc = {
   async billingGetGooglePlacesApiKey(): Promise<string> {
     return getBridge().billingGetGooglePlacesApiKey();
   },
-  async billingClearUsageHistory(): Promise<void> {\n    return getBridge().billingClearUsageHistory();\n  }\n\n  async billingGetSubscription(): Promise<SubscriptionState> {
+  async billingClearUsageHistory(): Promise<void> {
+    return getBridge().billingClearUsageHistory();
+  },
+
+  async billingGetSubscription(): Promise<SubscriptionState> {
     return getBridge().billingGetSubscription();
   },
   async billingSetSubscriptionTier(tier: SubscriptionTierId): Promise<SubscriptionState> {

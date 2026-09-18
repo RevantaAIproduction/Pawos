@@ -20,12 +20,18 @@ import { stashMicrosoftAuthPayload } from "./microsoftAuthRelayStore";
  * next (loopback redirect instead of a pawos:// deep link) is different.
  */
 export function relayGitHubToDesktop(code: string | null, error: string | null): Response {
-  if (error) return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error }).toString()}`, error);
-  if (!code) {
-    const missing = "missing_code";
-    return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error: missing }).toString()}`, missing);
+  const url = new URL("https://pawos.revantaai.com/auth/desktop-success");
+  url.searchParams.set("provider", "github");
+  
+  if (error) {
+    url.searchParams.set("error", error);
+  } else if (!code) {
+    url.searchParams.set("error", "missing_code");
+  } else {
+    url.searchParams.set("code", code);
   }
-  return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ code }).toString()}`, null);
+
+  return Response.redirect(url.toString(), 302);
 }
 
 /**
@@ -83,18 +89,23 @@ const LOCAL_CALLBACK_URL = "http://127.0.0.1:51899/callback";
  * /api/auth/google/consume the instant it receives the request.
  */
 export async function relayGoogleToDesktop(code: string | null, error: string | null): Promise<Response> {
-  if (error) return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error }).toString()}`, error);
-  if (!code) {
-    const missing = "missing_code";
-    return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error: missing }).toString()}`, missing);
-  }
+  const buildRedirect = (params: Record<string, string>) => {
+    const url = new URL("https://pawos.revantaai.com/auth/desktop-success");
+    url.searchParams.set("provider", "google");
+    for (const [k, v] of Object.entries(params)) {
+      if (v) url.searchParams.set(k, v);
+    }
+    return Response.redirect(url.toString(), 302);
+  };
+
+  if (error) return buildRedirect({ error });
+  if (!code) return buildRedirect({ error: "missing_code" });
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   const redirectUri = process.env.GOOGLE_REDIRECT_URI;
   if (!clientId || !clientSecret || !redirectUri) {
-    const notConfigured = "server_not_configured";
-    return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error: notConfigured }).toString()}`, notConfigured);
+    return buildRedirect({ error: "server_not_configured" });
   }
 
   try {
@@ -110,21 +121,18 @@ export async function relayGoogleToDesktop(code: string | null, error: string | 
       }),
     });
     if (!tokenResponse.ok) {
-      const failed = `token_exchange_failed_${tokenResponse.status}`;
-      return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error: failed }).toString()}`, failed);
+      return buildRedirect({ error: `token_exchange_failed_${tokenResponse.status}` });
     }
     const tokens = (await tokenResponse.json()) as { access_token: string; id_token?: string };
     if (!tokens.id_token) {
-      const missing = "no_id_token";
-      return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error: missing }).toString()}`, missing);
+      return buildRedirect({ error: "no_id_token" });
     }
 
     const profileResponse = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
       headers: { Authorization: `Bearer ${tokens.access_token}` },
     });
     if (!profileResponse.ok) {
-      const failed = "profile_fetch_failed";
-      return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error: failed }).toString()}`, failed);
+      return buildRedirect({ error: "profile_fetch_failed" });
     }
     const profile = (await profileResponse.json()) as { sub: string; email: string; name?: string; picture?: string };
 
@@ -133,10 +141,9 @@ export async function relayGoogleToDesktop(code: string | null, error: string | 
       accessToken: tokens.access_token,
       profile,
     });
-    return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ ref }).toString()}`, null);
+    return buildRedirect({ ref });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "unknown_error";
-    return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error: message }).toString()}`, message);
+    return buildRedirect({ error: e instanceof Error ? e.message : "unknown_error" });
   }
 }
 

@@ -20,8 +20,6 @@ import { categorizeTurn } from '../../shared/billing/AiUsageCategories';
 import { getToolDefinitionsForEntitlement } from '../ai/IntentRegistry';
 import { organizationService } from '../organization/OrganizationService';
 import { organizationUsageService } from '../billing/OrganizationUsageService';
-import { referralCreditService } from '../organization/ReferralCreditService';
-import { PAW_COMPUTE_UNITS_PER_CREDIT_USD } from '../../shared/billing/ReferralCreditTypes';
 import type { TurnUsageSubmission } from '../../shared/billing/UsageMeteringTypes';
 
 export function useConversationController(args?: {
@@ -196,25 +194,7 @@ export function useConversationController(args?: {
 
   const dismissCreditsNotice = useCallback(() => setCreditsNoticeTier(null), []);
 
-  // Paw Credits ("Referral Credits") balance — fetched lazily only once the exhaustion notice is
-  // actually showing, since it requires a real Supabase round trip and most turns never hit this
-  // wall. Never fetched for a pooled (Enterprise) account, which has no personal wallet.
-
-
-  useEffect(() => {
-    if (!creditsNoticeTier || entitlementRef.current?.pooled) return;
-    let cancelled = false;
-    referralCreditService
-      .getBalance()
-      .then((balance) => {
-        if (!cancelled) setPawCreditsBalanceUsd(balance.balanceUsd);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [creditsNoticeTier]);
-
+  
 
 
   useEffect(() => {
@@ -593,10 +573,7 @@ export function useConversationController(args?: {
     dismissCreditsNotice,
     refreshEntitlement,
     entitlement,
-    pawCreditsBalanceUsd,
     
-    redeemingCredits,
-    redeemCreditsError,
     executionMode,
     setExecutionMode,
     bypassPermissionsEnabled,

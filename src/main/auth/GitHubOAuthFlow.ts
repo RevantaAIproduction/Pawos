@@ -1,5 +1,6 @@
 import * as http from 'http';
 import { shell } from 'electron';
+import { registerPendingOAuth, unregisterPendingOAuth } from './OAuthProtocolBridge';
 
 export type GitHubOAuthCallbackResult = { code: string };
 
@@ -60,8 +61,14 @@ export async function waitForGitHubOAuthCallback(redirectUri: string, authorizeU
       settled = true;
       clearTimeout(timeoutHandle);
       server.close();
+      unregisterPendingOAuth('github');
       fn();
     };
+
+    registerPendingOAuth('github', {
+      resolve: (code) => finish(() => resolve({ code })),
+      reject: (err) => finish(() => reject(err)),
+    });
 
     timeoutHandle = setTimeout(() => finish(() => reject(new Error('GitHub sign-in timed out.'))), 120000);
 

@@ -1,0 +1,86 @@
+.container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background-color: #f9fafb;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.card {
+  background: white;
+  border-radius: 12px;
+  padding: 48px 32px;
+  max-width: 440px;
+  width: 100%;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  text-align: center;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.title {
+  margin-top: 24px;
+  font-size: 24px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 0;
+}
+
+.body {
+  margin-bottom: 32px;
+}
+
+.successText {
+  font-size: 16px;
+  color: #10B981;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.errorText {
+  font-size: 16px;
+  color: #EF4444;
+}
+
+.hintText {
+  font-size: 15px;
+  color: #6B7280;
+  margin: 0;
+}
+
+.footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.primaryButton {
+  display: inline-block;
+  padding: 12px 32px;
+  background-color: #2563EB;
+  color: white;
+  font-weight: 600;
+  font-size: 16px;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: background-color 0.2s ease;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.primaryButton:hover {
+  background-color: #1D4ED8;
+}
+
+.footnote {
+  margin-top: 16px;
+  font-size: 13px;
+  color: #9CA3AF;
+  margin-bottom: 0;
+}

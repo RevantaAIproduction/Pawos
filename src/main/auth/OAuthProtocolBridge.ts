@@ -14,7 +14,7 @@
  * second-instance argv on Windows/Linux) into handleOAuthProtocolUrl below.
  */
 
-export type OAuthProvider = 'google' | 'github';
+export type OAuthProvider = 'google' | 'github' | 'microsoft';
 
 type PendingResolver = { resolve: (code: string) => void; reject: (error: Error) => void };
 
@@ -33,6 +33,7 @@ export function unregisterPendingOAuth(provider: OAuthProvider): void {
 const PROTOCOL_HOST_TO_PROVIDER: Record<string, OAuthProvider> = {
   'google-auth-callback': 'google',
   'github-auth-callback': 'github',
+  'microsoft-auth-callback': 'microsoft',
 };
 
 /**
@@ -127,6 +128,36 @@ export async function handleOAuthProtocolUrl(rawUrl: string): Promise<void> {
       );
     } catch (e) {
       resolver.reject(e instanceof Error ? e : new Error('Google sign-in handoff request failed.'));
+    }
+    return;
+  }
+
+  if (provider === 'microsoft') {
+    const ref = parsed.searchParams.get('ref');
+    if (!ref) {
+      resolver.reject(new Error('Microsoft sign-in callback was missing its handoff reference.'));
+      return;
+    }
+    try {
+      const res = await fetch(`${PAWOS_WEB_BASE_URL}/api/auth/microsoft/consume?ref=${encodeURIComponent(ref)}`);
+      if (!res.ok) {
+        resolver.reject(new Error(`Microsoft sign-in handoff could not be completed (HTTP ${res.status}).`));
+        return;
+      }
+      const payload = (await res.json()) as { idToken?: string; accessToken?: string; profile?: { id?: string; mail?: string; displayName?: string } };
+      if (!payload.idToken || !payload.accessToken || !payload.profile?.id || !payload.profile?.mail) {
+        resolver.reject(new Error('Microsoft sign-in handoff response was missing required fields.'));
+        return;
+      }
+      resolver.resolve(
+        JSON.stringify({
+          idToken: payload.idToken,
+          accessToken: payload.accessToken,
+          profile: payload.profile,
+        })
+      );
+    } catch (e) {
+      resolver.reject(e instanceof Error ? e : new Error('Microsoft sign-in handoff request failed.'));
     }
     return;
   }

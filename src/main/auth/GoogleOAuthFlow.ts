@@ -1,5 +1,6 @@
 import * as http from 'http';
 import { shell } from 'electron';
+import { registerPendingOAuth, unregisterPendingOAuth } from './OAuthProtocolBridge';
 import type { GoogleProfile, GoogleSignInResult } from '../../shared/auth/AccountTypes';
 
 export type { GoogleProfile, GoogleSignInResult };
@@ -78,17 +79,30 @@ export async function startGoogleSignIn(config: GoogleOAuthConfig): Promise<Goog
   // always reassigns it, but TS can't prove that on its own).
   let timeoutHandle: ReturnType<typeof setTimeout> = setTimeout(() => {}, 0);
   clearTimeout(timeoutHandle);
-  const resultPromise = new Promise<GoogleSignInResult>((resolve, reject) => {
-    let settled = false;
-    const finish = (fn: () => void) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeoutHandle);
-      server.close();
-      fn();
-    };
+    const resultPromise = new Promise<GoogleSignInResult>((resolve, reject) => {
+      let settled = false;
+      const finish = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutHandle);
+        server.close();
+        unregisterPendingOAuth('google');
+        fn();
+      };
 
-    timeoutHandle = setTimeout(() => finish(() => reject(new Error('Google sign-in timed out.'))), 120000);
+      registerPendingOAuth('google', {
+        resolve: (payloadStr) => {
+          try {
+            const parsed = JSON.parse(payloadStr);
+            finish(() => resolve(parsed as GoogleSignInResult));
+          } catch (e) {
+            finish(() => reject(new Error('Google sign-in handoff returned an invalid payload.')));
+          }
+        },
+        reject: (err) => finish(() => reject(err)),
+      });
+
+      timeoutHandle = setTimeout(() => finish(() => reject(new Error('Google sign-in timed out.'))), 120000);
 
     server.on('request', (req, res) => {
       const url = new URL(req.url ?? '/', `http://127.0.0.1:${LOCAL_CALLBACK_PORT}`);

@@ -54,34 +54,42 @@ export function SubscriptionSection({
     ipc.billingGetPricing().then(setPricing).catch(() => {});
     ipc.billingGetSubscription().then(setSubscription).catch(() => {});
     ipc.entitlementGetSnapshot().then(setEntitlement).catch(() => {});
-    
-    
-                    padding: '6px 12px',
-                    backgroundColor: goRefreshesRemaining > 0 ? '#4cb050' : '#404040',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: 4,
-                    cursor: goRefreshesRemaining > 0 ? 'pointer' : 'not-allowed',
-                    fontSize: '0.85em',
-                  }}
-                >
-                  Refresh Usage
-                </button>
-              </div>
-            )}
-          </div>
+    ipc.billingGetGoRefreshesRemaining().then(setGoRefreshesRemaining).catch(() => {});
+  };
+
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  return (
+    <div>
+      <div style={{
+        background: "rgba(255, 255, 255, 0.03)",
+        borderRadius: 8,
+        padding: "20px",
+        marginBottom: "24px",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center"
+      }}>
+        <div>
+          <div style={{ fontSize: "0.85em", color: "rgba(255, 255, 255, 0.5)", marginBottom: 4 }}>Current Plan</div>
+          <div style={{ fontSize: "1.2em", fontWeight: 600 }}>{TIER_LABELS[currentTier]}</div>
+        </div>
+        
+        <div style={{ display: "flex", gap: 12 }}>
           <button
             onClick={() => onUpgrade()}
             style={{
-              padding: '8px 16px',
-              backgroundColor: '#404040',
-              color: '#fff',
-              border: 'none',
+              padding: "8px 16px",
+              backgroundColor: "#404040",
+              color: "#fff",
+              border: "none",
               borderRadius: 4,
-              cursor: 'pointer',
-              fontSize: '0.9em',
+              cursor: "pointer",
+              fontSize: "0.9em",
               fontWeight: 500,
-              whiteSpace: 'nowrap',
+              whiteSpace: "nowrap",
             }}
           >
             Adjust plan
