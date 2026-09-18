@@ -126,6 +126,7 @@ console.error("[PAWOS START] before app.whenReady");
 // second, redundant copy of PawOS instead of handing the URL to the one
 // already running (and already holding the pending OAuth promise).
 // Request single-instance lock. On failure, we'll proceed anyway since this could be:
+app.setName('PawOS');
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
 if (!gotSingleInstanceLock) {
