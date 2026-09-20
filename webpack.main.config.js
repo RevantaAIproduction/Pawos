@@ -46,7 +46,7 @@ module.exports = {
     sharp: 'commonjs sharp',
     docx: 'commonjs docx',
     xlsx: 'commonjs xlsx',
-    typescript: 'commonjs typescript',
+    'electron-updater': 'commonjs electron-updater',
   },
   module: {
     rules: [

@@ -546,6 +546,14 @@ export function contextBridge() {
       ipcRenderer.invoke("project:attach", projectId, localPath) as Promise<ProjectUserDeviceAttachment>,
     projectMarkVerified: (projectId: string) =>
       ipcRenderer.invoke("project:markVerified", projectId) as Promise<ProjectUserDeviceAttachment>,
+    // Updater IPC methods
+    checkForUpdates: () => ipcRenderer.invoke('updater:check'),
+    quitAndInstall: () => ipcRenderer.invoke('updater:quitAndInstall'),
+    onUpdateState: (cb: (state: string) => void) => {
+      const handler = (_: any, state: string) => cb(state);
+      ipcRenderer.on('updater:state', handler);
+      return () => ipcRenderer.removeListener('updater:state', handler);
+    },
   };
 
   electronContextBridge.exposeInMainWorld("__pawos_ipc__", api);

@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import styles from './conversationPanel.module.css';
 import type { ConversationSnapshot, SubmittedInputContext } from './ConversationTypes';
 import { conversationStateLabels } from './ConversationTypes';
@@ -1075,7 +1075,7 @@ export function ConversationPanel({
         </div>
 
         {/* Workspace Controls - Only show during active conversation for paid tiers */}
-        {hasMessages && entitlement?.tier !== 'go' && (
+        {hasMessages && (
           <div className={styles.workspaceControls}>
             <button className={styles.workspaceTab} onClick={() => setOpenPanel(openPanel === 'terminal' ? null : 'terminal')} title="Terminal">
               âŒ˜ Terminal
@@ -1098,16 +1098,11 @@ export function ConversationPanel({
         )}
 
         <div className={styles.headerRight}>
-          <div className={styles.modelSelectorCompact}>
-            <ModelSelectorWidget
-              activePawModel={activePawModel}
-              onSelectModel={onSelectModel}
-              entitlement={entitlement}
-              streamingElapsedSeconds={streamingElapsedSeconds}
-            />
-          </div>
-          <button className={styles.closeBtn} onClick={onClose} type="button" title="Close">
-            âœ•
+          <button className={styles.closeBtn} onClick={onClose} type="button" title="Close" aria-label="Close">
+            <svg viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={styles.closeIcon} aria-hidden="true">
+              <line x1="6" y1="6" x2="18" y2="18" />
+              <line x1="6" y1="18" x2="18" y2="6" />
+            </svg>
           </button>
         </div>
       </div>
@@ -1788,7 +1783,7 @@ export function ConversationPanel({
               disabled={isStreaming}
               title={voiceState.isRecording ? 'Stop recording' : 'Start voice input'}
             >
-              ðŸŽ¤
+              <svg viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className={styles.voiceIcon} aria-hidden="true"><path d="M12 1v10"/><circle cx="12" cy="16" r="4"/></svg>
             </button>
 
             <button
@@ -1798,7 +1793,7 @@ export function ConversationPanel({
               disabled={isStreaming}
               title={voiceState.speakerEnabled ? 'Disable read-aloud' : 'Enable read-aloud'}
             >
-              ðŸ‘‹
+              <svg viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className={styles.voiceIcon} aria-hidden="true"><path d="M9 9v6a3 3 0 0 0 6 0V9"/><path d="M5 12h14"/></svg>
             </button>
 
             <button

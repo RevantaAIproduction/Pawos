@@ -63,15 +63,7 @@ export function relayConnectivityToDesktop(code: string | null, error: string | 
   return buildRelayResponse(`${CONNECTIVITY_LOCAL_CALLBACK_URL}?${params.toString()}`, error);
 }
 
-/**
- * Loopback callback this relay hands the browser to — the same port GoogleOAuthFlow.ts listens
- * on (see its own doc comment for why: this is the RFC 8252 "OAuth for Native Apps" pattern used
- * by Claude Desktop/Cursor/VS Code/gcloud/etc., not a pawos:// custom protocol). A remote server
- * can't reach a port on the user's own machine, but the *browser* redirecting there is a normal
- * same-machine HTTP request — no OS protocol registry, no external-app dialog, no browser
- * anti-abuse throttling involved at all.
- */
-const LOCAL_CALLBACK_URL = "http://127.0.0.1:51899/callback";
+
 
 /**
  * Google-specific: this app's OAuth client is a "Web application" type,
@@ -147,27 +139,25 @@ export async function relayGoogleToDesktop(code: string | null, error: string | 
   }
 }
 
-/**
- * Microsoft OAuth relay — identical pattern to relayGoogleToDesktop. Exchanges the authorization
- * code for tokens server-side (this server holds MICROSOFT_CLIENT_SECRET), fetches the user profile
- * from Microsoft Graph, stashes the payload with a temporary ref, and redirects the browser to the
- * desktop's loopback listener with just the ref. Desktop then fetches the actual tokens via
- * /api/auth/microsoft/consume?ref=...
- */
 export async function relayMicrosoftToDesktop(code: string | null, error: string | null): Promise<Response> {
-  if (error) return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error }).toString()}`, error);
-  if (!code) {
-    const missing = "missing_code";
-    return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error: missing }).toString()}`, missing);
-  }
+  const buildRedirect = (params: Record<string, string>) => {
+    const url = new URL("https://pawos.revantaai.com/auth/desktop-success");
+    url.searchParams.set("provider", "microsoft");
+    for (const [k, v] of Object.entries(params)) {
+      if (v) url.searchParams.set(k, v);
+    }
+    return Response.redirect(url.toString(), 302);
+  };
+
+  if (error) return buildRedirect({ error });
+  if (!code) return buildRedirect({ error: "missing_code" });
 
   const clientId = process.env.MICROSOFT_CLIENT_ID;
   const clientSecret = process.env.MICROSOFT_CLIENT_SECRET;
   const tenantId = process.env.MICROSOFT_TENANT_ID ?? 'common';
   const redirectUri = process.env.MICROSOFT_REDIRECT_URI ?? 'https://pawos.revantaai.com/auth/microsoft/callback';
   if (!clientId || !clientSecret) {
-    const notConfigured = "server_not_configured";
-    return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error: notConfigured }).toString()}`, notConfigured);
+    return buildRedirect({ error: "server_not_configured" });
   }
 
   try {
@@ -184,21 +174,18 @@ export async function relayMicrosoftToDesktop(code: string | null, error: string
       }),
     });
     if (!tokenResponse.ok) {
-      const failed = `token_exchange_failed_${tokenResponse.status}`;
-      return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error: failed }).toString()}`, failed);
+      return buildRedirect({ error: `token_exchange_failed_${tokenResponse.status}` });
     }
     const tokens = (await tokenResponse.json()) as { access_token: string; id_token?: string };
     if (!tokens.id_token) {
-      const missing = "no_id_token";
-      return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error: missing }).toString()}`, missing);
+      return buildRedirect({ error: "no_id_token" });
     }
 
     const profileResponse = await fetch("https://graph.microsoft.com/v1.0/me", {
       headers: { Authorization: `Bearer ${tokens.access_token}` },
     });
     if (!profileResponse.ok) {
-      const failed = "profile_fetch_failed";
-      return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error: failed }).toString()}`, failed);
+      return buildRedirect({ error: "profile_fetch_failed" });
     }
     const profile = (await profileResponse.json()) as { id: string; mail: string; displayName?: string };
 
@@ -207,10 +194,9 @@ export async function relayMicrosoftToDesktop(code: string | null, error: string
       accessToken: tokens.access_token,
       profile,
     });
-    return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ ref }).toString()}`, null);
+    return buildRedirect({ ref });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "unknown_error";
-    return buildRelayResponse(`${LOCAL_CALLBACK_URL}?${new URLSearchParams({ error: message }).toString()}`, message);
+    return buildRedirect({ error: e instanceof Error ? e.message : "unknown_error" });
   }
 }
 

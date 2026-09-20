@@ -116,6 +116,7 @@ function SidebarSearch({ collapsed, onSelect }: { collapsed: boolean; onSelect: 
               {r.label}
             </button>
           ))}
+
         </div>
       )}
     </div>
@@ -221,6 +222,40 @@ export function Sidebar({
       // best-effort — a private/restricted profile just won't remember the preference
     }
   }, [collapsed]);
+  const [updateLabel, setUpdateLabel] = useState('Check for Updates');
+
+  const handleUpdateClick = () => {
+    if (updateLabel === 'Check for Updates') {
+      window.__pawos_ipc__.checkForUpdates();
+    } else if (updateLabel === 'Apply Update') {
+      window.__pawos_ipc__.quitAndInstall();
+    }
+  };
+
+  useEffect(() => {
+    const unsubscribe = window.__pawos_ipc__.onUpdateState((state) => {
+      switch (state) {
+        case 'checking-for-update':
+          setUpdateLabel('Checking…');
+          break;
+        case 'update-available':
+        case 'download-progress':
+          setUpdateLabel('Downloading…');
+          break;
+        case 'update-downloaded':
+          setUpdateLabel('Apply Update');
+          break;
+        case 'update-not-available':
+        case 'error':
+          setUpdateLabel('Check for Updates');
+          break;
+        default:
+          // no change
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
 
   return (
     <aside className={`${styles.sidebar} ${collapsed ? styles.sidebarCollapsed : ''}`}>
@@ -277,7 +312,19 @@ export function Sidebar({
         {SECONDARY_NAV.map((item) => (
           <NavButton key={item.id} item={item} active={active} onSelect={onSelect} collapsed={collapsed} />
         ))}
-      </nav>
+                <div className={styles.navDivider} />
+          {/* Update Button */}
+          <button
+            type="button"
+            className={styles.navItem}
+            onClick={handleUpdateClick}
+            title={updateLabel}
+            aria-label={updateLabel}
+          >
+            <span className={styles.navIcon}>🔄</span>
+            {!collapsed && <span>{updateLabel}</span>}
+          </button>
+        </nav>
 
       <div className={styles.navFooter}>
         <ProfileMenu

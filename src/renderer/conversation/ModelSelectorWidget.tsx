@@ -51,10 +51,6 @@ export function ModelSelectorWidget({
         <span className={styles.modelName}>{displayName}</span>
         <span className={styles.chevron}>▾</span>
       </button>
-      <div className={styles.usage}>
-        <div className={styles.usageBar} style={{ width: `${usagePercent}%` }} />
-        <span className={styles.usageText}>{streamingElapsedSeconds}s</span>
-      </div>
       {menuOpen && (
         <div className={styles.menu}>
           {[...new Set(REASONING_PAW_MODEL_IDS), ...PAW_MODEL_CATALOG.map((m) => m.id)]

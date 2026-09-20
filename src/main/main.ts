@@ -1,3 +1,4 @@
+import { autoUpdater } from 'electron-updater';
 import { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, screen, session } from 'electron';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
@@ -578,6 +579,46 @@ app.whenReady().then(async () => {
         tenantId: envVars.MICROSOFT_TENANT_ID,
       });
     },
+  });
+
+  // ------------------- Updater IPC & Event Forwarding -------------------
+  // Handles renderer requests to check for updates and to quit & install.
+  const { ipcMain } = require('electron');
+  ipcMain.handle('updater:check', async () => {
+    try {
+      await autoUpdater.checkForUpdates();
+      return true;
+    } catch (e) {
+      console.error('[UPDATER] check error', e);
+      return false;
+    }
+  });
+
+  ipcMain.handle('updater:quitAndInstall', async () => {
+    try {
+      autoUpdater.quitAndInstall();
+      return true;
+    } catch (e) {
+      console.error('[UPDATER] quitAndInstall error', e);
+      return false;
+    }
+  });
+
+  // Forward autoUpdater lifecycle events to the renderer via the "updater:state" channel.
+  const sendUpdaterState = (state) => {
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.send('updater:state', state);
+    }
+  };
+
+  autoUpdater.on('checking-for-update', () => sendUpdaterState('checking-for-update'));
+  autoUpdater.on('update-available', () => sendUpdaterState('update-available'));
+  autoUpdater.on('download-progress', () => sendUpdaterState('download-progress'));
+  autoUpdater.on('update-downloaded', () => sendUpdaterState('update-downloaded'));
+  autoUpdater.on('update-not-available', () => sendUpdaterState('update-not-available'));
+  autoUpdater.on('error', (err) => {
+    console.error('[UPDATER] error event', err);
+    sendUpdaterState('error');
   });
 
   app.on('activate', () => {
