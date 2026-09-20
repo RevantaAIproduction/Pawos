@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import styles from './conversationPanel.module.css';
-import type { ConversationSnapshot, SubmittedInputContext } from './ConversationTypes';
+import type { ConversationSnapshot, ConversationTaskAction, ConversationTaskRecord, SubmittedInputContext } from './ConversationTypes';
 import { conversationStateLabels } from './ConversationTypes';
-import { TaskCard } from './TaskCard';
+import { getLatestDevBrowserConsole, getLatestScreenshot } from './TaskCard';
 import { ProjectPlanCard } from './ProjectPlanCard';
 import { isProjectPlanMessage } from './ProjectPlanningUX';
 import { SupportPersonaIndicator, useSupportPersona } from './SupportPersonaIndicator';
@@ -41,6 +41,15 @@ import { ModelSelectorWidget } from './ModelSelectorWidget';
 import { ContextualGovernancePanel } from './ContextualGovernancePanel';
 import { ContextualPlanPanel } from './ContextualPlanPanel';
 import { MessageActions } from './MessageActions/MessageActions';
+import {
+  getCodingWorkspaceRoots,
+  getLatestActiveFilePath,
+  getLatestCodingWorkspaceRoot,
+  getPathBasename,
+  getPathDirname,
+  sortDirectoryEntries,
+  type CodingWorkspaceDirEntry,
+} from '../workspace/codingWorkspaceModel';
 
 /** Reasoning models are genuinely selectable (they change which model actually answers); the rest
  *  of the catalog are automatic, specialized routers Paw invokes per-need â€” shown for transparency
@@ -63,6 +72,99 @@ const SUPPORTED_FILE_EXTENSIONS = ['.txt', '.csv', '.json', '.md', '.log'];
 /** Reference material for Reference/Image Intelligence (a screenshot, mockup, logo) â€” analyzed via analyze_reference_image, never read as text. */
 const SUPPORTED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
 const MAX_FILE_CHARS = 20_000;
+const WORKSPACE_PANEL_TABS = ['terminal', 'browser', 'files', 'worktree'] as const;
+type WorkspacePanelTab = (typeof WORKSPACE_PANEL_TABS)[number];
+
+const WORKSPACE_PANEL_LABELS: Record<WorkspacePanelTab, string> = {
+  terminal: 'Terminal',
+  browser: 'Browser',
+  files: 'Files',
+  worktree: 'Worktree',
+};
+
+const FILE_WRITE_ACTION_TYPES = new Set(['writeFile', 'copyPath', 'duplicatePath', 'compressPath', 'extractArchive', 'mergeFolders', 'splitFile', 'printBrowserPageToPdf']);
+const FILE_CHANGE_ACTION_TYPES = new Set(['movePath', 'deletePath', 'restorePath']);
+const FILE_CREATE_ACTION_TYPES = new Set(['createFolder']);
+const FILE_PATH_KEYS = ['path', 'to', 'entry', 'url', 'cwd'] as const;
+
+function getRequestField(request: unknown, keys: readonly string[]): string | undefined {
+  const record = request as Record<string, unknown>;
+  for (const key of keys) {
+    if (typeof record[key] === 'string' && record[key]) return record[key] as string;
+  }
+  return undefined;
+}
+
+function getLatestTask(snapshot: ConversationSnapshot, activeTask?: ConversationTaskRecord): ConversationTaskRecord | undefined {
+  if (activeTask) return activeTask;
+  for (const message of [...snapshot.messages].reverse()) {
+    if (message.task) return message.task;
+  }
+  return undefined;
+}
+
+function getTaskEditedFiles(task?: ConversationTaskRecord): { path: string; label: string; action: ConversationTaskAction }[] {
+  if (!task) return [];
+  const files: { path: string; label: string; action: ConversationTaskAction }[] = [];
+  const seen = new Set<string>();
+  for (const action of [...task.actions].reverse()) {
+    const overwritten = action.result?.ok ? (action.result.data as { overwritten?: boolean } | undefined)?.overwritten : undefined;
+    const changed =
+      (FILE_CHANGE_ACTION_TYPES.has(action.type) && action.result?.ok) ||
+      (FILE_WRITE_ACTION_TYPES.has(action.type) && action.result?.ok && overwritten !== false) ||
+      (action.type === 'applyCodeEdit' && action.result?.ok);
+    if (!changed) continue;
+    const path = getRequestField(action.request, FILE_PATH_KEYS);
+    if (!path) continue;
+    const normalized = path.toLowerCase();
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    files.push({ path, label: getPathBasename(path), action });
+  }
+  return files;
+}
+
+function getTaskCreatedFiles(task?: ConversationTaskRecord): { path: string; label: string; action: ConversationTaskAction }[] {
+  if (!task) return [];
+  const files: { path: string; label: string; action: ConversationTaskAction }[] = [];
+  const seen = new Set<string>();
+  for (const action of [...task.actions].reverse()) {
+    const overwritten = action.result?.ok ? (action.result.data as { overwritten?: boolean } | undefined)?.overwritten : undefined;
+    const created =
+      (FILE_CREATE_ACTION_TYPES.has(action.type) && action.result?.ok) ||
+      (FILE_WRITE_ACTION_TYPES.has(action.type) && action.result?.ok && overwritten === false);
+    if (!created) continue;
+    const path = getRequestField(action.request, FILE_PATH_KEYS);
+    if (!path) continue;
+    const normalized = path.toLowerCase();
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    files.push({ path, label: getPathBasename(path), action });
+  }
+  return files;
+}
+
+function readFileContent(resultData: unknown): string | null {
+  const data = resultData as Record<string, unknown> | undefined;
+  if (!data) return null;
+  if (typeof data.content === 'string') return data.content;
+  if (typeof data.text === 'string') return data.text;
+  if (typeof data.data === 'string') return data.data;
+  return null;
+}
+
+function readDirectoryEntries(resultData: unknown): CodingWorkspaceDirEntry[] {
+  const data = resultData as { entries?: unknown; items?: unknown; files?: unknown } | undefined;
+  const raw = Array.isArray(data?.entries) ? data.entries : Array.isArray(data?.items) ? data.items : Array.isArray(data?.files) ? data.files : [];
+  return raw
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
+    .map((entry) => ({
+      name: String(entry.name ?? entry.path ?? ''),
+      isDirectory: typeof entry.isDirectory === 'boolean' ? entry.isDirectory : entry.kind === 'directory' || entry.type === 'directory',
+      size: typeof entry.size === 'number' ? entry.size : null,
+    }))
+    .filter((entry) => entry.name.length > 0);
+}
 
 function getExtension(fileName: string): string {
   const dot = fileName.lastIndexOf('.');
@@ -230,6 +332,7 @@ export function ConversationPanel({
   streamingElapsedSeconds = 0,
   onCancel,
   onOpenSidebar,
+  activeTask,
 }: {
   snapshot: ConversationSnapshot;
   onClose: () => void;
@@ -295,6 +398,7 @@ export function ConversationPanel({
   streamingPawCompute?: number;
   streamingElapsedSeconds?: number;
   onOpenSidebar?: (cardType: 'terminal' | 'worktree' | 'browser' | 'background-tasks') => void;
+  activeTask?: ConversationTaskRecord;
 }) {
   const windowCtx = useWindowContext();
   const isStreaming = snapshot.state === 'thinking' || snapshot.state === 'performingAction';
@@ -349,6 +453,19 @@ export function ConversationPanel({
   // Incognito Mode (Go tier only): Private session, doesn't persist data or history
   // BUT still calculates Paw Computes usage in real-time (no free pass)
   const [incognitoMode, setIncognitoMode] = useState(false);
+  const [activeWorkspacePanel, setActiveWorkspacePanel] = useState<WorkspacePanelTab | null>(null);
+  const [directoryEntries, setDirectoryEntries] = useState<CodingWorkspaceDirEntry[]>([]);
+  const [directoryError, setDirectoryError] = useState<string | null>(null);
+  const [selectedWorkspaceFile, setSelectedWorkspaceFile] = useState<string | null>(null);
+  const [selectedFileContent, setSelectedFileContent] = useState<string | null>(null);
+  const [selectedFileError, setSelectedFileError] = useState<string | null>(null);
+  const [systemPwd, setSystemPwd] = useState<string>('');
+  const [addedFiles, setAddedFiles] = useState<string[]>([]);
+  const [addedFolders, setAddedFolders] = useState<string[]>([]);
+  const [cloneRepoUrl, setCloneRepoUrl] = useState('');
+  const [terminalCommand, setTerminalCommand] = useState('');
+  const [terminalOutput, setTerminalOutput] = useState<string>('User terminal ready.');
+  const [terminalRunning, setTerminalRunning] = useState(false);
 
   // Limits tracking state
   const [limitsState, setLimitsState] = useState<{
@@ -383,9 +500,6 @@ export function ConversationPanel({
     dollarUsedThisSession: 0, // Total spent this session
     pcsUsedThisSession: 0    // Total PC used this session
   });
-
-  // Active task being worked on
-  const [activeTask, setActiveTask] = useState<{ gitConnected?: boolean } | null>(null);
 
   // Conversation control object
   const conversation = useMemo(() => ({ open: () => { /* reopen/refocus conversation */ } }), []);
@@ -758,6 +872,84 @@ export function ConversationPanel({
   }, [entitlement?.usage5hPc, entitlement?.limit5hPc, entitlement?.usageWeeklyPc, entitlement?.limitWeeklyPc, limitsState.limit5hrTriggered, limitsState.limitWeeklyTriggered]);
 
   const latestMessage = useMemo(() => snapshot.messages[snapshot.messages.length - 1], [snapshot.messages]);
+  const latestTask = useMemo(() => getLatestTask(snapshot, activeTask), [snapshot, activeTask]);
+  const workspaceRoot = useMemo(() => (latestTask ? getLatestCodingWorkspaceRoot(latestTask) : undefined), [latestTask]);
+  const panelRoot = workspaceRoot ?? addedFolders[0] ?? (addedFiles[0] ? getPathDirname(addedFiles[0]) : undefined);
+  const terminalPwd = panelRoot ?? systemPwd;
+  const workspaceRoots = useMemo(() => (latestTask ? getCodingWorkspaceRoots(latestTask) : []), [latestTask]);
+  const activeFilePath = useMemo(() => (latestTask ? getLatestActiveFilePath(latestTask) : undefined), [latestTask]);
+  const editedFiles = useMemo(() => getTaskEditedFiles(latestTask), [latestTask]);
+  const createdFiles = useMemo(() => getTaskCreatedFiles(latestTask), [latestTask]);
+  const browserScreenshot = useMemo(() => (latestTask ? getLatestScreenshot(latestTask) : undefined), [latestTask]);
+  const browserConsoleErrors = useMemo(
+    () => (latestTask ? (getLatestDevBrowserConsole(latestTask) ?? []).filter((entry) => entry.level === 'error') : []),
+    [latestTask]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    ipc.getHomeDir()
+      .then((home) => {
+        if (!cancelled) setSystemPwd(home);
+      })
+      .catch(() => {
+        if (!cancelled) setSystemPwd('');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ipc]);
+
+  useEffect(() => {
+    if (!activeWorkspacePanel || (activeWorkspacePanel !== 'files' && activeWorkspacePanel !== 'worktree') || !panelRoot) return;
+    let cancelled = false;
+    setDirectoryError(null);
+    ipc.executeAction({ type: 'listDirectory', path: panelRoot })
+      .then((result) => {
+        if (cancelled) return;
+        if (!result.ok) {
+          setDirectoryEntries([]);
+          setDirectoryError(result.message || 'Could not load project files.');
+          return;
+        }
+        setDirectoryEntries(sortDirectoryEntries(readDirectoryEntries(result.data)));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDirectoryEntries([]);
+          setDirectoryError('Could not load project files.');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeWorkspacePanel, ipc, panelRoot]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceFile) {
+      setSelectedFileContent(null);
+      setSelectedFileError(null);
+      return;
+    }
+    let cancelled = false;
+    setSelectedFileError(null);
+    setSelectedFileContent(null);
+    ipc.executeAction({ type: 'readFile', path: selectedWorkspaceFile, maxChars: 20_000, format: 'auto' })
+      .then((result) => {
+        if (cancelled) return;
+        if (!result.ok) {
+          setSelectedFileError(result.message || 'Could not read this file.');
+          return;
+        }
+        setSelectedFileContent(readFileContent(result.data) ?? 'This file type does not expose a text preview.');
+      })
+      .catch(() => {
+        if (!cancelled) setSelectedFileError('Could not read this file.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ipc, selectedWorkspaceFile]);
 
   // Action narration (system lines) get appended just like any other
   // message â€” without this, they scroll out of view the moment the
@@ -1027,6 +1219,253 @@ export function ConversationPanel({
 
   const hasMessages = snapshot.messages.length > 0;
   const isIdleState = !hasMessages && !isStreaming && !proposedPlan;
+  const selectWorkspaceTab = (tab: WorkspacePanelTab) => {
+    setActiveWorkspacePanel((current) => (current === tab ? null : tab));
+    if (tab !== 'files') setSelectedWorkspaceFile(null);
+    onOpenSidebar?.(tab === 'files' ? 'worktree' : tab);
+  };
+  const openEditedFile = (path: string) => {
+    setActiveWorkspacePanel('files');
+    setSelectedWorkspaceFile(path);
+    onOpenPath?.(path, 'file');
+  };
+  const openDirectoryEntry = (entry: CodingWorkspaceDirEntry) => {
+    if (!panelRoot) return;
+    const separator = panelRoot.includes('\\') ? '\\' : '/';
+    const path = `${panelRoot.replace(/[\\/]+$/, '')}${separator}${entry.name}`;
+    if (entry.isDirectory) {
+      onOpenPath?.(path, 'folder');
+      return;
+    }
+    openEditedFile(path);
+  };
+  const addPickedFiles = (files: FileList) => {
+    const paths = Array.from(files)
+      .map((file) => ipc.companionGetPathForFile(file))
+      .filter((path): path is string => Boolean(path));
+    if (paths.length === 0) return;
+    setAddedFiles((previous) => {
+      const next = [...previous];
+      for (const path of paths) {
+        if (!next.some((existing) => existing.toLowerCase() === path.toLowerCase())) next.push(path);
+      }
+      return next;
+    });
+    setActiveWorkspacePanel('files');
+    setSelectedWorkspaceFile(paths[0] ?? null);
+  };
+  const addPickedFolder = async () => {
+    const folder = await ipc.selectFolder();
+    if (!folder) return;
+    setAddedFolders((previous) => (
+      previous.some((existing) => existing.toLowerCase() === folder.toLowerCase()) ? previous : [folder, ...previous]
+    ));
+    setActiveWorkspacePanel('files');
+    setSelectedWorkspaceFile(null);
+  };
+  const requestCloneRepo = () => {
+    const url = cloneRepoUrl.trim();
+    if (!url) return;
+    const destination = panelRoot ?? systemPwd;
+    const destinationText = destination ? ` into ${destination}` : '';
+    onSendTranscript(`Clone this Git repository${destinationText}: ${url}`);
+    setCloneRepoUrl('');
+    setActiveWorkspacePanel('worktree');
+  };
+  const runUserTerminalCommand = async () => {
+    const command = terminalCommand.trim();
+    const cwd = terminalPwd || systemPwd;
+    if (!command || !cwd || terminalRunning) return;
+    setTerminalRunning(true);
+    setTerminalOutput((previous) => `${previous}\n\n${cwd}> ${command}\nRunning...`);
+    try {
+      const result = await ipc.executeAction({ type: 'runCommand', command, cwd });
+      if (result.ok) {
+        const data = result.data as { output?: unknown; exitCode?: unknown } | undefined;
+        const output = typeof data?.output === 'string' && data.output.trim() ? data.output.trim() : 'Command completed.';
+        const exitCode = typeof data?.exitCode === 'number' ? `\nExit code: ${data.exitCode}` : '';
+        setTerminalOutput((previous) => previous.replace(/\nRunning\.\.\.$/, `\n${output}${exitCode}`));
+      } else {
+        setTerminalOutput((previous) => previous.replace(/\nRunning\.\.\.$/, `\n${result.message || 'Command failed.'}`));
+      }
+    } catch {
+      setTerminalOutput((previous) => previous.replace(/\nRunning\.\.\.$/, '\nCommand failed.'));
+    } finally {
+      setTerminalRunning(false);
+      setTerminalCommand('');
+    }
+  };
+  const renderFileList = (items: { path: string; label: string; action: ConversationTaskAction }[], emptyText: string) => {
+    if (items.length === 0) return <div className={styles.panelPlaceholder}>{emptyText}</div>;
+    return (
+      <div className={styles.workspaceList}>
+        {items.map((item) => (
+          <button key={`${item.action.id}-${item.path}`} type="button" className={styles.workspaceListItem} onClick={() => openEditedFile(item.path)} title={item.path}>
+            <span className={styles.workspaceItemName}>{item.label}</span>
+            <span className={styles.workspaceItemPath}>{item.path}</span>
+          </button>
+        ))}
+      </div>
+    );
+  };
+  const renderAddedFiles = () => {
+    if (addedFiles.length === 0) return <div className={styles.panelPlaceholder}>No files added yet.</div>;
+    return (
+      <div className={styles.workspaceList}>
+        {addedFiles.map((path) => (
+          <button key={path} type="button" className={styles.workspaceListItem} onClick={() => openEditedFile(path)} title={path}>
+            <span className={styles.workspaceItemName}>{getPathBasename(path)}</span>
+            <span className={styles.workspaceItemPath}>{path}</span>
+          </button>
+        ))}
+      </div>
+    );
+  };
+  const renderDirectoryList = () => {
+    if (!panelRoot) return <div className={styles.panelPlaceholder}>No project or folder added yet.</div>;
+    if (directoryError) return <div className={styles.panelPlaceholder}>{directoryError}</div>;
+    if (directoryEntries.length === 0) return <div className={styles.panelPlaceholder}>No project files loaded yet.</div>;
+    return (
+      <div className={styles.workspaceList}>
+        {directoryEntries.map((entry) => (
+          <button key={`${entry.isDirectory ? 'dir' : 'file'}-${entry.name}`} type="button" className={styles.workspaceListItem} onClick={() => openDirectoryEntry(entry)}>
+            <span className={styles.workspaceItemName}>{entry.isDirectory ? '[dir]' : '[file]'} {entry.name}</span>
+            <span className={styles.workspaceItemPath}>{entry.isDirectory ? 'Folder' : entry.size === null ? 'File' : `${entry.size} bytes`}</span>
+          </button>
+        ))}
+      </div>
+    );
+  };
+  const renderSelectedFile = () => (
+    <div className={styles.filePreview}>
+      <div className={styles.filePreviewHeader}>
+        <button type="button" className={styles.backBtn} onClick={() => setSelectedWorkspaceFile(null)}>Back</button>
+        <div className={styles.filePreviewTitle} title={selectedWorkspaceFile ?? undefined}>
+          {selectedWorkspaceFile ? getPathBasename(selectedWorkspaceFile) : 'File'}
+        </div>
+      </div>
+      {selectedFileError ? (
+        <div className={styles.panelPlaceholder}>{selectedFileError}</div>
+      ) : (
+        <pre className={styles.filePreviewBody}>{selectedFileContent ?? 'Loading file...'}</pre>
+      )}
+    </div>
+  );
+  const renderWorkspacePanel = () => {
+    if (!activeWorkspacePanel) return null;
+    const title = WORKSPACE_PANEL_LABELS[activeWorkspacePanel];
+    return (
+      <aside className={styles.splitRight} aria-label={`${title} panel`}>
+        <div className={styles.panelHeader}>
+          <div className={styles.panelTitle}>{title}</div>
+          <button type="button" className={styles.panelCloseBtn} onClick={() => setActiveWorkspacePanel(null)} title="Close panel" aria-label="Close panel">
+            x
+          </button>
+        </div>
+        <div className={styles.panelContent}>
+          {activeWorkspacePanel === 'terminal' && (
+            <div className={styles.workspaceSurface}>
+              <div className={styles.metaRow}><span>PWD</span><strong>{terminalPwd || 'System folder unavailable'}</strong></div>
+              <pre className={styles.terminalPreview}>{terminalOutput}</pre>
+              <div className={styles.terminalCommandRow}>
+                <input
+                  value={terminalCommand}
+                  onChange={(event) => setTerminalCommand(event.currentTarget.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      void runUserTerminalCommand();
+                    }
+                  }}
+                  placeholder="Run a command in this folder..."
+                  disabled={!terminalPwd || terminalRunning}
+                />
+                <button type="button" onClick={() => void runUserTerminalCommand()} disabled={!terminalCommand.trim() || !terminalPwd || terminalRunning}>
+                  {terminalRunning ? 'Running' : 'Run'}
+                </button>
+              </div>
+            </div>
+          )}
+          {activeWorkspacePanel === 'browser' && (
+            <div className={styles.workspaceSurface}>
+              {browserScreenshot ? (
+                <img className={styles.browserPreviewImage} src={`data:image/png;base64,${browserScreenshot}`} alt="Latest browser preview" />
+              ) : (
+                <div className={styles.panelPlaceholder}>No browser preview captured yet.</div>
+              )}
+              {browserConsoleErrors.length > 0 && (
+                <div className={styles.errorList}>
+                  {browserConsoleErrors.map((entry, index) => (
+                    <div key={`${entry.timestamp}-${index}`} className={styles.errorItem}>{entry.text}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {activeWorkspacePanel === 'files' && (
+            selectedWorkspaceFile ? renderSelectedFile() : (
+              <div className={styles.workspaceSurface}>
+                <div className={styles.metaRow}><span>Current</span><strong>{activeFilePath ? getPathBasename(activeFilePath) : 'No active file'}</strong></div>
+                <section className={styles.workspaceSection}>
+                  <h3>Added files</h3>
+                  {renderAddedFiles()}
+                </section>
+                <section className={styles.workspaceSection}>
+                  <h3>Recently edited</h3>
+                  {renderFileList(editedFiles, 'No edited files in this conversation yet.')}
+                </section>
+                <section className={styles.workspaceSection}>
+                  <h3>Project files</h3>
+                  {renderDirectoryList()}
+                </section>
+              </div>
+            )
+          )}
+          {activeWorkspacePanel === 'worktree' && (
+            <div className={styles.workspaceSurface}>
+              <div className={styles.metaRow}><span>Root</span><strong>{panelRoot ?? 'No project, folder, or file added yet'}</strong></div>
+              <div className={styles.cloneBox}>
+                <input
+                  value={cloneRepoUrl}
+                  onChange={(event) => setCloneRepoUrl(event.currentTarget.value)}
+                  placeholder="Paste a Git repository URL..."
+                />
+                <button type="button" onClick={requestCloneRepo} disabled={!cloneRepoUrl.trim()}>
+                  Clone
+                </button>
+              </div>
+              {addedFolders.length > 0 && (
+                <section className={styles.workspaceSection}>
+                  <h3>Added folders</h3>
+                  <div className={styles.workspaceList}>
+                    {addedFolders.map((folder) => (
+                      <button key={folder} type="button" className={styles.workspaceListItem} onClick={() => onOpenPath?.(folder, 'folder')} title={folder}>
+                        <span className={styles.workspaceItemName}>{getPathBasename(folder)}</span>
+                        <span className={styles.workspaceItemPath}>{folder}</span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
+              {workspaceRoots.length > 1 && (
+                <div className={styles.workspaceRoots}>
+                  {workspaceRoots.map((root) => <div key={root}>{root}</div>)}
+                </div>
+              )}
+              <section className={styles.workspaceSection}>
+                <h3>Created</h3>
+                {renderFileList(createdFiles, 'No created files in this conversation yet.')}
+              </section>
+              <section className={styles.workspaceSection}>
+                <h3>Edited</h3>
+                {renderFileList(editedFiles, 'No edited files in this conversation yet.')}
+              </section>
+            </div>
+          )}
+        </div>
+      </aside>
+    );
+  };
 
   return (
     <section className={styles.panel} aria-label="Conversation panel">
@@ -1040,7 +1479,20 @@ export function ConversationPanel({
         </div>
 
         <div className={styles.headerCenter}>
-          <ProjectContextBar currentWorkingFile={currentWorkingFile} />
+          <ProjectContextBar activeTask={latestTask} currentWorkingFile={currentWorkingFile} />
+          <div className={styles.workspaceTopCards} aria-label="Workspace panels">
+            {WORKSPACE_PANEL_TABS.map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                className={`${styles.workspaceTopCard} ${activeWorkspacePanel === tab ? styles.workspaceTopCardActive : ''}`}
+                onClick={() => selectWorkspaceTab(tab)}
+                aria-pressed={activeWorkspacePanel === tab}
+              >
+                {WORKSPACE_PANEL_LABELS[tab]}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className={styles.headerRight}>
@@ -1223,6 +1675,7 @@ export function ConversationPanel({
           )}
         </div>
 
+        {renderWorkspacePanel()}
       </div>
 
       {/* â• UPGRADE MESSAGE BAR â• */}
@@ -1319,7 +1772,20 @@ export function ConversationPanel({
               type="button"
               title="Send (Enter)"
             >
-              â†’
+              <svg
+                viewBox="0 0 24 24"
+                width="18"
+                height="18"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M6 18v-6a4 4 0 0 1 4-4h8" />
+                <path d="M14 4l4 4-4 4" />
+              </svg>
             </button>
           </div>
         </div>
@@ -1327,9 +1793,9 @@ export function ConversationPanel({
         {/* Controls row: + | strategy | model | usage */}
         <div className={styles.composerControlsRow}>
           <PlusMenu
-            onAddFiles={() => {}}
-            onAddPhotos={() => {}}
-            onAddFolder={() => {}}
+            onAddFiles={addPickedFiles}
+            onAddPhotos={addPickedFiles}
+            onAddFolder={() => void addPickedFolder()}
             onAddConnector={() => {}}
             onAddSlashCommand={() => {}}
           />

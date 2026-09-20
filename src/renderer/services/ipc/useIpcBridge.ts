@@ -74,7 +74,10 @@ export function useIpcBridge() {
       getEnvApiKeys: async (): Promise<{ gemini?: string }> => ipc.envGetApiKeys(),
 
       getForegroundWindowInfo: async (): Promise<ForegroundWindowInfo> => ipc.systemGetForegroundWindowInfo(),
+      getHomeDir: async (): Promise<string> => ipc.systemGetHomeDir(),
       getAppVersion: async (): Promise<string> => ipc.systemGetAppVersion(),
+      selectFolder: async (): Promise<string | null> => ipc.selectFolder(),
+      companionGetPathForFile: (file: File): string => ipc.companionGetPathForFile(file),
 
       sendMail: async (method: string, to: string, params: unknown): Promise<boolean> => ipc.mailSend(method, to, params),
       listMailTemplates: async (): Promise<{ key: string; label: string }[]> => ipc.mailListTemplates(),

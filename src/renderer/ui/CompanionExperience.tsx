@@ -4,7 +4,6 @@ import { Avatar3DOverlay } from './CompanionCanvas/Avatar3DOverlay';
 import { SettingsPanel } from './SettingsPanel/SettingsPanel';
 import { ConversationPanel } from '../conversation/ConversationPanel';
 import { WindowContextProvider } from '../conversation/WindowContextProvider';
-import { CardGrid, type CardConfig } from './CardGrid/CardGrid';
 import { WorkspaceRuntime } from '../workspace/WorkspaceRuntime';
 import { CommunicationWorkspaceRuntime } from '../communication/CommunicationWorkspaceRuntime';
 import { useIpcBridge } from '../services/ipc/useIpcBridge';
@@ -91,10 +90,6 @@ export default function CompanionExperience() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showRecentWork, setShowRecentWork] = useState(false);
   const [showTalkButton, setShowTalkButton] = useState(false);
-  const [openCards, setOpenCards] = useState<CardConfig[]>([
-    { id: 'terminal-1', type: 'terminal', title: 'Terminal' },
-  ]);
-  const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
   const notifyOnTaskCompleteRef = useRef(true);
 
   // Show RecentWorkPage when work starts
@@ -338,18 +333,6 @@ export default function CompanionExperience() {
               streamingPawCompute={conversation.streamingPawCompute}
               streamingElapsedSeconds={conversation.streamingElapsedSeconds}
               onCancel={() => conversation.cancel()}
-              openCards={openCards}
-              onOpenSidebar={(cardType) => {
-                const existingCard = openCards.find((c) => c.type === cardType);
-                if (!existingCard) {
-                  const newId = `${cardType}-${Date.now()}`;
-                  setOpenCards((prev) => [...prev, { id: newId, type: cardType, title: cardType.charAt(0).toUpperCase() + cardType.slice(1) }]);
-                }
-              }}
-              onRemoveCard={(cardId) => setOpenCards((prev) => prev.filter((c) => c.id !== cardId))}
-              expandedCardId={expandedCardId}
-              onExpandCard={(cardId) => setExpandedCardId(cardId)}
-              onCollapseCard={() => setExpandedCardId(null)}
             />
           </div>
         </WindowContextProvider>

@@ -2,8 +2,8 @@ import React, { useRef, useState } from 'react';
 import styles from './plusMenu.module.css';
 
 interface PlusMenuProps {
-  onAddFiles?: () => void;
-  onAddPhotos?: () => void;
+  onAddFiles?: (files: FileList) => void;
+  onAddPhotos?: (files: FileList) => void;
   onAddFolder?: () => void;
   onAddConnector?: () => void;
   onAddSlashCommand?: () => void;
@@ -79,7 +79,8 @@ export function PlusMenu({
         multiple
         style={{ display: 'none' }}
         onChange={(e) => {
-          onAddFiles?.();
+          if (e.currentTarget.files) onAddFiles?.(e.currentTarget.files);
+          e.currentTarget.value = '';
           setMenuOpen(false);
         }}
       />
@@ -90,7 +91,8 @@ export function PlusMenu({
         accept="image/*"
         style={{ display: 'none' }}
         onChange={(e) => {
-          onAddPhotos?.();
+          if (e.currentTarget.files) onAddPhotos?.(e.currentTarget.files);
+          e.currentTarget.value = '';
           setMenuOpen(false);
         }}
       />
