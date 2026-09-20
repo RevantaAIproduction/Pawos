@@ -1,5 +1,4 @@
 import React, { useRef, useState } from 'react';
-import type { SubscriptionTierId } from '../../shared/billing/BillingTypes';
 import styles from './plusMenu.module.css';
 
 interface PlusMenuProps {
@@ -8,7 +7,6 @@ interface PlusMenuProps {
   onAddFolder?: () => void;
   onAddConnector?: () => void;
   onAddSlashCommand?: () => void;
-  tier?: SubscriptionTierId;
 }
 
 export function PlusMenu({
@@ -17,7 +15,6 @@ export function PlusMenu({
   onAddFolder,
   onAddConnector,
   onAddSlashCommand,
-  tier = 'go',
 }: PlusMenuProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -43,26 +40,23 @@ export function PlusMenu({
       {menuOpen && (
         <div className={styles.menu}>
           <button
-            className={`${styles.menuItem} ${tier === 'go' ? styles.disabled : ''}`}
-            disabled={tier === 'go'}
+            className={styles.menuItem}
             onClick={handleFileClick}
-            title={tier === 'go' ? 'Available on Pro and above' : 'Add files'}
+            title="Add files"
           >
             📎 Add files
           </button>
           <button
-            className={`${styles.menuItem} ${tier === 'go' ? styles.disabled : ''}`}
-            disabled={tier === 'go'}
+            className={styles.menuItem}
             onClick={handlePhotoClick}
-            title={tier === 'go' ? 'Available on Pro and above' : 'Add photos'}
+            title="Add photos"
           >
             🖼️ Add photos
           </button>
           <button
-            className={`${styles.menuItem} ${tier === 'go' ? styles.disabled : ''}`}
-            disabled={tier === 'go'}
+            className={styles.menuItem}
             onClick={onAddFolder}
-            title={tier === 'go' ? 'Available on Pro and above' : 'Add folder'}
+            title="Add folder"
           >
             📁 Add folder
           </button>
@@ -71,10 +65,9 @@ export function PlusMenu({
             / Slash commands
           </button>
           <button
-            className={`${styles.menuItem} ${tier === 'go' ? styles.disabled : ''}`}
-            disabled={tier === 'go'}
+            className={styles.menuItem}
             onClick={onAddConnector}
-            title={tier === 'go' ? 'Available on Pro and above' : 'Connect services'}
+            title="Connect services"
           >
             🔗 Connectors
           </button>

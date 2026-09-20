@@ -19,26 +19,26 @@ export type TierRollingCapacity = {
 export type CapacityTierKey = 'go' | 'pro' | 'proMax' | 'team' | 'teamPremium' | 'enterprise' | 'build';
 
 export type RollingCapacityConfig = {
-  /** Config schema version for migration (current = 3) */
+  /** Config schema version for migration (current = 4) */
   version?: number;
   /** 'team' = Team Standard per-seat; 'teamPremium' = Team Premium per-seat. */
   tiers: Record<CapacityTierKey, TierRollingCapacity>;
 };
 
 const FILE_NAME = 'paw-compute-capacity.json';
-const CURRENT_CONFIG_VERSION = 3;
+const CURRENT_CONFIG_VERSION = 4;
 
 function defaultConfig(): RollingCapacityConfig {
   return {
     version: CURRENT_CONFIG_VERSION,
     tiers: {
-      go:          { window5hPc: null,    windowWeeklyPc: 1_000,  window5hActiveHours: null, windowWeeklyActiveHours: 5,   pooled: false },
-      pro:         { window5hPc: null,    windowWeeklyPc: 5_000,  window5hActiveHours: 5,    windowWeeklyActiveHours: 20,  pooled: false },
-      proMax:      { window5hPc: null,    windowWeeklyPc: 25_000, window5hActiveHours: 5,    windowWeeklyActiveHours: 30,  pooled: false }, // 5x variant; 20x is 100k/40h
-      team:        { window5hPc: null,    windowWeeklyPc: 5_000,  window5hActiveHours: null, windowWeeklyActiveHours: 20,  pooled: true  }, // Handled server-side usually, but defining limits here
-      teamPremium: { window5hPc: null,    windowWeeklyPc: 25_000, window5hActiveHours: null, windowWeeklyActiveHours: 30,  pooled: true  },
+      go:          { window5hPc: 1_000,       windowWeeklyPc: 1_000,  window5hActiveHours: null, windowWeeklyActiveHours: 5,   pooled: false },
+      pro:         { window5hPc: 1_250,       windowWeeklyPc: 5_000,  window5hActiveHours: 5,    windowWeeklyActiveHours: 20,  pooled: false },
+      proMax:      { window5hPc: 4_166.6667,  windowWeeklyPc: 25_000, window5hActiveHours: 5,    windowWeeklyActiveHours: 30,  pooled: false }, // 5x variant; 20x is 100k/40h
+      team:        { window5hPc: 1_250,       windowWeeklyPc: 5_000,  window5hActiveHours: null, windowWeeklyActiveHours: 20,  pooled: true  }, // Handled server-side usually, but defining limits here
+      teamPremium: { window5hPc: 4_166.6667,  windowWeeklyPc: 25_000, window5hActiveHours: null, windowWeeklyActiveHours: 30,  pooled: true  },
       enterprise:  { window5hPc: null,    windowWeeklyPc: null,   window5hActiveHours: null, windowWeeklyActiveHours: null, pooled: true  },
-      build:       { window5hPc: null,    windowWeeklyPc: 1_500,  window5hActiveHours: 5,    windowWeeklyActiveHours: 15,  pooled: false },
+      build:       { window5hPc: 500,     windowWeeklyPc: 1_500,  window5hActiveHours: 5,    windowWeeklyActiveHours: 15,  pooled: false },
     },
   };
 }
@@ -90,6 +90,7 @@ class PawComputeCapacityStore {
       capacity = {
         ...capacity,
         windowWeeklyPc: (capacity.windowWeeklyPc ?? 0) * 4,
+        window5hPc: 12_500,
         windowWeeklyActiveHours: 40 // 40h for 20x
       };
     }

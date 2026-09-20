@@ -87,7 +87,6 @@ export function CompanionCard({
   };
 
   const activePawModelDescriptor = getPawModel(activePawModel ?? DEFAULT_PAW_MODEL_ID);
-  const tier = entitlement?.tier ?? 'go';
   const renderedModels = COMPANION_MODEL_ORDER.filter((id) => REASONING_PAW_MODEL_IDS.includes(id));
 
   return (
@@ -473,56 +472,50 @@ export function CompanionCard({
             >
               <button
                 type="button"
-                disabled={tier === 'go'}
                 onClick={() => {
                   handleFileUpload();
                   setAddMenuOpen(false);
                 }}
-                title={tier === 'go' ? 'Available on Pro and above' : 'Add files'}
+                title="Add files"
                 style={{
                   width: '100%',
                   padding: '8px 12px',
                   backgroundColor: 'transparent',
                   border: 'none',
                   borderRadius: '4px',
-                  cursor: tier === 'go' ? 'not-allowed' : 'pointer',
+                  cursor: 'pointer',
                   fontSize: 11,
                   textAlign: 'left',
-                  color: tier === 'go' ? 'rgba(var(--pawos-overlay-rgb), 0.4)' : 'rgba(var(--pawos-overlay-rgb), 0.8)',
+                  color: 'rgba(var(--pawos-overlay-rgb), 0.8)',
                   borderBottom: '1px solid rgba(var(--pawos-overlay-rgb), 0.08)',
-                  opacity: tier === 'go' ? 0.5 : 1,
+                  opacity: 1,
                 }}
-                onMouseEnter={(e) => {
-                  if (tier !== 'go') e.currentTarget.style.backgroundColor = 'rgba(var(--pawos-overlay-rgb), 0.08)';
-                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(var(--pawos-overlay-rgb), 0.08)')}
                 onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
               >
                 📁 Add Files
               </button>
               <button
                 type="button"
-                disabled={tier === 'go'}
                 onClick={() => {
                   handlePhotoUpload();
                   setAddMenuOpen(false);
                 }}
-                title={tier === 'go' ? 'Available on Pro and above' : 'Add photos'}
+                title="Add photos"
                 style={{
                   width: '100%',
                   padding: '8px 12px',
                   backgroundColor: 'transparent',
                   border: 'none',
                   borderRadius: '4px',
-                  cursor: tier === 'go' ? 'not-allowed' : 'pointer',
+                  cursor: 'pointer',
                   fontSize: 11,
                   textAlign: 'left',
-                  color: tier === 'go' ? 'rgba(var(--pawos-overlay-rgb), 0.4)' : 'rgba(var(--pawos-overlay-rgb), 0.8)',
+                  color: 'rgba(var(--pawos-overlay-rgb), 0.8)',
                   borderBottom: '1px solid rgba(var(--pawos-overlay-rgb), 0.08)',
-                  opacity: tier === 'go' ? 0.5 : 1,
+                  opacity: 1,
                 }}
-                onMouseEnter={(e) => {
-                  if (tier !== 'go') e.currentTarget.style.backgroundColor = 'rgba(var(--pawos-overlay-rgb), 0.08)';
-                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(var(--pawos-overlay-rgb), 0.08)')}
                 onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
               >
                 🖼️ Add Photos
@@ -549,25 +542,22 @@ export function CompanionCard({
               </button>
               <button
                 type="button"
-                disabled={tier === 'go'}
                 onClick={() => setAddMenuOpen(false)}
-                title={tier === 'go' ? 'Available on Pro and above' : 'Connect services'}
+                title="Connect services"
                 style={{
                   width: '100%',
                   padding: '8px 12px',
                   backgroundColor: 'transparent',
                   border: 'none',
                   borderRadius: '4px',
-                  cursor: tier === 'go' ? 'not-allowed' : 'pointer',
+                  cursor: 'pointer',
                   fontSize: 11,
                   textAlign: 'left',
-                  color: tier === 'go' ? 'rgba(var(--pawos-overlay-rgb), 0.4)' : 'rgba(var(--pawos-overlay-rgb), 0.8)',
+                  color: 'rgba(var(--pawos-overlay-rgb), 0.8)',
                   borderBottom: '1px solid rgba(var(--pawos-overlay-rgb), 0.08)',
-                  opacity: tier === 'go' ? 0.5 : 1,
+                  opacity: 1,
                 }}
-                onMouseEnter={(e) => {
-                  if (tier !== 'go') e.currentTarget.style.backgroundColor = 'rgba(var(--pawos-overlay-rgb), 0.08)';
-                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(var(--pawos-overlay-rgb), 0.08)')}
                 onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
               >
                 🔌 Connectors
