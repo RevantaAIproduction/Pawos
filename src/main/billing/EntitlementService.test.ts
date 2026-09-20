@@ -1,10 +1,27 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { entitlementService } from './EntitlementService';
 import { subscriptionStore } from './SubscriptionStore';
 import { creditStore } from './CreditStore';
 import { usageEventStore } from './UsageEventStore';
 import { pawComputeCapacityStore } from './PawComputeCapacityStore';
 import type { RuntimeEntitlementGrant } from '../../shared/billing/BillingTypes';
+
+beforeEach(() => {
+  vi.spyOn(usageEventStore as any, 'save').mockImplementation(() => {});
+  vi.spyOn(pawComputeCapacityStore as any, 'save').mockImplementation(() => {});
+  // Supply the legacy capacities the test assertions expect without altering the modern defaultConfig
+  pawComputeCapacityStore.applySyncedConfig({
+    tiers: {
+      go: { window5hPc: 132, windowWeeklyPc: 528, window5hActiveHours: null, windowWeeklyActiveHours: null, pooled: false },
+      pro: { window5hPc: 400, windowWeeklyPc: 1600, window5hActiveHours: null, windowWeeklyActiveHours: null, pooled: false },
+      proMax: { window5hPc: 2000, windowWeeklyPc: 8000, window5hActiveHours: null, windowWeeklyActiveHours: null, pooled: false },
+      team: { window5hPc: 800, windowWeeklyPc: 3200, window5hActiveHours: null, windowWeeklyActiveHours: null, pooled: false },
+      teamPremium: { window5hPc: 2000, windowWeeklyPc: 8000, window5hActiveHours: null, windowWeeklyActiveHours: null, pooled: false },
+      enterprise: { window5hPc: 4000, windowWeeklyPc: 16000, window5hActiveHours: null, windowWeeklyActiveHours: null, pooled: true },
+      build: { window5hPc: 400, windowWeeklyPc: 1600, window5hActiveHours: null, windowWeeklyActiveHours: null, pooled: false },
+    }
+  });
+});
 
 describe('EntitlementService — Go tier Think-not-Execute redesign', () => {
   afterEach(() => vi.restoreAllMocks());
@@ -111,11 +128,15 @@ describe('EntitlementService — Paw Compute usage-limit enforcement (paid tiers
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'pro', status: 'active' });
     const capacity = pawComputeCapacityStore.resolve('pro');
     const limit5h = capacity.window5hPc as number;
-    const now = Date.now();
-    // Fill the 5h window exactly to the limit with non-fable records inside the window
-    vi.spyOn(usageEventStore, 'list').mockReturnValue([
-      { usageEventId: 'e1', requestId: 'r1', timestamp: now - 1000, normalizedCompute: limit5h, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, totalTokens: null, thoughtsTokens: null, requestType: 'conversationTurn', sessionId: null, runId: null, provider: 'gemini', model: 'gemini-2.0-flash' },
-    ]);
+      const now = Date.now();
+      // Ensure the active window starts before our record
+      vi.spyOn(usageEventStore, 'getActiveWindowStartAt').mockReturnValue(now - 2000);
+      vi.spyOn(usageEventStore, 'getWeeklyCycleStartAt').mockReturnValue(now - 2000);
+      
+      // Fill the 5h window exactly to the limit with non-fable records inside the window
+      vi.spyOn(usageEventStore, 'list').mockReturnValue([
+        { usageEventId: 'e1', requestId: 'r1', timestamp: now - 1000, normalizedCompute: limit5h, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, totalTokens: null, thoughtsTokens: null, requestType: 'conversationTurn', sessionId: null, runId: null, provider: 'gemini', model: 'gemini-2.0-flash' },
+      ]);
     expect(entitlementService.hasCreditsRemaining()).toBe(false);
   });
 
@@ -244,7 +265,7 @@ describe('EntitlementService — getModelTierRequirements (model picker)', () =>
     expect(requirements['paw-core']).toBe('pro');
     expect(requirements['paw-fable']).toBe('pro');
     expect(requirements['paw-vision']).toBe('pro');
-    expect(requirements['paw-voice']).toBe('pro');
+    expect(requirements['paw-voice']).toBe('go');
     expect(requirements['paw-memory']).toBe('pro');
   });
 
@@ -260,11 +281,11 @@ describe('EntitlementService — getModelTierRequirements (model picker)', () =>
 describe('EntitlementService — final entitlement matrix (connectors, Autonomous Work, Ticket Balance)', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('Go: Jira/Linear/GitHub/Autonomous Work/Ticket Balance all blocked', () => {
+  it('Go: Jira/Linear/Autonomous Work/Ticket Balance all blocked', () => {
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'go', status: 'none' });
     expect(entitlementService.isFeatureAvailable('connectJira')).toBe(false);
     expect(entitlementService.isFeatureAvailable('connectLinear')).toBe(false);
-    expect(entitlementService.isFeatureAvailable('connectGithub')).toBe(false);
+    expect(entitlementService.isFeatureAvailable('connectGithub')).toBe(true);
     // Autonomous Work and Ticket Balance are both gated by the single 'autonomousTaskBilling'
     // feature (see AutonomousTaskBillingGate.ts's startAutonomousEngineeringTask check and
     // ipc.ts's billing:createCreditsCheckoutSession handler) — there is no second, separate flag.
@@ -302,8 +323,16 @@ describe('EntitlementService — final entitlement matrix (connectors, Autonomou
     expect(entitlementService.isFeatureAvailable('autonomousPlanBypass')).toBe(true);
   });
 
-  it('Team: Jira/Linear/Autonomous Work/Ticket Balance/Plan Bypass all allowed', () => {
+  it('Team Standard: Jira/Linear allowed, Autonomous Work/Ticket Balance/Plan Bypass blocked', () => {
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'team', status: 'active', seatTier: 'standard' });
+    expect(entitlementService.isFeatureAvailable('connectJira')).toBe(true);
+    expect(entitlementService.isFeatureAvailable('connectLinear')).toBe(true);
+    expect(entitlementService.isFeatureAvailable('autonomousTaskBilling')).toBe(false);
+    expect(entitlementService.isFeatureAvailable('autonomousPlanBypass')).toBe(false);
+  });
+
+  it('Team Premium: Jira/Linear/Autonomous Work/Ticket Balance/Plan Bypass all allowed', () => {
+    vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'team', status: 'active', seatTier: 'premium' });
     expect(entitlementService.isFeatureAvailable('connectJira')).toBe(true);
     expect(entitlementService.isFeatureAvailable('connectLinear')).toBe(true);
     expect(entitlementService.isFeatureAvailable('autonomousTaskBilling')).toBe(true);

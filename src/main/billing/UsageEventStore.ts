@@ -74,8 +74,19 @@ class UsageEventStore {
     return this.state.weeklyCycleStartAt;
   }
 
-  getActiveWindowStartAt(): number {
-    return this.state.activeWindowStartAt || 0;
+  getActiveWindowStartAt(now = Date.now()): number {
+    if (!this.state.activeWindowStartAt) {
+      this.state.activeWindowStartAt = now;
+      this.save();
+    }
+    const WINDOW_MS = 5 * 60 * 60 * 1000;
+    let changed = false;
+    while (now >= this.state.activeWindowStartAt + WINDOW_MS) {
+      this.state.activeWindowStartAt += WINDOW_MS;
+      changed = true;
+    }
+    if (changed) this.save();
+    return this.state.activeWindowStartAt;
   }
 
   advanceActiveWindow(now = Date.now()): void {

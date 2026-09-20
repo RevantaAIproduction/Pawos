@@ -252,7 +252,7 @@ export const DOCS: DocPage[] = [
         ],
       },
     ],
-    related: ["billing-and-usage", "referrals", "enterprise-deployment"],
+    related: ["billing-and-usage", "enterprise-deployment"],
   },
   {
     slug: "providers",
@@ -297,36 +297,9 @@ export const DOCS: DocPage[] = [
         ],
       },
     ],
-    related: ["plans", "referrals", "autonomous-ticket-resolution"],
+    related: ["plans", "autonomous-ticket-resolution"],
   },
-  {
-    slug: "referrals",
-    title: "Referrals",
-    category: "Billing & Enterprise",
-    summary: "How the referral program works, and how the reward is paid out.",
-    body: [
-      {
-        paragraphs: [
-          "Every signed-in account has its own shareable referral code, visible in Settings → Billing. Share it with anyone — a referral is created the moment they apply your code to their account (one-time, from their own Settings → Billing).",
-          "A referral only counts once it converts: the referred account has to genuinely subscribe to Pro or Pro Max. Signing up alone or staying on Go never counts — this is enforced server-side at the moment their own subscription purchase is confirmed, not self-reported.",
-        ],
-      },
-      {
-        heading: "The reward",
-        paragraphs: [
-          "Every 5 referrals that convert to Pro or Pro Max earns you $100 in Referral Credits — a third balance, fully separate from your subscription and from your Autonomous Ticket System Ticket Balance, visible in Settings → Billing.",
-          "Rewards are granted automatically the instant your 5th, 10th, 15th (and so on) referral converts — there's nothing to claim.",
-        ],
-      },
-      {
-        heading: "What Referral Credits can and can't be used for",
-        paragraphs: [
-          "Referral Credits are usable only for Coding Runtime, AI Runtime, Companion Runtime, and future runtime-based usage. They can never be spent on the Autonomous Ticket System or ticket investigations, applied toward a subscription or plan upgrade, withdrawn as cash, transferred to another account, or gifted or sold. Autonomous Ticket System billing always draws from your own payment method or Ticket Balance, never from Referral Credits.",
-        ],
-      },
-    ],
-    related: ["plans", "billing-and-usage"],
-  },
+
   {
     slug: "enterprise-deployment",
     title: "Enterprise",

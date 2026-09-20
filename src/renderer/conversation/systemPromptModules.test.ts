@@ -6,7 +6,7 @@ describe('INTELLIGENCE_PROMPT_MODULES', () => {
     const always = INTELLIGENCE_PROMPT_MODULES.filter((m) => m.tier === 'always');
     const executeOnly = INTELLIGENCE_PROMPT_MODULES.filter((m) => m.tier === 'executeOnly');
     expect(always.map((m) => m.id)).toEqual(expect.arrayContaining(['projectPlanningUx', 'intelligenceRuntime']));
-    expect(executeOnly.map((m) => m.id)).toEqual(expect.arrayContaining(['executionPlanner']));
+    expect(executeOnly.map((m) => m.id)).toEqual(expect.arrayContaining(['executionPlanner', 'executionTruthAndCompletion']));
   });
 
   it('every module has non-empty content', () => {

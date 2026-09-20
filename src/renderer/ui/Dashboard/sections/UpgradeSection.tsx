@@ -31,6 +31,7 @@ const PLAN_ICONS: Partial<Record<SubscriptionTierId, () => React.JSX.Element>> =
 };
 
 function formatPrice(plan: PricingPlan): string {
+  if (plan.id === 'team' || plan.id === 'enterprise') return 'Coming Soon';
   if (plan.seatBased) {
     const range = plan.maxSeats ? `${plan.minSeats}–${plan.maxSeats} members` : `${plan.minSeats}+ users`;
     return plan.priceCents === null ? `Custom pricing — ${range}` : `$${(plan.priceCents / 100).toFixed(2)}/seat/mo — ${range}`;
@@ -190,17 +191,28 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                         <span style={{ fontSize: 12.5, fontWeight: 600 }}>{seat.label}</span>
                         <span style={{ fontSize: 15, fontWeight: 700 }}>
-                          {seat.priceCents === null ? 'Custom' : `$${(seat.priceCents / 100).toFixed(0)}/seat/mo`}
+                          Coming Soon
                         </span>
                       </div>
                       {!isCurrent && !isDowngrade && (plan.id === 'team' || plan.id === 'enterprise') && (
-                        <a
-                          href={`mailto:pawos@revantaai.com?subject=${encodeURIComponent(`${plan.label} Plan Inquiry`)}`}
+                        <button
+                          type="button"
+                          disabled
                           className={styles.primaryButton}
-                          style={{ marginTop: 12, width: '100%', display: 'block', textAlign: 'center', textDecoration: 'none' }}
+                          style={{
+                            marginTop: 12,
+                            width: '100%',
+                            display: 'block',
+                            textAlign: 'center',
+                            backgroundColor: '#e5e7eb', // silver/gray styling
+                            color: '#6b7280', // muted text
+                            border: '1px solid #d1d5db', // subtle border
+                            cursor: 'not-allowed', // disabled cursor
+                            opacity: 0.8, // opacity
+                          }}
                         >
-                          Contact Sales
-                        </a>
+                          Coming Soon
+                        </button>
                       )}
                     </div>
                   ))}
@@ -219,9 +231,7 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
                 >
                   <span style={{ fontSize: 12.5, fontWeight: 600 }}>{plan.usageBilling.label}</span>
                   <p className={styles.cardBody} style={{ fontSize: 11.5, marginTop: 2 }}>
-                    {plan.priceCents === null
-                      ? 'Configuration required'
-                      : `$${(plan.priceCents / 100).toFixed(2)}/seat/mo — starts at ${plan.minSeats ?? 20} members`}
+                    Coming Soon
                   </p>
                   <p className={styles.cardBody} style={{ fontSize: 11.5, marginTop: 2 }}>{plan.usageBilling.description}</p>
                 </div>
@@ -246,13 +256,41 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
                     Included in your plan
                   </button>
                 ) : plan.id === 'team' && !isCurrent && !isDowngrade ? (
-                  <a href={`mailto:pawos@revantaai.com?subject=${encodeURIComponent('Team Plan Inquiry')}`} className={styles.primaryButton} style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}>
-                    Contact Sales
-                  </a>
+                  <button
+                    type="button"
+                    disabled
+                    className={styles.primaryButton}
+                    style={{
+                      display: 'block',
+                      textAlign: 'center',
+                      backgroundColor: '#e5e7eb', // silver/gray styling
+                      color: '#6b7280', // muted text
+                      border: '1px solid #d1d5db', // subtle border
+                      cursor: 'not-allowed', // disabled cursor
+                      opacity: 0.8, // opacity
+                      width: '100%',
+                    }}
+                  >
+                    Coming Soon
+                  </button>
                 ) : plan.id === 'enterprise' && !isCurrent && !isDowngrade ? (
-                  <a href={`mailto:pawos@revantaai.com?subject=${encodeURIComponent('Enterprise Plan Inquiry')}`} className={styles.primaryButton} style={{ display: 'block', textAlign: 'center', textDecoration: 'none' }}>
-                    Contact Sales
-                  </a>
+                  <button
+                    type="button"
+                    disabled
+                    className={styles.primaryButton}
+                    style={{
+                      display: 'block',
+                      textAlign: 'center',
+                      backgroundColor: '#e5e7eb', // silver/gray styling
+                      color: '#6b7280', // muted text
+                      border: '1px solid #d1d5db', // subtle border
+                      cursor: 'not-allowed', // disabled cursor
+                      opacity: 0.8, // opacity
+                      width: '100%',
+                    }}
+                  >
+                    Coming Soon
+                  </button>
                 ) : plan.seatOptions ? null : (
                   <button type="button" className={styles.primaryButton} onClick={() => startCheckout(plan.id, undefined, undefined)}>
                     Get {plan.label}

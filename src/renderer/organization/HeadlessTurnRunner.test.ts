@@ -66,11 +66,21 @@ vi.mock('../conversation/systemPrompt', () => ({
   buildSystemPrompt: vi.fn(() => 'system prompt'),
 }));
 
+vi.mock('../auth/supabaseClient', () => ({
+  getSupabaseClient: vi.fn(() => Promise.resolve({
+    from: vi.fn(() => ({
+      insert: vi.fn(() => Promise.resolve({ data: null, error: null }))
+    })),
+    rpc: vi.fn(() => Promise.resolve({ data: [{}], error: null }))
+  }))
+}));
+
 vi.mock('../services/ipc/ipcBridge', () => ({
   getIpcBridge: () => ({
     actionExecute: vi.fn(),
     actionCheckRequirements: vi.fn(),
     executionRecord: vi.fn(),
+    envGetApiKeys: vi.fn(() => Promise.resolve({ supabaseUrl: 'http://localhost', supabasePublishableKey: 'test-key' })),
     // Defaults to true (acceptEdits) so this file's own settlement-detection tests are unaffected by
     // the entitlement gate; the dedicated Plan-policy describe block below overrides per test.
     entitlementIsFeatureAvailable: (featureId: string) => (mocks.entitlementCheck ?? (() => Promise.resolve(true)))(featureId),

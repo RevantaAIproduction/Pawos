@@ -62,6 +62,7 @@ class SubscriptionStore {
         ...defaultState(),
         accountId: state.accountId,
         runtimeEntitlements: this.getPurchasedRuntimeEntitlements(),
+        buildEntitlement: state.buildEntitlement,
       };
     }
     return state;

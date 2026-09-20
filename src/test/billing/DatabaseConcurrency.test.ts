@@ -1,16 +1,34 @@
 import { describe, it, expect } from "vitest";
 import { createClient } from "@supabase/supabase-js";
+import "dotenv/config";
 
-// Database Concurrency Tests - Requires real Supabase connection
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+/**
+ * Database Concurrency Tests - Requires real Supabase connection
+ * 
+ * To run this integration test, you must supply active, valid JWTs for two separate users
+ * (to verify cross-account security) along with your project URL and Anon/Publishable key.
+ * 
+ * Environment Variables required:
+ * SUPABASE_URL: e.g. https://your-project.supabase.co
+ * SUPABASE_PUBLISHABLE_KEY: e.g. eyJ...
+ * TEST_USER_TOKEN_A: Real JWT for User A. User A MUST have exactly $10 in Usage Credits before running.
+ * TEST_USER_TOKEN_B: Real JWT for User B (used for cross-account spoofing tests).
+ */
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 const userTokenA = process.env.TEST_USER_TOKEN_A;
 const userTokenB = process.env.TEST_USER_TOKEN_B;
 
 describe("Supabase RPC Concurrency Tests", () => {
   it("Concurrent deduct_usage_credits executes safely and respects idempotency", async () => {
-    if (!supabaseUrl || !supabaseKey || !userTokenA || !userTokenB) {
-      throw new Error("BLOCKED: Missing Supabase credentials for real integration test");
+    const missing = [];
+    if (!supabaseUrl) missing.push("SUPABASE_URL");
+    if (!supabaseKey) missing.push("SUPABASE_PUBLISHABLE_KEY");
+    if (!userTokenA) missing.push("TEST_USER_TOKEN_A");
+    if (!userTokenB) missing.push("TEST_USER_TOKEN_B");
+    
+    if (missing.length > 0) {
+      throw new Error(`BLOCKED: Missing Supabase credentials for real integration test. Supply: ${missing.join(", ")}.`);
     }
 
     const supabaseA = createClient(supabaseUrl, supabaseKey, {

@@ -19,10 +19,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const usageMocks = vi.hoisted(() => ({
   list: vi.fn(() => [] as { id: string; timestamp: number; normalizedCompute: number; requestType: string; fable: boolean }[]),
+  getWeeklyCycleStartAt: vi.fn(() => Date.now() - 1000),
+  getActiveWindowStartAt: vi.fn(() => Date.now() - 1000),
 }));
 
 vi.mock('../../main/billing/UsageEventStore', () => ({
-  usageEventStore: { list: usageMocks.list, append: vi.fn() },
+  usageEventStore: { 
+    list: usageMocks.list, 
+    append: vi.fn(),
+    getWeeklyCycleStartAt: usageMocks.getWeeklyCycleStartAt,
+    getActiveWindowStartAt: usageMocks.getActiveWindowStartAt
+  },
 }));
 
 vi.mock('../../main/billing/PawComputeCapacityStore', () => ({

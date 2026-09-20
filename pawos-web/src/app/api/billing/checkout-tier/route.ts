@@ -71,6 +71,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, reason: "Unknown tier requested." }, { status: 400 });
   }
 
+  // ---- Commercial Availability Gate for V1 Launch ----
+  if ((tier as string) === "team" || (tier as string) === "enterprise") {
+    return NextResponse.json(
+      { ok: false, reason: "This tier is coming soon." },
+      { status: 503 } // or 400
+    );
+  }
 
   // ---- Tier-specific parameter validation ----
   if (tier === "proMax" && !proMaxVariant) {

@@ -242,7 +242,11 @@ export type FeatureId =
   | 'mobileNotifications'
   | 'organizationCrossDeviceAlerts'
   | 'autonomousPlanBypass'
-  | 'meetingAssistant';
+  | 'meetingAssistant'
+  | 'atsScoring'
+  | 'resumeRewriting'
+  | 'resumeGeneration'
+  | 'jobSearch';
 
 export type TierEntitlements = {
   tier: SubscriptionTierId;

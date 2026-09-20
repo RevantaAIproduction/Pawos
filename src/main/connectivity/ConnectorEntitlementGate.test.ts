@@ -1,4 +1,4 @@
-﻿import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isConnectorEntitled } from './ConnectorEntitlementGate';
 import { subscriptionStore } from '../billing/SubscriptionStore';
 
@@ -9,12 +9,10 @@ import { subscriptionStore } from '../billing/SubscriptionStore';
 describe('ConnectorEntitlementGate - final matrix', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('Go: GitHub, Vercel, Google Workspace, Microsoft allowed; others blocked', () => {
+  it('Go: GitHub allowed; others blocked', () => {
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'go', status: 'none' });
-    for (const id of ['github', 'vercel', 'googleWorkspace', 'microsoft']) {
-      expect(isConnectorEntitled(id)).toBe(true);
-    }
-    for (const id of ['gitlab', 'netlify', 'railway', 'slack', 'jira', 'linear']) {
+    expect(isConnectorEntitled('github')).toBe(true);
+    for (const id of ['vercel', 'gitlab', 'netlify', 'railway', 'slack', 'googleWorkspace', 'microsoft', 'jira', 'linear']) {
       expect(isConnectorEntitled(id)).toBe(false);
     }
   });

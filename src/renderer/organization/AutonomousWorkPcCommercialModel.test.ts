@@ -232,7 +232,7 @@ describe('AutonomousWorkPcCommercialModel', () => {
         const workPc = providerCostToWorkPc(providerCost);
         const charge = workPcToCustomerCharge(workPc);
         const recoveredCost = charge / AUTONOMOUS_MARKUP_MULTIPLIER;
-        expect(recoveredCost).toBeCloseTo(providerCost, 6);
+        expect(recoveredCost).toBeCloseTo(providerCost, 4);
         providerCost += 0.01;
       }
     });

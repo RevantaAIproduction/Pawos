@@ -37,6 +37,15 @@ function DesktopSuccessPageContent() {
     const link = url.toString();
     setDeepLink(link);
 
+    // Blast the payload to the legacy localhost listener simultaneously. 
+    // This guarantees delivery if the user's OS has broken deep link 
+    // registration during local development, or if Chrome blocks the launch.
+    const fallbackUrl = new URL("http://127.0.0.1:51899/callback");
+    if (ref) fallbackUrl.searchParams.set("ref", ref);
+    if (code) fallbackUrl.searchParams.set("code", code);
+    
+    fetch(fallbackUrl.toString(), { mode: 'no-cors' }).catch(() => {});
+
     // Attempt automatic handoff
     // This may be silently blocked by Chromium's external app throttle, 
     // which is why the fallback button is prominently displayed.

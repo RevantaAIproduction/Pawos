@@ -67,6 +67,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, reason: "Unknown plan requested." }, { status: 400 });
   }
 
+  // ---- Commercial Availability Gate for V1 Launch ----
+  if ((plan as string) === "team" || (plan as string) === "enterprise") {
+    return NextResponse.json(
+      { ok: false, reason: "This tier is coming soon." },
+      { status: 503 } // or 400
+    );
+  }
+
   // ---- Email validation for Team/Enterprise ----
   if ((plan === "team" || plan === "enterprise") && isPersonalEmail(userEmail)) {
     return NextResponse.json(

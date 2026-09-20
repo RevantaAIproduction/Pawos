@@ -131,7 +131,6 @@ const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
 if (!gotSingleInstanceLock) {
   app.quit();
-  process.exit(0);
 } else {
   app.on('second-instance', (_event, argv) => {
     const url = extractProtocolUrlFromArgv(argv);
@@ -351,6 +350,10 @@ function createAppTray() {
 
 app.whenReady().then(async () => {
   console.error("[PAWOS START] app.whenReady entered");
+  if (!app.hasSingleInstanceLock()) {
+    console.error("[PAWOS START] Aborting initialization (no single instance lock)");
+    return;
+  }
   // Electron auto-generates a default File/Edit/View/Window/Help menu bar when no
   // application menu is set â€” that's stock OS chrome, not anything this product defines, and
   // doesn't belong on a companion app with no File/Edit/View/Window/Help commands to offer. Null

@@ -106,8 +106,8 @@ const TEAM_ENTERPRISE_PLANS: Plan[] = [
     seatBased: true,
     minSeats: 20,
     usageBilling: {
-      label: "Seat price + usage at API rates",
-      description: "$20/seat + tax. Usage cost scales with model and task. Self-serve — no sales call required, same as Team.",
+      label: "Coming Soon",
+      description: "Self-serve — no sales call required, same as Team.",
     },
     features: [
       "Everything in Paw Team",
@@ -119,6 +119,7 @@ const TEAM_ENTERPRISE_PLANS: Plan[] = [
 ];
 
 function formatPrice(plan: Plan): string {
+  if (plan.id === 'team' || plan.id === 'enterprise') return 'Coming Soon';
   if (plan.seatBased) {
     const range = plan.maxSeats ? `${plan.minSeats}–${plan.maxSeats} members` : `${plan.minSeats}+ users`;
     return plan.priceCents === null ? `Custom pricing — ${range}` : `$${(plan.priceCents / 100).toFixed(2)}/seat/mo — ${range}`;
@@ -140,7 +141,7 @@ function PlanCard({ plan }: { plan: Plan }) {
             <div key={seat.seatTier} className="rounded-xl border border-neutral-800 p-4">
               <div className="flex items-baseline justify-between">
                 <span className="text-sm font-semibold text-neutral-200">{seat.label}</span>
-                <span className="text-lg font-bold">${(seat.priceCents / 100).toFixed(0)}/seat/mo</span>
+                <span className="text-lg font-bold">Coming Soon</span>
               </div>
               <p className="mt-1 text-xs text-neutral-500">{seat.description}</p>
             </div>

@@ -386,7 +386,28 @@ export function useConversationController(args?: {
 
   const open = useCallback(() => runtimeRef.current?.open(), []);
   const openPanel = useCallback(() => runtimeRef.current?.openPanel(), []);
-  const startListening = useCallback(() => runtimeRef.current?.startListening(), []);
+  const startListening = useCallback(() => {
+    const tryGate = (retryCount = 0) => {
+      ipc
+        .billingCanStartGeneration(activePawModelRef.current)
+        .then((gateResult) => {
+          ipc.billingReleaseGenerationSlot();
+          if (!gateResult.allowed) {
+            if (gateResult.reason === 'inflight' && retryCount < 2) {
+              setTimeout(() => tryGate(retryCount + 1), 2000);
+              return;
+            }
+            setCreditsNoticeTier(entitlementRef.current?.tier ?? 'go');
+            return;
+          }
+          runtimeRef.current?.startListening();
+        })
+        .catch(() => {
+          runtimeRef.current?.startListening();
+        });
+    };
+    tryGate();
+  }, [ipc]);
   const stopListening = useCallback(() => runtimeRef.current?.stopListening(), []);
   const close = useCallback(() => runtimeRef.current?.close(), []);
   const toggle = useCallback(() => runtimeRef.current?.toggle(), []);
@@ -510,7 +531,31 @@ export function useConversationController(args?: {
     []
   );
 
-  const speak = useCallback((text: string) => runtimeRef.current?.speak(text), []);
+  const speak = useCallback(
+    (text: string) => {
+      const tryGate = (retryCount = 0) => {
+        ipc
+          .billingCanStartGeneration(activePawModelRef.current)
+          .then((gateResult) => {
+            ipc.billingReleaseGenerationSlot();
+            if (!gateResult.allowed) {
+              if (gateResult.reason === 'inflight' && retryCount < 2) {
+                setTimeout(() => tryGate(retryCount + 1), 2000);
+                return;
+              }
+              setCreditsNoticeTier(entitlementRef.current?.tier ?? 'go');
+              return;
+            }
+            runtimeRef.current?.speak(text);
+          })
+          .catch(() => {
+            runtimeRef.current?.speak(text);
+          });
+      };
+      tryGate();
+    },
+    [ipc]
+  );
   const setVoiceOutputEnabled = useCallback((enabled: boolean) => runtimeRef.current?.setVoiceOutputEnabled(enabled), []);
   const stopSpeechPlayback = useCallback(() => runtimeRef.current?.stopSpeechPlayback(), []);
 

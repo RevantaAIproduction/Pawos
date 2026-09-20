@@ -1114,8 +1114,8 @@ export function registerIpc(opts: {
     }
   );
   // Grants bonus Paw Compute for the current period after the renderer has already redeemed the
-  // matching dollar amount from the caller's Referral Credits balance via Supabase's
-  // redeem_referral_credits_for_compute() RPC — this handler never touches money, it only ever
+  // matching dollar amount from the caller's Usage Credits balance via Supabase's
+  // redeem_usage_credits_for_compute() RPC — this handler never touches money, it only ever
   // extends the local usage counter. See EntitlementService.grantComputeBonus()'s own doc comment.
   ipcMain.handle('billing:grantComputeBonus', (_evt, units: number) => {
     entitlementService.grantComputeBonus(units);

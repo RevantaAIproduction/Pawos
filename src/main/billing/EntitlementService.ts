@@ -23,9 +23,7 @@ const GO_FEATURES: FeatureId[] = [
   'basicFileManagement',
   'localRuntimeFeatures',
   'connectGithub',
-  'connectVercel',
-  'connectGoogleWorkspace',
-  'connectMicrosoft',
+  'advancedRuntimes',
 ];
 
 const AI_MODELS: PawModelId[] = [
@@ -173,9 +171,9 @@ export const LEGACY_PLAN_RUNTIME_ENTITLEMENTS: RuntimeEntitlementId[] = ALL_RUNT
  * pro/proMax (nothing left to purchase there) but is left as-is rather than touched here.
  */
 export const PLAN_DERIVED_RUNTIME_ENTITLEMENTS: Record<SubscriptionTierId, RuntimeEntitlementId[]> = {
-  go: [],
-  pro: ['coding'],
-  proMax: ['coding'],
+  go: ['coding', 'browser'],
+  pro: ['coding', 'browser'],
+  proMax: ['coding', 'browser'],
   team: LEGACY_PLAN_RUNTIME_ENTITLEMENTS,
   enterprise: LEGACY_PLAN_RUNTIME_ENTITLEMENTS,
 };
@@ -257,7 +255,7 @@ class EntitlementService {
       return {
         tier: 'go',
         models: AI_MODELS, // Build has all models
-        features: [...GO_FEATURES, 'advancedRuntimes'],
+        features: [...GO_FEATURES, 'connectGithub', 'connectVercel', 'connectGoogleWorkspace', 'connectMicrosoft', 'advancedRuntimes', 'atsScoring', 'resumeRewriting', 'resumeGeneration', 'jobSearch'],
         monthlyCreditLimit: null,
         weeklyCreditLimit: null,
       };
@@ -274,6 +272,9 @@ class EntitlementService {
   }
 
   isModelAvailable(modelId: PawModelId): boolean {
+    if (modelId === 'paw-fable' && this.getPurchasedCreditsRemaining() > 0) {
+      return true;
+    }
     return this.getEntitlements().models.includes(modelId);
   }
 
@@ -331,8 +332,10 @@ class EntitlementService {
   }
 
   getRuntimeEntitlements(): RuntimeEntitlementId[] {
-    const tier = this.currentTier();
-    const ids = new Set<RuntimeEntitlementId>(PLAN_DERIVED_RUNTIME_ENTITLEMENTS[tier]);
+    const buildEntitlement = subscriptionStore.getEffective().buildEntitlement;
+    const tier = (buildEntitlement && buildEntitlement.active) ? 'build' : this.currentTier();
+    const baseIds = tier === 'build' ? (['coding', 'browser'] as RuntimeEntitlementId[]) : PLAN_DERIVED_RUNTIME_ENTITLEMENTS[tier];
+    const ids = new Set<RuntimeEntitlementId>(baseIds);
     for (const grant of subscriptionStore.getPurchasedRuntimeEntitlements()) {
       ids.add(grant.runtimeId);
     }

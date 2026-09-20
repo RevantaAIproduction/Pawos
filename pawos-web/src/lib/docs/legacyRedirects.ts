@@ -17,7 +17,7 @@ export const LEGACY_DOC_REDIRECTS: Record<string, string> = {
   'providers': '/docs/connectors/overview',
   'runtime-configuration': '/docs/reference/architecture',
   'billing-and-usage': '/docs/billing/plans',
-  'referrals': '/docs/billing/credits',
+
   'enterprise-deployment': '/docs/billing/plans',
   'ci-cd': '/docs/connectors/other-connectors',
   'deployments': '/docs/connectors/other-connectors',

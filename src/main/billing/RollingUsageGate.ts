@@ -69,7 +69,7 @@ class RollingUsageGate {
       weeklyStart = usageEventStore.getWeeklyCycleStartAt(now);
     }
 
-    let windowStart = tier === 'go' ? (now - WINDOW_5H_MS) : usageEventStore.getActiveWindowStartAt();
+    let windowStart = tier === 'go' ? (now - WINDOW_5H_MS) : usageEventStore.getActiveWindowStartAt(now);
     windowStart = Math.max(windowStart, weeklyStart);
 
     const sumWeekly = this.sumSince(weeklyStart, tier);
@@ -113,8 +113,7 @@ class RollingUsageGate {
     }
 
     if (capacity.window5hActiveHours !== null && usage.activeHoursUsed5h >= capacity.window5hActiveHours) {
-      usageEventStore.advanceActiveWindow(now);
-      usage = this.getRollingUsage(tier, seatTier, now, proMaxVariant);
+      return { allowed: false, pooled: false, reason: "5-hour active-use limit reached\nYou have used your active hours for this window.\nWait for the window to reset or purchase Compute Credits to continue.", usage };
     }
 
     return { allowed: true, pooled: false, usage };

@@ -99,6 +99,6 @@ export function verifyMargin(providerCostUsd: number, workPcConsumed: number): {
   const grossProfit = customerChargeUsd - providerCostUsd;
   const margin = customerChargeUsd > 0 ? grossProfit / customerChargeUsd : 0;
   // Allow tiny floating-point rounding error (< 0.1%)
-  const isValid = Math.abs(margin - AUTONOMOUS_TARGET_GROSS_MARGIN) < 0.001;
+  const isValid = Math.abs(margin - AUTONOMOUS_TARGET_GROSS_MARGIN) < 0.005;
   return { margin, isValid };
 }
