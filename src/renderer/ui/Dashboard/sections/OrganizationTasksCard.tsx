@@ -105,7 +105,7 @@ export function OrganizationTasksCard({ organizationId, members }: { organizatio
                         <label style={{ fontSize: 11, color: '#96969e', display: 'block', marginBottom: 4 }}>Assign to:</label>
                         <select value={task.assignedTo || ''} onChange={(e) => assignTask(task.id, e.target.value || null)} style={{ width: '100%', padding: '6px 8px', fontSize: 12, borderRadius: 4, border: '1px solid rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.05)', color: 'inherit' }}>
                           <option value="">Unassigned</option>
-                          {members.map((m) => <option key={m.userId} value={m.userId}>{m.displayName || m.email}</option>)}
+                          {members.map((m) => <option key={m.userId ?? m.email} value={m.userId ?? ''}>{m.displayName || m.email}</option>)}
                         </select>
                       </div>
                     )}

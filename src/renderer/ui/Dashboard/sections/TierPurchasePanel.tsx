@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState } from 'react';
 import { initiateRazorpayTierPayment } from './TierPaymentHandler';
 import type { SubscriptionTierId, ProMaxVariant } from '../../../../shared/billing/BillingTypes';

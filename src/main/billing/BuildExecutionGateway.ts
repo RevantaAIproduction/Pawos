@@ -33,8 +33,8 @@ async function executeBuildWithReservation(
       const errText = await res.text();
       return { ok: false, reason: 'Reservation failed: ' + errText };
     }
-    const data = await res.json();
-    reservationStatus = data.status; 
+    const data = (await res.json()) as { status?: string };
+    reservationStatus = data.status ?? ''; 
   } catch (e) {
     return { ok: false, reason: 'Reservation network error' };
   }
@@ -87,15 +87,14 @@ async function executeBuildWithReservation(
               
               if (parsed.usageMetadata) {
                 usageMetadata = {
+                  provider: 'gemini',
                   model: model,
-                  requestType: 'conversationTurn', // Standard internal fallback
                   inputTokens: parsed.usageMetadata.promptTokenCount ?? 0,
                   cachedInputTokens: parsed.usageMetadata.cachedContentTokenCount ?? 0,
                   outputTokens: parsed.usageMetadata.candidatesTokenCount ?? 0,
                   totalTokens: parsed.usageMetadata.totalTokenCount ?? 0,
-                  sessionId: null,
-                  runId: runId,
-                  requests: []
+                  thoughtsTokens: parsed.usageMetadata.thoughtsTokenCount ?? null,
+                  requestId: runId,
                 };
               }
 

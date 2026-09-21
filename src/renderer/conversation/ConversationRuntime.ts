@@ -1311,7 +1311,7 @@ export class ConversationRuntime {
         const estimatedPawCompute = estimatePawComputeFromUsage(ctx.usages);
         this.args.onStreamingUsage?.(estimatedPawCompute, elapsedSeconds);
 
-        ctx.finalResponse = result.response || result.assistantMessage?.content;
+        ctx.finalResponse = result.response || result.assistantMessage?.content || '';
         if (result.assistantMessage) {
           ctx.assistantMessageId = result.assistantMessage.id;
           this.upsertMessage({

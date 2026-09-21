@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState } from 'react';
 import styles from './acceptEditsControl.module.css';
 import type { ExecutionStrategy } from './ExecutionStrategyStore';

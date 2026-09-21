@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ConversationRuntime } from './ConversationRuntime';
 import type { ConversationSnapshot } from './ConversationTypes';

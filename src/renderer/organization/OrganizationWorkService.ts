@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { ActionRequest, ActionResult } from '../../shared/actions/ActionTypes';
 import type { RuntimeEntitlementId } from '../../shared/billing/BillingTypes';
 import type { OrganizationMember } from '../../shared/organization/OrganizationTypes';

@@ -88,7 +88,7 @@ export function Dashboard({
     }
   }, []);
   const [tierLabel, setTierLabel] = useState(user.isGuest ? 'Guest Preview' : 'Go');
-  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('Account');
+  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('Home');
   const [helpWidgetOpen, setHelpWidgetOpen] = useState(false);
   const [helpWidgetInitialTab, setHelpWidgetInitialTab] = useState<'home' | 'messages' | 'help'>('home');
   const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null);
@@ -186,7 +186,7 @@ export function Dashboard({
   const handleProfileAction = (action: ProfileMenuAction) => {
     switch (action) {
       case 'settings':
-        openSettingsTab('Account');
+        openSettingsTab('Home');
         break;
       case 'upgrade':
         navigateTo('upgrade');

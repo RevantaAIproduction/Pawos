@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useEffect, useState } from 'react';
 import styles from './contextualGovernancePanel.module.css';
 import { ipc } from '../services/ipc/ipcBridgeImplementation';

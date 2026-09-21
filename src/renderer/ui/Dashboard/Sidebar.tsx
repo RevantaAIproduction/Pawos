@@ -233,7 +233,7 @@ export function Sidebar({
   };
 
   useEffect(() => {
-    const unsubscribe = window.__pawos_ipc__.onUpdateState((state) => {
+    const unsubscribe = window.__pawos_ipc__.onUpdateState((state: string) => {
       switch (state) {
         case 'checking-for-update':
           setUpdateLabel('Checking…');

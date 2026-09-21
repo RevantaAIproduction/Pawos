@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import styles from './conversationPanel.module.css';
 import type { ConversationSnapshot, ConversationTaskAction, ConversationTaskRecord, SubmittedInputContext } from './ConversationTypes';

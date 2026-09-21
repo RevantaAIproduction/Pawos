@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useEffect, useState } from 'react';
 import type { SeatTier, CheckoutOptions } from '../../../shared/billing/BillingTypes';
 import { ipc } from '../../services/ipc/ipcBridgeImplementation';

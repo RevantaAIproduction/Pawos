@@ -1,4 +1,5 @@
-import type { PawModelId } from '../ai/PawModelTypes';
+import type { PawModelId as PawModelIdType } from '../ai/PawModelTypes';
+export type PawModelId = PawModelIdType;
 
 /**
  * Paw Go / Pro / Pro Max / Team / Enterprise subscription tiers, pricing, feature
@@ -165,7 +166,7 @@ export type NativeSubscriptionCheckoutResult =
   | { ok: false; reason: string };
 
 export type NativeCreditsCheckoutResult =
-  | { ok: true; keyId: string; orderId: string; amountUsd: number; amountInr: number; amountPaise: number; usdInrRate: number; currency: 'INR' }
+  | { ok: true; checkoutUrl?: string; keyId: string; orderId: string; amountUsd: number; amountInr: number; amountPaise: number; usdInrRate: number; currency: 'INR' }
   | { ok: false; reason: string };
 
 export type NativeCreditsVerificationResult =
@@ -173,7 +174,7 @@ export type NativeCreditsVerificationResult =
   | { ok: false; reason: string };
 
 export type NativeTierCheckoutResult =
-  | { ok: true; keyId: string; orderId: string; amountUsd: number; amountInr: number; amountPaise: number; usdInrRate: number; currency: 'INR' }
+  | { ok: true; checkoutUrl?: string; keyId: string; orderId: string; amountUsd: number; amountInr: number; amountPaise: number; usdInrRate: number; currency: 'INR' }
   | { ok: false; reason: string };
 
 export type NativeTierVerificationResult =
@@ -266,9 +267,12 @@ export const SUBSCRIPTION_TIER_ORDER: SubscriptionTierId[] = ['go', 'pro', 'proM
 /** The read-only snapshot the UI polls to render plan/models/features/credits â€” see EntitlementService.ts. */
 export type BuildCohortState = {
   active: boolean;
+  cohortId?: string | null;
+  cohortStartDate?: number;
+  cohortEndDate?: number;
   includedPc: number;
   purchasedPc: number;
-  exhaustedAt: string | null;
+  exhaustedAt: string | number | null;
   replenishedJustNow?: boolean;
 };
 
@@ -305,6 +309,12 @@ export type EntitlementSnapshot = {
   /** Deprecated: no fixed reset boundary in rolling windows. Kept for backward compatibility. */
   weekResetsAt: number;
   purchasedPcRemaining: number;
+  /** Deprecated compatibility alias for purchasedPcRemaining, expressed as USD in older UI surfaces. */
+  usageCreditsRemaining?: number;
+  /** Deprecated compatibility alias for creditsUsedThisPeriod. */
+  creditsUsedThisMonth?: number;
+  /** Deprecated compatibility alias for remaining included compute. */
+  creditsRemaining?: number;
 
   // â”€â”€ Rolling window Paw Compute (the active enforcement system) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   /** Paw Compute consumed in the last 5 hours (rolling). */

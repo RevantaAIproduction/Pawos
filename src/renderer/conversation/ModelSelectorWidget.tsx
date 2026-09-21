@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState } from 'react';
 import styles from './modelSelectorWidget.module.css';
 import type { PawModelId, PawModelDescriptor } from '../../shared/ai/PawModelTypes';

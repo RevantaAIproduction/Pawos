@@ -2,7 +2,9 @@
 export const theme = {
   colors: {
     background: '#0B1020',
+    surface: 'rgba(255,255,255,0.06)',
     card: 'rgba(255,255,255,0.04)',
+    border: 'rgba(255,255,255,0.10)',
     cardBorder: 'rgba(255,255,255,0.08)',
     text: '#F5F5F7',
     textMuted: '#96969E',

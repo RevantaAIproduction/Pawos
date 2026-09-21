@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useEffect, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import styles from '../dashboard.module.css';

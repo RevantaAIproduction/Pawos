@@ -22,6 +22,7 @@ import { exportCompanionPackage, importCompanionPackage } from '../companion/Com
 import type { CompanionPackageInput } from '../../shared/companion/CompanionPackageTypes';
 import { pricingConfigStore } from '../billing/PricingConfigStore';
 import { ticketPricingConfigStore } from '../billing/TicketPricingConfigStore';
+import { pawComputeConfigStore } from '../billing/PawComputeConfigStore';
 import { subscriptionStore } from '../billing/SubscriptionStore';
 import { rollingUsageGate } from '../billing/RollingUsageGate';
 import { normalizedComputeToCustomerPc, customerPcToPurchaseUsd } from '../../shared/billing/CustomerPcCommercialModel';
@@ -438,7 +439,7 @@ export function registerIpc(opts: {
   ipcMain.handle('billing:syncFromOrganization', async (_evt, accessToken: string, organizationId: string, seatTier?: SeatTier) => {
     const verified = await verifyRealOrganizationTier(accessToken, organizationId);
     if (!verified.ok) throw new Error(verified.reason);
-    return subscriptionStore.syncFromOrganization(verified.tier, seatTier);
+    return subscriptionStore.syncFromOrganization(accessToken, organizationId, seatTier);
   });
   ipcMain.handle('billing:reconcileForAccount', (_evt, accountId: string) => subscriptionStore.reconcileForAccount(accountId));
   // Called on sign-out so a stale, org-elevated tier from a previous account on this device never
@@ -518,7 +519,7 @@ export function registerIpc(opts: {
       const aggregated = recordTurnUsage(submission.requests, { sessionId: submission.sessionId, runId: submission.runId }, isFable);
       const customerPc = normalizedComputeToCustomerPc(aggregated.newNormalizedCompute);
       if (customerPc <= 0) return { ...creditStore.getBalance(), limit: entitlementService.getCreditLimit() };
-      const outboxId = aggregated.newRecords[0].usageEventId; // Durable idempotency key tied to real request
+      const outboxId = aggregated.newRecords[0]?.usageEventId ?? `${submission.sessionId ?? 'session'}:${submission.runId ?? 'run'}:${Date.now()}`;
       creditStore.consume(customerPc, reason, category, isFable, isPurchased, outboxId);
       
       const supabaseUrl = process.env.SUPABASE_URL;
@@ -539,8 +540,8 @@ export function registerIpc(opts: {
             });
             if (response.ok) {
               creditStore.resolvePendingDeduction(outboxId);
-              const newBalanceUsd = await response.json();
-              creditStore.setPurchasedUsageCreditsUsd(newBalanceUsd);
+              const newBalanceUsd = Number(await response.json());
+              creditStore.setPurchasedUsageCreditsUsd(Number.isFinite(newBalanceUsd) ? newBalanceUsd : 0);
             } else {
               console.error("Failed to deduct usage credits:", await response.text());
             }

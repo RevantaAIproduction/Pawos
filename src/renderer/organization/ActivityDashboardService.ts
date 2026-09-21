@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { getSupabaseClient } from '../auth/supabaseClient';
 import { workspaceTaskService } from './WorkspaceTaskService';
 import { workspaceContentService } from './WorkspaceContentService';

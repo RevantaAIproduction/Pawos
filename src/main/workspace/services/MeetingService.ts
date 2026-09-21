@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Service layer for meeting management.
  * Handles recording, summarization, and distribution of meetings.

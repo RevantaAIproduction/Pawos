@@ -280,7 +280,7 @@ class SubscriptionStore {
             cohortEndDate: row.cohort_end_date ? new Date(row.cohort_end_date).getTime() : undefined,
             includedPc: Number(row.included_pc) || 1500,
             purchasedPc: Number(row.purchased_pc) || 0,
-            exhaustedAt: row.exhausted_at ? new Date(row.exhausted_at).getTime() : undefined,
+            exhaustedAt: row.exhausted_at ? new Date(row.exhausted_at).getTime() : null,
           }
         };
       } else {

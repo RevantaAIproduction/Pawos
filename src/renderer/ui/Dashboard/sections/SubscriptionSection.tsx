@@ -1,11 +1,9 @@
 ﻿import React, { useEffect, useState } from 'react';
-import styles from '../dashboard.module.css';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import { UsageCreditsPanel } from './UsageCreditsPanel';
 import { AutonomousCreditsPanel } from './AutonomousCreditsPanel';
 import type { AuthUser } from '../../../auth/AuthTypes';
 import {
-  SUBSCRIPTION_TIER_ORDER,
   type PricingConfig,
   type PricingPlan,
   type SubscriptionState,
@@ -45,16 +43,25 @@ export function SubscriptionSection({
   const [subscription, setSubscription] = useState<SubscriptionState | null>(null);
   const [entitlement, setEntitlement] = useState<EntitlementSnapshot | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [goRefreshesRemaining, setGoRefreshesRemaining] = useState<number | null>(null);
-  const [deviceId, setDeviceHash] = useState<string | null>(null);
-
-  const currentTier = subscription?.tier || 'go';
+  const currentTier: SubscriptionTierId = subscription?.tier ?? 'go';
+  const billingEmail = user.email ?? '';
 
   const refresh = async () => {
     ipc.billingGetPricing().then(setPricing).catch(() => {});
     ipc.billingGetSubscription().then(setSubscription).catch(() => {});
     ipc.entitlementGetSnapshot().then(setEntitlement).catch(() => {});
-    ipc.billingGetGoRefreshesRemaining().then(setGoRefreshesRemaining).catch(() => {});
+  };
+
+  const downgrade = async (tier: SubscriptionTierId) => {
+    setMessage(null);
+    try {
+      const updated = await ipc.billingSetSubscriptionTier(tier);
+      setSubscription(updated);
+      setMessage('Subscription updated.');
+      refresh();
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Unable to update subscription.');
+    }
   };
 
   useEffect(() => {
@@ -98,8 +105,8 @@ export function SubscriptionSection({
       </div>
 
       {/* Payment Panels */}
-      <UsageCreditsPanel userEmail={user.email} onPaymentComplete={refresh} />
-      <AutonomousCreditsPanel userEmail={user.email} onPaymentComplete={refresh} currentTier={currentTier} />
+      <UsageCreditsPanel userEmail={billingEmail} onPaymentComplete={refresh} />
+      <AutonomousCreditsPanel userEmail={billingEmail} onPaymentComplete={refresh} currentTier={currentTier} />
 
       {/* Invoices */}
       <div style={{ marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>

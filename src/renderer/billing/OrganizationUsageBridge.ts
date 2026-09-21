@@ -1,9 +1,10 @@
 import { getIpcBridge } from '../services/ipc/ipcBridge';
 import { organizationUsageService } from './OrganizationUsageService';
+import type { OrganizationUsageRecordRequest } from '../../shared/billing/OrganizationUsageBridgeTypes';
 
 export function installOrganizationUsageBridge(): void {
   const ipc = getIpcBridge();
-  ipc.onOrganizationUsageRecordRequest(async (request) => {
+  ipc.onOrganizationUsageRecordRequest(async (request: OrganizationUsageRecordRequest) => {
     try {
       const recorded = await organizationUsageService.recordUsage(request.organizationId, request.capability, request.amount);
       await ipc.organizationUsageRecordRespond(request.requestId, {

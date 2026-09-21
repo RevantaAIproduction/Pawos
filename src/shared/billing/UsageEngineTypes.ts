@@ -98,3 +98,18 @@ export type CapabilityUsageSummary = {
   periodResetsAt: number | null;
   pooled: boolean;
 };
+
+export type RollingUsageSummary = {
+  usage5h: number;
+  limit5h: number | null;
+  usage7d: number;
+  limit7d: number | null;
+  activeHoursUsed5h: number;
+  activeHours5h: number | null;
+  activeHoursUsed7d: number;
+  activeHours7d: number | null;
+};
+
+export type GenerationCheckResult =
+  | { allowed: true; pooled: boolean; deferTo?: string; reason?: string; usage: RollingUsageSummary }
+  | { allowed: false; pooled: false; reason: string; usage: RollingUsageSummary };

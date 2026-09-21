@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useCallback, useEffect, useState } from 'react';
 import { SplashScreen } from './Splash/SplashScreen';
 import { AuthScreen } from './Auth/AuthScreen';

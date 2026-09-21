@@ -393,6 +393,19 @@ class EntitlementService {
     return Math.max(0, customerPurchaseUsdToPurchasedPc(balance.purchasedUsageCreditsUsd));
   }
 
+  getFableCreditsRemaining(): number {
+    return this.getPurchasedCreditsRemaining();
+  }
+
+  getStandardBonusCreditsRemaining(): number {
+    return this.getPurchasedCreditsRemaining();
+  }
+
+  grantComputeBonus(_units: number): void {
+    // Rolling-window Paw Compute no longer uses local bonus counters. The
+    // handler is kept as a compatibility no-op for older renderer surfaces.
+  }
+
   hasCreditsRemaining(pawModelId?: PawModelId): boolean {
     if (this.isComputePooled()) return true;
     if (pawModelId === 'paw-fable') return this.getPurchasedCreditsRemaining() > 0;

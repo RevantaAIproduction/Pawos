@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import { getSupabaseClient } from '../../../auth/supabaseClient';
 

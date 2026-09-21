@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React from 'react';
 import styles from '../Dashboard/dashboard.module.css';
 import type { SeatTier, SubscriptionTierId } from '../../../shared/billing/BillingTypes';

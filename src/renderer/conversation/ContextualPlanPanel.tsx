@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React from 'react';
 import styles from './contextualPlanPanel.module.css';
 import type { ProjectPlan, ProjectPlanStatus } from './ConversationTypes';

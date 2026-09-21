@@ -45,7 +45,7 @@ export function SettingsSection({
 }: {
   user: AuthUser;
   onSignOut: () => void;
-  /** Set when arriving from the profile menu's shortcuts — otherwise defaults to Account. */
+  /** Set when arriving from the profile menu's shortcuts — otherwise defaults to the Settings landing page. */
   initialTab?: SettingsTab;
   /** Navigates to the dedicated plan-comparison page — not a Settings tab itself. */
   onUpgrade: () => void;

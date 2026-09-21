@@ -118,8 +118,8 @@ class CreditStore {
     this.save();
   }
 
-  async syncUsageCredits(accessToken: string, userId: string): Promise<{ ok: boolean; reason?: string }> {
-    this.state.userId = userId;
+  async syncUsageCredits(accessToken: string, userId?: string): Promise<{ ok: boolean; reason?: string }> {
+    this.state.userId = userId ?? this.state.userId;
     this.save();
     const supabaseUrl = process.env.SUPABASE_URL;
     const anonKey = process.env.SUPABASE_PUBLISHABLE_KEY;
@@ -148,8 +148,8 @@ class CreditStore {
       });
       if (response.ok) {
         const data = await response.json();
-        if (data && data.length > 0) {
-          this.setPurchasedUsageCreditsUsd(data[0].balance_usd);
+        if (Array.isArray(data) && data.length > 0) {
+          this.setPurchasedUsageCreditsUsd(Number(data[0]?.balance_usd) || 0);
         } else {
           this.setPurchasedUsageCreditsUsd(0);
         }
@@ -169,6 +169,8 @@ class CreditStore {
       periodResetsAt: this.state.periodResetsAt,
       usedThisWeek: this.state.usedThisWeek,
       weekResetsAt: this.state.weekResetsAt,
+      fableUsedThisPeriod: 0,
+      standardPurchasedUsedThisPeriod: 0,
       purchasedUsageCreditsUsd: this.state.purchasedUsageCreditsUsd,
     };
   }

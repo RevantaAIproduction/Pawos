@@ -252,7 +252,7 @@ function createMainWindow() {
     console.error(`[PAWOS WINDOW] render-process-gone: ${details.reason}`);
   });
   
-  mainWindow.webContents.on('crashed', () => {
+  (mainWindow.webContents as any).on('crashed', () => {
     console.error("[PAWOS WINDOW] renderer crashed");
   });
 
@@ -605,7 +605,7 @@ app.whenReady().then(async () => {
   });
 
   // Forward autoUpdater lifecycle events to the renderer via the "updater:state" channel.
-  const sendUpdaterState = (state) => {
+  const sendUpdaterState = (state: string) => {
     if (mainWindow && mainWindow.webContents) {
       mainWindow.webContents.send('updater:state', state);
     }

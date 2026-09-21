@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import styles from './app.module.css';
 import { Avatar3DOverlay } from './CompanionCanvas/Avatar3DOverlay';

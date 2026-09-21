@@ -111,5 +111,7 @@ export type AggregatedTurnUsage = {
 export type TurnUsageSubmission = {
   sessionId: string | null;
   runId: string | null;
+  accessToken?: string;
+  organizationId?: string;
   requests: { usage: ProviderUsageMetadata; requestType: UsageRequestType }[];
 };

@@ -1,5 +1,6 @@
 import { getIpcBridge } from '../services/ipc/ipcBridge';
 import { connectivityCredentialService } from './ConnectivityCredentialService';
+import type { ConnectivityCredentialPersistRequest, ConnectivityCredentialRevokeRequest } from '../../shared/connectivity/ConnectivityCredentialBridgeTypes';
 
 /**
  * P0-4 security fix. Installs the renderer half of the main<->renderer credential-persistence
@@ -12,7 +13,7 @@ import { connectivityCredentialService } from './ConnectivityCredentialService';
 export function installConnectivityCredentialBridge(): void {
   const ipc = getIpcBridge();
 
-  ipc.onConnectivityCredentialPersistRequest(async (request) => {
+  ipc.onConnectivityCredentialPersistRequest(async (request: ConnectivityCredentialPersistRequest) => {
     try {
       await connectivityCredentialService.store(request.scope, request.connectorId, request.authMethod, request.secret, {
         refreshToken: request.refreshToken,
@@ -27,7 +28,7 @@ export function installConnectivityCredentialBridge(): void {
     }
   });
 
-  ipc.onConnectivityCredentialRevokeRequest(async (request) => {
+  ipc.onConnectivityCredentialRevokeRequest(async (request: ConnectivityCredentialRevokeRequest) => {
     try {
       await connectivityCredentialService.revoke(request.scope, request.connectorId);
       await ipc.connectivityCredentialRevokeRespond(request.requestId, { ok: true });

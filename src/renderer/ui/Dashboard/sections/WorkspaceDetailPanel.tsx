@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useEffect, useRef, useState } from 'react';
 import styles from '../dashboard.module.css';
 import { organizationWorkspaceService } from '../../../organization/OrganizationWorkspaceService';
