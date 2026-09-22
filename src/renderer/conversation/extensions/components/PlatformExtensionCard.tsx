@@ -27,7 +27,7 @@ export function PlatformExtensionCard({ extension, onExpand, onAction }: Platfor
       case 'in-progress':
       case 'processing':
       case 'recording-paused':
-        return '⚙️';
+        return '[gear]';
       case 'in-review':
       case 'review':
       case 'approved':
@@ -40,7 +40,7 @@ export function PlatformExtensionCard({ extension, onExpand, onAction }: Platfor
       case 'passed':
       case 'ready':
       case 'complete':
-        return '✓';
+        return '[done]';
       case 'failed':
       case 'cancelled':
         return '⚠️';
@@ -146,7 +146,7 @@ export function PlatformExtensionCard({ extension, onExpand, onAction }: Platfor
         </div>
         <div className={styles.extensionCardContent}>
           <div className={styles.title}>
-            {extension.type === 'jira-ticket' && '🔗 '}
+            {extension.type === 'jira-ticket' && '[link] '}
             {extension.type === 'linear-ticket' && '🎯 '}
             {extension.type === 'github-issue' && '🐙 '}
             {extension.type === 'pull-request' && '🔀 '}

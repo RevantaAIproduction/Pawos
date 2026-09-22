@@ -22,9 +22,9 @@ export function AgentStatusExtensionCard({
       case 'idle':
         return '⏳';
       case 'running':
-        return '⚙️';
+        return '[gear]';
       case 'complete':
-        return '✓';
+        return '[done]';
       case 'error':
         return '⚠️';
       case 'stopped':
@@ -73,8 +73,8 @@ export function AgentStatusExtensionCard({
                   <div className={styles.stepProgress}>
                     <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)' }}>
                       {step.status === 'pending' && '⏳ '}
-                      {step.status === 'running' && '⚙️ '}
-                      {step.status === 'completed' && '✓ '}
+                      {step.status === 'running' && '[gear] '}
+                      {step.status === 'completed' && '[done] '}
                       {step.status === 'failed' && '⚠️ '}
                       {step.name}
                     </div>

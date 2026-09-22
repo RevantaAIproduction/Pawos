@@ -15,7 +15,7 @@ export function ActivityDetailView({
       <div className={styles.detailHeader}>
         <div className={styles.detailTitle}>{activity.title}</div>
         <button className={styles.closeBtn} onClick={onClose} type="button" title="Close">
-          ✕
+          [x]
         </button>
       </div>
 

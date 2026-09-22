@@ -81,8 +81,8 @@ export function TasksCard({ card, onRemoveCard }: TasksCardProps) {
               <div className={styles.taskHeader}>
                 <div className={`${styles.statusIcon} ${styles[task.status]}`}>
                   {task.status === 'running' && '⟳'}
-                  {task.status === 'completed' && '✓'}
-                  {task.status === 'failed' && '✕'}
+                  {task.status === 'completed' && '[done]'}
+                  {task.status === 'failed' && '[x]'}
                   {task.status === 'queued' && '⋯'}
                 </div>
                 <div className={styles.taskTitle}>{task.title}</div>

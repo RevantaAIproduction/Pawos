@@ -28,7 +28,7 @@ export const AUTONOMOUS_TARGET_GROSS_MARGIN = 0.70;
 /**
  * Derived markup multiplier.
  *
- * Customer charge = Provider cost × markupMultiplier
+ * Customer charge = Provider cost x markupMultiplier
  */
 export const AUTONOMOUS_MARKUP_MULTIPLIER = 1 / (1 - AUTONOMOUS_TARGET_GROSS_MARGIN);
 
@@ -58,7 +58,7 @@ export const WORK_PC_PER_CUSTOMER_DOLLAR = 100;
  *   Round to 4 decimal places (same as internal normalized compute).
  *   This preserves precision without requiring fractional PC in the DB.
  *   Conversion: work_pc = ROUND(provider_cost_usd * 1000 / 3, 4)
- *   Verification: 1000 / 3 = 333.3333..., representing the markup × customer denomination.
+ *   Verification: 1000 / 3 = 333.3333..., representing the markup x customer denomination.
  */
 export function providerCostToWorkPc(providerCostUsd: number): number {
   const customerChargeUsd = providerCostUsd * AUTONOMOUS_MARKUP_MULTIPLIER;

@@ -151,7 +151,7 @@ export function EnterpriseCheckoutPage({ onClose, onSuccess }: Props) {
     return (
       <div className={styles.container}>
         <div className={styles.card}>
-          <button className={styles.closeBtn} onClick={onClose}>✕</button>
+          <button className={styles.closeBtn} onClick={onClose}>[x]</button>
 
           {/* Explanation Card */}
           <div className={styles.explainerCard}>
@@ -225,7 +225,7 @@ export function EnterpriseCheckoutPage({ onClose, onSuccess }: Props) {
               <p>Pay per seat, pay for usage you use</p>
             </div>
             <div className={styles.benefitItem}>
-              <div className={styles.benefitIcon}>🔒</div>
+              <div className={styles.benefitIcon}>[lock]</div>
               <strong>Organization Control</strong>
               <p>Admin dashboard & team management</p>
             </div>
@@ -362,7 +362,7 @@ export function EnterpriseCheckoutPage({ onClose, onSuccess }: Props) {
     return (
       <div className={styles.container}>
         <div className={styles.card} style={{ textAlign: 'center' }}>
-          <div className={styles.successCheckmark}>✓</div>
+          <div className={styles.successCheckmark}>[done]</div>
           <h2>Thank you for choosing PawOS</h2>
           <p className={styles.subtitle}>PawOS organization dedicated team member contacts you in a while within 48hrs</p>
 
@@ -434,12 +434,12 @@ export function EnterpriseCheckoutPage({ onClose, onSuccess }: Props) {
           <div className={styles.detailsSection}>
             <h3>What's Included</h3>
             <div className={styles.detailsList}>
-              <p>✓ Unlimited team members (company domain only)</p>
-              <p>✓ Admin dashboard & controls</p>
-              <p>✓ Usage tracking & analytics</p>
-              <p>✓ Custom spending limits per user</p>
-              <p>✓ $20 ticket credit per seat</p>
-              <p>✓ Dedicated support team</p>
+              <p>[done] Unlimited team members (company domain only)</p>
+              <p>[done] Admin dashboard & controls</p>
+              <p>[done] Usage tracking & analytics</p>
+              <p>[done] Custom spending limits per user</p>
+              <p>[done] $20 ticket credit per seat</p>
+              <p>[done] Dedicated support team</p>
             </div>
           </div>
 

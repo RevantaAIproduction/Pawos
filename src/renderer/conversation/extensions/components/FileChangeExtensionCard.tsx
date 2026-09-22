@@ -24,7 +24,7 @@ export function FileChangeExtensionCard({
       case 'detected':
         return '📝';
       case 'staged':
-        return '✓';
+        return '[done]';
       case 'committed':
         return '📦';
       case 'conflict':

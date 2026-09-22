@@ -30,7 +30,7 @@ export function ComputeCost({ actionType, quantity = 1, onComputeUsed }: Compute
       <div className={styles.details}>
         {quantity > 1 && (
           <span className={styles.quantity}>
-            {quantity} × {config.baseAmount.toFixed(3)}
+            {quantity} x {config.baseAmount.toFixed(3)}
           </span>
         )}
         <span className={styles.description}>{config.description}</span>

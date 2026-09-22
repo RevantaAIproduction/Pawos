@@ -24,11 +24,11 @@ export function DownloadProgressExtensionCard({
       case 'paused':
         return '⏸️';
       case 'completed':
-        return '✓';
+        return '[done]';
       case 'failed':
         return '⚠️';
       case 'cancelled':
-        return '✕';
+        return '[x]';
       default:
         return '?';
     }

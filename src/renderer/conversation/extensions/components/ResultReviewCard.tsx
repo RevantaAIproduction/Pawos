@@ -64,11 +64,11 @@ export function ResultReviewCard({ extension, onAction }: ResultReviewCardProps)
   const getStatusIcon = () => {
     switch (extension.state) {
       case 'pending-review':
-        return '✓';
+        return '[done]';
       case 'accepted':
-        return '✓';
+        return '[done]';
       case 'needs-changes':
-        return '🔄';
+        return '[refresh]';
       default:
         return '?';
     }

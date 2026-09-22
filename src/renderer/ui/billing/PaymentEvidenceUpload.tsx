@@ -95,7 +95,7 @@ export function PaymentEvidenceUpload({
           color: '#22c55e',
           fontWeight: 500,
         }}>
-          ✓ All invoice evidence uploaded. Your payment is under validation.
+          [done] All invoice evidence uploaded. Your payment is under validation.
         </div>
       )}
 
@@ -119,7 +119,7 @@ export function PaymentEvidenceUpload({
             >
               {invoiceIds.map((id) => (
                 <option key={id} value={id} disabled={uploadedMap[id]}>
-                  {id} {uploadedMap[id] ? '✓ Uploaded' : ''}
+                  {id} {uploadedMap[id] ? '[done] Uploaded' : ''}
                 </option>
               ))}
             </select>

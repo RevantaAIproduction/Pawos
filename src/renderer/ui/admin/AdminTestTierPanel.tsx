@@ -281,7 +281,7 @@ export function AdminTestTierPanel() {
     >
       <div style={{ marginBottom: '16px' }}>
         <h3 style={{ margin: '0 0 8px 0', color: '#c92a2a' }}>
-          ⚙️ INTERNAL ADMIN / TEST
+          [gear] INTERNAL ADMIN / TEST
         </h3>
         <p style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#666' }}>
           Internal testing only. This does not represent a real purchase.

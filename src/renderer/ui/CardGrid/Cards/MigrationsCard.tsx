@@ -52,9 +52,9 @@ export function MigrationsCard({ card, onRemoveCard }: MigrationsCardProps) {
       case 'running':
         return '⟳';
       case 'completed':
-        return '✓';
+        return '[done]';
       case 'failed':
-        return '✕';
+        return '[x]';
       case 'rolled-back':
         return '↶';
       default:

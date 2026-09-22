@@ -138,7 +138,7 @@ export function ProfileMenu({
                   onClick={() => selectLanguage(lng.code)}
                 >
                   {lng.label}
-                  {languageCode === lng.code ? ' ✓' : ''}
+                  {languageCode === lng.code ? ' [done]' : ''}
                 </button>
               ))}
             </>

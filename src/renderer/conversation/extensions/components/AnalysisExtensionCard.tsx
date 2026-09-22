@@ -25,11 +25,11 @@ export function AnalysisExtensionCard({ extension, onAction }: AnalysisExtension
       case 'processing-results':
         return '📊';
       case 'complete':
-        return '✓';
+        return '[done]';
       case 'failed':
         return '⚠️';
       case 'cancelled':
-        return '✕';
+        return '[x]';
       default:
         return '?';
     }
@@ -38,7 +38,7 @@ export function AnalysisExtensionCard({ extension, onAction }: AnalysisExtension
   const getSourceIcon = () => {
     switch (extension.source) {
       case 'jira-ticket':
-        return '🔗';
+        return '[link]';
       case 'linear-ticket':
         return '🎯';
       case 'github-issue':
@@ -56,7 +56,7 @@ export function AnalysisExtensionCard({ extension, onAction }: AnalysisExtension
       case 'code-review':
         return '👁️';
       case 'git-commit':
-        return '📋';
+        return '[copy]';
       case 'webpage':
         return '🌐';
       case 'pdf':
@@ -99,7 +99,7 @@ export function AnalysisExtensionCard({ extension, onAction }: AnalysisExtension
 
     return (
       <div style={{ fontSize: 10, marginTop: 4, color: isFree ? 'rgba(100, 200, 100, 0.8)' : 'rgba(255, 165, 0, 0.8)' }}>
-        {isFree ? '✓ Free (tier allowance)' : `💰 ${cost.toFixed(2)} PC`}
+        {isFree ? '[done] Free (tier allowance)' : `💰 ${cost.toFixed(2)} PC`}
       </div>
     );
   };

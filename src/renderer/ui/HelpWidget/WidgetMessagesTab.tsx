@@ -136,7 +136,7 @@ export function WidgetMessagesTab() {
           >
             {a.kind === 'image' ? '🖼' : '📄'} {a.name}
             <button type="button" onClick={() => removePendingAttachment(i)} style={{ background: 'none', border: 'none', color: '#96969e', cursor: 'pointer', padding: 0, fontSize: 12 }}>
-              ✕
+              [x]
             </button>
           </span>
         ))}

@@ -93,7 +93,7 @@ function ConnectionCard({
   detail?: string;
   disabled?: boolean;
   /** Present only for a Team/Enterprise-gated connector the current plan doesn't unlock — renders
-   *  a "🔒 Available on {tier}" pill instead of the normal live-status pill. */
+   *  a "[lock] Available on {tier}" pill instead of the normal live-status pill. */
   lockBadge?: string;
   onClick: () => void;
 }) {
@@ -112,7 +112,7 @@ function ConnectionCard({
             padding: '3px 8px', borderRadius: 999, background: 'rgba(var(--pawos-accent-rgb), 0.14)', color: 'var(--pawos-accent)',
           }}
         >
-          🔒 {lockBadge}
+          [lock] {lockBadge}
         </span>
       ) : (
         <LiveStatusPill state={state} label={stateLabel} />
@@ -299,7 +299,7 @@ export function ConnectionsPage({ scope, onUpgrade }: { scope: ConnectivityScope
 
       // Send success notification
       new Notification('Connected Successfully', {
-        body: `✓ ${connectorName} connected successfully`,
+        body: `[done] ${connectorName} connected successfully`,
         tag: `pawos-connector-${connectorId}`,
       });
 
@@ -341,7 +341,7 @@ export function ConnectionsPage({ scope, onUpgrade }: { scope: ConnectivityScope
 
       // Send disconnection notification
       new Notification('Disconnected', {
-        body: `✓ ${connectorName} disconnected`,
+        body: `[done] ${connectorName} disconnected`,
         tag: `pawos-connector-${connectorId}`,
       });
 
@@ -713,7 +713,7 @@ export function ConnectionsPage({ scope, onUpgrade }: { scope: ConnectivityScope
               padding: '3px 8px', borderRadius: 999, background: 'rgba(var(--pawos-accent-rgb), 0.14)', color: 'var(--pawos-accent)',
             }}
           >
-            🔒 Available on {selected.requiredTier} &amp; above
+            [lock] Available on {selected.requiredTier} &amp; above
           </span>
           <p className={styles.cardBody} style={{ marginTop: 14 }}>
             This integration requires a {selected.requiredTier} workspace.

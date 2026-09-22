@@ -13,7 +13,7 @@ const STATUS_TEXT: Record<BrowserCapabilityReport['realProfileReuse']['status'],
 function Row({ label, ok }: { label: string; ok: boolean }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, padding: '3px 0' }}>
-      <span style={{ color: ok ? '#7ee787' : '#6c6c74', width: 14, textAlign: 'center' }}>{ok ? '✓' : '—'}</span>
+      <span style={{ color: ok ? '#7ee787' : '#6c6c74', width: 14, textAlign: 'center' }}>{ok ? '[done]' : '—'}</span>
       <span style={{ color: ok ? '#f5f5f7' : '#6c6c74' }}>{label}</span>
     </div>
   );
@@ -46,7 +46,7 @@ export function BrowserCapabilitiesSection() {
       {reports.map((r) => {
         const reuse = r.realProfileReuse;
         const reuseColor = reuse.status === 'working' ? '#7ee787' : reuse.status === 'blocked' ? '#ff8a8a' : '#96969e';
-        const reuseIcon = reuse.status === 'working' ? '✓' : reuse.status === 'blocked' ? '⚠' : '—';
+        const reuseIcon = reuse.status === 'working' ? '[done]' : reuse.status === 'blocked' ? '⚠' : '—';
         return (
           <div key={r.id} className={styles.card}>
             <h3 className={styles.cardTitle}>

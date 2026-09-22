@@ -30,7 +30,7 @@ export function DesktopSection() {
   const runApp = async (appId: KnownAppId, label: string) => {
     setAppStatus(`${label}…`);
     const result = await ipc.executeAction({ type: 'openApp', appId });
-    setAppStatus(result.ok ? `${label} ✓` : `${label} failed: ${result.reason}`);
+    setAppStatus(result.ok ? `${label} [done]` : `${label} failed: ${result.reason}`);
     window.setTimeout(() => setAppStatus(null), 3000);
   };
 
@@ -38,14 +38,14 @@ export function DesktopSection() {
     if (!url.trim()) return;
     setUrlStatus('Opening…');
     const result = await ipc.executeAction({ type: 'openUrl', url: url.trim() });
-    setUrlStatus(result.ok ? 'Opened ✓' : `Failed: ${result.reason}`);
+    setUrlStatus(result.ok ? 'Opened [done]' : `Failed: ${result.reason}`);
   };
 
   const runOpenFolder = async () => {
     if (!folderPath.trim()) return;
     setFolderStatus('Opening…');
     const result = await ipc.executeAction({ type: 'openFolder', path: folderPath.trim() });
-    setFolderStatus(result.ok ? 'Opened ✓' : `Failed: ${result.reason}`);
+    setFolderStatus(result.ok ? 'Opened [done]' : `Failed: ${result.reason}`);
   };
 
   const runSearch = async () => {

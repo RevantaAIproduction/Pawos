@@ -211,10 +211,10 @@ export function TierCheckoutPage({ tier, options, onClose, onSuccess }: Props) {
             {message && (
               <div style={{
                 fontSize: 12,
-                color: message.includes('❌') ? '#ef4444' : '#4cb050',
+                color: message.includes('[error]') ? '#ef4444' : '#4cb050',
                 marginBottom: 16,
                 padding: '12px 14px',
-                background: message.includes('❌') ? 'rgba(239,68,68,0.1)' : 'rgba(76,176,80,0.1)',
+                background: message.includes('[error]') ? 'rgba(239,68,68,0.1)' : 'rgba(76,176,80,0.1)',
                 borderRadius: 8,
               }}>
                 {message}

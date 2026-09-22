@@ -1965,7 +1965,7 @@ export class ConversationRuntime {
 
     // Send completion notification
     if (task.status === 'completed') {
-      this.sendNotification('Work Finished', `✓ ${task.goal || 'Task'} completed successfully`);
+      this.sendNotification('Work Finished', `[done] ${task.goal || 'Task'} completed successfully`);
     } else if (task.status === 'failed') {
       this.sendNotification('Work Failed', `✗ ${task.goal || 'Task'} did not complete`);
     }

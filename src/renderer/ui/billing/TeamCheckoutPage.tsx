@@ -108,14 +108,14 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
   const [paymentStep, setPaymentStep] = useState<'idle' | 'creating-invoice' | 'awaiting-payment' | 'processing' | 'confirming' | 'success'>('idle');
 
   // Calculate amounts
-  const standardPriceInr = SEAT_PRICING.standard.priceUsd * USD_TO_INR; // $20 × 95.65 = ₹1,913
-  const premiumPriceInr = SEAT_PRICING.premium.priceUsd * USD_TO_INR;   // $100 × 95.65 = ₹9,565
+  const standardPriceInr = SEAT_PRICING.standard.priceUsd * USD_TO_INR; // $20 x 95.65 = ₹1,913
+  const premiumPriceInr = SEAT_PRICING.premium.priceUsd * USD_TO_INR;   // $100 x 95.65 = ₹9,565
 
   const standardSubtotal = standardSeatCount * standardPriceInr;
   const premiumSubtotal = premiumSeatCount * premiumPriceInr;
   const subtotalInr = standardSubtotal + premiumSubtotal;
 
-  // For annual: monthly × 12 (no discount applied to subtotal)
+  // For annual: monthly x 12 (no discount applied to subtotal)
   const displaySubtotalInr = billingFrequency === 'annually' ? subtotalInr * 12 : subtotalInr;
   const gstAmount = displaySubtotalInr * 0.18;
   const totalInr = displaySubtotalInr + gstAmount;
@@ -281,12 +281,12 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
 
       const lineItems = [
         standardSeatCount > 0 && {
-          description: `Standard Seats (${standardSeatCount} × $20/month)`,
+          description: `Standard Seats (${standardSeatCount} x $20/month)`,
           amount: (standardSeatCount * 1913 * (billingFrequency === 'annually' ? 12 : 1)) / 100,
           quantity: standardSeatCount,
         },
         premiumSeatCount > 0 && {
-          description: `Premium Seats (${premiumSeatCount} × $100/month)`,
+          description: `Premium Seats (${premiumSeatCount} x $100/month)`,
           amount: (premiumSeatCount * 9565 * (billingFrequency === 'annually' ? 12 : 1)) / 100,
           quantity: premiumSeatCount,
         },
@@ -696,7 +696,7 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
                   <span>₹{standardSubtotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
                 </div>
                 <div style={{ fontSize: '12px', color: 'rgba(var(--pawos-text-rgb), 0.6)' }}>
-                  × ₹{standardPriceInr.toLocaleString('en-IN', { maximumFractionDigits: 2 })} per seat
+                  x ₹{standardPriceInr.toLocaleString('en-IN', { maximumFractionDigits: 2 })} per seat
                 </div>
               </div>
             )}
@@ -708,7 +708,7 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
                   <span>₹{premiumSubtotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
                 </div>
                 <div style={{ fontSize: '12px', color: 'rgba(var(--pawos-text-rgb), 0.6)' }}>
-                  × ₹{premiumPriceInr.toLocaleString('en-IN', { maximumFractionDigits: 2 })} per seat
+                  x ₹{premiumPriceInr.toLocaleString('en-IN', { maximumFractionDigits: 2 })} per seat
                 </div>
               </div>
             )}
@@ -1333,7 +1333,7 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
               <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: '12px', color: '#3b82f6' }}>Payment Progress</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: paymentStep !== 'idle' ? '#10b981' : '#d1d5db', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '10px', fontWeight: 'bold' }}>✓</div>
+                  <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: paymentStep !== 'idle' ? '#10b981' : '#d1d5db', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '10px', fontWeight: 'bold' }}>[done]</div>
                   <span>Creating invoice...</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1349,7 +1349,7 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
                   <span>Confirming payment...</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: paymentStep === 'success' ? '#10b981' : '#d1d5db', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '10px', fontWeight: 'bold' }}>{paymentStep === 'success' ? '✓' : '●'}</div>
+                  <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: paymentStep === 'success' ? '#10b981' : '#d1d5db', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '10px', fontWeight: 'bold' }}>{paymentStep === 'success' ? '[done]' : '●'}</div>
                   <span style={{ color: paymentStep === 'success' ? '#10b981' : 'inherit' }}>Success - Tier Activated</span>
                 </div>
               </div>
@@ -1371,7 +1371,7 @@ export function TeamCheckoutPage({ seatTier, onClose, onSuccess }: Props) {
               fontSize: '14px',
             }}
           >
-            {processing ? (paymentStep === 'success' ? '✓ Success!' : 'Processing payment...') : `Pay ₹${displaySubtotalInr.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`}
+            {processing ? (paymentStep === 'success' ? '[done] Success!' : 'Processing payment...') : `Pay ₹${displaySubtotalInr.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`}
           </button>
         </div>
 

@@ -312,7 +312,7 @@ export function Sidebar({
             title={updateLabel}
             aria-label={updateLabel}
           >
-            <span className={styles.navIcon}>🔄</span>
+            <span className={styles.navIcon}>[refresh]</span>
             {!collapsed && <span>{updateLabel}</span>}
           </button>
         </nav>

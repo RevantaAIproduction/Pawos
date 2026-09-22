@@ -49,7 +49,7 @@ export function WorkTreeCard({ card, onRemoveCard }: WorkTreeCardProps) {
       case 'deleted':
         return '−';
       case 'staged':
-        return '✓';
+        return '[done]';
       default:
         return '○';
     }

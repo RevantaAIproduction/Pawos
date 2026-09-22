@@ -87,7 +87,7 @@ function BlockedWorkPanel({ blocked, isFailed }: { blocked: WorkRecordBlockedSum
         {blocked.completedSteps.length > 0 ? (
           <ul className={styles.workRecordList}>
             {blocked.completedSteps.map((step, index) => (
-              <li key={`${step}-${index}`}>✓ {step}</li>
+              <li key={`${step}-${index}`}>[done] {step}</li>
             ))}
           </ul>
         ) : (

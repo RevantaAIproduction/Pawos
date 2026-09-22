@@ -278,7 +278,7 @@ const CODING_CAPABILITIES = [
   { id: 'diff',       icon: '◆', name: 'Review Diffs',            desc: 'Inspect unified diffs of every change made' },
   { id: 'commands',   icon: '▷', name: 'Run Commands',            desc: 'Execute build, test, and custom shell commands' },
   { id: 'test',       icon: '✦', name: 'Run Tests',               desc: 'Run your test suite and surface failures inline' },
-  { id: 'validate',   icon: '✓', name: 'Validate Builds',         desc: 'Syntax, imports, types, lint, build, and test pipeline' },
+  { id: 'validate',   icon: '[done]', name: 'Validate Builds',         desc: 'Syntax, imports, types, lint, build, and test pipeline' },
   { id: 'git',        icon: '⊕', name: 'Use Git',                 desc: 'Stage, commit, branch, diff, log, and revert' },
   { id: 'worktree',   icon: '⊞', name: 'Isolated Worktrees',      desc: 'Create Git worktrees for safe parallel experiments' },
   { id: 'browser',    icon: '◻', name: 'Monitor Dev Browser',     desc: 'Watch console output and network from your local server' },
@@ -700,7 +700,7 @@ export function WorkspaceRuntime({
         return (
           <div className={styles.evidenceBlock}>
             <span className={`${styles.evidenceStatus} ${evidence.ok ? styles.evidenceOk : styles.evidenceIssues}`}>
-              {evidence.ok ? '✓ Verified — no issues found' : `✗ ${evidence.issues.length} issue${evidence.issues.length === 1 ? '' : 's'} found`}
+              {evidence.ok ? '[done] Verified — no issues found' : `✗ ${evidence.issues.length} issue${evidence.issues.length === 1 ? '' : 's'} found`}
             </span>
             {evidence.issues.length > 0 && (
               <ul className={styles.evidenceIssueList}>
@@ -741,7 +741,7 @@ export function WorkspaceRuntime({
                     <span className={styles.agentActivityLabel}>{label}</span>
                     {retryAttempts > 0 && (
                       <span className={styles.agentRetryBadge} title={`Recovered after ${retryAttempts} retry attempt${retryAttempts === 1 ? '' : 's'}`}>
-                        retried {retryAttempts}×
+                        retried {retryAttempts}x
                       </span>
                     )}
                   </li>
@@ -814,7 +814,7 @@ export function WorkspaceRuntime({
                 <ul className={styles.todoList}>
                   {progress.items.map((item) => (
                     <li key={item.id} className={styles.todoItem}>
-                      <span>{item.status === 'done' ? '✓' : item.status === 'inProgress' ? '▸' : item.status === 'skipped' ? '⊘' : '○'}</span>
+                      <span>{item.status === 'done' ? '[done]' : item.status === 'inProgress' ? '▸' : item.status === 'skipped' ? '⊘' : '○'}</span>
                       <span>{item.label}</span>
                     </li>
                   ))}
@@ -918,7 +918,7 @@ export function WorkspaceRuntime({
               <span className={styles.codingSectionTitle}>Build Status</span>
               <div className={styles.codingSectionBody}>
                 <span className={build.status === 'success' ? styles.diffAdded : styles.diffDeleted}>
-                  {build.status === 'success' ? '✓' : '✗'} {build.buildTool ?? 'Build'} — {build.status === 'success' ? 'succeeded' : 'failed'}
+                  {build.status === 'success' ? '[done]' : '✗'} {build.buildTool ?? 'Build'} — {build.status === 'success' ? 'succeeded' : 'failed'}
                   {build.durationMs !== undefined ? ` (${(build.durationMs / 1000).toFixed(1)}s)` : ''}
                 </span>
                 {build.failureDetail && <pre className={styles.terminalPreview}>{build.failureDetail.slice(-500)}</pre>}
@@ -937,7 +937,7 @@ export function WorkspaceRuntime({
               <span className={styles.codingSectionTitle}>Test Results</span>
               <div className={styles.codingSectionBody}>
                 <span className={results.status === 'passed' ? styles.diffAdded : styles.diffDeleted}>
-                  {results.status === 'passed' ? '✓' : results.status === 'failed' ? '✗' : '?'}{' '}
+                  {results.status === 'passed' ? '[done]' : results.status === 'failed' ? '✗' : '?'}{' '}
                   {results.status === 'passed' ? 'Passed' : results.status === 'failed' ? 'Failed' : 'Unknown'}
                   {results.total !== undefined ? ` — ${results.passed ?? 0}/${results.total}` : ''}
                 </span>
@@ -1028,14 +1028,14 @@ export function WorkspaceRuntime({
                   {memory.latestValidation && (
                     <>
                       <li className={styles.todoItem}>
-                        <span>{memory.latestValidation.blockingIssues.length === 0 ? '✓' : '✗'}</span>
+                        <span>{memory.latestValidation.blockingIssues.length === 0 ? '[done]' : '✗'}</span>
                         <span>
                           Last validation: {memory.latestValidation.blockingIssues.length === 0 ? 'passed' : 'failed'} ({memory.latestValidation.confidence} confidence)
                         </span>
                       </li>
                       {memory.latestValidation.steps.map((step) => (
                         <li key={`validation-step-${step.id}`} className={styles.todoItem}>
-                          <span>{step.status === 'passed' ? '✓' : step.status === 'failed' ? '✗' : '–'}</span>
+                          <span>{step.status === 'passed' ? '[done]' : step.status === 'failed' ? '✗' : '–'}</span>
                           <span>
                             {step.id}: {step.status}
                             {step.status === 'skipped' && step.skippedReason ? ` — ${step.skippedReason}` : ''}
@@ -1059,7 +1059,7 @@ export function WorkspaceRuntime({
           return (
             <div className={styles.codingSection}>
               <span className={styles.codingSectionTitle}>
-                Validation {report.blockingIssues.length === 0 ? '✓' : `✗ ${report.blockingIssues.length} issue${report.blockingIssues.length === 1 ? '' : 's'}`}
+                Validation {report.blockingIssues.length === 0 ? '[done]' : `✗ ${report.blockingIssues.length} issue${report.blockingIssues.length === 1 ? '' : 's'}`}
                 <span className={styles.validationConfidence}>{report.confidence} confidence</span>
               </span>
               <ul className={styles.validationStepList}>
@@ -1070,7 +1070,7 @@ export function WorkspaceRuntime({
                       step.status === 'failed' ? styles.validationFailed :
                       styles.validationSkipped
                     }>
-                      {step.status === 'passed' ? '✓' : step.status === 'failed' ? '✗' : '–'}
+                      {step.status === 'passed' ? '[done]' : step.status === 'failed' ? '✗' : '–'}
                     </span>
                     <span className={styles.validationStepName}>{step.id}</span>
                     {step.status === 'skipped' && step.skippedReason && (
@@ -1271,7 +1271,7 @@ export function WorkspaceRuntime({
               <ul className={styles.todoList}>
                 {engineeringMemory.slice(0, 8).map((e, i) => (
                   <li key={i} className={styles.todoItem}>
-                    <span>{e.status === 'success' ? '✓' : e.status === 'failure' ? '✗' : '○'}</span>
+                    <span>{e.status === 'success' ? '[done]' : e.status === 'failure' ? '✗' : '○'}</span>
                     <span>{e.summary}</span>
                   </li>
                 ))}
@@ -1313,7 +1313,7 @@ export function WorkspaceRuntime({
                 <ul className={styles.todoList}>
                   {rollbacks.map((e, i) => (
                     <li key={i} className={styles.todoItem}>
-                      <span>{e.status === 'success' ? '✓' : '✗'}</span>
+                      <span>{e.status === 'success' ? '[done]' : '✗'}</span>
                       <span>{e.summary}</span>
                     </li>
                   ))}
@@ -1336,7 +1336,7 @@ export function WorkspaceRuntime({
                 <ul className={styles.todoList}>
                   {deployments.map((e, i) => (
                     <li key={i} className={styles.todoItem}>
-                      <span>{e.status === 'success' ? '✓' : '✗'}</span>
+                      <span>{e.status === 'success' ? '[done]' : '✗'}</span>
                       <span>{e.summary}</span>
                     </li>
                   ))}

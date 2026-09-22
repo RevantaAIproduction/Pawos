@@ -674,11 +674,11 @@ function buildLogText(task: ConversationTaskRecord): string {
 }
 
 function statusMeta(status: ConversationTaskRecord['status']): { icon: string; label: string; className: string } {
-  if (status === 'running') return { icon: '⚙️', label: 'Running', className: styles.statusRunning ?? '' };
+  if (status === 'running') return { icon: '[gear]', label: 'Running', className: styles.statusRunning ?? '' };
   if (status === 'stopped') return { icon: '■', label: 'Stopped', className: styles.statusStopped ?? styles.statusInterrupted ?? '' };
   if (status === 'failed') return { icon: '✗', label: 'Failed', className: styles.statusFailed ?? '' };
   if (status === 'interrupted') return { icon: '⏸', label: 'Interrupted', className: styles.statusInterrupted ?? '' };
-  return { icon: '✓', label: 'Completed', className: styles.statusCompleted ?? '' };
+  return { icon: '[done]', label: 'Completed', className: styles.statusCompleted ?? '' };
 }
 
 function ActionRow({
@@ -692,7 +692,7 @@ function ActionRow({
 }) {
   const failed = action.result && !action.result.ok;
   const running = !action.result;
-  const icon = running ? '⚙️' : failed ? '✗' : '✓';
+  const icon = running ? '[gear]' : failed ? '✗' : '[done]';
   return (
     <div className={styles.timelineRow}>
       <span className={`${styles.timelineIcon} ${failed ? styles.timelineIconFailed : running ? styles.timelineIconRunning : styles.timelineIconOk}`}>
@@ -739,7 +739,7 @@ function StageGroup({
         <span className={styles.stageChevron}>{collapsed ? '▸' : '▾'}</span>
         <span className={styles.stageTitle}>{stage}</span>
         <span className={styles.stageCounts}>
-          {okCount > 0 && <span className={styles.verifyOk}>{okCount} ✓</span>}
+          {okCount > 0 && <span className={styles.verifyOk}>{okCount} [done]</span>}
           {failCount > 0 && <span className={styles.verifyFail}>{failCount} ✗</span>}
         </span>
       </button>
@@ -979,8 +979,8 @@ export function TaskCard({
               <div key={stage} className={styles.summaryStageStat}>
                 <span className={styles.summaryStageLabel}>{stage}</span>
                 <span className={styles.summaryStageCount}>
-                  {okCount > 0 && <span className={styles.summaryOk}>{okCount} ✓</span>}
-                  {runningCount > 0 && <span className={styles.summaryRunning}>{runningCount} ⚙️</span>}
+                  {okCount > 0 && <span className={styles.summaryOk}>{okCount} [done]</span>}
+                  {runningCount > 0 && <span className={styles.summaryRunning}>{runningCount} [gear]</span>}
                   {failCount > 0 && <span className={styles.summaryFail}>{failCount} ✗</span>}
                 </span>
               </div>
@@ -1086,7 +1086,7 @@ export function TaskCard({
         <div className={styles.details}>
           <div className={styles.toolbar}>
             <button type="button" className={styles.toolbarBtn} onClick={handleCopy}>
-              {copied ? 'Copied ✓' : 'Copy logs'}
+              {copied ? 'Copied [done]' : 'Copy logs'}
             </button>
             <button type="button" className={styles.toolbarBtn} onClick={handleExport}>
               Export logs
@@ -1253,7 +1253,7 @@ export function TaskCard({
                 return (
                   <div key={a.id} className={styles.workflowBlock}>
                     <div className={styles.workflowName}>
-                      <span className={build.status === 'success' ? styles.verifyOk : styles.verifyFail}>{build.status === 'success' ? '✓' : '✗'}</span>{' '}
+                      <span className={build.status === 'success' ? styles.verifyOk : styles.verifyFail}>{build.status === 'success' ? '[done]' : '✗'}</span>{' '}
                       {build.buildTool ?? 'Build'} — {build.status === 'success' ? 'succeeded' : 'failed'}
                     </div>
                     <div className={styles.workflowGrid}>
@@ -1286,7 +1286,7 @@ export function TaskCard({
                   <div key={a.id} className={styles.workflowBlock}>
                     <div className={styles.workflowName}>
                       <span className={results.status === 'passed' ? styles.verifyOk : styles.verifyFail}>
-                        {results.status === 'passed' ? '✓' : results.status === 'failed' ? '✗' : '?'}
+                        {results.status === 'passed' ? '[done]' : results.status === 'failed' ? '✗' : '?'}
                       </span>{' '}
                       {results.status === 'passed' ? 'Tests passed' : results.status === 'failed' ? 'Tests failed' : 'Test status unknown'}
                     </div>
@@ -1350,7 +1350,7 @@ export function TaskCard({
               <ul className={styles.planList}>
                 {sections.todoProgress.items.map((item) => (
                   <li key={item.id}>
-                    {item.status === 'done' ? '✓' : item.status === 'inProgress' ? '▸' : item.status === 'skipped' ? '⊘' : '○'} {item.label}
+                    {item.status === 'done' ? '[done]' : item.status === 'inProgress' ? '▸' : item.status === 'skipped' ? '⊘' : '○'} {item.label}
                   </li>
                 ))}
               </ul>
@@ -1424,7 +1424,7 @@ export function TaskCard({
                       </div>
                       {hunksApplied !== undefined && (
                         <div style={{ fontSize: '11px', color: 'rgba(76, 175, 80, 0.8)', marginTop: '4px' }}>
-                          ✓ {hunksApplied} hunk{hunksApplied === 1 ? '' : 's'} applied
+                          [done] {hunksApplied} hunk{hunksApplied === 1 ? '' : 's'} applied
                         </div>
                       )}
                     </div>
@@ -1466,7 +1466,7 @@ export function TaskCard({
               <h4 className={styles.sectionTitle}>Verification Results</h4>
               {sections.verifications.map((a) => (
                 <div key={a.id} className={styles.fileRow}>
-                  <span className={a.result?.ok ? styles.verifyOk : styles.verifyFail}>{a.result?.ok ? '✓' : '✗'}</span>
+                  <span className={a.result?.ok ? styles.verifyOk : styles.verifyFail}>{a.result?.ok ? '[done]' : '✗'}</span>
                   <span className={styles.filePath}>{a.doneText ?? a.inProgressText}</span>
                 </div>
               ))}

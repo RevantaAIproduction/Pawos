@@ -62,7 +62,7 @@ export function SettingsPanel({
         <div className={styles.header}>
           <div className={styles.title}>PawOS Settings</div>
           <button className={styles.closeBtn} onClick={onClose}>
-            ✕
+            [x]
           </button>
         </div>
 

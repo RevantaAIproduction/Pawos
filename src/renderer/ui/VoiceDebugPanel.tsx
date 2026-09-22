@@ -249,7 +249,7 @@ function statusColor(status: TimelineStatus): string {
 
 function statusIcon(status: TimelineStatus): string {
   if (status === 'error') return '✗';
-  if (status === 'ok') return '✓';
+  if (status === 'ok') return '[done]';
   return '·';
 }
 

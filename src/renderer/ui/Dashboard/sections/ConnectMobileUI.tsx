@@ -330,7 +330,7 @@ export function ConnectMobileUI({ userId, onSuccess }: ConnectMobileUIProps) {
     return (
       <div className={styles.card}>
         <div style={{ textAlign: 'center', paddingTop: 20 }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>✓</div>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>[done]</div>
           <h3 className={styles.cardTitle}>Mobile Connected</h3>
           <p className={styles.cardBody}>
             Your mobile device is now paired to this PawOS account.

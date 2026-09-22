@@ -13,7 +13,7 @@ function getErrorMessage(e: unknown): string {
 }
 
 /**
- * Phase 0's capability engine, made visible: a role × capability grid an
+ * Phase 0's capability engine, made visible: a role x capability grid an
  * org owner/roles-manager can edit directly. Real RLS enforcement (via
  * has_capability('roles.manage')) is what actually gates the writes —
  * this component just reflects that back honestly (toggles revert if the

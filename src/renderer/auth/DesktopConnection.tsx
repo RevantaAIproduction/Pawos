@@ -172,7 +172,7 @@ export function DesktopConnection({ userEmail, onConnected, onError }: DesktopCo
 
           {pairingMode === 'paired' ? (
             <div className={styles.success}>
-              <div className={styles.checkmark}>✓</div>
+              <div className={styles.checkmark}>[done]</div>
               <p className={styles.successText}>Connected!</p>
               <p className={styles.successSubtext}>Mobile synced with PawOS Desktop</p>
             </div>
@@ -186,7 +186,7 @@ export function DesktopConnection({ userEmail, onConnected, onError }: DesktopCo
         </div>
 
         <div className={styles.footer}>
-          <p className={styles.footerText}>🔒 Secure pairing with encrypted connection</p>
+          <p className={styles.footerText}>[lock] Secure pairing with encrypted connection</p>
         </div>
       </div>
     </div>

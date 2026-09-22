@@ -49,13 +49,13 @@ export function PermissionExtensionCard({ extension, onAction }: PermissionExten
       case 'pending':
         return '⏳';
       case 'approved':
-        return '✓';
+        return '[done]';
       case 'denied':
-        return '✕';
+        return '[x]';
       case 'executing':
-        return '⚙️';
+        return '[gear]';
       case 'completed':
-        return '✓';
+        return '[done]';
       case 'failed':
         return '⚠️';
       default:

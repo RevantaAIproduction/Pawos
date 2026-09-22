@@ -155,7 +155,7 @@ export function MemberCreditRequestPanel({
 
         {pending && (
           <p style={{ fontSize: 12, color: '#f4b860', marginBottom: 12 }}>
-            📋 Pending request: {pending.requested_amount.toLocaleString()} credits
+            [copy] Pending request: {pending.requested_amount.toLocaleString()} credits
           </p>
         )}
 
@@ -211,7 +211,7 @@ export function MemberCreditRequestPanel({
 
         {submitted && (
           <p style={{ fontSize: 12, color: '#7dd87d', marginTop: 8 }}>
-            ✓ Request submitted. Awaiting admin approval.
+            [done] Request submitted. Awaiting admin approval.
           </p>
         )}
         {error && (

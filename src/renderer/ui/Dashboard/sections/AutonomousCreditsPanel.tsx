@@ -51,11 +51,11 @@ export function AutonomousCreditsPanel({ userEmail, onPaymentComplete, currentTi
 
   const validateAmount = () => {
     if (!amountUsd || amountUsd < 30) {
-      setMessage('❌ Minimum $30 required');
+      setMessage('[error] Minimum $30 required');
       return false;
     }
     if (amountUsd > 20000) {
-      setMessage('❌ Maximum $20,000 per transaction');
+      setMessage('[error] Maximum $20,000 per transaction');
       return false;
     }
     setMessage(null);

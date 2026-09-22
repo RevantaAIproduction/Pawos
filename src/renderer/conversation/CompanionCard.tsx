@@ -45,7 +45,7 @@ export function CompanionCard({
   const [recentTasks, setRecentTasks] = useState([
     {
       id: 'task-1',
-      icon: '✓',
+      icon: '[[done]]',
       title: 'Building... Close button added',
       meta: 'Compacted conversation · saved 188.5k tokens',
       timestamp: Date.now() - 2 * 60 * 1000, // 2 min ago
@@ -140,7 +140,7 @@ export function CompanionCard({
           if (label) label.style.display = 'none';
         }}
       >
-        <span style={{ fontSize: 16 }}>×</span>
+        <span style={{ fontSize: 16 }}>x</span>
         <span
           data-label
           style={{
@@ -189,7 +189,7 @@ export function CompanionCard({
             }}
             title={`Recent: ${currentWorkingFile}`}
           >
-            🔗 {currentWorkingFile}
+            [link] {currentWorkingFile}
           </button>
         )}
         <button
@@ -382,7 +382,7 @@ export function CompanionCard({
                   onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = editsMode === 'manual' ? 'rgba(59, 130, 246, 0.1)' : 'transparent')}
                 >
                   <div>
-                    <div style={{ fontWeight: 600 }}>Manual {editsMode === 'manual' && '✓'}</div>
+                    <div style={{ fontWeight: 600 }}>Manual {editsMode === 'manual' && '[done]'}</div>
                     <div style={{ fontSize: 10, color: 'rgba(var(--pawos-overlay-rgb), 0.5)', marginTop: 2 }}>Always ask before making changes</div>
                   </div>
                 </button>
@@ -407,7 +407,7 @@ export function CompanionCard({
                   onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = editsMode === 'auto' ? 'rgba(59, 130, 246, 0.1)' : 'transparent')}
                 >
                   <div>
-                    <div style={{ fontWeight: 600 }}>Accept edits {editsMode === 'auto' && '✓'}</div>
+                    <div style={{ fontWeight: 600 }}>Accept edits {editsMode === 'auto' && '[done]'}</div>
                     <div style={{ fontSize: 10, color: 'rgba(var(--pawos-overlay-rgb), 0.5)', marginTop: 2 }}>Automatically accept all file edits</div>
                   </div>
                 </button>
@@ -431,7 +431,7 @@ export function CompanionCard({
                   onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = editsMode === 'plan' ? 'rgba(59, 130, 246, 0.1)' : 'transparent')}
                 >
                   <div>
-                    <div style={{ fontWeight: 600 }}>Plan {editsMode === 'plan' && '✓'}</div>
+                    <div style={{ fontWeight: 600 }}>Plan {editsMode === 'plan' && '[done]'}</div>
                     <div style={{ fontSize: 10, color: 'rgba(var(--pawos-overlay-rgb), 0.5)', marginTop: 2 }}>Create a plan before making changes</div>
                   </div>
                 </button>
@@ -644,7 +644,7 @@ export function CompanionCard({
                     onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = isSelected ? 'rgba(59, 130, 246, 0.15)' : 'rgba(var(--pawos-overlay-rgb), 0.08)')}
                     onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = isSelected ? 'rgba(59, 130, 246, 0.1)' : 'transparent')}
                   >
-                    {model.label} {isSelected && '✓'}
+                    {model.label} {isSelected && '[done]'}
                   </button>
                 );
               })}

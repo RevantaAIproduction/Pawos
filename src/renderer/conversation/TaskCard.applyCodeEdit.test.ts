@@ -131,7 +131,7 @@ describe('TaskCard applyCodeEdit rendering', () => {
 
     const rendered = renderFileModification(singleHunkAction);
     expect(rendered.hunksApplied).toBe(1);
-    // The UI will render "✓ 1 hunk applied" (no 's')
+    // The UI will render "[done] 1 hunk applied" (no 's')
   });
 
   it('should handle multiple hunks correctly (with pluralization)', () => {
@@ -144,7 +144,7 @@ describe('TaskCard applyCodeEdit rendering', () => {
 
     const rendered = renderFileModification(multiHunkAction);
     expect(rendered.hunksApplied).toBe(3);
-    // The UI will render "✓ 3 hunks applied" (with 's')
+    // The UI will render "[done] 3 hunks applied" (with 's')
   });
 
   it('should not affect non-applyCodeEdit action types', () => {

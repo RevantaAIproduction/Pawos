@@ -27,7 +27,7 @@ export async function initiateRazorpayInvoicePayment(
     options.setMessage(null);
 
     if (amountInr <= 0) {
-      options.setMessage('❌ Enter a valid amount');
+      options.setMessage('[error] Enter a valid amount');
       options.setBusy(false);
       return;
     }
@@ -37,7 +37,7 @@ export async function initiateRazorpayInvoicePayment(
     const accessToken = sessionData.session?.access_token;
 
     if (!accessToken) {
-      options.setMessage('❌ Sign in required');
+      options.setMessage('[error] Sign in required');
       options.setBusy(false);
       return;
     }
@@ -50,7 +50,7 @@ export async function initiateRazorpayInvoicePayment(
       handleSmallInvoice(amountInr, description, options, accessToken);
     }
   } catch (error) {
-    options.setMessage(`❌ ${error instanceof Error ? error.message : 'Payment failed'}`);
+    options.setMessage(`[error] ${error instanceof Error ? error.message : 'Payment failed'}`);
     options.setBusy(false);
   }
 }
@@ -66,7 +66,7 @@ async function handleLargeInvoice(
     const result = await ipc.billingCreateInvoice(amountInr, description, options.userEmail, accessToken);
 
     if (!result.ok) {
-      options.setMessage(`❌ ${result.reason}`);
+      options.setMessage(`[error] ${result.reason}`);
       options.setBusy(false);
       return;
     }
@@ -75,7 +75,7 @@ async function handleLargeInvoice(
     setTimeout(() => options.refresh(), 3000);
     options.setBusy(false);
   } catch (error) {
-    options.setMessage(`❌ Invoice creation failed: ${error}`);
+    options.setMessage(`[error] Invoice creation failed: ${error}`);
     options.setBusy(false);
   }
 }
@@ -92,7 +92,7 @@ async function handleSmallInvoice(
     const result = await ipc.billingCreateNativeSubscriptionCheckout('pro', {}, accessToken);
 
     if (!result.ok) {
-      options.setMessage(`❌ ${result.reason}`);
+      options.setMessage(`[error] ${result.reason}`);
       options.setBusy(false);
       return;
     }
@@ -100,7 +100,7 @@ async function handleSmallInvoice(
     // Load Razorpay and open checkout with all payment methods
     loadRazorpayAndPay(result, options, description, amountInr);
   } catch (error) {
-    options.setMessage(`❌ ${error instanceof Error ? error.message : 'Payment failed'}`);
+    options.setMessage(`[error] ${error instanceof Error ? error.message : 'Payment failed'}`);
     options.setBusy(false);
   }
 }
@@ -112,7 +112,7 @@ function loadRazorpayAndPay(result: any, options: InvoicePaymentHandler, descrip
     script.async = true;
     script.onload = () => openRazorpayCheckout(result, options, description, amountInr);
     script.onerror = () => {
-      options.setMessage('❌ Failed to load payment');
+      options.setMessage('[error] Failed to load payment');
       options.setBusy(false);
     };
     document.body.appendChild(script);
@@ -149,7 +149,7 @@ function openRazorpayCheckout(result: any, options: InvoicePaymentHandler, descr
     const razorpay = new window.Razorpay(razorpayOptions);
     razorpay.open();
   } catch (error) {
-    options.setMessage(`❌ Payment error: ${error}`);
+    options.setMessage(`[error] Payment error: ${error}`);
     options.setBusy(false);
   }
 }
@@ -173,10 +173,10 @@ async function handlePaymentSuccess(
       options.setMessage(`✅ Payment successful! ₹${amountInr.toLocaleString()} received.`);
       setTimeout(() => options.refresh(), 2000);
     } else {
-      options.setMessage(`❌ Verification failed: ${verifyResult.reason}`);
+      options.setMessage(`[error] Verification failed: ${verifyResult.reason}`);
     }
   } catch (error) {
-    options.setMessage(`❌ Error: ${error}`);
+    options.setMessage(`[error] Error: ${error}`);
   } finally {
     options.setBusy(false);
   }

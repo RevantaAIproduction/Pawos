@@ -69,7 +69,7 @@ export function PlusMenu({
             onClick={onAddConnector}
             title="Connect services"
           >
-            🔗 Connectors
+            [link] Connectors
           </button>
         </div>
       )}

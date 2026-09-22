@@ -179,7 +179,7 @@ export function TicketBalanceIndicator({
         >
           <span className={styles.walletIndicatorIcon}><WalletMark /></span>
           <span>Ticket Wallet</span>
-          <span className={styles.walletLockBadge} aria-hidden>🔒 Pro Max+</span>
+          <span className={styles.walletLockBadge} aria-hidden>[lock] Pro Max+</span>
         </button>
         {eligibilityPopoverOpen && (
           <div
@@ -258,7 +258,7 @@ export function TicketBalanceIndicator({
               onClick={closeAll}
               aria-label="Close wallet"
             >
-              ✕
+              [x]
             </button>
           </div>
 

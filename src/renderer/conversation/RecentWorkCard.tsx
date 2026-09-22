@@ -3,8 +3,8 @@ import React, { useState } from 'react';
 export function RecentWorkCard({
   onClose,
   tasks = [
-    { icon: '✓', title: 'Changes applied', status: 'done' },
-    { icon: '✓', title: 'Tests completed', status: 'done' },
+    { icon: '[done]', title: 'Changes applied', status: 'done' },
+    { icon: '[done]', title: 'Tests completed', status: 'done' },
     { icon: '●', title: 'Validation running', status: 'running' },
   ],
 }: {
@@ -51,13 +51,13 @@ export function RecentWorkCard({
           (e.currentTarget as HTMLElement).style.color = 'rgba(var(--pawos-overlay-rgb), 0.5)';
         }}
       >
-        ×
+        x
       </button>
 
       {/* Title Section */}
       <div style={{ marginBottom: 16, paddingRight: 28 }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: 'rgba(var(--pawos-overlay-rgb), 0.9)' }}>
-          ✓ Building...
+          [done] Building...
         </div>
         <div style={{ fontSize: 12, color: 'rgba(var(--pawos-overlay-rgb), 0.6)', marginTop: 4 }}>
           Close button added
@@ -138,7 +138,7 @@ export function RecentWorkCard({
                   }}
                   title="Copy"
                 >
-                  📋
+                  [copy]
                 </button>
                 <button
                   type="button"
@@ -153,7 +153,7 @@ export function RecentWorkCard({
                   }}
                   title="Pin"
                 >
-                  📌
+                  [pin]
                 </button>
               </div>
             )}

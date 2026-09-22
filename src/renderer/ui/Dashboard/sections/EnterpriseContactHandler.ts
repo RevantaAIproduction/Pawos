@@ -27,37 +27,37 @@ export async function submitEnterpriseContact(
 
     // Validate form
     if (!formData.name?.trim()) {
-      options.setMessage('❌ Name is required');
+      options.setMessage('[error] Name is required');
       options.setBusy(false);
       return;
     }
 
     if (!formData.email?.trim()) {
-      options.setMessage('❌ Email is required');
+      options.setMessage('[error] Email is required');
       options.setBusy(false);
       return;
     }
 
     if (!formData.company?.trim()) {
-      options.setMessage('❌ Company is required');
+      options.setMessage('[error] Company is required');
       options.setBusy(false);
       return;
     }
 
     if (!formData.phone?.trim()) {
-      options.setMessage('❌ Phone number is required');
+      options.setMessage('[error] Phone number is required');
       options.setBusy(false);
       return;
     }
 
     if (!formData.seatsNeeded || formData.seatsNeeded < 20) {
-      options.setMessage('❌ Minimum 20 seats required');
+      options.setMessage('[error] Minimum 20 seats required');
       options.setBusy(false);
       return;
     }
 
     if (formData.message && formData.message.length > 5000) {
-      options.setMessage('❌ Message too long (max 5000 characters)');
+      options.setMessage('[error] Message too long (max 5000 characters)');
       options.setBusy(false);
       return;
     }
@@ -68,7 +68,7 @@ export async function submitEnterpriseContact(
     const accessToken = sessionData.session?.access_token;
 
     if (!accessToken) {
-      options.setMessage('❌ Sign in required');
+      options.setMessage('[error] Sign in required');
       options.setBusy(false);
       return;
     }
@@ -84,7 +84,7 @@ export async function submitEnterpriseContact(
     });
 
     if (!result.ok) {
-      options.setMessage(`❌ ${result.reason}`);
+      options.setMessage(`[error] ${result.reason}`);
       options.setBusy(false);
       return;
     }
@@ -96,7 +96,7 @@ export async function submitEnterpriseContact(
     options.setBusy(false);
 
   } catch (error) {
-    options.setMessage(`❌ ${error instanceof Error ? error.message : 'Failed to submit inquiry'}`);
+    options.setMessage(`[error] ${error instanceof Error ? error.message : 'Failed to submit inquiry'}`);
     options.setBusy(false);
   }
 }

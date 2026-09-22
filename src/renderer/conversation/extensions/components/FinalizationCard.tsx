@@ -69,11 +69,11 @@ export function FinalizationCard({ extension, onAction }: FinalizationCardProps)
       case 'waiting-action':
         return '→';
       case 'executing':
-        return '⚙️';
+        return '[gear]';
       case 'completed':
-        return '✓';
+        return '[done]';
       case 'failed':
-        return '✕';
+        return '[x]';
       default:
         return '?';
     }

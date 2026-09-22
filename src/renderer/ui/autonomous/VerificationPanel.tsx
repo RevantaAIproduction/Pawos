@@ -127,7 +127,7 @@ export function VerificationPanel({ pending, onVerified, onRejected }: Verificat
               <strong>Files Changed:</strong> {run.filesChanged}
             </div>
             <div>
-              <strong>Validation:</strong> {run.validationPassed ? '✅ Passed' : '❌ Failed'}
+              <strong>Validation:</strong> {run.validationPassed ? '✅ Passed' : '[error] Failed'}
             </div>
             {run.prUrl && (
               <div>

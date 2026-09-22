@@ -65,7 +65,7 @@ export function LiveWorkStream({ actions, isRunning, showActivityDot = true }: L
                 style={{ opacity: 1 - idx * 0.08 }} // Fade out older items
               >
                 <div className={styles.itemDot}>
-                  {action.result ? '✓' : '•'}
+                  {action.result ? '[done]' : '•'}
                 </div>
                 <div className={styles.itemText}>
                   {action.result ? action.doneText || action.inProgressText : action.inProgressText}

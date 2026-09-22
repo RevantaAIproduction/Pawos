@@ -22,7 +22,7 @@ export function BrowserPreviewExtensionCard({
       case 'loading':
         return '⏳';
       case 'loaded':
-        return '✓';
+        return '[done]';
       case 'downloading':
         return '⬇️';
       case 'error':

@@ -35,7 +35,7 @@ export function SlideOver({
             {subtitle && <p className={styles.slideOverSubtitle}>{subtitle}</p>}
           </div>
           <button type="button" className={styles.slideOverClose} onClick={onClose} aria-label="Close">
-            ✕
+            [x]
           </button>
         </div>
         <div className={styles.slideOverBody}>{children}</div>

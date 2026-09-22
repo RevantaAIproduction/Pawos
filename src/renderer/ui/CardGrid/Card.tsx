@@ -52,7 +52,7 @@ export function Card({ card, onClose, onExpand, children }: CardProps) {
             title="Close card"
             onClick={() => onClose(card.id)}
           >
-            ✕
+            [x]
           </button>
         </div>
       </div>

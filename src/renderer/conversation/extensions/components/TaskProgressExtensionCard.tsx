@@ -22,13 +22,13 @@ export function TaskProgressExtensionCard({
       case 'queued':
         return '⏱️';
       case 'running':
-        return '⚙️';
+        return '[gear]';
       case 'progress':
         return '⚡';
       case 'waiting-permission':
         return '⏳';
       case 'completed':
-        return '✓';
+        return '[done]';
       case 'failed':
         return '⚠️';
       case 'stopped':

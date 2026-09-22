@@ -23,7 +23,7 @@ export function HelpWidgetPanel({ onClose, initialTab }: { onClose: () => void; 
           <span style={{ display: 'inline-flex' }}><HelpBubbleIcon /></span> PawOS Support
         </div>
         <button type="button" className={styles.closeButton} onClick={onClose} aria-label="Close">
-          ✕
+          [x]
         </button>
       </div>
 

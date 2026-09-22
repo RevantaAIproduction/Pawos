@@ -117,7 +117,7 @@ export function InitialPage({
           }}
         >
           <div style={{ fontSize: 16, fontWeight: 600, color: 'rgba(var(--pawos-overlay-rgb), 0.9)', marginBottom: 8 }}>
-            🐾 Welcome to PawOS
+             Welcome to PawOS
           </div>
           <div style={{ fontSize: 12, color: 'rgba(var(--pawos-overlay-rgb), 0.6)' }}>
             Start a new task to see your recent work and progress

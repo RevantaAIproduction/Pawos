@@ -138,7 +138,7 @@ export function ExecutionChoiceCard({
               marginBottom: '2px',
             }}
           >
-            {selectedChoice === 'work_with_me' ? '✓ ' : ''}Work with me
+            {selectedChoice === 'work_with_me' ? '[done] ' : ''}Work with me
           </div>
           <div
             style={{
@@ -202,7 +202,7 @@ export function ExecutionChoiceCard({
               marginBottom: '2px',
             }}
           >
-            {selectedChoice === 'autonomous' ? '✓ ' : ''}Do it autonomously
+            {selectedChoice === 'autonomous' ? '[done] ' : ''}Do it autonomously
           </div>
           <div
             style={{

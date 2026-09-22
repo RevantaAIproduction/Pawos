@@ -24,7 +24,7 @@ export function BrowserCard({ card, onRemoveCard }: BrowserCardProps) {
     {
       id: 'jira',
       name: 'Jira',
-      icon: '📋',
+      icon: '[copy]',
       status: 'connected',
       data: [
         { label: 'Open Issues', value: 24 },
@@ -83,8 +83,8 @@ export function BrowserCard({ card, onRemoveCard }: BrowserCardProps) {
           <div className={styles.platformHeader}>
             <h3>{selectedPlatform.name}</h3>
             <span className={`${styles.statusBadge} ${styles[selectedPlatform.status]}`}>
-              {selectedPlatform.status === 'connected' && '✓ Connected'}
-              {selectedPlatform.status === 'disconnected' && '✕ Disconnected'}
+              {selectedPlatform.status === 'connected' && '[done] Connected'}
+              {selectedPlatform.status === 'disconnected' && '[x] Disconnected'}
               {selectedPlatform.status === 'loading' && '⟳ Loading'}
             </span>
           </div>

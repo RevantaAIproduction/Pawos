@@ -48,11 +48,11 @@ export function UsageCreditsPanel({ userEmail, onPaymentComplete }: UsageCredits
 
   const validateAmount = () => {
     if (!amountUsd || amountUsd < 5) {
-      setMessage('❌ Minimum $5 required');
+      setMessage('[error] Minimum $5 required');
       return false;
     }
     if (amountUsd > 20000) {
-      setMessage('❌ Maximum $20,000 per transaction');
+      setMessage('[error] Maximum $20,000 per transaction');
       return false;
     }
     setMessage(null);

@@ -322,7 +322,7 @@ function SuccessView({ heading, detail, onClose }: { heading: string; detail: st
   return (
     <div style={{ padding: '44px 30px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, textAlign: 'center' }}>
       <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(100,220,120,0.14)', border: '1.5px solid rgba(100,220,120,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>
-        ✓
+        [done]
       </div>
       <div>
         <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>{heading}</div>
@@ -347,44 +347,44 @@ function WelcomeScreen({ tier, onNext }: { tier: Exclude<SubscriptionTierId, 'go
       title: 'PawOS Pro',
       headline: '5 things PawOS Pro can take off your plate',
       features: [
-        '✓ Monday team update — Share weekly progress summaries',
-        '✓ Meeting prep — Brief yourself before each meeting',
-        '✓ Roll-up numbers — Research and draft status updates',
-        '✓ Inbox triage — Prioritize and filter important messages',
-        '✓ Code review — Draft and discuss pull request feedback',
+        '[done] Monday team update — Share weekly progress summaries',
+        '[done] Meeting prep — Brief yourself before each meeting',
+        '[done] Roll-up numbers — Research and draft status updates',
+        '[done] Inbox triage — Prioritize and filter important messages',
+        '[done] Code review — Draft and discuss pull request feedback',
       ],
     },
     proMax: {
       title: 'PawOS Pro Max',
       headline: '5 things PawOS Pro Max can take off your plate',
       features: [
-        '✓ Autonomous execution — Build features without you writing code',
-        '✓ Multi-step workflows — Connect tools and automate your tasks',
-        '✓ Advanced analysis — Deep dive research and insights',
-        '✓ Full codebase context — Work with your entire project',
-        '✓ Meeting facilitation — Run and summarize your meetings',
+        '[done] Autonomous execution — Build features without you writing code',
+        '[done] Multi-step workflows — Connect tools and automate your tasks',
+        '[done] Advanced analysis — Deep dive research and insights',
+        '[done] Full codebase context — Work with your entire project',
+        '[done] Meeting facilitation — Run and summarize your meetings',
       ],
     },
     team: {
       title: 'PawOS Team',
       headline: '5 things PawOS Team can do for your team',
       features: [
-        '✓ Shared workflows — All team members use the same automations',
-        '✓ Connected tools — Gmail, Slack, Linear, Jira, and more',
-        '✓ Team analytics — Track work across your entire team',
-        '✓ Consistent standards — Apply team policies and processes',
-        '✓ Knowledge base — Centralized team documentation and context',
+        '[done] Shared workflows — All team members use the same automations',
+        '[done] Connected tools — Gmail, Slack, Linear, Jira, and more',
+        '[done] Team analytics — Track work across your entire team',
+        '[done] Consistent standards — Apply team policies and processes',
+        '[done] Knowledge base — Centralized team documentation and context',
       ],
     },
     enterprise: {
       title: 'PawOS Enterprise',
       headline: '5 things PawOS Enterprise provides',
       features: [
-        '✓ Full organization access — Every team member can use PawOS',
-        '✓ Advanced permissions — Control who can see and execute what',
-        '✓ Audit trail — Complete activity logs for compliance',
-        '✓ Custom integrations — Connect your internal tools and systems',
-        '✓ Dedicated support — Priority help from our team',
+        '[done] Full organization access — Every team member can use PawOS',
+        '[done] Advanced permissions — Control who can see and execute what',
+        '[done] Audit trail — Complete activity logs for compliance',
+        '[done] Custom integrations — Connect your internal tools and systems',
+        '[done] Dedicated support — Priority help from our team',
       ],
     },
   };
@@ -768,7 +768,7 @@ function FailureView({ message, onRetry, onClose }: { message: string; onRetry: 
   return (
     <div style={{ padding: '44px 30px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, textAlign: 'center' }}>
       <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(220,80,80,0.12)', border: '1.5px solid rgba(220,80,80,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>
-        ✕
+        [x]
       </div>
       <div>
         <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>Payment could not be completed</div>
@@ -1855,7 +1855,7 @@ export function NativeBillingCheckoutModal({
               aria-label="Close"
               style={{ border: 'none', background: 'transparent', color: 'var(--pawos-fg)', fontSize: 18, cursor: isBusy ? 'default' : 'pointer', opacity: isBusy ? 0.4 : 1, lineHeight: 1, padding: '2px 6px' }}
             >
-              ×
+              x
             </button>
           </div>
 
@@ -1948,9 +1948,9 @@ export function NativeBillingCheckoutModal({
             ) : (
               <div style={{ position: 'relative', width: 100, height: 100 }}>
                 {/* Key unlocking for subscriptions */}
-                <div className="lock-open" style={{ fontSize: 80, position: 'absolute', left: 20, top: 0 }}>🔒</div>
+                <div className="lock-open" style={{ fontSize: 80, position: 'absolute', left: 20, top: 0 }}>[lock]</div>
                 <div className="key-turn" style={{ fontSize: 60, position: 'absolute', right: 10, top: 20 }}>🔑</div>
-                <div className="plan-unlock" style={{ fontSize: 80, position: 'absolute', left: 10, top: -10 }}>📋</div>
+                <div className="plan-unlock" style={{ fontSize: 80, position: 'absolute', left: 10, top: -10 }}>[copy]</div>
               </div>
             )}
           </div>
@@ -2035,7 +2035,7 @@ export function NativeBillingCheckoutModal({
                       flexShrink: 0,
                     }}
                   >
-                    {step.completed ? '✓' : idx + 1}
+                    {step.completed ? '[done]' : idx + 1}
                   </div>
                   {/* Line connecting steps */}
                   {idx < steps.length - 1 && (
@@ -2131,7 +2131,7 @@ export function NativeBillingCheckoutModal({
             ) : (
               <div style={{ position: 'relative', width: 80, height: 80 }}>
                 {/* Plan icon for subscriptions */}
-                <div style={{ fontSize: 64, position: 'absolute', left: 0, top: 0 }}>📋</div>
+                <div style={{ fontSize: 64, position: 'absolute', left: 0, top: 0 }}>[copy]</div>
                 <div style={{ position: 'absolute', right: 0, bottom: 0, fontSize: 36 }}>🔍</div>
               </div>
             )}
@@ -2174,7 +2174,7 @@ export function NativeBillingCheckoutModal({
               aria-label="Close"
               style={{ border: 'none', background: 'transparent', color: 'var(--pawos-fg)', fontSize: 18, cursor: isBusy ? 'default' : 'pointer', opacity: isBusy ? 0.4 : 1, lineHeight: 1, padding: '2px 6px' }}
             >
-              ×
+              x
             </button>
           </div>
 
@@ -2436,7 +2436,7 @@ export function NativeBillingCheckoutModal({
             aria-label="Close"
             style={{ border: 'none', background: 'transparent', color: 'var(--pawos-fg)', fontSize: 18, cursor: isBusy ? 'default' : 'pointer', opacity: isBusy ? 0.4 : 1, lineHeight: 1, padding: '2px 6px' }}
           >
-            ×
+            x
           </button>
         </div>
 

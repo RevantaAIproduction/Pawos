@@ -23,7 +23,7 @@ export function ActivityDisplay({ activities, onActivityClick }: ActivityDisplay
       case 'agent':
         return '🤖';
       case 'task':
-        return '✓';
+        return '[done]';
       case 'thinking':
         return '💭';
       case 'running':

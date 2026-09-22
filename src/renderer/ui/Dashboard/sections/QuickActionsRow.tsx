@@ -16,7 +16,7 @@ export function QuickActionsRow() {
   const run = async (appId: KnownAppId, label: string) => {
     setStatus(`${label}…`);
     const result = await ipc.executeAction({ type: 'openApp', appId });
-    setStatus(result.ok ? `${label} ✓` : `${label} failed: ${result.reason}`);
+    setStatus(result.ok ? `${label} [done]` : `${label} failed: ${result.reason}`);
     window.setTimeout(() => setStatus(null), 3000);
   };
 

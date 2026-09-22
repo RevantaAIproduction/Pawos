@@ -29,7 +29,7 @@ export function ActivityListView({
             type="button"
           >
             <div className={styles.activityIcon}>
-              {activity.status === 'running' ? '⚙️' : activity.status === 'failed' ? '❌' : '✓'}
+              {activity.status === 'running' ? '[gear]' : activity.status === 'failed' ? '[error]' : '[done]'}
             </div>
             <div className={styles.activityContent}>
               <div className={styles.activityTitle}>{activity.title}</div>

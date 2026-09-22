@@ -18,9 +18,9 @@ export function RecentWorkPage({
   const [showRecentWork, setShowRecentWork] = useState(true);
 
   const recentTasks = [
-    { icon: '✓', title: 'Changes applied', status: 'done' },
-    { icon: '✓', title: 'Tests completed', status: 'done' },
-    { icon: '●', title: 'Validation running', status: 'running' },
+    { icon: '[done]', title: 'Changes applied', status: 'done' },
+    { icon: '[done]', title: 'Tests completed', status: 'done' },
+    { icon: '[running]', title: 'Validation running', status: 'running' },
   ];
 
   const timeAgo = '2 min ago';
@@ -148,12 +148,12 @@ export function RecentWorkPage({
               (e.currentTarget as HTMLElement).style.color = 'rgba(var(--pawos-overlay-rgb), 0.5)';
             }}
           >
-            ×
+            x
           </button>
 
           {/* Title */}
           <div style={{ marginBottom: 16, paddingRight: 28 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'rgba(var(--pawos-overlay-rgb), 0.9)' }}>✓ Building...</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'rgba(var(--pawos-overlay-rgb), 0.9)' }}>[done] Building...</div>
             <div style={{ fontSize: 12, color: 'rgba(var(--pawos-overlay-rgb), 0.6)', marginTop: 4 }}>Close button added</div>
           </div>
 
@@ -234,7 +234,7 @@ export function RecentWorkPage({
                     }}
                     title="Copy"
                   >
-                    📋
+                    [copy]
                   </button>
                   <button
                     type="button"
@@ -249,7 +249,7 @@ export function RecentWorkPage({
                     }}
                     title="Pin"
                   >
-                    📌
+                    [pin]
                   </button>
                 </div>
               </div>

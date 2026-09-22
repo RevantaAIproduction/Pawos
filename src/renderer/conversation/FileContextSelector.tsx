@@ -75,7 +75,7 @@ export function FileContextSelector({ mode = 'full' }: FileContextSelectorProps)
           }}
           title="Remove file context"
         >
-          ×
+          x
         </button>
       </div>
     );
@@ -138,7 +138,7 @@ export function FileContextSelector({ mode = 'full' }: FileContextSelectorProps)
           onMouseOver={(e) => !fileContext.isLoading && !pathInput.trim() ? null : (e.currentTarget.style.background = 'rgba(255,255,255,0.18)')}
           onMouseOut={(e) => e.currentTarget.style.background = fileContext.isLoading || !pathInput.trim() ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.12)'}
         >
-          {fileContext.isLoading ? '⚙️ Loading' : 'Open'}
+          {fileContext.isLoading ? '[gear] Loading' : 'Open'}
         </button>
       </div>
 
@@ -213,7 +213,7 @@ export function FileContextSelector({ mode = 'full' }: FileContextSelectorProps)
               onMouseOut={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}
               title="Remove file"
             >
-              ×
+              x
             </button>
           </div>
           {fileContext.currentFile.content && (

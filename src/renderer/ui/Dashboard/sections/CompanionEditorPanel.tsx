@@ -182,7 +182,7 @@ function PersonalityTab({
         <button type="button" className={styles.chip} onClick={applyPromptOverride}>
           Apply
         </button>
-        {promptSaved && <span style={{ fontSize: 12, color: '#4ade80' }}>✓ Saved</span>}
+        {promptSaved && <span style={{ fontSize: 12, color: '#4ade80' }}>[done] Saved</span>}
       </div>
     </div>
   );
@@ -346,7 +346,7 @@ function VoiceTab({
             <button type="button" className={styles.chip} onClick={applyElevenLabsVoiceId}>
               Apply
             </button>
-            {elevenLabsSaved && <span style={{ fontSize: 12, color: '#4ade80' }}>✓ Saved</span>}
+            {elevenLabsSaved && <span style={{ fontSize: 12, color: '#4ade80' }}>[done] Saved</span>}
           </div>
 
           <label className={styles.cardBody} style={{ display: 'block', marginTop: 12 }}>
@@ -537,7 +537,7 @@ function BehaviorTab({
         <button type="button" className={styles.chip} onClick={applyInteractionStyle}>
           Apply
         </button>
-        {interactionStyleSaved && <span style={{ fontSize: 12, color: '#4ade80' }}>✓ Saved</span>}
+        {interactionStyleSaved && <span style={{ fontSize: 12, color: '#4ade80' }}>[done] Saved</span>}
       </div>
 
       <label className={styles.cardBody} style={{ display: 'block', marginTop: 16 }}>
@@ -554,7 +554,7 @@ function BehaviorTab({
         <button type="button" className={styles.chip} onClick={applyWakeWord}>
           Apply
         </button>
-        {wakeWordSaved && <span style={{ fontSize: 12, color: '#4ade80' }}>✓ Saved</span>}
+        {wakeWordSaved && <span style={{ fontSize: 12, color: '#4ade80' }}>[done] Saved</span>}
       </div>
       <p className={styles.cardBody} style={{ marginTop: 4, fontSize: 12 }}>
         Saved, but honest limitation: PawOS has no always-on/background voice-listening engine yet, so
@@ -631,7 +631,7 @@ function MemoryTab({
           <ul>
             {summary.goals.map((g) => (
               <li key={g.id} className={styles.cardBody}>
-                {g.completed ? '✓ ' : ''}
+                {g.completed ? '[done] ' : ''}
                 {g.text}
               </li>
             ))}
