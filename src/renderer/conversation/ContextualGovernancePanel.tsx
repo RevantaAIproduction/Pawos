@@ -47,7 +47,7 @@ export function ContextualGovernancePanel({ pendingApproval, onApprove, onDeny }
     };
   }, []); // Empty dependency - register once on mount only
 
-  // Keyboard shortcuts: Alt+Enter = Allow, Esc = Deny
+  // Keyboard shortcuts: Alt+Enter = Allow Once, Alt+, = Allow Always, Esc = Deny
   useEffect(() => {
     if (!pendingApproval) return;
 
@@ -55,6 +55,11 @@ export function ContextualGovernancePanel({ pendingApproval, onApprove, onDeny }
       if (e.altKey && e.key === 'Enter') {
         e.preventDefault();
         approveRef?.click();
+      } else if (e.altKey && e.key === ',') {
+        e.preventDefault();
+        // Find and click the "Allow Always" button
+        const allowAlwaysBtn = document.querySelector('[title="Approve this action type always"]') as HTMLButtonElement;
+        allowAlwaysBtn?.click();
       } else if (e.key === 'Escape') {
         e.preventDefault();
         denyRef?.click();
@@ -137,10 +142,11 @@ export function ContextualGovernancePanel({ pendingApproval, onApprove, onDeny }
           <button
             className={`${styles.button} ${styles.allow}`}
             onClick={handleAllowAlways}
-            title="Approve this action type always"
+            title="Approve this action type always (Alt+,)"
             style={{ flex: 1, padding: '8px 12px', fontSize: '12px', opacity: 0.8 }}
           >
             Allow Always
+            <span className={styles.shortcut} style={{ fontSize: '10px' }}>Alt+,</span>
           </button>
           <button
             ref={setDenyRef}
