@@ -10,32 +10,22 @@ interface PendingApproval {
 }
 
 interface ContextualGovernancePanelProps {
+  pendingApproval?: {
+    approvalId: string;
+    actionType: string;
+    requestedAt: number;
+  } | null;
   onApprove?: (approvalId: string) => void;
   onDeny?: (approvalId: string) => void;
 }
 
-export function ContextualGovernancePanel({ onApprove, onDeny }: ContextualGovernancePanelProps) {
-  const [pending, setPending] = useState<PendingApproval[]>([]);
-
+export function ContextualGovernancePanel({ pendingApproval, onApprove, onDeny }: ContextualGovernancePanelProps) {
   useEffect(() => {
-    const fetchPending = async () => {
-      try {
-        const result = await ipc.governanceGetPending();
-        setPending(result);
-      } catch (err) {
-        // Silently ignore if governance not available
-      }
-    };
-
-    fetchPending();
-
     const unsubscribeApproved = ipc.onGovernanceApproved(({ approvalId }) => {
-      setPending((prev) => prev.filter((p) => p.approvalId !== approvalId));
       onApprove?.(approvalId);
     });
 
     const unsubscribeDenied = ipc.onGovernanceDenied(({ approvalId }) => {
-      setPending((prev) => prev.filter((p) => p.approvalId !== approvalId));
       onDeny?.(approvalId);
     });
 
@@ -45,11 +35,11 @@ export function ContextualGovernancePanel({ onApprove, onDeny }: ContextualGover
     };
   }, [onApprove, onDeny]);
 
-  if (!pending.length) {
+  if (!pendingApproval) {
     return null;
   }
 
-  const approval = pending[0];
+  const approval = pendingApproval;
 
   const handleApprove = async () => {
     try {

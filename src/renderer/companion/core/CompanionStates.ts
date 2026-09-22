@@ -43,7 +43,7 @@ export type CompanionState =
 export type CompanionGesture = 'greeting' | 'sitting' | 'jumping' | 'highFive' | 'waving' | 'pointing';
 
 export interface OverlayWindowBridge {
-  moveOverlayWindow(x: number, y: number): Promise<boolean>;
+  moveOverlayWindow(x: number, y: number, opts?: { force?: boolean }): Promise<boolean>;
   getOverlayWindowBounds(): Promise<{ x: number; y: number; width: number; height: number } | null>;
   getScreenWorkArea(): Promise<{ width: number; height: number }>;
   getForegroundWindowInfo(): Promise<ForegroundWindowInfo>;

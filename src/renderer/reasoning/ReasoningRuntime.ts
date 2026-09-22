@@ -202,7 +202,6 @@ export class ReasoningRuntime {
     // the turn won't hang indefinitely, but it will never race the provider's own timeout.
     const timeoutHandle = setTimeout(() => {
       if (!settled) {
-        console.log('[TRACE-TIMEOUT] Response timeout after 185s, settling with empty response');
         settleRejected(new Error('Response generation timeout'));
       }
     }, 185000);
@@ -211,7 +210,6 @@ export class ReasoningRuntime {
 
     try {
       this.activeTurnReject = settleRejected;
-      console.log('[CHK 3] ReasoningRuntime provider invoked', { model: this.provider.id, turnId });
       this.activeSession = this.provider.streamResponse(
         {
           systemPrompt: this.systemPrompt,
@@ -257,15 +255,12 @@ export class ReasoningRuntime {
           onComplete: (providerResponse) => {
             clearTimeout(timeoutHandle);
             if (this.activeTurnId !== turnId) {
-              console.log('[TRACE-IGNORED] onComplete skipped - turnId mismatch', { current: this.activeTurnId, expected: turnId, settled });
               if (!settled) {
                 // Response arrived but for an old turn - still settle it to avoid hanging
-                console.log('[TRACE-SETTLE-MISMATCH] Settling mismatched turn with empty response');
                 settleResolved({ response: '', assistantMessage: createMessage('assistant', '', 'final'), toolCalls: [], usage });
               }
               return;
             }
-            console.log('[TRACE-3] onComplete - processing response', { length: providerResponse?.length ?? 0 });
             response = providerResponse || response;
             const toolCallsForMessage = toolCalls.length > 0 ? [...toolCalls] : undefined;
             if (assistantMessage) {

@@ -67,55 +67,42 @@ export function InitialPage({
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             {/* 5-Hour Limit */}
             <div>
-              <div style={{ fontSize: 10, color: 'rgba(var(--pawos-overlay-rgb), 0.6)', marginBottom: 4 }}>5-Hour Limit</div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(var(--pawos-overlay-rgb), 0.9)' }}>
-                {entitlement?.usage5hPc ?? 0} / {entitlement?.limit5hPc ?? 0} PC
+              <div style={{ fontSize: 10, color: 'rgba(var(--pawos-overlay-rgb), 0.6)', marginBottom: 8 }}>
+                Plan usage limits - {entitlement?.tier === 'team'
+                  ? `TEAM ${entitlement?.seatTier?.toUpperCase() ?? 'STANDARD'}`
+                  : entitlement?.tier === 'proMax'
+                  ? `PRO MAX ${entitlement?.proMaxVariant?.toUpperCase() ?? '5X'}`
+                  : entitlement?.tier?.toUpperCase() ?? 'GO'}
+                {(entitlement?.tier === 'team' || entitlement?.tier === 'enterprise') && ' (pooled)'}
               </div>
-              <div
-                style={{
-                  height: '4px',
-                  backgroundColor: 'rgba(var(--pawos-overlay-rgb), 0.1)',
-                  borderRadius: '2px',
-                  marginTop: 6,
-                  overflow: 'hidden',
-                }}
-              >
-                <div
-                  style={{
-                    height: '100%',
-                    backgroundColor: '#3b82f6',
-                    width: `${Math.min(100, ((entitlement?.usage5hPc ?? 0) / (entitlement?.limit5hPc ?? 1)) * 100)}%`,
-                    transition: 'width 0.3s ease',
-                  }}
-                />
-              </div>
+              {entitlement?.limit5hPc && (
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(var(--pawos-overlay-rgb), 0.9)', marginBottom: 12 }}>
+                  <div style={{ marginBottom: 4, fontWeight: 400, fontSize: 10 }}>5-hour limit</div>
+                  <div>{`Resets in ${Math.floor((5 * 60 * 60 * 1000 - ((Date.now() - (entitlement?.activeWindowStartAt ?? Date.now())) % (5 * 60 * 60 * 1000))) / (60 * 1000))} min ${Math.round(((entitlement?.usage5hPc ?? 0) / (entitlement?.limit5hPc ?? 1)) * 100)}%`}</div>
+                </div>
+              )}
+              {entitlement?.activeHoursWeekly !== null && entitlement?.activeHoursWeekly > 0 && (
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(var(--pawos-overlay-rgb), 0.9)' }}>
+                  <div style={{ marginBottom: 4, fontWeight: 400, fontSize: 10 }}>Weekly · all models</div>
+                  <div>{(() => {
+                    const hoursUsed = entitlement?.activeHoursUsed7d ?? 0;
+                    const hoursLimit = entitlement?.activeHoursWeekly ?? 0;
+                    const percentage = hoursLimit > 0 ? (hoursUsed / hoursLimit) * 100 : 0;
+                    if (percentage < 100) return `${Math.round(percentage)}% (${Math.round(hoursUsed * 10) / 10}/${hoursLimit}h)`;
+                    const cycleStartMs = entitlement?.weeklyCycleStartAt ?? Date.now();
+                    const weekEndMs = cycleStartMs + (7 * 24 * 60 * 60 * 1000);
+                    const resetDate = new Date(weekEndMs);
+                    const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                    const resetDay = daysOfWeek[resetDate.getDay()];
+                    const resetHour = resetDate.getHours().toString().padStart(2, '0');
+                    const resetMin = resetDate.getMinutes().toString().padStart(2, '0');
+                    const ampm = resetDate.getHours() >= 12 ? 'PM' : 'AM';
+                    return `100% (${Math.round(hoursUsed * 10) / 10}/${hoursLimit}h) Resets ${resetDay} ${resetHour}:${resetMin} ${ampm}`;
+                  })()}</div>
+                </div>
+              )}
             </div>
 
-            {/* 7-Day Limit */}
-            <div>
-              <div style={{ fontSize: 10, color: 'rgba(var(--pawos-overlay-rgb), 0.6)', marginBottom: 4 }}>7-Day Limit</div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(var(--pawos-overlay-rgb), 0.9)' }}>
-                {entitlement?.usageWeeklyPc ?? 0} / {entitlement?.limitWeeklyPc ?? 0} PC
-              </div>
-              <div
-                style={{
-                  height: '4px',
-                  backgroundColor: 'rgba(var(--pawos-overlay-rgb), 0.1)',
-                  borderRadius: '2px',
-                  marginTop: 6,
-                  overflow: 'hidden',
-                }}
-              >
-                <div
-                  style={{
-                    height: '100%',
-                    backgroundColor: '#10b981',
-                    width: `${Math.min(100, ((entitlement?.usageWeeklyPc ?? 0) / (entitlement?.limitWeeklyPc ?? 1)) * 100)}%`,
-                    transition: 'width 0.3s ease',
-                  }}
-                />
-              </div>
-            </div>
           </div>
         </div>
 

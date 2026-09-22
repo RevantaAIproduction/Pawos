@@ -73,7 +73,7 @@ export async function analyzeUiReference(params: {
   const {
     apiKey,
     imageDataUrls,
-    model = 'gemini-flash-latest',
+    model = 'gemini-3.6-flash',
     baseUrl = 'https://generativelanguage.googleapis.com/v1beta',
   } = params;
 
@@ -169,7 +169,7 @@ export async function generateAltTextForImage(params: {
   const {
     apiKey,
     imageDataUrl,
-    model = 'gemini-flash-latest',
+    model = 'gemini-3.6-flash',
     baseUrl = 'https://generativelanguage.googleapis.com/v1beta',
   } = params;
 
@@ -224,7 +224,7 @@ export async function verifyUiScreenshot(params: {
     imageDataUrl,
     structuralIssues,
     consoleErrors,
-    model = 'gemini-flash-latest',
+    model = 'gemini-3.6-flash',
     baseUrl = 'https://generativelanguage.googleapis.com/v1beta',
   } = params;
 

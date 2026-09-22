@@ -101,6 +101,13 @@ export function useConversationController(args?: {
   // render that first mounted the effect, never a later model switch.
   const activePawModelRef = useRef(activePawModel);
   activePawModelRef.current = activePawModel;
+
+  // Session management
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [currentSessionPromptCount, setCurrentSessionPromptCount] = useState(0);
+  const [sessionLimitModalOpen, setSessionLimitModalOpen] = useState(false);
+  const [preservedPrompt, setPreservedPrompt] = useState<{ text: string; context?: SubmittedInputContext } | null>(null);
+  const [activeSessionName, setActiveSessionName] = useState<string | null>(null);
   // For every model, the minimum tier that unlocks it — derived server-side from
   // EntitlementService's own TIER_ENTITLEMENTS (see entitlement:getModelTierRequirements), never a
   // second hardcoded gating table in the renderer. Static, account-independent; fetched once.
@@ -195,8 +202,61 @@ export function useConversationController(args?: {
 
   const dismissCreditsNotice = useCallback(() => setCreditsNoticeTier(null), []);
 
-  
+  // Check if current session has reached 80-prompt limit
+  const checkSessionLimit = useCallback(async (): Promise<boolean> => {
+    if (!currentSessionId) return false;
+    try {
+      const session = await ipc.getSession(currentSessionId);
+      if (!session) return false;
+      // Count only user prompts (turns with non-empty transcript)
+      const promptCount = session.turns.filter(t => t.transcript.trim()).length;
+      setCurrentSessionPromptCount(promptCount);
+      return promptCount >= 80;
+    } catch {
+      return false;
+    }
+  }, [currentSessionId, ipc]);
 
+  // Handle New Chat - creates empty session
+  const handleNewChat = useCallback(() => {
+    setSessionLimitModalOpen(false);
+    setPreservedPrompt(null);
+    setCurrentSessionId(null);
+    setCurrentSessionPromptCount(0);
+    runtimeRef.current?.openPanel();
+  }, []);
+
+  // Handle Continue as New Session - creates new session with preserved prompt
+  const handleContinueAsNewSession = useCallback(() => {
+    if (!preservedPrompt) {
+      setSessionLimitModalOpen(false);
+      return;
+    }
+    setSessionLimitModalOpen(false);
+    setCurrentSessionId(null);
+    setCurrentSessionPromptCount(0);
+    // Submit the preserved prompt to the new session
+    const { text, context } = preservedPrompt;
+    setPreservedPrompt(null);
+    runtimeRef.current?.submitTranscript(text, context);
+  }, [preservedPrompt]);
+
+  // Update active session name when currentSessionId changes
+  useEffect(() => {
+    if (!currentSessionId) {
+      setActiveSessionName(null);
+      return;
+    }
+    let cancelled = false;
+    ipc.getSession(currentSessionId).then((session) => {
+      if (!cancelled && session) {
+        setActiveSessionName(session.title || null);
+      }
+    }).catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [currentSessionId, ipc]);
 
   useEffect(() => {
     // Electron's built-in webkitSpeechRecognition ('browser') cannot
@@ -273,15 +333,15 @@ export function useConversationController(args?: {
       onStateChange: (state) => {
         onStateChangeRef.current?.(state);
         if (state === 'completed' || state === 'error') {
+          setStreamingPawCompute(0);
           const currentSnapshot = runtimeRef.current?.getSnapshot();
           const lastTaskMessage = currentSnapshot ? [...currentSnapshot.messages].reverse().find((m) => m.task) : undefined;
           const actionTypes = lastTaskMessage?.task?.actions.map((a) => a.type) ?? [];
           const category = categorizeTurn(actionTypes, lastInputSourceRef.current);
-          
+
           const submission = lastTurnUsageRef.current;
           lastTurnUsageRef.current = null;
-          console.log('[CHK 8B] useConversationController state transition', { state, hasUsageSubmission: !!submission, requestsLength: submission?.requests.length });
-          
+
           if (submission && submission.requests.length > 0) {
             // Attach authentication and organization context so the trusted main process
             // can make the authoritative Enterprise billing RPC call.
@@ -297,20 +357,23 @@ export function useConversationController(args?: {
             } else {
               sendSubmission(submission, category);
             }
-            
+
             function sendSubmission(sub: typeof submission, cat: AiUsageCategory) {
               ipc
                 .billingRecordTurnUsage(sub, 'conversation-turn', cat, activePawModelRef.current)
                 .then(async ({ balance }) => {
-                  console.log('[CHK 8C] billingRecordTurnUsage succeeded');
-                  
                   if (!entitlementRef.current?.pooled && balance) {
-                    setCreditsNoticeTier(balance.hasCreditsRemaining ? null : (entitlementRef.current?.tier ?? 'go'));
+                    // Fetch fresh entitlement after usage recorded to check if tier is actually exhausted
+                    ipc.entitlementGetSnapshot().then((snap) => {
+                      setCreditsNoticeTier(snap.hasCreditsRemaining ? null : snap.tier);
+                    }).catch(() => {
+                      // On fetch error, fallback to current entitlementRef (stale but safe)
+                      setCreditsNoticeTier(entitlementRef.current?.hasCreditsRemaining ? null : (entitlementRef.current?.tier ?? 'go'));
+                    });
                   }
                   refreshEntitlement();
                 })
                 .catch(() => {
-                  console.log('[CHK 8D] billingRecordTurnUsage failed, falling back to releaseGenerationSlot');
                   ipc.billingReleaseGenerationSlot().finally(() => refreshEntitlement());
                 });
             }
@@ -330,10 +393,74 @@ export function useConversationController(args?: {
       onProcessExit: (cb) => ipc.onProcessExit(cb),
       onWorkspaceObservation: (cb) => ipc.onWorkspaceObservation(cb),
       onCommunicationEvent: (cb) => ipc.onCommunicationEvent(cb),
-      onGovernanceApproved: (cb) => ipc.onGovernanceApproved(cb),
-      onGovernanceDenied: (cb) => ipc.onGovernanceDenied(cb),
+      onGovernanceApproved: (cb) => {
+        const unsubscribe = ipc.onGovernanceApproved(cb);
+        return unsubscribe;
+      },
+      onGovernanceDenied: (cb) => {
+        const unsubscribe = ipc.onGovernanceDenied(cb);
+        return unsubscribe;
+      },
+      onRequestPlan: async (plan) => {
+        return new Promise((resolve) => {
+          (window as any).__planResolve = (decision: 'approve' | 'deny' | 'revise') => {
+            resolve(decision);
+          };
+          window.dispatchEvent(new CustomEvent('pawos-request-plan', { detail: plan }));
+        });
+      },
+      onRequestApproval: async (options) => {
+        // Check if user has "Always allow" preference for this action
+        try {
+          const alwaysAllowKey = `gov_always_allow_${options.action}`;
+          const alwaysAllow = localStorage.getItem(alwaysAllowKey) === 'true';
+          if (alwaysAllow) {
+            console.log(`[GOVERNANCE] Auto-approved (always allow): ${options.verb} ${options.target}`);
+            return true;
+          }
+        } catch (e) {
+          // localStorage may not be available
+        }
+
+        return new Promise((resolve) => {
+          let resolved = false;
+          const timeout = setTimeout(() => {
+            if (!resolved) {
+              resolved = true;
+              console.warn('[GOVERNANCE] Approval timeout, allowing by default');
+              resolve(true);
+            }
+          }, 30000);
+
+          // Store resolver so ConversationPanel can call it when user decides
+          (window as any).__governanceResolve = (approved: boolean, rememberChoice?: boolean) => {
+            if (!resolved) {
+              resolved = true;
+              clearTimeout(timeout);
+              if (rememberChoice && approved) {
+                try {
+                  localStorage.setItem(`gov_always_allow_${options.action}`, 'true');
+                } catch (e) {
+                  // localStorage may not be available
+                }
+              }
+              resolve(approved);
+            }
+          };
+          // Dispatch custom event that ConversationPanel listens to
+          window.dispatchEvent(new CustomEvent('pawos-request-approval', { detail: options }));
+        });
+      },
       onVisemeFrame: (frame) => onVisemeFrameRef.current?.(frame),
-      persistTurn: (turn, hint) => ipc.appendSessionTurn(turn, hint),
+      persistTurn: (turn, hint) => {
+        return ipc.appendSessionTurn(turn, hint).then((session) => {
+          setCurrentSessionId(session.id);
+          // Count user prompts in the session
+          const promptCount = session.turns.filter(t => t.transcript.trim()).length;
+          setCurrentSessionPromptCount(promptCount);
+          return session;
+        });
+      },
       persistExecution: (record) => ipc.recordExecution(record),
       resolveSession: async (transcript) => {
         try {
@@ -486,48 +613,60 @@ export function useConversationController(args?: {
       // PawComputeCapacityStore, and reserves an in-flight slot atomically. This covers both Fable
       // (gates on purchased-credit headroom) and normal turns (gates on rolling PC windows) in one
       // call. Renderer-provided tier, usage, balance, and authorization result are never trusted.
-      const tryGate = (retryCount = 0) => {
-        ipc
-          .billingCanStartGeneration(activePawModelRef.current)
-          .then((gateResult) => {
-            if (!gateResult.allowed) {
-              // Distinguish in-flight slot blocking (transient, auto-resolves in <60s) from real
-              // quota exhaustion. In-flight blocking means another generation's slot hasn't been
-              // released yet — retry once after a short delay rather than showing the exhaustion
-              // banner, since the slot will be released when that turn's billingRecordTurnUsage
-              // completes (or auto-releases on its 60s timeout).
-              if (gateResult.reason === 'inflight' && retryCount < 2) {
-                setTimeout(() => tryGate(retryCount + 1), 2000);
+      // Check session prompt limit before proceeding
+      const checkAndSubmit = async () => {
+        const limitReached = await checkSessionLimit();
+        if (limitReached) {
+          // Session limit reached - show modal and preserve the prompt
+          setPreservedPrompt({ text, context: finalContext });
+          setSessionLimitModalOpen(true);
+          return;
+        }
+
+        const tryGate = (retryCount = 0) => {
+          ipc
+            .billingCanStartGeneration(activePawModelRef.current)
+            .then((gateResult) => {
+              if (!gateResult.allowed) {
+                // Distinguish in-flight slot blocking (transient, auto-resolves in <60s) from real
+                // quota exhaustion. In-flight blocking means another generation's slot hasn't been
+                // released yet — retry once after a short delay rather than showing the exhaustion
+                // banner, since the slot will be released when that turn's billingRecordTurnUsage
+                // completes (or auto-releases on its 60s timeout).
+                if (gateResult.reason === 'inflight' && retryCount < 2) {
+                  setTimeout(() => tryGate(retryCount + 1), 2000);
+                  return;
+                }
+                setCreditsNoticeTier(entitlementRef.current?.tier ?? 'go');
                 return;
               }
-              setCreditsNoticeTier(entitlementRef.current?.tier ?? 'go');
-              return;
-            }
-            lastInputSourceRef.current = finalContext?.source;
-            runtimeRef.current?.submitTranscript(text, finalContext);
-          })
-          .catch(() => {
-            // IPC failure — refresh entitlement to get the real, authoritative state before
-            // deciding whether to block. A transient IPC error should NOT show "More Paw Compute
-            // needed" if the account actually has capacity remaining.
-            ipc.entitlementGetSnapshot().then((snap) => {
-              if (snap.hasCreditsRemaining) {
-                // Authoritative state says capacity remains — fail open rather than block a
-                // legitimate user on a transient IPC error. The generation-time gate in the main
-                // process will still enforce limits if the request actually proceeds.
-                lastInputSourceRef.current = finalContext?.source;
-                runtimeRef.current?.submitTranscript(text, finalContext);
-              } else {
-                setCreditsNoticeTier(snap.tier);
-              }
-              setEntitlement(snap);
-            }).catch(() => {
-              // Both IPC calls failed — fail closed as a last resort.
-              setCreditsNoticeTier(entitlementRef.current?.tier ?? 'go');
+              lastInputSourceRef.current = finalContext?.source;
+              runtimeRef.current?.submitTranscript(text, finalContext);
+            })
+            .catch(() => {
+              // IPC failure — refresh entitlement to get the real, authoritative state before
+              // deciding whether to block. A transient IPC error should NOT show "More Paw Compute
+              // needed" if the account actually has capacity remaining.
+              ipc.entitlementGetSnapshot().then((snap) => {
+                if (snap.hasCreditsRemaining) {
+                  // Authoritative state says capacity remains — fail open rather than block a
+                  // legitimate user on a transient IPC error. The generation-time gate in the main
+                  // process will still enforce limits if the request actually proceeds.
+                  lastInputSourceRef.current = finalContext?.source;
+                  runtimeRef.current?.submitTranscript(text, finalContext);
+                } else {
+                  setCreditsNoticeTier(snap.tier);
+                }
+                setEntitlement(snap);
+              }).catch(() => {
+                // Both IPC calls failed — fail closed as a last resort.
+                setCreditsNoticeTier(entitlementRef.current?.tier ?? 'go');
+              });
             });
-          });
+        };
+        tryGate();
       };
-      tryGate();
+      checkAndSubmit();
     },
     []
   );
@@ -619,7 +758,7 @@ export function useConversationController(args?: {
     dismissCreditsNotice,
     refreshEntitlement,
     entitlement,
-    
+
     executionMode,
     setExecutionMode,
     bypassPermissionsEnabled,
@@ -628,5 +767,17 @@ export function useConversationController(args?: {
     selectModel,
     streamingPawCompute,
     streamingElapsedSeconds,
+
+    // Session management
+    currentSessionId,
+    setCurrentSessionId,
+    currentSessionPromptCount,
+    sessionLimitModalOpen,
+    setSessionLimitModalOpen,
+    preservedPrompt,
+    handleNewChat,
+    handleContinueAsNewSession,
+    checkSessionLimit,
+    activeSessionName,
   };
 }

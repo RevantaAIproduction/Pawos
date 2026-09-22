@@ -27,7 +27,7 @@ export async function generateJson<T>(params: {
   const apiKey = getGeminiApiKey();
   if (!apiKey) return null;
 
-  const { prompt, schema, model = 'gemini-flash-latest', baseUrl = 'https://generativelanguage.googleapis.com/v1beta' } = params;
+  const { prompt, schema, model = 'gemini-3.6-flash', baseUrl = 'https://generativelanguage.googleapis.com/v1beta' } = params;
 
   // Minted once, right here, for this one real outgoing request — PawOS's own per-request identity
   // (Gemini's response body carries no stable id of its own; see UsageMeteringTypes.ts's doc comment

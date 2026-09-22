@@ -12,9 +12,9 @@ type ReasoningSizeTier = 'paw-flash' | 'paw-swift' | 'paw-core';
  */
 const REASONING_SIZE_MODELS: Partial<Record<ReasoningProviderId, Record<ReasoningSizeTier, string>>> = {
   gemini: {
-    'paw-flash': 'gemini-flash-lite-latest',
-    'paw-swift': 'gemini-flash-latest',
-    'paw-core': 'gemini-pro-latest',
+    'paw-flash': 'gemini-3.5-flash-lite',
+    'paw-swift': 'gemini-3.6-flash',
+    'paw-core': 'gemini-3.1-pro',
   },
   openai: {
     'paw-flash': 'gpt-4o-mini',

@@ -114,4 +114,6 @@ export type TurnUsageSubmission = {
   accessToken?: string;
   organizationId?: string;
   requests: { usage: ProviderUsageMetadata; requestType: UsageRequestType }[];
+  /** Optional: line count of the user's submitted prompt/message. Used to apply compute minimums. */
+  promptLineCount?: number;
 };

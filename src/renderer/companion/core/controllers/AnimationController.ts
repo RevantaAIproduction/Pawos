@@ -172,7 +172,7 @@ export class AnimationController implements CompanionSubsystem {
   /** Snaps back to fully visible immediately — used when something more important (voice, a gesture) interrupts mid-peek, so the companion never gets stuck hidden off-screen. */
   private cancelPeek(ctx: RuntimeContext): void {
     if (!this.peek) return;
-    void ctx.ipc.moveOverlayWindow(this.peek.visibleX, this.peek.y);
+    void ctx.ipc.moveOverlayWindow(this.peek.visibleX, this.peek.y, { force: true });
     if (this.windowBounds) this.windowBounds = { ...this.windowBounds, x: this.peek.visibleX };
     this.peek = null;
   }

@@ -52,10 +52,11 @@ export class ActionController implements CompanionSubsystem, StateRequester {
    * actively running OR the chat panel is simply open. A walk moves the
    * whole overlay window (avatar + chat panel are siblings inside it), so
    * wandering while the panel is visible can carry it off toward a screen
-   * edge and make it unreadable — this ref suppresses that regardless of
-   * whether a task happens to be running. Ranked below real foreground-app
-   * docking (a more specific, already-real signal) but above idle
-   * wandering.
+   * edge and make it unreadable — this ref suppresses overlay-window
+   * movement regardless of whether a task happens to be running. It
+   * outranks idle walking/peek cycles and foreground-app docking while the
+   * panel is open; once the panel closes, normal idle/environment behavior
+   * resumes.
    *
    * celebrateUntilRef: set to a future timestamp the moment a task
    * transitions to 'completed'; while now < that timestamp this outranks
@@ -117,8 +118,14 @@ export class ActionController implements CompanionSubsystem, StateRequester {
       });
     }
 
-    // Docking moves the window directly, bypassing the state machine — must
-    // not race AnimationController's own moveOverlayWindow calls mid-walk/peek.
+    // Docking moves the whole overlay window directly, bypassing the state
+    // machine. While the chat panel is open, CompanionExperience sets
+    // workspaceActiveRef so the panel stays exactly where the user opened it
+    // through typed submission/thinking/completion.
+    if (this.workspaceActiveRef?.current) return;
+
+    // Must not race AnimationController's own moveOverlayWindow calls
+    // mid-walk/peek.
     if (!this.animation.isWalkComplete()) return;
 
     if (this.foreground.kind === 'fullscreen' && !this.dockedForForeground) {
@@ -131,6 +138,8 @@ export class ActionController implements CompanionSubsystem, StateRequester {
   }
 
   desiredState(now: number, current: CompanionState): CompanionState | null {
+    if (this.workspaceActiveRef?.current) return 'sitting';
+
     // A walk (including its peek-a-boo tail) must finish before the
     // environment gets to reclaim the companion — otherwise, since some
     // foreground app is focused almost all the time during normal computer
@@ -143,7 +152,6 @@ export class ActionController implements CompanionSubsystem, StateRequester {
 
     if (this.foreground.kind === 'fullscreen') return 'sleeping';
     if (this.foreground.kind === 'app') return 'sitting';
-    if (this.workspaceActiveRef?.current) return 'sitting';
 
     if (current === 'walking') {
       this.nextActivityAt = now + this.randomWalkDelay();

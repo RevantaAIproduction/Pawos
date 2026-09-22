@@ -1,0 +1,86 @@
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: var(--color-bg-primary, #ffffff);
+  border-radius: 8px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  max-width: 420px;
+  width: 90%;
+  padding: 24px;
+}
+
+.header {
+  margin-bottom: 16px;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--color-text-primary, #000000);
+}
+
+.content {
+  margin-bottom: 24px;
+}
+
+.message {
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0 0 12px 0;
+  color: var(--color-text-primary, #000000);
+}
+
+.subtitle {
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+  color: var(--color-text-secondary, #666666);
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  flex-direction: column;
+}
+
+.primaryButton,
+.secondaryButton {
+  padding: 12px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.primaryButton {
+  background: var(--color-button-primary, #007AFF);
+  color: white;
+}
+
+.primaryButton:hover {
+  background: var(--color-button-primary-hover, #0051D5);
+}
+
+.secondaryButton {
+  background: var(--color-button-secondary, #f0f0f0);
+  color: var(--color-text-primary, #000000);
+  border: 1px solid var(--color-border, #e0e0e0);
+}
+
+.secondaryButton:hover {
+  background: var(--color-button-secondary-hover, #e8e8e8);
+}

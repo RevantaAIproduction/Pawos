@@ -227,7 +227,7 @@ function createMainWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
-      devTools: false,
+      devTools: true,
     },
   });
 

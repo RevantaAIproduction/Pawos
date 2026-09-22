@@ -82,6 +82,8 @@ type TurnContext = {
    *  before the turn is finalized (see drainPendingActionsAndFinalize's onTurnUsage call) — this is
    *  what replaces the old flat "1 credit per turn" charge with the turn's real aggregate cost. */
   usages: TurnUsageSubmission['requests'];
+  /** Line count of the user's submitted prompt/message. Used to apply compute minimums for large prompts. */
+  promptLineCount?: number;
 };
 
 /** States where a new mic/typed input should interrupt whatever's in flight rather than being ignored. */
@@ -206,6 +208,8 @@ export class ConversationRuntime {
   private currentTurnRecord: ConversationTurnRecord | null = null;
   /** One Task Card per user request that actually did desktop work — see ConversationTaskRecord. Null for a turn that never called an action (plain Q&A). */
   private currentTaskRecord: ConversationTaskRecord | null = null;
+  /** Assistant message ID for current turn — shared across all phases (initial + tool continuations) to prevent creating duplicate assistant messages */
+  private currentTurnAssistantMessageId: string | null = null;
   /** Which persisted session the next turn continues, once persistTurn resolves one — null means "let the store decide". */
   private activeSessionId: string | null = null;
 
@@ -246,10 +250,37 @@ export class ConversationRuntime {
   private modifiedFilesDuringTask = new Map<string, { status: 'added' | 'modified' | 'deleted'; additions?: number; deletions?: number }>();
   private fileChangeMessageCreated = false;
 
+  /** Unsubscribe functions for governance event listeners — stored for cleanup on runtime close */
+  private unsubscribeGovernanceApproved: (() => void) | undefined;
+  private unsubscribeGovernanceDenied: (() => void) | undefined;
+
   /** Coordinates action ordering/dedup/Work-History tracking — never reasons, never decides what runs next. See ExecutionSupervisor.ts. */
   private executionSupervisor = new ExecutionSupervisor((record) => {
     void this.args.persistExecution?.(record);
   });
+
+  private getActionVerb(actionType: string): string {
+    const verbMap: Record<string, string> = {
+      'readFile': 'read',
+      'writeFile': 'edit',
+      'createFolder': 'create',
+      'deletePath': 'delete',
+      'movePath': 'move',
+      'executeCommand': 'run',
+      'runProcess': 'run',
+      'copyPath': 'copy',
+      'default': 'run'
+    };
+    return verbMap[actionType] || verbMap['default'];
+  }
+
+  private getActionTarget(request: ActionRequest): string {
+    const target = (request as Record<string, unknown>)['path'] ||
+                   (request as Record<string, unknown>)['cwd'] ||
+                   (request as Record<string, unknown>)['command'] ||
+                   request.type;
+    return String(target).split('/').pop() || request.type;
+  }
 
   private handleWorkspaceObservation = (event: WorkspaceObservationEvent) => {
     const actionId = this.activeActionIdByType.get(event.actionType);
@@ -476,6 +507,14 @@ export class ConversationRuntime {
        */
       onGovernanceDenied?: (cb: (payload: { approvalId: string }) => void) => void;
       /**
+       * Request user approval for an action before executing
+       */
+      onRequestApproval?: (options: { verb: string; target: string; action: string }) => Promise<boolean>;
+      /**
+       * Request user approval for a plan/proposal before execution
+       */
+      onRequestPlan?: (plan: { title: string; description: string; changes: string[] }) => Promise<'approve' | 'deny' | 'revise'>;
+      /**
        * The composer's current mode (Manual/Accept edits/Plan/Auto/Bypass permissions — see
        * ExecutionModeTypes.ts). Read fresh on every requires-confirmation result, never cached, so
        * a mode change the user makes mid-conversation takes effect on the very next action.
@@ -514,8 +553,8 @@ export class ConversationRuntime {
     args.onProcessExit?.(this.handleProcessExit);
     args.onWorkspaceObservation?.(this.handleWorkspaceObservation);
     args.onCommunicationEvent?.(this.handleCommunicationRuntimeEvent);
-    args.onGovernanceApproved?.((payload) => this.resumeFromApproval(payload.approvalId));
-    args.onGovernanceDenied?.((payload) => this.denyApproval(payload.approvalId));
+    this.unsubscribeGovernanceApproved = args.onGovernanceApproved?.((payload) => this.resumeFromApproval(payload.approvalId));
+    this.unsubscribeGovernanceDenied = args.onGovernanceDenied?.((payload) => this.denyApproval(payload.approvalId));
   }
 
   subscribe(listener: (snapshot: ConversationSnapshot) => void) {
@@ -682,6 +721,9 @@ export class ConversationRuntime {
     this.reasoningTurn = null;
     this.speechQueue = [];
     this.pendingConfirmation = null;
+    // Cleanup governance event listeners
+    this.unsubscribeGovernanceApproved?.();
+    this.unsubscribeGovernanceDenied?.();
     this.args.speechSynthesis.stop();
     this.finalizeCurrentTurn('interrupted', 'panel closed mid-turn');
     this.updateSnapshot({
@@ -704,7 +746,6 @@ export class ConversationRuntime {
   }
 
   submitTranscript(transcript: string, context?: SubmittedInputContext) {
-    console.log('[CHK 1] submitTranscript', { turnId: this.turnId, state: this.snapshot.state, closed: this.closed });
     const trimmed = transcript.trim();
     if (!trimmed) {
       return;
@@ -778,7 +819,6 @@ export class ConversationRuntime {
       });
     }
     this.appendMessage('user', trimmed);
-    console.log('[TRACE-2] calling handleTranscript', { text: trimmed.substring(0, 30) });
     void this.handleTranscript(trimmed, context);
   }
 
@@ -976,7 +1016,6 @@ export class ConversationRuntime {
   }
 
   private async handleTranscript(transcript: string, context?: SubmittedInputContext) {
-    console.log('[CHK 2] handleTranscript entry', { turnId: this.turnId, sessionId: this.activeSessionId, state: this.snapshot.state });
     if (this.closed) {
       return;
     }
@@ -1005,6 +1044,7 @@ export class ConversationRuntime {
     }
 
     const currentTurn = ++this.turnId;
+    console.log(`[TRACE.handleTranscript] TURN START | turnId=${currentTurn} | transcript="${transcript.substring(0, 50)}..."`);
     this.stopRecognition();
     this.currentTurnProjectId = context?.projectId;
     if (context?.temporaryExecutionMode) {
@@ -1046,28 +1086,21 @@ export class ConversationRuntime {
     let turnHandle: ReasoningTurnHandle;
     // Shared with handleToolCall/continueReasoningTurn — a tool-result
     // continuation streams into the SAME buffers as this initial call.
-    const turnContext: TurnContext = { ttsBuffer: '', finalResponse: '', assistantMessageId: null, startedAtMs: Date.now(), usages: [] };
+    const promptLineCount = context?.largePromptAttachment?.lineCount ?? transcript.split('\n').length;
+    const turnContext: TurnContext = { ttsBuffer: '', finalResponse: '', assistantMessageId: null, startedAtMs: Date.now(), usages: [], promptLineCount };
 
     try {
       turnHandle = this.args.reasoningRuntime.runTurn(reasoningInput, this.buildStreamCallbacks(currentTurn, turnContext));
       this.reasoningTurn = turnHandle;
 
       const result = await turnHandle.completed;
-      console.log('[TRACE-3] turnHandle completed', {
-        hasResponse: !!result.response,
-        responseLength: result.response?.length ?? 0,
-        hasAssistantMsg: !!result.assistantMessage?.content,
-        assistantMsgLength: result.assistantMessage?.content?.length ?? 0
-      });
       turnContext.finalResponse = result.response || result.assistantMessage?.content || turnContext.finalResponse;
-      console.log('[TRACE-4] finalResponse set', { length: turnContext.finalResponse.length, preview: turnContext.finalResponse.substring(0, 50) });
     } catch (error) {
       if (this.closed || currentTurn !== this.turnId || turnFailed) {
         return;
       }
       turnFailed = true;
       const message = error instanceof Error ? error.message : 'Failed to compose a response.';
-      console.log('[CHK ERROR] handleTranscript catch', { turnId: this.turnId, errorName: error instanceof Error ? error.name : 'Error', message, usageCount: turnContext.usages.length, assistantMessageId: turnContext.assistantMessageId, accumulatedContentLen: turnContext.finalResponse.length });
       const failureClass = classifyFailure(message);
       const nothingStreamedYet = turnContext.ttsBuffer === '' && turnContext.finalResponse === '';
 
@@ -1163,7 +1196,6 @@ export class ConversationRuntime {
           status: 'final',
         });
       } else {
-        console.log('[TRACE-5] appending assistant message', { length: ctx.finalResponse.length, preview: ctx.finalResponse.substring(0, 50) });
         this.appendMessage('assistant', ctx.finalResponse);
       }
       this.enqueueSpeech(ctx.finalResponse, currentTurn);
@@ -1180,7 +1212,7 @@ export class ConversationRuntime {
     // Report the turn's real, aggregate Gemini usage — every request this turn actually made,
     // including tool continuations — BEFORE finalizing, so the caller's billing call always sees a
     // fully-settled ctx.usages for this turn (finalizeCurrentTurn/persistTurn never touch usage).
-    this.args.onTurnUsage?.({ sessionId: this.activeSessionId, runId: this.args.autonomousRunId ?? null, requests: ctx.usages });
+    this.args.onTurnUsage?.({ sessionId: this.activeSessionId, runId: this.args.autonomousRunId ?? null, requests: ctx.usages, promptLineCount: ctx.promptLineCount });
 
     this.reasoningTurn = null;
     this.finalizeCurrentTurn('completed');
@@ -1284,9 +1316,13 @@ export class ConversationRuntime {
     return {
       onDelta: (delta, assistantMessage) => {
         if (this.closed || currentTurn !== this.turnId) return;
-        console.log('[CHK 5] ConversationRuntime onDelta', { assistantMessageId: assistantMessage.id, deltaLength: delta.length, cumulativeLength: assistantMessage.content.length });
+        // Reuse turn-level assistant message ID to avoid creating duplicates across phases
+        const messageId = this.currentTurnAssistantMessageId || assistantMessage.id;
+        if (!this.currentTurnAssistantMessageId) {
+          this.currentTurnAssistantMessageId = messageId;
+        }
         this.upsertMessage({
-          id: assistantMessage.id,
+          id: messageId,
           role: 'assistant',
           content: assistantMessage.content,
           createdAt: assistantMessage.createdAt,
@@ -1313,9 +1349,14 @@ export class ConversationRuntime {
 
         ctx.finalResponse = result.response || result.assistantMessage?.content || '';
         if (result.assistantMessage) {
-          ctx.assistantMessageId = result.assistantMessage.id;
+          // Reuse turn-level assistant message ID instead of creating new one
+          const messageId = this.currentTurnAssistantMessageId || result.assistantMessage.id;
+          if (!this.currentTurnAssistantMessageId) {
+            this.currentTurnAssistantMessageId = messageId;
+          }
+          ctx.assistantMessageId = messageId;
           this.upsertMessage({
-            id: result.assistantMessage.id,
+            id: messageId,
             role: 'assistant',
             content: result.assistantMessage.content,
             createdAt: result.assistantMessage.createdAt,
@@ -1395,6 +1436,17 @@ export class ConversationRuntime {
     const request = toolCallToActionRequest(toolCall);
     if (!request) {
       this.appendMessage('system', "I'm not sure how to do that yet.");
+      return;
+    }
+
+    // Request user approval before executing
+    const approved = await this.args.onRequestApproval?.({
+      verb: this.getActionVerb(request.type),
+      target: this.getActionTarget(request),
+      action: request.type
+    }) ?? true;
+    if (!approved) {
+      this.log('action-denied', { type: request.type });
       return;
     }
 
@@ -1732,13 +1784,34 @@ export class ConversationRuntime {
   }
 
   private upsertMessage(message: ConversationMessage) {
-    const messages = this.snapshot.messages.some((item) => item.id === message.id)
+    const isUpdate = this.snapshot.messages.some((item) => item.id === message.id);
+    const messages = isUpdate
       ? this.snapshot.messages.map((item) => (item.id === message.id ? message : item))
       : [...this.snapshot.messages, message];
+
+    const operation = isUpdate ? 'UPDATE' : 'INSERT';
+    const beforeCount = this.snapshot.messages.length;
+    const afterCount = messages.length;
+    const allIds = messages.map(m => m.id);
+    const duplicateIds = allIds.filter((id, idx) => allIds.indexOf(id) !== idx);
+
+    console.log(`[TRACE.upsertMessage] ${operation} | msgId=${message.id} role=${message.role} status=${message.status || 'N/A'} | msgs: ${beforeCount}→${afterCount} | allMsgIds=[${allIds.join(',')}] | DUPLICATES=[${duplicateIds.join(',')}]`);
 
     this.updateSnapshot({
       messages,
     });
+  }
+
+  private removeMessage(messageId: string): void {
+    const messages = this.snapshot.messages.filter((item) => item.id !== messageId);
+    if (messages.length === this.snapshot.messages.length) {
+      console.log(`[TRACE.removeMessage] SKIPPED - messageId not found: ${messageId}`);
+      return;
+    }
+    const beforeCount = this.snapshot.messages.length;
+    const afterCount = messages.length;
+    console.log(`[TRACE.removeMessage] REMOVED | msgId=${messageId} | msgs: ${beforeCount}→${afterCount}`);
+    this.updateSnapshot({ messages });
   }
 
   /**
@@ -1770,6 +1843,8 @@ export class ConversationRuntime {
   private upsertTaskMessage(): void {
     const task = this.currentTaskRecord;
     if (!task) return;
+
+    console.log(`[TRACE.upsertTaskMessage] START | taskId=${task.id} | status=${task.status}`);
 
     // Build task progress extension for inline preview
     const completedActions = task.actions.filter((a) => a.endedAt).length;
@@ -1809,6 +1884,7 @@ export class ConversationRuntime {
       expandTarget: 'terminal',
     });
 
+    console.log(`[TRACE.upsertTaskMessage] CALLING upsertMessage | taskId=${task.id} | role=system`);
     this.upsertMessage({
       id: task.id,
       role: 'system',
@@ -1866,7 +1942,11 @@ export class ConversationRuntime {
    */
   private finalizeTask(finalReport: string, reason: NonNullable<ConversationTurnRecord['endedReason']>): void {
     const task = this.currentTaskRecord;
-    if (!task) return;
+    if (!task) {
+      console.log(`[TRACE.finalizeTask] SKIPPED - no currentTaskRecord`);
+      return;
+    }
+    console.log(`[TRACE.finalizeTask] START | taskId=${task.id} | reason=${reason}`);
     task.endedAt = Date.now();
     task.status =
       task.actions.some((a) => a.result && isTerminalExecutionBlock(a.result))
@@ -1882,11 +1962,14 @@ export class ConversationRuntime {
             : 'completed';
     task.finalReport = finalReport;
     this.upsertTaskMessage();
+    // Remove temporary task message from conversation after finalization
+    this.removeMessage(task.id);
     this.currentTaskRecord = null;
     // Reset file tracking after task completes
     this.modifiedFilesDuringTask.clear();
     this.fileChangeMessageCreated = false;
     this.recordTaskProvenance(task);
+    console.log(`[TRACE.finalizeTask] END | taskId=${task.id}`);
   }
 
   /**
@@ -2041,6 +2124,7 @@ export class ConversationRuntime {
     // Recovery Policy caps apply per user turn, not per continuation.
     this.toolIterationCount = 0;
     this.failureSignatureCounts = new Map();
+    this.currentTurnAssistantMessageId = null; // Reset for new turn
     this.executionSupervisor.begin(transcript, { externalRunId: this.args.autonomousRunId });
     this.currentTurnRecord = {
       id: uuidv4(),
@@ -2057,7 +2141,11 @@ export class ConversationRuntime {
   }
 
   private finalizeCurrentTurn(reason: NonNullable<ConversationTurnRecord['endedReason']>, note?: string): void {
-    if (!this.currentTurnRecord) return;
+    if (!this.currentTurnRecord) {
+      console.log(`[TRACE.finalizeCurrentTurn] SKIPPED - no currentTurnRecord`);
+      return;
+    }
+    console.log(`[TRACE.finalizeCurrentTurn] START | turnId=${this.turnId} | reason=${reason} | msgCount=${this.snapshot.messages.length}`);
     this.currentTurnRecord.endedAt = Date.now();
     this.currentTurnRecord.endedReason = reason;
     this.turnRecords.push(this.currentTurnRecord);
@@ -2073,6 +2161,7 @@ export class ConversationRuntime {
     this.persistTurn(this.currentTurnRecord);
     this.currentTurnRecord = null;
     this.turnIdToTemporaryMode.delete(this.turnId);
+    console.log(`[TRACE.finalizeCurrentTurn] END | msgCount=${this.snapshot.messages.length}`);
   }
 
   /** Hands a finished turn to Electron's session history, if wired. Skips turns with no real content (e.g. an immediately-superseded record). */

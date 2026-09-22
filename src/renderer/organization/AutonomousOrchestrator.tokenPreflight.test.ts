@@ -330,7 +330,7 @@ describe('Phase 2D: Exact Gemini Token Preflight', () => {
       // Exact inputs
       const exactInputTokens = 500; // From countTokens
       const configuredOutputBudget = 8000;
-      const model = 'gemini-flash-latest';
+      const model = 'gemini-3.6-flash';
 
       // Pricing
       const pricing = {

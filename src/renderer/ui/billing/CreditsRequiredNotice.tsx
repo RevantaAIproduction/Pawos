@@ -95,6 +95,7 @@ export function CreditsRequiredNotice({
   onContactSales,
   onContactAdmin,
   onRequestMoreCompute,
+  pawCreditsBalanceUsd = 0,
 }: {
   tier: SubscriptionTierId;
   seatTier?: SeatTier;
@@ -111,6 +112,7 @@ export function CreditsRequiredNotice({
   onContactSales?: () => void;
   onContactAdmin?: () => void;
   onRequestMoreCompute?: () => void;
+  pawCreditsBalanceUsd?: number;
 }) {
   const message = pooled
     ? "Your organization has used all of its pooled Paw Compute for this period. Everything else keeps working — reach out to your organization administrator, or wait for the next monthly reset."

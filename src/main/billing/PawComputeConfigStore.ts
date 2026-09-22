@@ -52,13 +52,16 @@ function defaultConfig(): PawComputeConversionConfig {
       // Flash tier — sourced from Gemini 3.6/3.7 Flash pricing (identical rates, both current through
       // 2026-12-31 per ai.google.dev).
       'gemini-flash-latest': { inputPerMillionUsd: 0.75, outputPerMillionUsd: 3.75, cachedInputPerMillionUsd: 0.075 },
+      'gemini-3.6-flash': { inputPerMillionUsd: 1.5, outputPerMillionUsd: 7.5, cachedInputPerMillionUsd: 0.15 },
       // Flash-Lite tier — sourced from Gemini 3.5 Flash-Lite pricing.
       'gemini-flash-lite-latest': { inputPerMillionUsd: 0.3, outputPerMillionUsd: 2.5, cachedInputPerMillionUsd: 0.03 },
+      'gemini-3.5-flash-lite': { inputPerMillionUsd: 0.3, outputPerMillionUsd: 2.5, cachedInputPerMillionUsd: 0.03 },
       // Pro tier — sourced from Gemini 3.1 Pro pricing, ≤200k-context tier (the >200k tier is
       // materially more expensive — $4.00/$18.00/$0.40 — and is not modeled separately here; a
       // request whose real prompt exceeds 200k tokens will be honestly under-priced by this table
       // until a context-length-aware tier is added, a disclosed simplification, not a silent one).
       'gemini-pro-latest': { inputPerMillionUsd: 2.0, outputPerMillionUsd: 12.0, cachedInputPerMillionUsd: 0.2 },
+      'gemini-3.1-pro': { inputPerMillionUsd: 2.0, outputPerMillionUsd: 12.0, cachedInputPerMillionUsd: 0.2 },
       // Fallback for any Gemini model id not explicitly listed above (e.g. a version-pinned model a
       // future change might request) — the Flash tier's real rate, a conservative mid-range default
       // rather than silently charging $0.

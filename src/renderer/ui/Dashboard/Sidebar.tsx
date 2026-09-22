@@ -130,7 +130,6 @@ const PRIMARY_NAV: NavItem[] = [
   { id: 'companionLab', label: 'Companion Studio', icon: <CompanionIcon /> },
   { id: 'projects', label: 'Projects', icon: <WorkIcon /> },
   { id: 'apps', label: 'Apps', icon: <AppsGridIcon /> },
-  { id: 'analytics', label: 'Analytics', icon: <AnalyticsIcon /> },
 ];
 
 const SECONDARY_NAV: NavItem[] = [
@@ -144,14 +143,6 @@ function AppsGridIcon() {
       <rect x="13" y="4" width="7" height="7" rx="1.5" />
       <rect x="4" y="13" width="7" height="7" rx="1.5" />
       <rect x="13" y="13" width="7" height="7" rx="1.5" />
-    </svg>
-  );
-}
-
-function AnalyticsIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4.5 19.5v-6M12 19.5v-11M19.5 19.5V9" />
     </svg>
   );
 }

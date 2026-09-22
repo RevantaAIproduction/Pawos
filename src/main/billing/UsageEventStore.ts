@@ -39,7 +39,15 @@ class UsageEventStore {
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     try {
       const persisted = JSON.parse(fs.readFileSync(this.file, 'utf-8')) as Partial<State>;
-      this.state = { records: Array.isArray(persisted.records) ? persisted.records : [] };
+      this.state = {
+        records: Array.isArray(persisted.records) ? persisted.records : [],
+        recoveryRequired: persisted.recoveryRequired,
+        lastGoRefreshAt: persisted.lastGoRefreshAt,
+        goCycleStartAt: persisted.goCycleStartAt,
+        goRefreshesUsed: persisted.goRefreshesUsed,
+        weeklyCycleStartAt: persisted.weeklyCycleStartAt,
+        activeWindowStartAt: persisted.activeWindowStartAt,
+      };
     } catch {
       this.state = freshState();
       this.save();

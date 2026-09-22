@@ -315,8 +315,8 @@ describe('AutonomousOrchestrator Settlement Integration', () => {
       // Execution: const url = `${baseUrl}/models/${model}:streamGenerateContent...` (GeminiReasoningProvider.ts:146)
       // Both use the same model from the provider instance
 
-      const authorizationModel = 'gemini-flash-latest';
-      const executionModel = 'gemini-flash-latest';
+      const authorizationModel = 'gemini-3.6-flash';
+      const executionModel = 'gemini-3.6-flash';
 
       expect(authorizationModel).toBe(executionModel);
     });

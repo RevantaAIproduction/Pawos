@@ -27,7 +27,7 @@ import { subscriptionStore } from '../billing/SubscriptionStore';
 import { rollingUsageGate } from '../billing/RollingUsageGate';
 import { normalizedComputeToCustomerPc, customerPcToPurchaseUsd } from '../../shared/billing/CustomerPcCommercialModel';
 import { creditStore } from '../billing/CreditStore';
-import { recordTurnUsage, recordUsageEvent } from '../billing/UsageMeteringEngine';
+import { recordTurnUsage, recordUsageEvent, reportRequestStart, reportRequestEnd } from '../billing/UsageMeteringEngine';
 import { usageEventStore } from '../billing/UsageEventStore';
 import type { ProviderUsageMetadata, TurnUsageSubmission, UsageRequestType } from '../../shared/billing/UsageMeteringTypes';
 import { createBillingProvider } from '../billing/BillingProviderRegistry';
@@ -516,8 +516,12 @@ export function registerIpc(opts: {
       const check = rollingUsageGate.canStartGeneration(tier, seatTier, Date.now(), proMaxVariant);
       const isPurchased = !check.allowed && !isFable;
 
-      const aggregated = recordTurnUsage(submission.requests, { sessionId: submission.sessionId, runId: submission.runId }, isFable);
-      const customerPc = normalizedComputeToCustomerPc(aggregated.newNormalizedCompute);
+      const aggregated = recordTurnUsage(submission.requests, { sessionId: submission.sessionId, runId: submission.runId }, isFable, submission.promptLineCount);
+      let customerPc = normalizedComputeToCustomerPc(aggregated.newNormalizedCompute);
+      // GO tier charges 2x the actual PC cost
+      if (tier === 'go') {
+        customerPc = customerPc * 2;
+      }
       if (customerPc <= 0) return { ...creditStore.getBalance(), limit: entitlementService.getCreditLimit() };
       const outboxId = aggregated.newRecords[0]?.usageEventId ?? `${submission.sessionId ?? 'session'}:${submission.runId ?? 'run'}:${Date.now()}`;
       creditStore.consume(customerPc, reason, category, isFable, isPurchased, outboxId);
@@ -606,6 +610,15 @@ export function registerIpc(opts: {
     (_evt, usage: ProviderUsageMetadata, requestType: UsageRequestType, context: { sessionId: string | null; runId: string | null }) =>
       recordUsageEvent(usage, requestType, context)
   );
+
+  ipcMain.handle('billing:reportRequestStart', (_evt, requestId: string) => {
+    reportRequestStart(requestId);
+  });
+
+  ipcMain.handle('billing:reportRequestEnd', (_evt, requestId: string) => {
+    reportRequestEnd(requestId);
+  });
+
   // Real, per-request usage ledger — the Usage Details view's data source (Model / Input / Output /
   // Total tokens / Paw Compute consumed, all real provider-reported values, never fabricated).
   ipcMain.handle('billing:getUsageEvents', (_evt, limit?: number) => usageEventStore.list(limit));
@@ -657,7 +670,7 @@ export function registerIpc(opts: {
     async (_evt, submission: TurnUsageSubmission) => {
       console.log('[AUTONOMOUS_USAGE_RECORD] runId:', submission.runId, 'sessionId:', submission.sessionId);
       try {
-        const aggregated = recordTurnUsage(submission.requests, { sessionId: submission.sessionId, runId: submission.runId }, false);
+        const aggregated = recordTurnUsage(submission.requests, { sessionId: submission.sessionId, runId: submission.runId }, false, submission.promptLineCount);
         console.log('[AUTONOMOUS_USAGE_RECORDED] normalized compute:', aggregated.totalNormalizedCompute);
         return aggregated;
       } catch (err) {

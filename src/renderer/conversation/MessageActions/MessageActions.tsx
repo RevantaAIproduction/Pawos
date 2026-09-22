@@ -10,6 +10,8 @@ interface MessageActionsProps {
   onReadAloud?: () => void;
   onDownloadPdf?: () => void;
   timestamp?: Date;
+  isCompletedTask?: boolean;
+  role?: 'user' | 'assistant';
 }
 
 export function MessageActions({
@@ -21,9 +23,11 @@ export function MessageActions({
   onReadAloud,
   onDownloadPdf,
   timestamp,
+  isCompletedTask = false,
+  role = 'assistant',
 }: MessageActionsProps) {
   const formatTimestamp = (date?: Date) => {
-    if (!date) return '';
+    if (!date || !isCompletedTask) return '';
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const minutes = Math.floor(diff / 60000);
@@ -37,6 +41,38 @@ export function MessageActions({
     return `completed ${date.toLocaleDateString()}`;
   };
 
+  // For user messages, show only Copy and Delete buttons
+  if (role === 'user') {
+    return (
+      <div className={styles.container}>
+        <div className={styles.actions}>
+          <button
+            className={styles.action}
+            onClick={onCopy}
+            title="Copy"
+            type="button"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M9 5H7C5.89543 5 5 5.89543 5 7V19C5 20.1046 5.89543 21 7 21H17C18.1046 21 19 20.1046 19 19V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M9 5C9 3.89543 9.89543 3 11 3H17C18.1046 3 19 3.89543 19 5V11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+          <button
+            className={styles.action}
+            onClick={onWorkFromHere}
+            title="Edit"
+            type="button"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 17.25V21h3.75L17.81 9.94m-4.59-4.59L19.73 3.51a2.414 2.414 0 0 1 3.41 3.41L16.61 13.76m-4.59-4.59l1.41-1.41a2.414 2.414 0 0 1 3.41 0l1.41 1.41" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // For assistant messages, show all actions
   return (
     <div className={styles.container}>
       <div className={styles.timestamp}>{formatTimestamp(timestamp)}</div>

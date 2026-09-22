@@ -151,11 +151,15 @@ export function recordUsageEvent(
  * the caller of this function. An empty `requests` array (no Gemini request was actually made —
  * e.g. a turn that was stopped before reaching the reasoning provider) correctly produces zero usage
  * and zero Paw Compute, never a fabricated minimum charge.
+ *
+ * For prompts with 150+ lines, applies a minimum 3 PC charge if actual compute is below that threshold.
+ * This minimum is applied once per turn, not per request.
  */
 export function recordTurnUsage(
   requests: { usage: ProviderUsageMetadata; requestType: UsageRequestType }[],
   context: { sessionId: string | null; runId: string | null },
-  fable = false
+  fable = false,
+  promptLineCount?: number
 ): AggregatedTurnUsage {
   const newRecords: NormalizedUsageRecord[] = [];
   const records = requests.map(({ usage, requestType }) => {
@@ -169,10 +173,17 @@ export function recordTurnUsage(
     }
     return record;
   });
-  
-  const totalNormalizedCompute = round(records.reduce((sum, r) => sum + r.normalizedCompute, 0));
-  const newNormalizedCompute = round(newRecords.reduce((sum, r) => sum + r.normalizedCompute, 0));
+
+  let totalNormalizedCompute = round(records.reduce((sum, r) => sum + r.normalizedCompute, 0));
+  let newNormalizedCompute = round(newRecords.reduce((sum, r) => sum + r.normalizedCompute, 0));
   const totalActiveDurationMs = records.reduce((sum, r) => sum + r.activeDurationMs, 0);
-  
+
+  // Apply minimum 3 PC baseline for large prompts (150+ lines)
+  if (promptLineCount !== undefined && promptLineCount >= 150 && newNormalizedCompute < 3) {
+    const adjustment = 3 - newNormalizedCompute;
+    newNormalizedCompute = 3;
+    totalNormalizedCompute = round(totalNormalizedCompute + adjustment);
+  }
+
   return { totalNormalizedCompute, newNormalizedCompute, totalActiveDurationMs, requestCount: records.length, records, newRecords };
 }

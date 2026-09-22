@@ -555,10 +555,49 @@ export function ConversationPanel({
     storeData: false,
     shareContext: false,
   });
+  const [pendingGovernanceApproval, setPendingGovernanceApproval] = useState<{
+    approvalId: string;
+    actionType: string;
+    requestedAt: number;
+  } | null>(null);
+  const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [slashCommandsMenuOpen, setSlashCommandsMenuOpen] = useState(false);
   const [connectorsSubmenuOpen, setConnectorsSubmenuOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [currentTime, setCurrentTime] = useState(Date.now());
+  const [sessionStartTime, setSessionStartTime] = useState<number | null>(null);
+  const [sessionElapsedMs, setSessionElapsedMs] = useState(0);
+  const isRunning = snapshot.state === 'running';
+
+  // Update current time every second for live timer display
+  useEffect(() => {
+    const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Track session start on first message
+  useEffect(() => {
+    if (snapshot.messages.length > 0 && sessionStartTime === null) {
+      setSessionStartTime(Date.now());
+    }
+  }, [snapshot.messages.length, sessionStartTime]);
+
+  // Accumulate elapsed time only when running
+  useEffect(() => {
+    if (!isRunning || !sessionStartTime) return;
+
+    const lastTimestamp = Date.now();
+    const interval = setInterval(() => {
+      setSessionElapsedMs(prev => {
+        const newElapsed = prev + 1000;
+        return Math.min(newElapsed, 5 * 60 * 60 * 1000); // Cap at 5 hours
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isRunning, sessionStartTime]);
+
   const modelMenuRef = useRef<HTMLDivElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
   const slashMenuRef = useRef<HTMLDivElement>(null);
@@ -795,6 +834,25 @@ export function ConversationPanel({
     document.addEventListener('mousedown', onClick);
     return () => document.removeEventListener('mousedown', onClick);
   }, [slashCommandsMenuOpen]);
+
+  useEffect(() => {
+    const handleGovernanceRequest = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { verb, target, action } = customEvent.detail || {};
+      if (action) {
+        const approvalId = `${action}_${Date.now()}`;
+        const actionType = `${verb} ${target}`.trim();
+        setPendingGovernanceApproval({
+          approvalId,
+          actionType: actionType || action,
+          requestedAt: Date.now(),
+        });
+      }
+    };
+
+    window.addEventListener('pawos-request-approval', handleGovernanceRequest);
+    return () => window.removeEventListener('pawos-request-approval', handleGovernanceRequest);
+  }, []);
 
   // Countdown timer for limits
   useEffect(() => {
@@ -1576,27 +1634,61 @@ export function ConversationPanel({
                   const diffMins = Math.floor(diffMs / 60000);
                   const timeDisplay = diffMins === 0 ? 'just now' : diffMins < 60 ? `${diffMins}m ago` : `${Math.floor(diffMins / 60)}h ago`;
 
+                  const msgLines = message.content.split('\n');
+                  const isExpanded = expandedMessages.has(message.id);
+                  const shouldTruncate = msgLines.length > 10 && !isExpanded && message.role === 'user';
+                  const displayLines = shouldTruncate ? msgLines.slice(0, 10) : msgLines;
+
                   return (
-                    <div key={idx} className={`${styles.message} ${styles[message.role]}`}>
-                      <div className={styles.messageContent}>
-                        {message.role === 'user' ? (
-                          <div>{message.content}</div>
-                        ) : (
-                          <div>
-                            {message.content && <span>{message.content}</span>}
-                            {message.extensions && message.extensions.length > 0 && (
-                              <ExtensionRenderer
-                                extensions={message.extensions}
-                                onExpand={handleExtensionExpand}
-                                onAction={handleExtensionAction}
-                              />
-                            )}
-                          </div>
-                        )}
+                    <div key={idx} style={{
+                      marginBottom: '12px',
+                      whiteSpace: 'pre-wrap',
+                      wordWrap: 'break-word',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: message.role === 'user' ? 'flex-end' : 'flex-start',
+                      maxWidth: '80%',
+                      marginLeft: message.role === 'user' ? 'auto' : '0',
+                      marginRight: message.role === 'user' ? '0' : 'auto',
+                    }}>
+                      <div>
+                        {displayLines.map((line, lineIdx) => {
+                          const isQuoted = line.trim().startsWith('>');
+                          const isCode = line.trim().startsWith('`') || line.match(/^[\s]*\$|^[\s]*#|^[\s]*npm|^[\s]*git/);
+                          const isError = line.toLowerCase().includes('error') || line.toLowerCase().includes('failed');
+                          const shouldBeRed = isQuoted || isCode || isError;
+
+                          return (
+                            <div key={lineIdx} style={{ color: shouldBeRed ? '#ff4444' : 'inherit' }}>
+                              {line}
+                            </div>
+                          );
+                        })}
                       </div>
-                                              <MessageActions
+                      {shouldTruncate && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newSet = new Set(expandedMessages);
+                            newSet.add(message.id);
+                            setExpandedMessages(newSet);
+                          }}
+                          style={{ marginTop: '8px', padding: '4px 8px', fontSize: '12px', cursor: 'pointer', background: 'none', border: 'none', color: 'inherit', textDecoration: 'underline' }}
+                        >
+                          See more ({msgLines.length - 10} more lines)
+                        </button>
+                      )}
+                      {message.extensions && message.extensions.length > 0 && (
+                        <ExtensionRenderer
+                          extensions={message.extensions}
+                          onExpand={handleExtensionExpand}
+                          onAction={handleExtensionAction}
+                        />
+                      )}
+                      <MessageActions
                           messageId={message.id}
                           timestamp={new Date(message.createdAt)}
+                          role={message.role as 'user' | 'assistant'}
                           onCopy={() => navigator.clipboard.writeText(message.content)}
                           onDownloadPdf={
                             (message.role === 'assistant' && message.content.toLowerCase().includes('ats analysis')) 
@@ -1665,11 +1757,12 @@ export function ConversationPanel({
 
               {/* Governance approval panel - contextual */}
               <ContextualGovernancePanel
+                pendingApproval={pendingGovernanceApproval}
                 onApprove={(approvalId) => {
-                  // Handled via IPC
+                  setPendingGovernanceApproval(null);
                 }}
                 onDeny={(approvalId) => {
-                  // Handled via IPC
+                  setPendingGovernanceApproval(null);
                 }}
               />
           </div>
@@ -1838,29 +1931,53 @@ export function ConversationPanel({
                   />
                   {usageDropdownOpen && (
                     <div className={styles.usageDropdownMenu}>
-                      <div className={styles.usageHeader}>{entitlement?.tier ?? 'Free'} Tier Usage</div>
-                      <div className={styles.usageRow}>
-                        <span>5-Hour Limit:</span>
-                        <span className={styles.usageValue}>{Math.round(usage5h)}{streamingPawCompute ? `+${streamingPawCompute}` : ''} / {Math.round(limit5h)} PC</span>
+                      <div className={styles.usageHeader}>Plan usage limits - {entitlement?.tier === 'team'
+                          ? `TEAM ${entitlement?.seatTier?.toUpperCase() ?? 'STANDARD'}`
+                          : entitlement?.tier === 'proMax'
+                          ? `PRO MAX ${entitlement?.proMaxVariant?.toUpperCase() ?? '5X'}`
+                          : entitlement?.tier?.toUpperCase() ?? 'GO'}
+                        {(entitlement?.tier === 'team' || entitlement?.tier === 'enterprise') && ' (pooled)'}
                       </div>
-                      <div className={styles.usageBar}>
-                        <div
-                          className={styles.usageBarFill}
-                          style={{
-                            width: `${Math.min(100, (totalUsage / limit5h) * 100)}%`,
-                            backgroundColor: percentage >= 90 ? '#d64545' : percentage >= 65 ? '#d4a537' : '#4cafe3'
-                          }}
-                        />
-                      </div>
-                      <div className={styles.usagePercentage}>{Math.round(percentage)}%</div>
-                      <div className={styles.usageRow} style={{ marginTop: '12px' }}>
-                        <span>Weekly Limit:</span>
-                        <span className={styles.usageValue}>{Math.round(entitlement?.usageWeeklyPc ?? 0)} / {entitlement?.limitWeeklyPc ?? 'âˆž'} PC</span>
-                      </div>
-                      {isStreaming && (
-                        <div className={styles.usageRow} style={{ marginTop: '12px', color: 'rgba(76, 175, 80, 0.9)' }}>
-                          <span>ðŸŸ¢ Currently using:</span>
-                          <span>{streamingPawCompute} PC</span>
+                      {(limit5h !== null || entitlement?.limit5hPc) && sessionStartTime && (
+                        <div className={styles.usageRow}>
+                          <span>{entitlement?.limit5hPc ? `${(entitlement?.limit5hPc / 1000).toFixed(1)}k limit` : '5-hour limit'}</span>
+                          <span className={styles.usageValue}>
+                            {(() => {
+                              const remainingMs = Math.max(0, (limit5h || entitlement?.limit5hPc || 5 * 60 * 60 * 1000) - sessionElapsedMs);
+                              const hours = Math.floor(remainingMs / (60 * 60 * 1000));
+                              const mins = Math.floor((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
+                              const secs = Math.floor((remainingMs % (60 * 1000)) / 1000);
+                              return `${hours}h ${mins}m ${secs}s ${Math.round(percentage)}%`;
+                            })()}
+                          </span>
+                        </div>
+                      )}
+                      {entitlement?.activeHoursWeekly !== null && entitlement?.activeHoursWeekly > 0 && (
+                        <div className={styles.usageRow}>
+                          <span>Weekly · all models</span>
+                          <span className={styles.usageValue}>
+                            {(() => {
+                              const hoursUsed = entitlement?.activeHoursUsed7d ?? 0;
+                              const hoursLimit = entitlement?.activeHoursWeekly ?? 0;
+                              const percentage = hoursLimit > 0 ? (hoursUsed / hoursLimit) * 100 : 0;
+
+                              // Only show reset time if 100% exhausted
+                              if (percentage < 100) {
+                                return `${Math.round(percentage)}% (${Math.round(hoursUsed * 10) / 10}/${hoursLimit}h)`;
+                              }
+
+                              const cycleStartMs = entitlement?.weeklyCycleStartAt ?? currentTime;
+                              const weekEndMs = cycleStartMs + (7 * 24 * 60 * 60 * 1000);
+                              const resetDate = new Date(weekEndMs);
+                              const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                              const resetDay = daysOfWeek[resetDate.getDay()];
+                              const resetHour = resetDate.getHours().toString().padStart(2, '0');
+                              const resetMin = resetDate.getMinutes().toString().padStart(2, '0');
+                              const ampm = resetDate.getHours() >= 12 ? 'PM' : 'AM';
+
+                              return `100% (${Math.round(hoursUsed * 10) / 10}/${hoursLimit}h) Resets ${resetDay} ${resetHour}:${resetMin} ${ampm}`;
+                            })()}
+                          </span>
                         </div>
                       )}
                     </div>

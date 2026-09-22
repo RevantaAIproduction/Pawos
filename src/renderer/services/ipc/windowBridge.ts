@@ -91,8 +91,10 @@ export function contextBridge() {
   const ipcApi = (window as any).electron?.ipcRenderer;
 
 
-  function on(channel: string, cb: (...args: any[]) => void) {
-    ipcApi?.on(channel, (_: any, payload: any) => cb(payload));
+  function on(channel: string, cb: (...args: any[]) => void): (() => void) | undefined {
+    const handler = (_: any, payload: any) => cb(payload);
+    ipcApi?.on(channel, handler);
+    return () => ipcApi?.removeListener?.(channel, handler);
   }
 
   return {

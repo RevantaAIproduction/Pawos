@@ -281,7 +281,7 @@ describe('Phase 2C: Server-Authoritative Executor Claim', () => {
         run_id: 'run-123',
         executor_instance_id: 'exec-uuid-123', // From claim
         provider: 'gemini',
-        model: 'gemini-flash-latest',
+        model: 'gemini-3.6-flash',
         input_tokens: 100,
         output_tokens: 200,
         provider_cost_usd: 0.00825,

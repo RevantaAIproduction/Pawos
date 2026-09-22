@@ -29,7 +29,7 @@ export function useCompanionEngine() {
       lookAt: (target: { x: number; y: number } | null) => companion.controller?.lookAt(target),
       speak: (text: string) => conversation.speak(text),
       startListening: () => conversation.open(),
-      stopListening: () => conversation.close(),
+      stopListening: () => conversation.stopListening(),
       setMood: (mood: string) => companion.controller?.setMood(mood),
       setContext: (context: Record<string, unknown>) => companion.controller?.setContext(context),
       getEmotion: () => companion.controller?.getEmotion(),

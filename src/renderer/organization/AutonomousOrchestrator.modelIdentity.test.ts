@@ -13,25 +13,25 @@ import { PAW_MODEL_CATALOG } from '../../shared/ai/PawModelTypes';
 
 describe('Autonomous Model Identity Resolution', () => {
   describe('Paw Model → Concrete Model Mapping (Gemini)', () => {
-    it('paw-flash maps to gemini-flash-lite-latest', () => {
+    it('paw-flash maps to gemini-3.5-flash-lite', () => {
       const model = resolveReasoningModel('gemini', 'paw-flash');
-      expect(model).toBe('gemini-flash-lite-latest');
-      expect(model).not.toBe('gemini-flash-latest');
-      expect(model).not.toBe('gemini-pro-latest');
+      expect(model).toBe('gemini-3.5-flash-lite');
+      expect(model).not.toBe('gemini-3.6-flash');
+      expect(model).not.toBe('gemini-3.1-pro');
     });
 
-    it('paw-swift maps to gemini-flash-latest', () => {
+    it('paw-swift maps to gemini-3.6-flash', () => {
       const model = resolveReasoningModel('gemini', 'paw-swift');
-      expect(model).toBe('gemini-flash-latest');
-      expect(model).not.toBe('gemini-flash-lite-latest');
-      expect(model).not.toBe('gemini-pro-latest');
+      expect(model).toBe('gemini-3.6-flash');
+      expect(model).not.toBe('gemini-3.5-flash-lite');
+      expect(model).not.toBe('gemini-3.1-pro');
     });
 
-    it('paw-core maps to gemini-pro-latest', () => {
+    it('paw-core maps to gemini-3.1-pro', () => {
       const model = resolveReasoningModel('gemini', 'paw-core');
-      expect(model).toBe('gemini-pro-latest');
-      expect(model).not.toBe('gemini-flash-latest');
-      expect(model).not.toBe('gemini-flash-lite-latest');
+      expect(model).toBe('gemini-3.1-pro');
+      expect(model).not.toBe('gemini-3.6-flash');
+      expect(model).not.toBe('gemini-3.5-flash-lite');
     });
 
     it('all three tiers produce DIFFERENT concrete models', () => {
@@ -82,17 +82,17 @@ describe('Autonomous Model Identity Resolution', () => {
   });
 
   describe('Model Identity Consistency (No Hardcoded Fallbacks)', () => {
-    it('never falls back to gemini-flash-latest for paw-flash', () => {
+    it('never falls back to gemini-3.6-flash for paw-flash', () => {
       const model = resolveReasoningModel('gemini', 'paw-flash');
-      expect(model).not.toBe('gemini-flash-latest');
-      expect(model).toBe('gemini-flash-lite-latest');
+      expect(model).not.toBe('gemini-3.6-flash');
+      expect(model).toBe('gemini-3.5-flash-lite');
     });
 
     it('never falls back to hardcoded default for paw-core', () => {
       const model = resolveReasoningModel('gemini', 'paw-core');
       expect(model).toBeTruthy();
-      expect(model).not.toBe('gemini-flash-latest'); // Not the default
-      expect(model).toBe('gemini-pro-latest'); // The configured model
+      expect(model).not.toBe('gemini-3.6-flash'); // Not the default
+      expect(model).toBe('gemini-3.1-pro'); // The configured model
     });
 
     it('all reasoning Paw models return truthy (non-empty) models', () => {
@@ -100,9 +100,9 @@ describe('Autonomous Model Identity Resolution', () => {
         resolveReasoningModel('gemini', tier as any)
       );
       expect(models).toEqual([
-        'gemini-flash-lite-latest',
-        'gemini-flash-latest',
-        'gemini-pro-latest',
+        'gemini-3.5-flash-lite',
+        'gemini-3.6-flash',
+        'gemini-3.1-pro',
       ]);
       models.forEach((m) => {
         expect(m).toBeTruthy();
@@ -168,7 +168,7 @@ describe('Autonomous Model Identity Resolution', () => {
       // With the fix, authorization code does:
       // const model = baseProvider.model;
       // if (!model) throw new Error(...)
-      // This ensures no silent fallback to gemini-flash-latest
+      // This ensures no silent fallback to gemini-3.6-flash
     });
 
     it('provider exposes concrete model through interface', () => {
@@ -182,13 +182,13 @@ describe('Autonomous Model Identity Resolution', () => {
       const mockProviderWithModel = {
         id: 'gemini',
         label: 'Gemini',
-        model: 'gemini-pro-latest', // NOW REQUIRED
+        model: 'gemini-3.1-pro', // NOW REQUIRED
         isSupported: () => true,
         streamResponse: () => ({ cancel: () => {} }),
       };
 
       expect(mockProviderWithModel.model).toBeTruthy();
-      expect(mockProviderWithModel.model).toBe('gemini-pro-latest');
+      expect(mockProviderWithModel.model).toBe('gemini-3.1-pro');
 
       // Authorization code can now use this directly:
       // const model = baseProvider.model; // NEVER undefined
@@ -196,17 +196,17 @@ describe('Autonomous Model Identity Resolution', () => {
   });
 
   describe('Pricing Model Lookup (Uses Correct Model)', () => {
-    it('paw-flash pricing comes from gemini-flash-lite-latest, not gemini-flash-latest', () => {
+    it('paw-flash pricing comes from gemini-3.5-flash-lite, not gemini-3.6-flash', () => {
       // This test documents that pricing MUST match the executable model
-      // paw-flash → gemini-flash-lite-latest → look up pricing by this exact model
+      // paw-flash → gemini-3.5-flash-lite → look up pricing by this exact model
 
       const flashModel = resolveReasoningModel('gemini', 'paw-flash');
-      expect(flashModel).toBe('gemini-flash-lite-latest');
+      expect(flashModel).toBe('gemini-3.5-flash-lite');
 
       // The authorization code does:
       // const pricing = pawComputeConfigStore.get().modelPricing[model]
-      // With model = 'gemini-flash-lite-latest', it gets the CORRECT pricing
-      // (not the pricing for gemini-flash-latest, which is different)
+      // With model = 'gemini-3.5-flash-lite', it gets the CORRECT pricing
+      // (not the pricing for gemini-3.6-flash, which is different)
 
       // This is crucial because:
       // - flash-lite is CHEAPER than flash
@@ -217,18 +217,18 @@ describe('Autonomous Model Identity Resolution', () => {
     it('every autonomous mode model exists in PawComputeConfigStore', () => {
       // This is documented requirement:
       // PawComputeConfigStore.modelPricing MUST have entries for:
-      // - gemini-flash-lite-latest (paw-flash)
-      // - gemini-flash-latest (paw-swift)
-      // - gemini-pro-latest (paw-core)
+      // - gemini-3.5-flash-lite (paw-flash)
+      // - gemini-3.6-flash (paw-swift)
+      // - gemini-3.1-pro (paw-core)
 
       // The test here just documents the requirement.
       // Actual verification: see src/main/billing/PawComputeConfigStore.ts
       // which must hardcode all three models with their real Gemini pricing.
 
       const requiredModelsForGemini = [
-        'gemini-flash-lite-latest',
-        'gemini-flash-latest',
-        'gemini-pro-latest',
+        'gemini-3.5-flash-lite',
+        'gemini-3.6-flash',
+        'gemini-3.1-pro',
       ];
 
       requiredModelsForGemini.forEach((model) => {
@@ -241,7 +241,7 @@ describe('Autonomous Model Identity Resolution', () => {
   describe('Model Identity Through Settlement (Audit Trail)', () => {
     it('settlement path receives correct model from usage metadata', () => {
       // Usage metadata includes the model that was actually executed:
-      // ProviderUsageMetadata.model = 'gemini-pro-latest' (or whichever was used)
+      // ProviderUsageMetadata.model = 'gemini-3.1-pro' (or whichever was used)
       //
       // Settlement path:
       // 1. UsageMeteringEngine reads usage metadata (includes model)
@@ -256,15 +256,15 @@ describe('Autonomous Model Identity Resolution', () => {
 
       const exampleUsageMetadata = {
         provider: 'gemini' as const,
-        model: 'gemini-pro-latest', // Must be the concrete model used
+        model: 'gemini-3.1-pro', // Must be the concrete model used
         inputTokens: 1000,
         outputTokens: 2000,
         totalTokens: 3000,
         requestId: 'req-123',
       };
 
-      expect(exampleUsageMetadata.model).toBe('gemini-pro-latest');
-      expect(exampleUsageMetadata.model).not.toBe('gemini-flash-latest');
+      expect(exampleUsageMetadata.model).toBe('gemini-3.1-pro');
+      expect(exampleUsageMetadata.model).not.toBe('gemini-3.6-flash');
     });
   });
 });
