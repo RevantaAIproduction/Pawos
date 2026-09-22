@@ -1628,6 +1628,11 @@ export function ConversationPanel({
               {/* Messages container - conversation history */}
               <div className={styles.transcript}>
                 {snapshot.messages.map((message, idx) => {
+                  // Skip governance confirmation messages - they're shown in ContextualGovernancePanel instead
+                  if (message.id.startsWith('confirm-')) {
+                    return null;
+                  }
+
                   const timestamp = message.createdAt ? new Date(message.createdAt) : new Date();
                   const now = new Date();
                   const diffMs = now.getTime() - timestamp.getTime();
