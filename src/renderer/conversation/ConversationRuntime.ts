@@ -1962,6 +1962,14 @@ export class ConversationRuntime {
             : 'completed';
     task.finalReport = finalReport;
     this.upsertTaskMessage();
+
+    // Send completion notification
+    if (task.status === 'completed') {
+      this.sendNotification('Work Finished', `✓ ${task.goal || 'Task'} completed successfully`);
+    } else if (task.status === 'failed') {
+      this.sendNotification('Work Failed', `✗ ${task.goal || 'Task'} did not complete`);
+    }
+
     // Remove temporary task message from conversation after finalization
     this.removeMessage(task.id);
     this.currentTaskRecord = null;
@@ -1970,6 +1978,18 @@ export class ConversationRuntime {
     this.fileChangeMessageCreated = false;
     this.recordTaskProvenance(task);
     console.log(`[TRACE.finalizeTask] END | taskId=${task.id}`);
+  }
+
+  /** Send system notification to user */
+  private sendNotification(title: string, body: string): void {
+    try {
+      new Notification(title, {
+        body,
+        tag: `pawos-${Date.now()}`,
+      });
+    } catch (e) {
+      console.error('Failed to send notification:', e);
+    }
   }
 
   /**

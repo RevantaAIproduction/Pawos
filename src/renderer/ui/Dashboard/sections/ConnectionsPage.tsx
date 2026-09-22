@@ -292,6 +292,17 @@ export function ConnectionsPage({ scope, onUpgrade }: { scope: ConnectivityScope
       const result = await ipc.connectivityConnect(connectorId, scope);
       if (!result.ok) throw new Error(result.error);
       await mirrorBestEffort('connections:upsert', () => connectionManagerService.upsert(scope, result.data));
+
+      // Get connector name for notification
+      const connector = connectors.find(c => c.id === connectorId);
+      const connectorName = connector?.displayName || connectorId;
+
+      // Send success notification
+      new Notification('Connected Successfully', {
+        body: `✓ ${connectorName} connected successfully`,
+        tag: `pawos-connector-${connectorId}`,
+      });
+
       await reload();
     } catch (e) {
       setRowError(connectorId, getErrorMessage(e));
@@ -323,6 +334,17 @@ export function ConnectionsPage({ scope, onUpgrade }: { scope: ConnectivityScope
       if (!result.ok) throw new Error(result.error);
       await mirrorBestEffort('connections:remove', () => connectionManagerService.remove(scope, connectorId));
       await mirrorBestEffort('credentials:revoke', () => connectivityCredentialService.revoke(scope, connectorId));
+
+      // Get connector name for notification
+      const connector = connectors.find(c => c.id === connectorId);
+      const connectorName = connector?.displayName || connectorId;
+
+      // Send disconnection notification
+      new Notification('Disconnected', {
+        body: `✓ ${connectorName} disconnected`,
+        tag: `pawos-connector-${connectorId}`,
+      });
+
       await reload();
     } catch (e) {
       setRowError(connectorId, getErrorMessage(e));
