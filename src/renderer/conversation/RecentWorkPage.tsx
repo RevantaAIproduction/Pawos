@@ -18,9 +18,9 @@ export function RecentWorkPage({
   const [showRecentWork, setShowRecentWork] = useState(true);
 
   const recentTasks = [
-    { icon: '[done]', title: 'Changes applied', status: 'done' },
-    { icon: '[done]', title: 'Tests completed', status: 'done' },
-    { icon: '[running]', title: 'Validation running', status: 'running' },
+    { icon: '✓', title: 'Changes applied', status: 'done' },
+    { icon: '✓', title: 'Tests completed', status: 'done' },
+    { icon: '●', title: 'Validation running', status: 'running' },
   ];
 
   const timeAgo = '2 min ago';
@@ -153,7 +153,7 @@ export function RecentWorkPage({
 
           {/* Title */}
           <div style={{ marginBottom: 16, paddingRight: 28 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'rgba(var(--pawos-overlay-rgb), 0.9)' }}>[done] Building...</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'rgba(var(--pawos-overlay-rgb), 0.9)' }}>✓ Building...</div>
             <div style={{ fontSize: 12, color: 'rgba(var(--pawos-overlay-rgb), 0.6)', marginTop: 4 }}>Close button added</div>
           </div>
 
@@ -182,7 +182,7 @@ export function RecentWorkPage({
                 onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(var(--pawos-overlay-rgb), 0.05)')}
                 onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
               >
-                <span style={{ fontSize: 12, color: 'rgba(var(--pawos-overlay-rgb), 0.8)' }}>{task.icon}</span>
+                <span style={{ fontSize: 12, color: 'rgba(var(--pawos-overlay-rgb), 0.45)', fontWeight: 500 }}>{task.icon}</span>
                 <span style={{ fontSize: 12, color: 'rgba(var(--pawos-overlay-rgb), 0.8)' }}>{task.title}</span>
 
                 {/* Hover Actions */}
@@ -234,7 +234,7 @@ export function RecentWorkPage({
                     }}
                     title="Copy"
                   >
-                    [copy]
+                    ◐
                   </button>
                   <button
                     type="button"
@@ -249,7 +249,7 @@ export function RecentWorkPage({
                     }}
                     title="Pin"
                   >
-                    [pin]
+                    ◎
                   </button>
                 </div>
               </div>
