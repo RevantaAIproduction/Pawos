@@ -24,6 +24,7 @@ export function ContextualGovernancePanel({ pendingApproval, onApprove, onDeny }
   const [denyRef, setDenyRef] = useState<HTMLButtonElement | null>(null);
 
   useEffect(() => {
+    // Register listeners only once on mount
     const unsubscribeApproved = ipc.onGovernanceApproved(({ approvalId }) => {
       onApprove?.(approvalId);
     });
@@ -36,7 +37,7 @@ export function ContextualGovernancePanel({ pendingApproval, onApprove, onDeny }
       unsubscribeApproved?.();
       unsubscribeDenied?.();
     };
-  }, [onApprove, onDeny]);
+  }, []); // Empty dependency - register once on mount only
 
   // Keyboard shortcuts: Alt+Enter = Allow, Esc = Deny
   useEffect(() => {
