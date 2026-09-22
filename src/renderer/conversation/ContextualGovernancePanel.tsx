@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import styles from './contextualGovernancePanel.module.css';
 import { ipc } from '../services/ipc/ipcBridgeImplementation';
 
@@ -22,15 +22,23 @@ interface ContextualGovernancePanelProps {
 export function ContextualGovernancePanel({ pendingApproval, onApprove, onDeny }: ContextualGovernancePanelProps) {
   const [approveRef, setApproveRef] = useState<HTMLButtonElement | null>(null);
   const [denyRef, setDenyRef] = useState<HTMLButtonElement | null>(null);
+  const onApproveRef = useRef(onApprove);
+  const onDenyRef = useRef(onDeny);
+
+  // Keep refs updated with latest callbacks
+  useEffect(() => {
+    onApproveRef.current = onApprove;
+    onDenyRef.current = onDeny;
+  }, [onApprove, onDeny]);
 
   useEffect(() => {
     // Register listeners only once on mount
     const unsubscribeApproved = ipc.onGovernanceApproved(({ approvalId }) => {
-      onApprove?.(approvalId);
+      onApproveRef.current?.(approvalId);
     });
 
     const unsubscribeDenied = ipc.onGovernanceDenied(({ approvalId }) => {
-      onDeny?.(approvalId);
+      onDenyRef.current?.(approvalId);
     });
 
     return () => {
