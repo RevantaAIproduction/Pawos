@@ -56,6 +56,22 @@ export function ContextualGovernancePanel({ pendingApproval, onApprove, onDeny }
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [pendingApproval, approveRef, denyRef]);
 
+  // Show OS notification when approval is pending
+  useEffect(() => {
+    if (!pendingApproval) return;
+
+    const notification = new Notification('PawOS Approval Needed', {
+      body: `PawOS is waiting for your approval to ${pendingApproval.actionType.replace(/_/g, ' ').toLowerCase()}`,
+      icon: undefined,
+      tag: 'pawos-approval',
+      requireInteraction: true,
+    });
+
+    return () => {
+      notification.close();
+    };
+  }, [pendingApproval]);
+
   if (!pendingApproval) {
     return null;
   }
