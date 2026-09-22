@@ -623,6 +623,20 @@ export function useConversationController(args?: {
       // call. Renderer-provided tier, usage, balance, and authorization result are never trusted.
       // Check session prompt limit before proceeding
       const checkAndSubmit = async () => {
+        // Interrupt any currently running work when user sends a new prompt
+        if (snapshot.state === 'running' || snapshot.state === 'performingAction') {
+          runtimeRef.current?.cancel();
+          // Notify user that work was interrupted
+          try {
+            new Notification('Work Interrupted', {
+              body: 'Previous task stopped. Processing your new request...',
+              tag: 'pawos-interrupt',
+            });
+          } catch (e) {
+            console.error('Failed to send interrupt notification:', e);
+          }
+        }
+
         const limitReached = await checkSessionLimit();
         if (limitReached) {
           // Session limit reached - show modal and preserve the prompt
