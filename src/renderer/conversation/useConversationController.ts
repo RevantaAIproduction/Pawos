@@ -157,6 +157,14 @@ export function useConversationController(args?: {
     ipc.entitlementGetModelTierRequirements().then(setModelTierRequirements).catch(() => {});
   }, [ipc]);
 
+  // Real-time entitlement updates: refresh every 3 seconds while panel is open to show live usage
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refreshEntitlement();
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [refreshEntitlement]);
+
   // Resolved once per session, not re-fetched on every entitlement refresh — organization
   // membership doesn't change mid-session in practice, matching the same session-scoped resolution
   // convention already used elsewhere (useOrganizationTierSync, useConnectivityBootstrap). Only
