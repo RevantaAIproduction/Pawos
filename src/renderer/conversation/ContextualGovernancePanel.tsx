@@ -87,11 +87,21 @@ export function ContextualGovernancePanel({ pendingApproval, onApprove, onDeny }
 
   const approval = pendingApproval;
 
-  const handleApprove = async () => {
+  const handleAllowOnce = async () => {
     try {
       await ipc.governanceApprove(approval.approvalId);
     } catch (err) {
       console.error('Failed to approve:', err);
+    }
+  };
+
+  const handleAllowAlways = async () => {
+    try {
+      // Store approval for future similar actions
+      await ipc.governanceApprove(approval.approvalId);
+      // TODO: Store in preferences to auto-approve similar actions
+    } catch (err) {
+      console.error('Failed to approve always:', err);
     }
   };
 
@@ -106,27 +116,40 @@ export function ContextualGovernancePanel({ pendingApproval, onApprove, onDeny }
   return (
     <div className={styles.panel} data-interactive="true">
       <div className={styles.content}>
-        <div className={styles.message}>
-          PawOS wants to {approval.actionType.replace(/_/g, ' ').toLowerCase()}
+        <div className={styles.header} style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid rgba(var(--pawos-overlay-rgb), 0.1)' }}>
+          <div style={{ fontSize: '11px', color: 'rgba(var(--pawos-overlay-rgb), 0.5)', marginBottom: '4px' }}>
+            PawOS needs your approval
+          </div>
+          <div style={{ fontSize: '12px', color: 'rgba(var(--pawos-overlay-rgb), 0.8)', fontWeight: 500 }}>
+            {approval.actionType.replace(/_/g, ' ').charAt(0).toUpperCase() + approval.actionType.replace(/_/g, ' ').slice(1).toLowerCase()}
+          </div>
         </div>
-        <div className={styles.actions}>
+        <div className={styles.actions} style={{ display: 'flex', gap: '8px' }}>
           <button
             ref={setApproveRef}
             className={`${styles.button} ${styles.allow}`}
-            onClick={handleApprove}
-            title="Alt+Enter to approve"
+            onClick={handleAllowOnce}
+            title="Alt+Enter to approve once"
+            style={{ flex: 1, padding: '8px 12px', fontSize: '12px' }}
           >
-            Allow
-            <span className={styles.shortcut}>Alt+Enter</span>
+            Allow Once
+          </button>
+          <button
+            className={`${styles.button} ${styles.allow}`}
+            onClick={handleAllowAlways}
+            title="Approve this action type always"
+            style={{ flex: 1, padding: '8px 12px', fontSize: '12px', opacity: 0.8 }}
+          >
+            Allow Always
           </button>
           <button
             ref={setDenyRef}
             className={`${styles.button} ${styles.deny}`}
             onClick={handleDeny}
             title="Esc to deny"
+            style={{ flex: 1, padding: '8px 12px', fontSize: '12px' }}
           >
             Deny
-            <span className={styles.shortcut}>Esc</span>
           </button>
         </div>
       </div>
