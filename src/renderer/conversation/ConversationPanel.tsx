@@ -1745,7 +1745,7 @@ export function ConversationPanel({
 
                 {isStreaming && (
                   <div className={styles.streaming}>
-                    âœ¨ PawOS is responding
+                    PawOS is responding...
                   </div>
                 )}
               </div>
