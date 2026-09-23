@@ -326,13 +326,22 @@ function createAppTray() {
       if (!overlayWindow) {
         enableCompanion();
       } else if (overlayWindow.isVisible()) {
+        console.error('[OVERLAY] User toggled visibility to hide');
         overlayWindow.hide();
       } else {
+        console.error('[OVERLAY] User toggled visibility to show');
         overlayWindow.show();
       }
     },
-    onShow: () => enableCompanion(),
-    onHide: () => overlayWindow?.hide(),
+    onShow: () => {
+      console.error('[OVERLAY] Tray onShow triggered');
+      enableCompanion();
+    },
+    onHide: () => {
+      // Only hide if explicitly requested via tray - log it for debugging
+      console.error('[OVERLAY] Tray onHide triggered - hiding window');
+      overlayWindow?.hide();
+    },
     onRestart: () => {
       app.relaunch();
       app.exit(0);

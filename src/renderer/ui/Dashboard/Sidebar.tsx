@@ -147,6 +147,17 @@ function AppsGridIcon() {
   );
 }
 
+function RefreshIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 11a8 8 0 0 0-14.5-4.5L4 8" />
+      <path d="M4 4v4h4" />
+      <path d="M4 13a8 8 0 0 0 14.5 4.5L20 16" />
+      <path d="M20 20v-4h-4" />
+    </svg>
+  );
+}
+
 function NavButton({
   item,
   active,
@@ -312,7 +323,7 @@ export function Sidebar({
             title={updateLabel}
             aria-label={updateLabel}
           >
-            <span className={styles.navIcon}>[refresh]</span>
+            <span className={styles.navIcon}><RefreshIcon /></span>
             {!collapsed && <span>{updateLabel}</span>}
           </button>
         </nav>

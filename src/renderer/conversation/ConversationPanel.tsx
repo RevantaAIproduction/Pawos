@@ -1078,6 +1078,31 @@ export function ConversationPanel({
       return;
     }
 
+    // GOVERNANCE APPROVAL: If user types/says "allow" and there's a pending approval, approve it
+    const lowerText = text.toLowerCase();
+    if (pendingGovernanceApproval) {
+      if (lowerText === 'allow') {
+        ipc.governanceApprove(pendingGovernanceApproval.approvalId);
+        setPendingGovernanceApproval(null);
+        setDraft('');
+        lastSyncedVoiceDraftRef.current = '';
+        setWasPasted(false);
+        requestAnimationFrame(resizeTextarea);
+        return;
+      }
+
+      // GOVERNANCE DENIAL: If user types/says "deny" or anything else while approval is pending, deny it
+      if (lowerText === 'deny' || lowerText !== 'allow') {
+        ipc.governanceDeny(pendingGovernanceApproval.approvalId);
+        setPendingGovernanceApproval(null);
+        setDraft('');
+        lastSyncedVoiceDraftRef.current = '';
+        setWasPasted(false);
+        requestAnimationFrame(resizeTextarea);
+        return;
+      }
+    }
+
     // If task is running and text is not empty, queue the message instead of sending
     if (snapshot.state === 'performingAction' && text) {
       const context: SubmittedInputContext | undefined = wasPasted ? { source: 'pasted' } : { projectId: windowCtx.context.project?.id };
@@ -1809,7 +1834,7 @@ export function ConversationPanel({
           <textarea
             ref={textareaRef}
             className={styles.input}
-            placeholder="Describe a task or ask a question..."
+            placeholder={pendingGovernanceApproval ? 'Type "allow" to proceed or "deny" to skip...' : 'Describe a task or ask a question...'}
             value={draft}
             onChange={(e) => {
               setDraft(e.currentTarget.value);
@@ -1826,7 +1851,7 @@ export function ConversationPanel({
               }
             }}
             onPaste={() => setWasPasted(true)}
-            disabled={isStreaming}
+            disabled={isStreaming && !pendingGovernanceApproval}
           />
 
           <div className={styles.composerInputControls}>

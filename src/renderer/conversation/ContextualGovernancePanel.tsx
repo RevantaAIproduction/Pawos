@@ -14,14 +14,13 @@ interface ContextualGovernancePanelProps {
     approvalId: string;
     actionType: string;
     requestedAt: number;
+    details?: string;
   } | null;
   onApprove?: (approvalId: string) => void;
   onDeny?: (approvalId: string) => void;
 }
 
 export function ContextualGovernancePanel({ pendingApproval, onApprove, onDeny }: ContextualGovernancePanelProps) {
-  const [approveRef, setApproveRef] = useState<HTMLButtonElement | null>(null);
-  const [denyRef, setDenyRef] = useState<HTMLButtonElement | null>(null);
   const onApproveRef = useRef(onApprove);
   const onDenyRef = useRef(onDeny);
 
@@ -47,43 +46,29 @@ export function ContextualGovernancePanel({ pendingApproval, onApprove, onDeny }
     };
   }, []); // Empty dependency - register once on mount only
 
-  // Keyboard shortcuts: Alt+Enter = Allow Once, Alt+, = Allow Always, Esc = Deny
-  useEffect(() => {
-    if (!pendingApproval) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.altKey && e.key === 'Enter') {
-        e.preventDefault();
-        approveRef?.click();
-      } else if (e.altKey && e.key === ',') {
-        e.preventDefault();
-        // Find and click the "Allow Always" button
-        const allowAlwaysBtn = document.querySelector('[title="Approve this action type always"]') as HTMLButtonElement;
-        allowAlwaysBtn?.click();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        denyRef?.click();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [pendingApproval, approveRef, denyRef]);
-
   // Show OS notification when approval is pending
   useEffect(() => {
     if (!pendingApproval) return;
 
-    const notification = new Notification('PawOS Approval Needed', {
-      body: `PawOS is waiting for your approval to ${pendingApproval.actionType.replace(/_/g, ' ').toLowerCase()}`,
-      icon: undefined,
-      tag: 'pawos-approval',
-      requireInteraction: true,
-    });
-
-    return () => {
-      notification.close();
-    };
+    try {
+      // Try using Electron's native notification via IPC if available
+      if (ipc.companionShowNotification) {
+        ipc.companionShowNotification(
+          'PawOS Approval Needed',
+          `PawOS is waiting for your approval to ${pendingApproval.actionType.replace(/_/g, ' ').toLowerCase()}`
+        );
+      } else {
+        // Fallback to Web Notification API
+        new Notification('PawOS Approval Needed', {
+          body: `PawOS is waiting for your approval to ${pendingApproval.actionType.replace(/_/g, ' ').toLowerCase()}`,
+          icon: undefined,
+          tag: 'pawos-approval',
+          requireInteraction: true,
+        });
+      }
+    } catch (err) {
+      console.error('Failed to show notification:', err);
+    }
   }, [pendingApproval]);
 
   if (!pendingApproval) {
@@ -91,72 +76,56 @@ export function ContextualGovernancePanel({ pendingApproval, onApprove, onDeny }
   }
 
   const approval = pendingApproval;
+  const hasDetails = approval.details && approval.details.trim().length > 0;
 
-  const handleAllowOnce = async () => {
-    try {
-      await ipc.governanceApprove(approval.approvalId);
-    } catch (err) {
-      console.error('Failed to approve:', err);
-    }
-  };
-
-  const handleAllowAlways = async () => {
-    try {
-      // Store approval for future similar actions
-      await ipc.governanceApprove(approval.approvalId);
-      // TODO: Store in preferences to auto-approve similar actions
-    } catch (err) {
-      console.error('Failed to approve always:', err);
-    }
-  };
-
-  const handleDeny = async () => {
-    try {
-      await ipc.governanceDeny(approval.approvalId);
-    } catch (err) {
-      console.error('Failed to deny:', err);
-    }
+  // Format action type with context for all governance types
+  const getActionLabel = (type: string) => {
+    const typeMap: Record<string, string> = {
+      'run_command': 'Running command',
+      'write_file': 'Writing file',
+      'create_folder': 'Creating folder',
+      'delete_path': 'Deleting',
+      'install_tool': 'Installing software',
+      'download_software': 'Downloading software',
+      'set_path_entry': 'Adding to PATH',
+      'connect_database': 'Connecting to database',
+      'request_api_access': 'Requesting API access',
+      'propose_code_edit_plan': 'Proposing code changes',
+      'deploy_project': 'Deploying project',
+      'git_commit': 'Creating git commit',
+    };
+    return typeMap[type] || type.replace(/_/g, ' ');
   };
 
   return (
     <div className={styles.panel} data-interactive="true">
       <div className={styles.content}>
-        <div className={styles.header} style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid rgba(var(--pawos-overlay-rgb), 0.1)' }}>
-          <div style={{ fontSize: '11px', color: 'rgba(var(--pawos-overlay-rgb), 0.5)', marginBottom: '4px' }}>
-            PawOS needs your approval
+        <div style={{ padding: '12px', backgroundColor: 'rgba(var(--pawos-overlay-rgb), 0.05)', borderRadius: '6px', borderLeft: '3px solid rgba(59, 130, 246, 0.5)' }}>
+          <div style={{ fontSize: '12px', color: 'rgba(var(--pawos-overlay-rgb), 0.9)', marginBottom: '8px', fontWeight: 500 }}>
+            {getActionLabel(approval.actionType)}
           </div>
-          <div style={{ fontSize: '12px', color: 'rgba(var(--pawos-overlay-rgb), 0.8)', fontWeight: 500 }}>
-            {approval.actionType.replace(/_/g, ' ').charAt(0).toUpperCase() + approval.actionType.replace(/_/g, ' ').slice(1).toLowerCase()}
+
+          {hasDetails && (
+            <div style={{
+              fontSize: '11px',
+              color: 'rgba(var(--pawos-overlay-rgb), 0.7)',
+              backgroundColor: 'rgba(var(--pawos-overlay-rgb), 0.08)',
+              padding: '8px',
+              borderRadius: '4px',
+              marginBottom: '8px',
+              fontFamily: 'monospace',
+              wordBreak: 'break-all',
+              maxHeight: '120px',
+              overflow: 'auto',
+              whiteSpace: 'pre-wrap'
+            }}>
+              {approval.details}
+            </div>
+          )}
+
+          <div style={{ fontSize: '11px', color: 'rgba(var(--pawos-overlay-rgb), 0.6)' }}>
+            Type or say <strong style={{ color: 'rgba(var(--pawos-overlay-rgb), 0.8)' }}>allow</strong> to proceed, or <strong style={{ color: 'rgba(var(--pawos-overlay-rgb), 0.8)' }}>deny</strong> to skip.
           </div>
-        </div>
-        <div className={styles.actions} style={{ display: 'flex', gap: '8px' }}>
-          <button
-            ref={setApproveRef}
-            className={`${styles.button} ${styles.allow}`}
-            onClick={handleAllowOnce}
-            title="Alt+Enter to approve once"
-            style={{ flex: 1, padding: '8px 12px', fontSize: '12px' }}
-          >
-            Allow Once
-          </button>
-          <button
-            className={`${styles.button} ${styles.allow}`}
-            onClick={handleAllowAlways}
-            title="Approve this action type always (Alt+,)"
-            style={{ flex: 1, padding: '8px 12px', fontSize: '12px', opacity: 0.8 }}
-          >
-            Allow Always
-            <span className={styles.shortcut} style={{ fontSize: '10px' }}>Alt+,</span>
-          </button>
-          <button
-            ref={setDenyRef}
-            className={`${styles.button} ${styles.deny}`}
-            onClick={handleDeny}
-            title="Esc to deny"
-            style={{ flex: 1, padding: '8px 12px', fontSize: '12px' }}
-          >
-            Deny
-          </button>
         </div>
       </div>
     </div>

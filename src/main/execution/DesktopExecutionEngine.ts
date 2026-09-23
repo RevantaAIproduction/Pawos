@@ -82,6 +82,7 @@ import { recordCodingPreferencePlugin } from './plugins/RecordCodingPreferencePl
 import { queryCodingRuntimeMemoryPlugin } from './plugins/QueryCodingRuntimeMemoryPlugin';
 import { installToolPlugin } from './plugins/InstallToolPlugin';
 import { detectSoftwarePlugin } from './plugins/DetectSoftwarePlugin';
+import { downloadSoftwarePlugin } from './plugins/DownloadSoftwarePlugin';
 import { updateSoftwarePlugin } from './plugins/UpdateSoftwarePlugin';
 import { uninstallSoftwarePlugin } from './plugins/UninstallSoftwarePlugin';
 import { repairSoftwarePlugin } from './plugins/RepairSoftwarePlugin';
@@ -212,6 +213,12 @@ import { getCompanionMemorySummaryPlugin } from './plugins/companion/GetCompanio
 import { resetCompanionMemoryPlugin } from './plugins/companion/ResetCompanionMemoryPlugin';
 import { getInfraModePlugin } from './plugins/infrastructure/GetInfraModePlugin';
 import { setInfraModePlugin } from './plugins/infrastructure/SetInfraModePlugin';
+import { connectDatabasePlugin } from './plugins/ConnectDatabasePlugin';
+import { requestFilePermissionPlugin } from './plugins/RequestFilePermissionPlugin';
+import { requestToolAccessPlugin } from './plugins/RequestToolAccessPlugin';
+import { requestAPIAccessPlugin } from './plugins/RequestAPIAccessPlugin';
+import { requestExternalSiteAccessPlugin } from './plugins/RequestExternalSiteAccessPlugin';
+import { requestCredentialAccessPlugin } from './plugins/RequestCredentialAccessPlugin';
 
 /** Observe → Diagnose → Repair → Retry → Verify — max 3 automatic attempts, then honestly report failure rather than looping or silently giving up. */
 const MAX_RECOVERY_ATTEMPTS = 3;
@@ -284,10 +291,17 @@ export class DesktopExecutionEngine extends EventEmitter {
     queryCodingRuntimeMemoryPlugin,
     installToolPlugin,
     detectSoftwarePlugin,
+    downloadSoftwarePlugin,
     updateSoftwarePlugin,
     uninstallSoftwarePlugin,
     repairSoftwarePlugin,
     verifyToolInstalledPlugin,
+    connectDatabasePlugin,
+    requestFilePermissionPlugin,
+    requestToolAccessPlugin,
+    requestAPIAccessPlugin,
+    requestExternalSiteAccessPlugin,
+    requestCredentialAccessPlugin,
     setPathEntryPlugin,
     setEnvironmentVariablePlugin,
     openDevBrowserPlugin,
@@ -510,7 +524,31 @@ export class DesktopExecutionEngine extends EventEmitter {
       const approvalId = uuidv4();
       const approval = deriveApprovalKey(request);
       if (approval) pendingApprovalStore.record({ ...approval, requestedAt: Date.now() });
-      recordApprovalRequest(approvalId, request.type, { request });
+
+      // Extract action details based on request type
+      let actionDetails = '';
+      if (request.type === 'runCommand') {
+        actionDetails = (request as any).command || '';
+      } else if (request.type === 'writeFile') {
+        actionDetails = (request as any).path || '';
+      } else if (request.type === 'createFolder') {
+        actionDetails = (request as any).path || '';
+      } else if (request.type === 'deletePath') {
+        actionDetails = (request as any).path || '';
+      } else if (request.type === 'movePath') {
+        actionDetails = `${(request as any).from} → ${(request as any).to}` || '';
+      } else if (request.type === 'connectDatabase') {
+        const dbReq = request as any;
+        actionDetails = `${dbReq.type}://${dbReq.host}:${dbReq.port}/${dbReq.database}` || '';
+      } else if (request.type === 'downloadSoftware') {
+        actionDetails = `${(request as any).name} (${(request as any).manager || 'winget'})` || '';
+      } else if (request.type === 'requestAPIAccess') {
+        actionDetails = `${(request as any).service}${(request as any).scopes ? ` (${(request as any).scopes.join(', ')})` : ''}` || '';
+      } else if (request.type === 'deployProject') {
+        actionDetails = (request as any).environment || 'production';
+      }
+
+      recordApprovalRequest(approvalId, request.type, { request, details: actionDetails });
       return { ok: false, reason: 'requires-confirmation', approvalRequestId: approvalId };
     }
 

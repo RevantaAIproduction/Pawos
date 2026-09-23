@@ -283,10 +283,22 @@ export type ActionRequest = { scope?: ConnectivityScope; codingRuntimeSession?: 
       confirmed?: boolean;
     }
   | { type: 'detectSoftware'; manager: 'winget' | 'npm' | 'pip' | 'code-extension'; packageId: string }
+  | { type: 'downloadSoftware'; name: string; manager?: 'winget' | 'npm' | 'pip'; installPath?: string; confirmed?: boolean }
   | { type: 'updateSoftware'; manager: 'winget' | 'npm' | 'pip' | 'code-extension'; packageId: string; confirmed?: boolean }
   | { type: 'uninstallSoftware'; manager: 'winget' | 'npm' | 'pip' | 'code-extension'; packageId: string; confirmed?: boolean }
   | { type: 'repairSoftware'; manager: 'winget' | 'npm' | 'pip' | 'code-extension'; packageId: string; verifyCommand?: string; executableHint?: string; confirmed?: boolean }
   | { type: 'verifyToolInstalled'; command: string }
+  | { type: 'connectDatabase'; type: 'mysql' | 'postgres' | 'mongodb' | 'sqlite' | 'mssql'; host?: string; port?: number; username?: string; password?: string; database?: string; confirmed?: boolean }
+  // Claude Code-style governance: File access permissions
+  | { type: 'requestFilePermission'; path: string; permission: 'read' | 'write' | 'edit' | 'delete'; confirmed?: boolean }
+  // Claude Code-style governance: Tool access (Bash, PowerShell, GitHub CLI, etc.)
+  | { type: 'requestToolAccess'; tool: 'bash' | 'powershell' | 'github' | 'docker' | 'kubernetes' | 'curl' | 'git'; scope?: string; confirmed?: boolean }
+  // Claude Code-style governance: API/credential access for integrations
+  | { type: 'requestAPIAccess'; service: 'github' | 'slack' | 'notion' | 'jira' | 'linear' | 'aws' | 'gcp' | 'azure'; scopes?: string[]; confirmed?: boolean }
+  // Claude Code-style governance: External site/origin access
+  | { type: 'requestExternalSiteAccess'; url: string; origin: string; reason?: string; confirmed?: boolean }
+  // Claude Code-style governance: Credential storage and retrieval
+  | { type: 'requestCredentialAccess'; credentialType: 'api-key' | 'password' | 'token' | 'certificate'; service?: string; confirmed?: boolean }
   // Writes to real Windows System (Machine) scope by default, requesting a
   // real UAC elevation prompt when required — never silently downgrades to
   // User scope. `preferredScope` lets the model explicitly settle for User
@@ -789,16 +801,24 @@ export type ActionResult =
  * which only the plugin itself can check at execute time.
  */
 export const DESTRUCTIVE_ACTION_TYPES: ActionRequest['type'][] = [
+  'writeFile',
   'createFolder',
   'runCommand',
   'movePath',
   'deletePath',
   'installTool',
+  'downloadSoftware',
   'updateSoftware',
   'uninstallSoftware',
   'repairSoftware',
   'setPathEntry',
   'setEnvironmentVariable',
+  'connectDatabase',
+  'requestFilePermission',
+  'requestToolAccess',
+  'requestAPIAccess',
+  'requestExternalSiteAccess',
+  'requestCredentialAccess',
   'fillDevForm',
   'writeEnvVar',
   'runDeployScript',

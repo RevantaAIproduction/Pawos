@@ -23,9 +23,6 @@ export class WriteFilePlugin extends BasePlugin {
     if (request.type !== 'writeFile') return { ok: false, reason: 'failed', message: 'Mismatched request.' };
 
     const exists = fs.existsSync(request.path);
-    if (exists && !request.confirmed) {
-      return { ok: false, reason: 'requires-confirmation' };
-    }
 
     try {
       await fs.promises.mkdir(path.dirname(request.path), { recursive: true });

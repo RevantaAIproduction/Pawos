@@ -30,12 +30,14 @@ win:
   icon: build/icon.ico
 
 nsis:
-  oneClick: false
-  perMachine: true
-  allowToChangeInstallationDirectory: true
+  oneClick: true
+  perMachine: false
+  allowToChangeInstallationDirectory: false
   deleteAppDataOnUninstall: false
   installerIcon: build/icon.ico
   uninstallerIcon: build/icon.ico
+  installerLanguages:
+    - en_US
 
 electronVersion: "35.0.0"
 
