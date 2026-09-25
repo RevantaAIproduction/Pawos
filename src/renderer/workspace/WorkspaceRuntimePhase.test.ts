@@ -123,7 +123,7 @@ const autonomousMocks = vi.hoisted(() => ({
   entitlementIsFeatureAvailable: vi.fn(),
   entitlementGetFeatureTierRequirements: vi.fn(),
   connectivityGetStatus: vi.fn(),
-  getTicketBalance: vi.fn(async () => ({ balanceUsd: 0, ticketsUsedCount: 0 })),
+  getTicketBalance: vi.fn(async () => ({ balanceUsd: 0, ticketsUsedCount: 0, availableBalancePc: 0 })),
   getTicketUnitPriceUsd: vi.fn(() => 5),
   startRun: vi.fn(),
   orchestrate: vi.fn(async () => ({})),
@@ -157,6 +157,7 @@ vi.mock('../organization/AutonomousOrchestrator', () => ({
 
 vi.mock('../../shared/organization/AutonomousTaskBillingTypes', () => ({
   getTicketUnitPriceUsd: autonomousMocks.getTicketUnitPriceUsd,
+  TICKET_START_MINIMUM_USD: 5,
 }));
 
 import { withAutonomousTaskBilling } from '../organization/AutonomousTaskBillingGate';
@@ -164,7 +165,7 @@ import { withAutonomousTaskBilling } from '../organization/AutonomousTaskBilling
 describe('Autonomous Work tier gate', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    autonomousMocks.getTicketBalance.mockResolvedValue({ balanceUsd: 0, ticketsUsedCount: 0 });
+    autonomousMocks.getTicketBalance.mockResolvedValue({ balanceUsd: 0, ticketsUsedCount: 0, availableBalancePc: 0 });
     autonomousMocks.getTicketUnitPriceUsd.mockReturnValue(5);
   });
 
@@ -183,7 +184,7 @@ describe('Autonomous Work tier gate', () => {
 
   it('requirement 9 — insufficient balance blocks work with balance-restricted reason', async () => {
     autonomousMocks.entitlementIsFeatureAvailable.mockResolvedValue(true);
-    autonomousMocks.getTicketBalance.mockResolvedValue({ balanceUsd: 0, ticketsUsedCount: 0 });
+    autonomousMocks.getTicketBalance.mockResolvedValue({ balanceUsd: 0, ticketsUsedCount: 0, availableBalancePc: 0 });
     autonomousMocks.getTicketUnitPriceUsd.mockReturnValue(5);
 
     const execute = withAutonomousTaskBilling(vi.fn(async () => ({ ok: true as const, data: {} })));
@@ -194,7 +195,7 @@ describe('Autonomous Work tier gate', () => {
 
   it('requirement 8 — Pro Max with sufficient balance passes entitlement gate', async () => {
     autonomousMocks.entitlementIsFeatureAvailable.mockResolvedValue(true);
-    autonomousMocks.getTicketBalance.mockResolvedValue({ balanceUsd: 30, ticketsUsedCount: 0 });
+    autonomousMocks.getTicketBalance.mockResolvedValue({ balanceUsd: 30, ticketsUsedCount: 0, availableBalancePc: 3000 });
     autonomousMocks.getTicketUnitPriceUsd.mockReturnValue(5);
     autonomousMocks.startRun.mockResolvedValue({ run: { id: 'run-1', startedAt: new Date().toISOString() }, alreadyActive: false });
 

@@ -165,6 +165,29 @@ export function getTicketUnitPriceUsd(ticketNumber: number): number {
   return tier?.pricePerTicketUsd ?? 5.0;
 }
 
+/**
+ * Autonomous Work pricing — mirrors the server (supabase/migrations/20260925105000_autonomous_retry_fee.sql
+ * and 20260925106000_ticket_size_pricing.sql), which is what actually charges. A COMPLETED ticket is
+ * priced by the size of the change it delivered; size = max(files changed, ceil(lines changed / 100)).
+ */
+export const TICKET_START_MINIMUM_USD = 5;
+export const TICKET_RETRY_FEE_USD = 3;
+export const TICKET_CANCELLATION_FEE_USD = 2.5;
+export const TICKET_SIZE_PRICE_FROM_USD = 1;
+
+export function getTicketSizePriceUsd(filesChanged: number, linesChanged: number): number {
+  const files = Math.max(0, Math.floor(filesChanged || 0));
+  const lines = Math.max(0, Math.floor(linesChanged || 0));
+  const size = Math.max(files, Math.ceil(lines / 100));
+  if (files <= 1 && lines <= 10) return 1;
+  if (size <= 3) return 5;
+  if (size <= 9) return 7.5;
+  if (size <= 20) return 10;
+  if (size <= 30) return 15;
+  if (size <= 50) return 20 + 0.5 * (size - 30);
+  return 30 + 0.5 * (size - 50);
+}
+
 /** Real, finalized minimum top-up: a balance top-up must be at least $30. */
 export const MIN_TICKET_BALANCE_TOPUP_USD = 30;
 /** Real, finalized maximum top-up: a single balance top-up must be at most $20,000. Mirrors MAX_TICKET_BALANCE_TOPUP_USD in pawos-web's razorpay.ts and the $20,000 ceiling enforced independently at the SQL layer in add_ticket_balance_service() — kept in sync manually since pawos-web is a separate deployment with no shared build step. */

@@ -1,4 +1,5 @@
 import { ConversationRuntime } from '../conversation/ConversationRuntime';
+import { measureChangeSize } from './AutonomousChangeSize';
 import { ReasoningRuntime } from '../reasoning/ReasoningRuntime';
 import type { ReasoningProvider, ReasoningProviderRequest, ReasoningProviderSession, ReasoningProviderCallbacks } from '../reasoning/ReasoningProvider';
 import { aiRouter } from '../ai/AIRouter';
@@ -807,7 +808,7 @@ export async function orchestrateAutonomousRun(input: AutonomousOrchestrationInp
     `reserve-${input.runId}-turn-1`
   );
   if (!reserveResult.success) {
-    const reason = `Insufficient Autonomous Work PC balance to start. Required: ${estimatedPcPerTurn} PC, Available: ${reserveResult.availableRemaining ?? 0} PC. Please add more credit.`;
+    const reason = reserveResult.errorMessage ?? `Ticket Balance too low to start this ticket ($${((reserveResult.availableRemaining ?? 0) / 100).toFixed(2)} available). Add funds and it continues.`;
     await deps.billingService.transitionRun(input.runId, 'waiting_for_topup', reason);
     return {
       runId: input.runId,
@@ -1004,10 +1005,14 @@ async function finishAutonomousRun(
     // Success: must use completeRun() to mark 'completed' (per SQL constraint)
     // This transitions to terminal status AND marks execution complete
     try {
+      // A completed ticket is priced by the size of the change it delivered (charged server-side).
+      const changeSize = measureChangeSize(executionRecord);
       await deps.billingService.completeRun(input.runId, {
         prUrl: input.prUrl,
         clientReplySent: false,
         deployCompleted: false,
+        filesChanged: changeSize.filesChanged,
+        linesChanged: changeSize.linesChanged,
       });
     } catch (completeErr) {
       const err = completeErr instanceof Error ? completeErr.message : String(completeErr);
@@ -1078,9 +1083,9 @@ async function finishAutonomousRun(
   // Attempt external ticket updates (Jira, Linear, GitHub)
   const externalUpdate = await attemptExternalUpdate(input, deps, prUrl, executionRecord);
 
-  // Transition to waiting_for_permission for human verification
-  // Note: This is a non-terminal state. If the run were somehow reverted, settlement has already occurred.
-  await deps.billingService.transitionRun(input.runId, 'waiting_for_permission' as any, 'Implementation complete. Awaiting human verification before final completion.');
+  // The run is 'completed' (terminal, charged once) — there is no state after it to move to. (This
+  // used to request 'waiting_for_permission', which the server rejects for a completed run, turning
+  // every successful ticket into an error after it had already been charged.)
 
   // Capture wallet balance after settlement
   const walletAfter = await deps.billingService.getTicketBalance(input.organizationId ?? null);

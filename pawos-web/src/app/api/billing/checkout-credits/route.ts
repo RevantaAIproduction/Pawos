@@ -42,6 +42,16 @@ export async function POST(request: Request) {
   }
   const userId = userData.user.id;
 
+  // Maintenance switch (pawos_billing_switch('ticket_topups')): while off, no new Ticket Balance
+  // payment is taken. Fails closed — never take a payment that might not be creditable.
+  const { data: topupsEnabled, error: switchError } = await authClient.rpc("pawos_billing_switch", { p_key: "ticket_topups" });
+  if (switchError || topupsEnabled !== true) {
+    return NextResponse.json(
+      { ok: false, reason: "Ticket Balance top-ups are briefly paused for maintenance. Please try again in a few minutes." },
+      { status: 503 }
+    );
+  }
+
   if (typeof amountUsd !== "number") {
     return NextResponse.json({ ok: false, reason: "Enter a valid USD amount." }, { status: 400 });
   }

@@ -97,6 +97,22 @@ describe("Razorpay billing webhook", () => {
     expect(mocks.creditVerifiedTicketBalancePayment).toHaveBeenCalledTimes(1);
   });
 
+  it("asks Razorpay to retry when crediting failed on our side (database/config/Razorpay lookup)", async () => {
+    const rawBody = JSON.stringify(capturedEvent);
+    for (const status of [500, 502, 503]) {
+      mocks.creditVerifiedTicketBalancePayment.mockResolvedValueOnce({ ok: false, status, reason: "Failed to credit balance: relation does not exist" });
+      expect((await POST(requestFor(rawBody, signatureFor(rawBody)))).status).toBe(500);
+    }
+    mocks.creditVerifiedTicketBalancePayment.mockRejectedValueOnce(new Error("network down"));
+    expect((await POST(requestFor(rawBody, signatureFor(rawBody)))).status).toBe(500);
+  });
+
+  it("does not retry a permanent rejection (wrong amount, not captured, bad identity)", async () => {
+    const rawBody = JSON.stringify(capturedEvent);
+    mocks.creditVerifiedTicketBalancePayment.mockResolvedValueOnce({ ok: false, status: 400, reason: "Payment amount does not match" });
+    expect((await POST(requestFor(rawBody, signatureFor(rawBody)))).status).toBe(200);
+  });
+
   it("does not credit on payment.failed", async () => {
     const failedEvent = {
       event: "payment.failed",

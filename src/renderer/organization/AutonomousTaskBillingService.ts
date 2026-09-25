@@ -117,7 +117,7 @@ export const autonomousTaskBillingService = {
    * resulting billing event 'connector_verified' — without any change to the billing math itself.
    * Never wire a model tool argument directly into these flags; only genuine first-party connector
    * code that has actually confirmed the write may set them true. */
-  async completeRun(runId: string, opts: { prUrl?: string; clientReplySent: boolean; deployCompleted: boolean; invoiceReference?: string; prVerified?: boolean; ticketVerified?: boolean }): Promise<string> {
+  async completeRun(runId: string, opts: { prUrl?: string; clientReplySent: boolean; deployCompleted: boolean; invoiceReference?: string; prVerified?: boolean; ticketVerified?: boolean; filesChanged?: number; linesChanged?: number }): Promise<string> {
     const supabase = await getSupabaseClient();
     const { data, error } = await supabase.rpc('mark_autonomous_task_completed', {
       p_run_id: runId,
@@ -127,11 +127,24 @@ export const autonomousTaskBillingService = {
       p_invoice_reference: opts.invoiceReference ?? null,
       p_pr_verified: opts.prVerified ?? false,
       p_ticket_verified: opts.ticketVerified ?? false,
+      // The change size prices a completed ticket; omitted → the server charges the $5 standard price.
+      ...(typeof opts.filesChanged === 'number' ? { p_files_changed: opts.filesChanged, p_lines_changed: opts.linesChanged ?? 0 } : {}),
     });
     if (error) throw error;
     return data as string;
   },
 
+  /**
+   * Starts the automatic retry of a FAILED run: a fresh run for the same ticket, charged the $3.00
+   * retry fee server-side (start_autonomous_retry_run — idempotent per failed run, refused when the
+   * Ticket Balance can't cover the fee). Returns the new run's id.
+   */
+  async startRetryRun(previousRunId: string): Promise<string> {
+    const supabase = await getSupabaseClient();
+    const { data, error } = await supabase.rpc('start_autonomous_retry_run', { p_previous_run_id: previousRunId }).single<RunRow>();
+    if (error) throw error;
+    return data.id;
+  },
   async markTerminal(runId: string, status: 'failed' | 'cancelled' | 'retry_limit_reached'): Promise<void> {
     const supabase = await getSupabaseClient();
     const { error } = await supabase.rpc('mark_autonomous_task_terminal', { p_run_id: runId, p_status: status });

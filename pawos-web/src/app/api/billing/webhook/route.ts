@@ -180,7 +180,8 @@ async function handleTierPurchaseWebhookAsync(
  * top-up Order and has no `notes.userId`) from a real top-up payment. Any payment whose order lacks
  * a recorded payer identity in `notes` is honestly skipped rather than guessed at.
  */
-async function applyPaymentCapturedEvent(event: RazorpayWebhookEvent): Promise<void> {
+/** Returns false when crediting failed on OUR side (server/database) and Razorpay should retry. */
+async function applyPaymentCapturedEvent(event: RazorpayWebhookEvent): Promise<boolean> {
   const paymentEntity = event.payload.payment?.entity as
     | { id?: string; order_id?: string | null; notes?: Record<string, string> }
     | undefined;
@@ -188,7 +189,7 @@ async function applyPaymentCapturedEvent(event: RazorpayWebhookEvent): Promise<v
   const orderId = paymentEntity?.order_id;
   if (!paymentId || !orderId) {
     console.warn("[razorpay-webhook] payment.captured event missing payment id or order id — skipping.");
-    return;
+    return true;
   }
 
   // Dispatch to the correct handler based on the server-stamped productType in the
@@ -209,7 +210,7 @@ async function applyPaymentCapturedEvent(event: RazorpayWebhookEvent): Promise<v
     await handleTierPurchaseWebhookAsync(paymentEntity).catch((error) => {
       console.warn(`[razorpay-webhook] Tier purchase webhook handling failed for ${paymentId}:`, error);
     });
-    return;
+    return true;
   }
 
   const baseParams = {
@@ -222,13 +223,17 @@ async function applyPaymentCapturedEvent(event: RazorpayWebhookEvent): Promise<v
   const result = await (productType === "usage_credits"
     ? creditVerifiedUsageCreditsPayment(baseParams)
     : creditVerifiedTicketBalancePayment(baseParams) // default: "ticket_balance" (or legacy orders without productType)
-  ).catch((error) => ({ ok: false as const, reason: error instanceof Error ? error.message : String(error) }));
+  ).catch((error) => ({ ok: false as const, status: 500, reason: error instanceof Error ? error.message : String(error) }));
 
   if (!result.ok) {
     console.log(`[razorpay-webhook] payment.captured for ${paymentId} (${productType ?? "ticket_balance"}) not credited via webhook: ${result.reason}`);
-    return;
+    // A server-side failure (database unavailable, crediting not configured, Razorpay lookup failed)
+    // must be retried — otherwise a real, captured payment is never credited. A permanent rejection
+    // (wrong amount, not captured, bad identity) is not retried.
+    return !((result.status ?? 0) >= 500);
   }
   console.log(`[razorpay-webhook] payment.captured for ${paymentId} (${productType ?? "ticket_balance"}) credited $${result.amountUsd} (topupId: ${result.topupId}).`);
+  return true;
 }
 
 const SUBSCRIPTION_EVENTS = new Set([
@@ -265,7 +270,9 @@ export async function POST(request: Request) {
   }
 
   if (event.event === "payment.captured") {
-    await applyPaymentCapturedEvent(event);
+    if (!(await applyPaymentCapturedEvent(event))) {
+      return NextResponse.json({ ok: false, reason: "Payment could not be credited yet." }, { status: 500 });
+    }
   } else if (SUBSCRIPTION_EVENTS.has(event.event)) {
     if (!(await applySubscriptionEvent(event))) {
       return NextResponse.json({ ok: false, reason: "Subscription could not be recorded yet." }, { status: 500 });

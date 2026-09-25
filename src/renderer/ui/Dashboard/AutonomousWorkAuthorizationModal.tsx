@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import styles from './dashboard.module.css';
+import { TICKET_CANCELLATION_FEE_USD, TICKET_RETRY_FEE_USD, TICKET_SIZE_PRICE_FROM_USD } from '../../../shared/organization/AutonomousTaskBillingTypes';
 
 export type AuthorizationRequest = {
   ticketId: string | null;
@@ -81,24 +82,22 @@ export function AutonomousWorkAuthorizationModal({
           {/* Billing block */}
           <div className={styles.authBillingBlock}>
             <div className={styles.authBillingItem}>
-              <div className={styles.authBillingLabel}>Current charge</div>
-              <div className={styles.authBillingValue}>${nextTicketPriceUsd.toFixed(2)}</div>
+              <div className={styles.authBillingLabel}>Charged when complete</div>
+              <div className={styles.authBillingValue}>{`$${TICKET_SIZE_PRICE_FROM_USD.toFixed(2)}+`}</div>
             </div>
             <div className={styles.authBillingItem}>
               <div className={styles.authBillingLabel}>Wallet balance</div>
               <div className={`${styles.authBillingValue} ${sufficient ? styles.authBillingValueOk : styles.authBillingValueWarn}`}>
-                ${balanceUsd.toFixed(2)}
+                {balanceUsd < 0 ? `-$${Math.abs(balanceUsd).toFixed(2)}` : `$${balanceUsd.toFixed(2)}`}
               </div>
             </div>
             <div className={styles.authBillingItem}>
-              <div className={styles.authBillingLabel}>Maximum authorization</div>
+              <div className={styles.authBillingLabel}>Needed to start</div>
               <div className={styles.authBillingValue}>${nextTicketPriceUsd.toFixed(2)}</div>
             </div>
             <div className={styles.authBillingItem}>
-              <div className={styles.authBillingLabel}>Remaining after</div>
-              <div className={`${styles.authBillingValue} ${(balanceUsd - nextTicketPriceUsd) < 0 ? styles.authBillingValueWarn : ''}`}>
-                ${Math.max(0, balanceUsd - nextTicketPriceUsd).toFixed(2)}
-              </div>
+              <div className={styles.authBillingLabel}>Each automatic retry</div>
+              <div className={styles.authBillingValue}>${TICKET_RETRY_FEE_USD.toFixed(2)}</div>
             </div>
           </div>
 
@@ -127,9 +126,11 @@ export function AutonomousWorkAuthorizationModal({
           {/* Wallet notice */}
           <div className={styles.authWalletNotice}>
             <span className={styles.authWalletNoticeEmphasis}>Autonomous Work uses your Ticket Wallet.</span>
-            {' '}$5.00 is charged per completed ticket at the current volume-tiered rate.
-            Tasks that fail, are cancelled, or are denied approval are not charged.
-            Normal Paw Compute is not consumed in place of Ticket Wallet balance.
+            {' '}A completed ticket is priced by the size of the change: $1 for a one-line fix, $5 for 1–3 files,
+            $7.50 for 4–9, $10 for 10–20, $15 for 21–30, $20–$30 for 31–50, and more for larger changes. If a run
+            fails it is retried automatically — each retry costs ${TICKET_RETRY_FEE_USD.toFixed(2)}; a failed first
+            attempt costs nothing. Cancelling a started ticket costs ${TICKET_CANCELLATION_FEE_USD.toFixed(2)}. A
+            large change can take your balance below zero; top up to clear it before the next ticket.
           </div>
 
           {/* Stages */}
@@ -145,15 +146,6 @@ export function AutonomousWorkAuthorizationModal({
             </div>
           )}
 
-          {/* Cap note */}
-          {sufficient && (
-            <div className={styles.authCapNote}>
-              PawOS will not exceed the authorized amount ($
-              {nextTicketPriceUsd.toFixed(2)}) without your approval.
-              Cap-exceeded pausing requires a backend reservation mechanism
-              (currently BLOCKED — implementation pending).
-            </div>
-          )}
         </div>
 
         <div className={styles.authModalFooter}>

@@ -1,9 +1,10 @@
 import { autonomousTaskBillingService } from './AutonomousTaskBillingService';
-import { getTicketUnitPriceUsd } from '../../shared/organization/AutonomousTaskBillingTypes';
+import { TICKET_START_MINIMUM_USD } from '../../shared/organization/AutonomousTaskBillingTypes';
 import type { ActionRequest, ActionResult } from '../../shared/actions/ActionTypes';
 import { getIpcBridge } from '../services/ipc/ipcBridge';
 import { getSupabaseClient } from '../auth/supabaseClient';
 import { orchestrateAutonomousRun } from './AutonomousOrchestrator';
+import { orchestrateWithAutoRetry } from './AutonomousRetry';
 
 const RUNTIME_VERSION = 'pawos-desktop-v1';
 
@@ -115,35 +116,30 @@ export function withAutonomousTaskBilling(execute: (request: ActionRequest) => P
             }
           }
 
-          // Fail fast, before any real work starts, if the ticket balance can't cover this
-          // account's *next* ticket at its current volume-tiered rate — the RPC re-checks this
-          // again at completion time as the real guarantee, but refusing here avoids wasting an
-          // entire investigate/implement/test cycle on a task that could never actually bill.
+          // Fail fast, before any real work starts: a ticket needs at least TICKET_START_MINIMUM_USD
+          // available (balance minus what running tickets hold), and an owed (negative) balance blocks
+          // new tickets. The price itself depends on the size of the change and is charged at
+          // completion; the server re-checks all of this (reserve_autonomous_pc) as the real guarantee.
           const organizationId = request.organizationId ?? null;
           const balance = await autonomousTaskBillingService.getTicketBalance(organizationId);
-          const nextTicketPrice = getTicketUnitPriceUsd(balance.ticketsUsedCount + 1);
-          if (balance.balanceUsd < nextTicketPrice) {
-            // Distinct from 'entitlement-restricted' (this account's plan already includes
-            // Autonomous Work — the tier gate above already passed) and from 'usage-restricted'
-            // (a different currency: monthly Paw Compute allowance, not this prepaid Ticket
-            // Balance) — 'balance-restricted' lets describeLaunchFailure render a real "add funds"
-            // prompt instead of the generic Retry pill a plain 'failed' would get, since retrying
-            // this exact call can never succeed until the balance actually changes.
+          const availableUsd = balance.availableBalancePc / 100;
+          const nextTicketPrice = TICKET_START_MINIMUM_USD;
+          if (availableUsd < TICKET_START_MINIMUM_USD) {
+            // 'balance-restricted' lets describeLaunchFailure render a real "add funds" prompt instead
+            // of a generic Retry — retrying can never succeed until the balance changes.
+            const where = organizationId ? 'Organization → Autonomous Ticket System' : 'Settings → Billing';
+            const whose = organizationId ? "This organization's Ticket Balance" : 'Your Ticket Balance';
             return {
               ok: false,
               reason: 'balance-restricted',
-              message: organizationId
-                ? `This organization's ticket balance ($${balance.balanceUsd.toFixed(2)}) can't cover the next ticket at the current rate ($${nextTicketPrice.toFixed(2)}). Add funds from Organization → Autonomous Ticket System before starting a new task.`
-                : `Your ticket balance ($${balance.balanceUsd.toFixed(2)}) can't cover the next ticket at the current rate ($${nextTicketPrice.toFixed(2)}). Add funds from Settings → Billing before starting a new task.`,
-              data: { balanceUsd: balance.balanceUsd, nextTicketPriceUsd: nextTicketPrice, organizationId },
+              message:
+                balance.balanceUsd < 0
+                  ? `${whose} is -$${Math.abs(balance.balanceUsd).toFixed(2)} (owed from a previous ticket). Add funds from ${where} to clear it before starting a new task.`
+                  : `${whose} has $${Math.max(availableUsd, 0).toFixed(2)} available; a ticket needs at least $${TICKET_START_MINIMUM_USD.toFixed(2)} to start. Add funds from ${where} before starting a new task.`,
+              data: { balanceUsd: balance.balanceUsd, availableUsd, requiredToStartUsd: TICKET_START_MINIMUM_USD, nextTicketPriceUsd: TICKET_START_MINIMUM_USD, organizationId },
             };
           }
 
-          // Pre-execution UI authorization — shows the ticket details, current charge, and wallet
-          // balance to the user and waits for explicit approval before any Supabase run row is
-          // created. If the Dashboard authorization modal is not mounted (headless / test context),
-          // the event detail's _handled flag stays false and the gate proceeds immediately —
-          // this must never block or throw in a non-UI context.
           const authorized = await requestAutonomousWorkAuthorization({
             ticketId: request.ticketId ?? null,
             ticketTitle: request.ticketTitle ?? null,
@@ -187,23 +183,29 @@ export function withAutonomousTaskBilling(execute: (request: ActionRequest) => P
           // orchestration itself runs to completion (or WAITING_FOR_PERMISSION) independently and
           // reports its own outcome via the same billing RPCs a manual completion would have used.
           if (request.cwd) {
-            void orchestrateAutonomousRun({
-              runId: run.id,
-              organizationId,
-              ticketSource: request.ticketSource ?? null,
-              ticketId: request.ticketId ?? null,
-              ticketTitle: request.ticketTitle,
-              ticketDescription: request.ticketDescription,
-              cwd: request.cwd,
-            }).catch((error) => {
-              // Never let an orchestration failure become an unhandled rejection — the orchestrator
-              // itself already transitions the run to a real terminal/blocked state on every honest
-              // failure path; this only guards against a genuinely unexpected exception (e.g. a
-              // network error before any state transition ran) so the run doesn't silently stay
-              // 'running' forever with no recorded reason.
-              void autonomousTaskBillingService.markTerminal(run.id, 'failed').catch(() => undefined);
-              // eslint-disable-next-line no-console
-              console.error('Autonomous orchestration failed unexpectedly', error);
+            const cwd = request.cwd;
+            // A failed run is retried straight away as a fresh run for the same ticket: the failure
+            // costs nothing, each retry costs $3.00, and the attempt that completes is charged the
+            // ticket price. An unexpected exception marks that run failed so it never stays
+            // 'running' with no recorded reason.
+            void orchestrateWithAutoRetry({
+              firstRunId: run.id,
+              orchestrate: (runId) =>
+                orchestrateAutonomousRun({
+                  runId,
+                  organizationId,
+                  ticketSource: request.ticketSource ?? null,
+                  ticketId: request.ticketId ?? null,
+                  ticketTitle: request.ticketTitle,
+                  ticketDescription: request.ticketDescription,
+                  cwd,
+                }),
+              startRetryRun: (failedRunId) => autonomousTaskBillingService.startRetryRun(failedRunId),
+              markFailed: (runId) => autonomousTaskBillingService.markTerminal(runId, 'failed'),
+              onRetry: (attempt) => {
+                // eslint-disable-next-line no-console
+                console.log(`[AUTONOMOUS_RETRY] ticket ${request.ticketId ?? '(none)'} failed on attempt ${attempt} — retrying now.`);
+              },
             });
           }
 
