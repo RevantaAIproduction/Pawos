@@ -1,6 +1,6 @@
 import { ipc } from '../../services/ipc/ipcBridgeImplementation';
 import { getSupabaseClient } from '../supabaseClient';
-import { clearServerSessionLinkFailure, recordServerSessionLinkFailure } from '../serverSessionLink';
+import { clearServerSessionLinkFailure, getServerSessionLinkFailure, recordServerSessionLinkFailure } from '../serverSessionLink';
 import type { AuthUser } from '../AuthTypes';
 import { cleanIpcErrorMessage } from '../ipcErrorMessage';
 
@@ -12,9 +12,10 @@ interface MicrosoftProfile {
   givenName?: string;
 }
 
-function toAuthUser(profile: MicrosoftProfile, supabaseUserId: string | null): AuthUser {
+function toAuthUser(profile: MicrosoftProfile, supabaseUserId: string): AuthUser {
   return {
-    id: supabaseUserId ?? `microsoft:${profile.id}`,
+    // Always the PawOS server account id — one id per person across every sign-in method.
+    id: supabaseUserId,
     name: profile.displayName || profile.givenName || profile.userPrincipalName.split('@')[0] || profile.userPrincipalName,
     email: profile.mail || profile.userPrincipalName,
     pictureUrl: undefined,
@@ -56,6 +57,12 @@ export class MicrosoftAuthProvider {
     try {
       const { profile, idToken, accessToken } = await ipc.authStartMicrosoftSignIn();
       const supabaseUserId = await linkSupabaseSession(idToken, accessToken);
+      if (!supabaseUserId) {
+        const reason = getServerSessionLinkFailure()?.message;
+        throw new Error(
+          `Microsoft sign-in worked, but PawOS could not connect it to your account${reason ? ` (server said: ${reason})` : ''}. Please try again in a moment, or sign in with email or GitHub.`
+        );
+      }
       return toAuthUser(profile, supabaseUserId);
     } catch (err) {
       throw new Error(cleanIpcErrorMessage(err));

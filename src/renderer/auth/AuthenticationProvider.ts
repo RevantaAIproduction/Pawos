@@ -199,8 +199,21 @@ export class AuthenticationProvider implements AuthService {
         return null;
       }
       if (localUser && localUser.provider !== 'email') {
-        await this.reconcileSubscriptionFor(localUser);
-        return localUser; // Google/GitHub use the local mirror after Supabase sign-in.
+        // One account id for every sign-in method: the PawOS server account (Supabase) is the source
+        // of truth. The local copy only keeps the display name/picture. A saved sign-in with no
+        // server session — e.g. an older local-only "google:…" id — is dropped, so the next sign-in
+        // lands on the real account.
+        const supabase = await getSupabaseClient();
+        const { data } = await supabase.auth.getSession();
+        const sessionUser = data.session?.user;
+        if (!sessionUser) {
+          window.localStorage.removeItem(STORAGE_KEY);
+          return null;
+        }
+        const user: AuthUser = { ...localUser, id: sessionUser.id, email: sessionUser.email ?? localUser.email };
+        if (user.id !== localUser.id || user.email !== localUser.email) this.setSession(user);
+        await this.reconcileSubscriptionFor(user);
+        return user;
       }
     } catch {
       // fall through to the Supabase session check

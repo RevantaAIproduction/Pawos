@@ -1,13 +1,15 @@
 import { ipc } from '../../services/ipc/ipcBridgeImplementation';
 import { getSupabaseClient } from '../supabaseClient';
-import { clearServerSessionLinkFailure, recordServerSessionLinkFailure } from '../serverSessionLink';
+import { clearServerSessionLinkFailure, getServerSessionLinkFailure, recordServerSessionLinkFailure } from '../serverSessionLink';
 import type { GoogleProfile } from '../../../shared/auth/AccountTypes';
 import type { AuthUser } from '../AuthTypes';
 import { cleanIpcErrorMessage } from '../ipcErrorMessage';
 
-function toAuthUser(profile: GoogleProfile, supabaseUserId: string | null): AuthUser {
+function toAuthUser(profile: GoogleProfile, supabaseUserId: string): AuthUser {
   return {
-    id: supabaseUserId ?? `google:${profile.sub}`,
+    // Always the PawOS server account id — the same one email and GitHub sign-in give for this
+    // email (Supabase links identities that share a verified email). Never a local-only id.
+    id: supabaseUserId,
     name: profile.name,
     email: profile.email,
     pictureUrl: profile.picture,
@@ -70,6 +72,14 @@ export class GoogleAuthProvider {
     try {
       const { profile, idToken, accessToken } = await ipc.authStartGoogleSignIn();
       const supabaseUserId = await linkSupabaseSession(idToken, accessToken);
+      if (!supabaseUserId) {
+        // No local-only fallback: a sign-in that never reached the PawOS account would silently
+        // lose the user's plan, Build access, credits and Ticket Balance.
+        const reason = getServerSessionLinkFailure()?.message;
+        throw new Error(
+          `Google sign-in worked, but PawOS could not connect it to your account${reason ? ` (server said: ${reason})` : ''}. Please try again in a moment, or sign in with email or GitHub.`
+        );
+      }
       return toAuthUser(profile, supabaseUserId);
     } catch (err) {
       throw new Error(cleanIpcErrorMessage(err));
