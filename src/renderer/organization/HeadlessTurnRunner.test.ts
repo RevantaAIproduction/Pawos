@@ -71,7 +71,8 @@ vi.mock('../auth/supabaseClient', () => ({
     from: vi.fn(() => ({
       insert: vi.fn(() => Promise.resolve({ data: null, error: null }))
     })),
-    rpc: vi.fn(() => Promise.resolve({ data: [{}], error: null }))
+    // claim_autonomous_executor_for_run (Phase 2C): a successful server-side executor claim.
+    rpc: vi.fn(() => Promise.resolve({ data: [{ execution_executor_instance_id: 'executor-1', status: 'claimed', error_message: null }], error: null }))
   }))
 }));
 
@@ -97,11 +98,11 @@ function record(overrides: Partial<ExecutionRecord> = {}): ExecutionRecord {
   };
 }
 
-/** run() now does a real `await` (the entitlement check) before constructing ConversationRuntime, so
- *  mocks.lastInstance is no longer set synchronously the moment run() is called — poll microtasks
+/** run() awaits the server-side executor claim and the entitlement check before constructing
+ *  ConversationRuntime, so mocks.lastInstance is not set synchronously — poll (macrotasks, bounded)
  *  until the mocked constructor has actually run. */
 async function waitForInstance(): Promise<FakeConversationRuntime> {
-  for (let i = 0; i < 20 && !mocks.lastInstance; i++) await Promise.resolve();
+  for (let i = 0; i < 50 && !mocks.lastInstance; i++) await new Promise((resolve) => setTimeout(resolve, 0));
   if (!mocks.lastInstance) throw new Error('ConversationRuntime was never constructed');
   return mocks.lastInstance;
 }

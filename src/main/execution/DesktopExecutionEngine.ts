@@ -7,7 +7,7 @@ import { infraModeStore } from '../infrastructure/InfraModeStore';
 import { entitlementService } from '../billing/EntitlementService';
 import { codingExecutionBlocked, infraExecutionBlocked } from './ThinkExecuteGate';
 import { codingRuntimeSecurityRequirements, enforceCodingRuntimeSecurity } from './CodingRuntimeSecurity';
-import { enforceCodingRuntimeUsage, type PooledCodingRuntimeUsageRecorder } from './CodingRuntimeUsageBoundary';
+import { enforceCodingRuntimeUsage, recordCodeFileWrite, type PooledCodingRuntimeUsageRecorder } from './CodingRuntimeUsageBoundary';
 import { authorizeRuntimeAction } from './RuntimeActionAuthorization';
 import { pendingApprovalStore, deriveApprovalKey } from '../infrastructure/PendingApprovalStore';
 import { recordApprovalRequest } from '../ipc/handlers/governanceHandler';
@@ -539,7 +539,7 @@ export class DesktopExecutionEngine extends EventEmitter {
         actionDetails = `${(request as any).from} → ${(request as any).to}` || '';
       } else if (request.type === 'connectDatabase') {
         const dbReq = request as any;
-        actionDetails = `${dbReq.type}://${dbReq.host}:${dbReq.port}/${dbReq.database}` || '';
+        actionDetails = `${dbReq.dbType}://${dbReq.host}:${dbReq.port}/${dbReq.database}` || '';
       } else if (request.type === 'downloadSoftware') {
         actionDetails = `${(request as any).name} (${(request as any).manager || 'winget'})` || '';
       } else if (request.type === 'requestAPIAccess') {
@@ -609,6 +609,9 @@ export class DesktopExecutionEngine extends EventEmitter {
     if (recovered && attempts > 0) {
       this.emit('observation', { actionType: request.type, event: { at: Date.now(), message: RECOVERY_SUCCESS_NARRATION } });
     }
+
+    // Count successful code-file writes toward the hidden file cap.
+    recordCodeFileWrite(request, result);
 
     const trail: ExecutionTrail = { attempts, recovered, observations };
     return { ...result, trail };

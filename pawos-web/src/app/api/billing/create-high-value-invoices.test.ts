@@ -3,6 +3,8 @@
  * Verifies correct USD threshold and INR splitting behavior
  */
 
+import { describe, expect, test } from "vitest";
+
 const USD_INR_RATE = 95.65;
 const MAX_INVOICE_AMOUNT_INR = 500000;
 const THRESHOLD_USD = 500;

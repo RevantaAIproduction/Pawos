@@ -108,6 +108,10 @@ export type RollingUsageSummary = {
   activeHours5h: number | null;
   activeHoursUsed7d: number;
   activeHours7d: number | null;
+  /** When the current 5-hour window ends (epoch ms). Null for Paw Go, whose 5-hour window is truly rolling. */
+  windowResetsAt: number | null;
+  /** When the current weekly capacity cycle ends and weekly usage resets (epoch ms). */
+  weekResetsAt: number;
 };
 
 export type GenerationCheckResult =

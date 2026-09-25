@@ -38,10 +38,13 @@ function SearchIcon() {
 /** Real, searchable universe — every SectionId this shell can navigate to, not just the six
  *  visible primary/secondary nav items (Research/Communication/Office/Cloud/Development/Files
  *  live under Apps and have no direct sidebar entry otherwise). */
-const SEARCHABLE_SECTIONS: { id: SectionId; label: string }[] = (Object.keys(SECTION_TITLES) as SectionId[]).map((id) => ({
-  id,
-  label: SECTION_TITLES[id],
-}));
+const SEARCHABLE_SECTIONS: { id: SectionId; label: string }[] = (Object.keys(SECTION_TITLES) as SectionId[])
+  // Admin is reachable only through its own admin-only sidebar entry, never via search.
+  .filter((id) => id !== 'admin')
+  .map((id) => ({
+    id,
+    label: SECTION_TITLES[id],
+  }));
 
 function SidebarSearch({ collapsed, onSelect }: { collapsed: boolean; onSelect: (id: SectionId) => void }) {
   const [open, setOpen] = useState(false);
@@ -158,6 +161,15 @@ function RefreshIcon() {
   );
 }
 
+function AdminShieldIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3.5 5 6.5v5c0 4.2 2.9 7.9 7 9 4.1-1.1 7-4.8 7-9v-5z" />
+      <path d="m9.2 12 2 2 3.8-3.9" />
+    </svg>
+  );
+}
+
 function NavButton({
   item,
   active,
@@ -196,6 +208,7 @@ export function Sidebar({
   companionEnabled,
   onProfileAction,
   onOpenUrl,
+  isAdmin = false,
 }: {
   active: SectionId;
   onSelect: (id: SectionId) => void;
@@ -208,6 +221,8 @@ export function Sidebar({
   companionEnabled: boolean;
   onProfileAction: (action: ProfileMenuAction) => void;
   onOpenUrl: (url: string) => void;
+  /** Signed in with a PawOS admin email — shows the Admin entry (actions are still server-authorized). */
+  isAdmin?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -315,6 +330,20 @@ export function Sidebar({
           <NavButton key={item.id} item={item} active={active} onSelect={onSelect} collapsed={collapsed} />
         ))}
                 <div className={styles.navDivider} />
+          {/* Admin — only for PawOS admin accounts */}
+          {isAdmin && (
+            <button
+              type="button"
+              className={`${styles.navItem} ${active === 'admin' ? styles.navItemActive : ''}`}
+              onClick={() => onSelect('admin')}
+              title="Admin"
+              aria-label="Admin"
+              data-testid="sidebar-admin"
+            >
+              <span className={styles.navIcon}><AdminShieldIcon /></span>
+              {!collapsed && <span>Admin</span>}
+            </button>
+          )}
           {/* Update Button */}
           <button
             type="button"

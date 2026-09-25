@@ -1,5 +1,6 @@
 import { ipc } from '../../services/ipc/ipcBridgeImplementation';
 import { getSupabaseClient } from '../supabaseClient';
+import { clearServerSessionLinkFailure, recordServerSessionLinkFailure } from '../serverSessionLink';
 import type { AuthUser } from '../AuthTypes';
 import { cleanIpcErrorMessage } from '../ipcErrorMessage';
 
@@ -33,11 +34,15 @@ async function linkSupabaseSession(idToken: string, accessToken: string): Promis
     });
     if (error) {
       console.warn('Microsoft→Supabase session link failed:', error.message);
+      recordServerSessionLinkFailure('microsoft', error.message);
       return null;
     }
+    clearServerSessionLinkFailure();
     return data.user?.id ?? null;
   } catch (err) {
-    console.warn('Microsoft→Supabase session link failed:', err instanceof Error ? err.message : err);
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn('Microsoft→Supabase session link failed:', message);
+    recordServerSessionLinkFailure('microsoft', message);
     return null;
   }
 }

@@ -39,9 +39,14 @@ class SubscriptionStore {
     this.file = path.join(app.getPath('userData'), 'billing', FILE_NAME);
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     try {
-      const parsed = JSON.parse(fs.readFileSync(this.file, 'utf-8')) as SubscriptionState;
+      const parsed = JSON.parse(fs.readFileSync(this.file, 'utf-8')) as SubscriptionState & { buildEntitlement?: unknown };
+      // PawOS Build access is server-authoritative and memory-only (BuildAccessStore.ts). Older builds
+      // persisted a `buildEntitlement` overlay here; drop it so a stale or hand-edited copy is inert.
+      const hadLegacyBuildOverlay = 'buildEntitlement' in parsed;
+      delete parsed.buildEntitlement;
       this.state = { ...defaultState(), ...parsed };
       this.migrateLegacyRuntimeEntitlements(parsed);
+      if (hadLegacyBuildOverlay) this.save();
     } catch {
       this.save();
     }
@@ -55,14 +60,16 @@ class SubscriptionStore {
     return this.state;
   }
 
-  getEffective(): SubscriptionState {
+  getEffective(now = Date.now()): SubscriptionState {
     const state = this.get();
-    if (!isActiveStatus(state.status)) {
+    // A server-confirmed plan is paid only through renewsAt; past it (and until the server confirms a
+    // renewal) the account is back on the free tier.
+    const lapsed = state.serverVerified === true && typeof state.renewsAt === 'number' && now >= state.renewsAt;
+    if (!isActiveStatus(state.status) || lapsed) {
       return {
         ...defaultState(),
         accountId: state.accountId,
         runtimeEntitlements: this.getPurchasedRuntimeEntitlements(),
-        buildEntitlement: state.buildEntitlement,
       };
     }
     return state;
@@ -220,6 +227,45 @@ class SubscriptionStore {
   }
 
   /**
+   * Applies the account's paid personal plan as confirmed by the server (get_my_subscription, written
+   * by pawos-web from Razorpay-verified data). This is what makes a plan follow the ACCOUNT: signing
+   * back in — after using another account, a reinstall, or on another PC — restores it until
+   * `expiresAt`. An organization tier (Team/Enterprise) already active for this account is kept.
+   */
+  applyServerSubscription(accountId: string, plan: { tier: 'pro' | 'proMax'; proMaxVariant?: string | null; expiresAt: number }): SubscriptionState {
+    if (this.state.accountId === accountId && isActiveStatus(this.state.status) && (this.state.tier === 'team' || this.state.tier === 'enterprise')) {
+      return this.getEffective();
+    }
+    const keepGrants = this.state.accountId === accountId ? this.purchaseRuntimeEntitlementsOnly() : [];
+    this.state = {
+      ...defaultState(),
+      accountId,
+      tier: plan.tier,
+      status: 'active',
+      renewsAt: plan.expiresAt,
+      serverVerified: true,
+      runtimeEntitlements: keepGrants,
+      ...(plan.tier === 'proMax' ? { proMaxVariant: (plan.proMaxVariant === '20x' ? '20x' : '5x') as import('../../shared/billing/BillingTypes').ProMaxVariant } : {}),
+    };
+    this.save();
+    return this.getEffective();
+  }
+
+  /**
+   * The server knows this account's plans and none is currently paid (expired, cancelled and
+   * lapsed, halted…): drop a personal Pro/Pro Max plan back to the free tier. Organization tiers are
+   * left alone — they come from organization membership, not a personal subscription.
+   */
+  clearServerSubscription(accountId: string): SubscriptionState {
+    if (this.state.accountId && this.state.accountId !== accountId) return this.getEffective();
+    if (this.state.tier === 'pro' || this.state.tier === 'proMax') {
+      this.state = { ...defaultState(), accountId, runtimeEntitlements: this.purchaseRuntimeEntitlementsOnly() };
+      this.save();
+    }
+    return this.getEffective();
+  }
+
+  /**
    * Called when this account becomes an active member of a Team/Enterprise
    * organization (see acceptInvite() in OrganizationSection.tsx) — a
    * teammate never pays individually, the org owner's seats cover them, so
@@ -254,50 +300,6 @@ class SubscriptionStore {
     };
     this.save();
     return this.getEffective();
-  }
-
-  async syncBuildEntitlement(accessToken: string): Promise<{ ok: boolean; state?: any; reason?: string }> {
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const anonKey = process.env.SUPABASE_PUBLISHABLE_KEY;
-    if (!supabaseUrl || !anonKey) {
-      return { ok: false, reason: 'Supabase is not configured' };
-    }
-
-    try {
-      const response = await fetch(`${supabaseUrl}/rest/v1/pawos_build_cohort?select=*&is_active=eq.true`, {
-        headers: { apikey: anonKey, Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      });
-      if (!response.ok) return { ok: false, reason: 'Could not fetch build cohort' };
-      const rows = await response.json();
-      if (Array.isArray(rows) && rows.length > 0) {
-        const row = rows[0];
-        this.state = {
-          ...this.state,
-          buildEntitlement: {
-            active: true,
-            cohortId: row.cohort_id,
-            cohortStartDate: row.cohort_start_date ? new Date(row.cohort_start_date).getTime() : undefined,
-            cohortEndDate: row.cohort_end_date ? new Date(row.cohort_end_date).getTime() : undefined,
-            includedPc: Number(row.included_pc) || 1500,
-            purchasedPc: Number(row.purchased_pc) || 0,
-            exhaustedAt: row.exhausted_at ? new Date(row.exhausted_at).getTime() : null,
-          }
-        };
-      } else {
-        delete this.state.buildEntitlement;
-      }
-      this.save();
-      return { ok: true, state: this.state.buildEntitlement };
-    } catch (e) {
-      return { ok: false, reason: 'Network error' };
-    }
-  }
-
-  clearBuildEntitlement(): void {
-    if (this.state.buildEntitlement) {
-      delete this.state.buildEntitlement;
-      this.save();
-    }
   }
 }
 

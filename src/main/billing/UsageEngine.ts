@@ -26,11 +26,22 @@ export type UsageCheckResult =
  */
 class UsageEngine {
   canConsume(capability: Exclude<UsageCapability, 'aiReasoning'>, amount = 1): UsageCheckResult {
-    const entitlements = entitlementService.getEntitlements();
-    const tier = entitlements.tier;
+    // PawOS Build's capacity is its own Paw Compute / active-hour limits (RollingUsageGate); it never
+    // inherits its base tier's per-capability quotas (Go's are 0, which would block every action).
+    if (entitlementService.effectiveTier() === 'build') return { allowed: true, pooled: false };
+
+    // Quotas for these 7 tracked capabilities are keyed by the purchasable subscription tier. Paw
+    // Compute ('aiReasoning') below uses the effective tier.
+    const tier = entitlementService.baseTier();
     if (usageQuotaConfigStore.isPooled(tier)) {
       return { allowed: true, pooled: true, deferTo: 'organizationUsageService' };
     }
+
+    // Code execution on individual tiers is governed by the rolling Paw Compute gate plus the hidden
+    // weekly code-file cap (RollingUsageGate), not this per-action counter — Go's legacy 0 quota here
+    // (in defaults, saved configs and the synced usage_quota_config table) would otherwise block the
+    // coding runtime Go is entitled to.
+    if (capability === 'codeExecution') return { allowed: true, pooled: false };
 
     const seatTier = entitlementService.getSeatTier();
     const limit = usageQuotaConfigStore.getEffectiveQuota(tier, seatTier, capability, 'monthly');
@@ -45,20 +56,22 @@ class UsageEngine {
 
   /** Only meaningful to call after canConsume() returned {allowed: true, pooled: false} — recording usage for a pooled tier here would be silently wrong (the real counter lives in Supabase), so this is a no-op for pooled tiers rather than double-counting. */
   recordUsage(capability: Exclude<UsageCapability, 'aiReasoning'>, amount = 1): void {
-    const tier = entitlementService.getEntitlements().tier;
+    const tier = entitlementService.baseTier();
     if (usageQuotaConfigStore.isPooled(tier)) return;
     usageStore.record(capability, amount);
   }
 
   /** One combined view across all 8 capabilities — merges CreditStore's real aiReasoning numbers with this engine's own 7 tracked capabilities, so a future usage dashboard has a single source to read instead of stitching two APIs together itself. */
   getUnifiedUsageSummary(): CapabilityUsageSummary[] {
-    const entitlements = entitlementService.getEntitlements();
-    const tier = entitlements.tier;
+    // Quotas for these 7 tracked capabilities are keyed by the purchasable subscription tier; PawOS
+    // Build (an effective-tier overlay) uses its base tier's quotas here. Paw Compute ('aiReasoning')
+    // below uses the effective tier.
+    const tier = entitlementService.baseTier();
     const seatTier = entitlementService.getSeatTier();
     const pooled = usageQuotaConfigStore.isPooled(tier);
 
     const aiReasoningSummary: CapabilityUsageSummary = (() => {
-      const rolling = rollingUsageGate.getRollingUsage(tier, seatTier);
+      const rolling = rollingUsageGate.getRollingUsage(entitlementService.effectiveTier(), seatTier, Date.now(), entitlementService.currentProMaxVariant());
       return {
         capability: 'aiReasoning',
         limit: rolling.limit5h,

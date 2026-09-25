@@ -21,45 +21,23 @@ import { pawComputeCapacityStore } from './PawComputeCapacityStore';
 beforeEach(() => { pawComputeCapacityStore.init(); });
 
 describe('Rolling limits — exact approved values', () => {
-  it('Go: 5h=null, weekly=1000 PC, not pooled', () => {
-    const cap = pawComputeCapacityStore.resolve('go');
-    expect(cap.window5hPc).toBeNull();
-    expect(cap.windowWeeklyPc).toBe(1_000);
-    expect(cap.pooled).toBe(false);
-  });
-
-  it('Pro: 5h=null, weekly=5000 PC, not pooled', () => {
-    const cap = pawComputeCapacityStore.resolve('pro');
-    expect(cap.window5hPc).toBeNull();
-    expect(cap.windowWeeklyPc).toBe(5_000);
-    expect(cap.pooled).toBe(false);
-  });
-
-  it('Pro Max: 5h=null, weekly=25000 PC, not pooled', () => {
-    const cap = pawComputeCapacityStore.resolve('proMax');
-    expect(cap.window5hPc).toBeNull();
-    expect(cap.windowWeeklyPc).toBe(25_000);
-    expect(cap.pooled).toBe(false);
-  });
-
-  it('Team Standard: 5h=null, weekly=5000 PC/seat, pooled', () => {
-    const cap = pawComputeCapacityStore.resolve('team');
-    expect(cap.window5hPc).toBeNull();
-    expect(cap.windowWeeklyPc).toBe(5_000);
-    expect(cap.pooled).toBe(true);
-  });
-
-  it('Team Premium: 5h=null, weekly=25000 PC/seat, pooled', () => {
-    const cap = pawComputeCapacityStore.resolve('team', 'premium');
-    expect(cap.window5hPc).toBeNull();
-    expect(cap.windowWeeklyPc).toBe(25_000);
-    expect(cap.pooled).toBe(true);
-  });
-
-  it('Enterprise: 5h=null, weekly=null, pooled', () => {
-    const cap = pawComputeCapacityStore.resolve('enterprise');
-    expect(cap.window5hPc).toBeNull();
-    expect(cap.windowWeeklyPc).toBeNull();
-    expect(cap.pooled).toBe(true);
+  // [tier, seatTier, proMaxVariant] -> 5h PC, weekly PC, 5h active hours, weekly active hours, pooled.
+  // The 5-hour window cap is part of the weekly total, never extra capacity.
+  it.each([
+    ['Go', 'go', undefined, undefined, 1_000, 1_000, null, 5, false],
+    ['PawOS Build', 'build', undefined, undefined, 500, 1_500, 5, 15, false],
+    ['Pro', 'pro', undefined, undefined, 1_250, 5_000, 5, 20, false],
+    ['Pro Max 5x', 'proMax', undefined, '5x', 4_166.6667, 25_000, 5, 30, false],
+    ['Pro Max 20x', 'proMax', undefined, '20x', 12_500, 100_000, 5, 40, false],
+    ['Team Standard', 'team', undefined, undefined, 1_250, 5_000, null, 20, true],
+    ['Team Premium', 'team', 'premium', undefined, 4_166.6667, 25_000, null, 30, true],
+    ['Enterprise', 'enterprise', undefined, undefined, null, null, null, null, true],
+  ] as const)('%s', (_label, tier, seatTier, variant, pc5h, pcWeek, h5h, hWeek, pooled) => {
+    const cap = pawComputeCapacityStore.resolve(tier, seatTier, variant);
+    expect(cap.window5hPc).toBe(pc5h);
+    expect(cap.windowWeeklyPc).toBe(pcWeek);
+    expect(cap.window5hActiveHours).toBe(h5h);
+    expect(cap.windowWeeklyActiveHours).toBe(hWeek);
+    expect(cap.pooled).toBe(pooled);
   });
 });

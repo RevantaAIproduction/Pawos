@@ -31,9 +31,9 @@ describe('ConversationRuntime Completion & Error Recovery Behavior', () => {
             callbacks?.onToolCall?.({
               id: 'call_1',
               name: 'run_command',
-              arguments: { command: 'npm run build' }
+              arguments: { command: 'npm run build', cwd: 'C:/projects/site' }
             });
-            callbacks?.onEnd?.('assistant', { text: '', usages: [] });
+            callbacks?.onComplete('');
           }, 0);
           return { cancel: () => {} } as any;
         }
@@ -42,15 +42,15 @@ describe('ConversationRuntime Completion & Error Recovery Behavior', () => {
             callbacks?.onToolCall?.({
               id: 'call_2',
               name: 'run_command',
-              arguments: { command: 'npm run build' }
+              arguments: { command: 'npm run build', cwd: 'C:/projects/site' }
             });
-            callbacks?.onEnd?.('assistant', { text: '', usages: [] });
+            callbacks?.onComplete('');
           }, 0);
           return { cancel: () => {} } as any;
         }
         setTimeout(() => {
-          callbacks?.onDelta?.('Home page added successfully. Status: Completed');
-          callbacks?.onEnd?.('assistant', { text: 'Home page added successfully. Status: Completed', usages: [] });
+          callbacks?.onDelta('Home page added successfully. Status: Completed');
+          callbacks?.onComplete('Home page added successfully. Status: Completed');
         }, 0);
         return { cancel: () => {} } as any;
       }
@@ -64,9 +64,9 @@ describe('ConversationRuntime Completion & Error Recovery Behavior', () => {
       speechSynthesis: tts as any,
       reasoningRuntime: new ReasoningRuntime(mockProvider),
       executeAction: async (req: ActionRequest): Promise<ActionResult> => {
-        if (req.type === 'run_command') {
+        if (req.type === 'runCommand') {
           if (callCount === 1) {
-            return { ok: false, data: { exitCode: 1, stdout: '', stderr: 'Build failed' } };
+            return { ok: false, reason: 'failed', message: 'Build failed', data: { exitCode: 1, stdout: '', stderr: 'Build failed' } };
           }
           return { ok: true, data: { exitCode: 0, stdout: 'Build passed', stderr: '' } };
         }
@@ -75,7 +75,11 @@ describe('ConversationRuntime Completion & Error Recovery Behavior', () => {
     });
 
     runtime.submitTranscript('Add a home page.');
-    await new Promise(r => setTimeout(r, 100));
+    // Fail -> diagnose -> retry -> succeed -> summarize spans several async round-trips; wait for the
+    // turn to genuinely settle (bounded) rather than a fixed sleep.
+    for (let i = 0; i < 300 && (runtime.getSnapshot().state !== 'idle' || callCount < 3); i++) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
     
     const snapshot = runtime.getSnapshot();
     expect(snapshot.state).toBe('idle');

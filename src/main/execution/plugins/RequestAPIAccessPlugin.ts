@@ -48,7 +48,7 @@ export class RequestAPIAccessPlugin extends BasePlugin {
   describeInProgress(request: ActionRequest): string {
     if (request.type !== 'requestAPIAccess') return 'Working on that…';
     const scopes = request.scopes?.join(', ') || 'default';
-    return `Granting ${service} API access (${scopes})…`;
+    return `Granting ${request.service} API access (${scopes})…`;
   }
 
   describeDone(request: ActionRequest, result: ActionResult): string {

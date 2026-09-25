@@ -8,7 +8,6 @@ import type { RuntimeEntitlementGrant } from '../../shared/billing/BillingTypes'
 
 beforeEach(() => {
   vi.spyOn(usageEventStore as any, 'save').mockImplementation(() => {});
-  vi.spyOn(pawComputeCapacityStore as any, 'save').mockImplementation(() => {});
   // Supply the legacy capacities the test assertions expect without altering the modern defaultConfig
   pawComputeCapacityStore.applySyncedConfig({
     tiers: {
@@ -46,14 +45,16 @@ describe('EntitlementService — Go tier Think-not-Execute redesign', () => {
     expect(snap.limit5hPc as number).toBeGreaterThan(0);
   });
 
-  it('does not grant advancedRuntimes (the Execute-class entitlement) to Go', () => {
+  it('grants Go execution (advancedRuntimes) and the Coding Runtime — current rule since 406663d', () => {
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'go', status: 'none' });
 
-    expect(entitlementService.isFeatureAvailable('advancedRuntimes')).toBe(false);
-    expect(entitlementService.isRuntimeEntitled('coding')).toBe(false);
+    expect(entitlementService.isFeatureAvailable('advancedRuntimes')).toBe(true);
+    expect(entitlementService.isRuntimeEntitled('coding')).toBe(true);
+    // …but never Autonomous Work.
+    expect(entitlementService.isFeatureAvailable('autonomousTaskBilling')).toBe(false);
   });
 
-  it('bonus Paw Credits extend Fable headroom but never unlock Go execution entitlements', () => {
+  it('bonus Paw Credits extend Fable headroom but never change Go\'s plan-derived entitlements', () => {
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'go', status: 'none' });
     vi.spyOn(usageEventStore, 'list').mockReturnValue([]);
     vi.spyOn(creditStore, 'getBalance').mockReturnValue({
@@ -66,8 +67,10 @@ describe('EntitlementService — Go tier Think-not-Execute redesign', () => {
           });
 
     expect(entitlementService.hasCreditsRemaining()).toBe(true);
-    expect(entitlementService.isFeatureAvailable('advancedRuntimes')).toBe(false);
-    expect(entitlementService.isRuntimeEntitled('coding')).toBe(false);
+    // Execution comes from Go's plan, not from credits — and credits never add anything beyond it.
+    expect(entitlementService.isFeatureAvailable('advancedRuntimes')).toBe(true);
+    expect(entitlementService.isFeatureAvailable('autonomousTaskBilling')).toBe(false);
+    expect(entitlementService.isRuntimeEntitled('office')).toBe(false);
   });
 
   it('still reports hasCreditsRemaining() true when nothing has been consumed yet (rolling window empty)', () => {
@@ -135,7 +138,7 @@ describe('EntitlementService — Paw Compute usage-limit enforcement (paid tiers
       
       // Fill the 5h window exactly to the limit with non-fable records inside the window
       vi.spyOn(usageEventStore, 'list').mockReturnValue([
-        { usageEventId: 'e1', requestId: 'r1', timestamp: now - 1000, normalizedCompute: limit5h, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, totalTokens: null, thoughtsTokens: null, requestType: 'conversationTurn', sessionId: null, runId: null, provider: 'gemini', model: 'gemini-2.0-flash' },
+        { usageEventId: 'e1', requestId: 'r1', timestamp: now - 1000, normalizedCompute: (limit5h) * 10, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, totalTokens: null, thoughtsTokens: null, requestType: 'conversationTurn', sessionId: null, runId: null, provider: 'gemini', model: 'gemini-2.0-flash' },
       ]);
     expect(entitlementService.hasCreditsRemaining()).toBe(false);
   });
@@ -179,14 +182,15 @@ describe('EntitlementService — Paw Compute usage-limit enforcement (paid tiers
 describe('EntitlementService — runtime entitlement foundation', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it.each(['pro', 'proMax'] as const)('new %s accounts get the Coding Runtime plan-derived, but no other runtime entitlement, with no separate purchase', (tier) => {
+  it.each(['pro', 'proMax'] as const)('new %s accounts get the Coding and Browser Runtimes plan-derived, but no other runtime entitlement, with no separate purchase', (tier) => {
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier, status: 'active' });
     vi.spyOn(subscriptionStore, 'getPurchasedRuntimeEntitlements').mockReturnValue([]);
     vi.spyOn(usageEventStore, 'list').mockReturnValue([]);
 
     expect(entitlementService.isRuntimeEntitled('coding')).toBe(true);
+    expect(entitlementService.isRuntimeEntitled('browser')).toBe(true);
     expect(entitlementService.isRuntimeEntitled('office')).toBe(false);
-    expect(entitlementService.getSnapshot().runtimeEntitlements).toEqual(['coding']);
+    expect(entitlementService.getSnapshot().runtimeEntitlements).toEqual(['coding', 'browser']);
   });
 
   it.each(['team', 'enterprise'] as const)('%s keeps the existing organization runtime entitlement behavior for this phase', (tier) => {
@@ -204,7 +208,9 @@ describe('EntitlementService — runtime entitlement foundation', () => {
     vi.spyOn(usageEventStore, 'list').mockReturnValue([]);
 
     expect(entitlementService.hasCreditsRemaining()).toBe(true);
-    expect(entitlementService.isRuntimeEntitled('coding')).toBe(false);
+    // Runtime access is plan-derived (Go: coding + browser), independent of compute/credits.
+    expect(entitlementService.getRuntimeEntitlements()).toEqual(['coding', 'browser']);
+    expect(entitlementService.isRuntimeEntitled('office')).toBe(false);
   });
 
   it('preserves an existing purchased runtime when another runtime is added to the account grant set', () => {
@@ -215,7 +221,7 @@ describe('EntitlementService — runtime entitlement foundation', () => {
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'go', status: 'none', runtimeEntitlements: grants });
     vi.spyOn(subscriptionStore, 'getPurchasedRuntimeEntitlements').mockReturnValue(grants);
 
-    expect(entitlementService.getRuntimeEntitlements()).toEqual(['coding', 'office']);
+    expect(entitlementService.getRuntimeEntitlements()).toEqual(['coding', 'browser', 'office']);
   });
 
   it('grants Coding when it is explicitly purchased', () => {
@@ -248,7 +254,8 @@ describe('EntitlementService — runtime entitlement foundation', () => {
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'go', status: 'none', runtimeEntitlements: grants });
     vi.spyOn(subscriptionStore, 'getPurchasedRuntimeEntitlements').mockReturnValue(grants);
 
-    expect(entitlementService.diffRuntimeEntitlements(['coding', 'office', 'browser', 'office'])).toEqual(['office', 'browser']);
+    // 'coding' is purchased and 'browser' is plan-derived on Go, so only 'office' is payable.
+    expect(entitlementService.diffRuntimeEntitlements(['coding', 'office', 'browser', 'office'])).toEqual(['office']);
   });
 });
 
@@ -323,12 +330,12 @@ describe('EntitlementService — final entitlement matrix (connectors, Autonomou
     expect(entitlementService.isFeatureAvailable('autonomousPlanBypass')).toBe(true);
   });
 
-  it('Team Standard: Jira/Linear allowed, Autonomous Work/Ticket Balance/Plan Bypass blocked', () => {
+  it('Team Standard: same feature set as Team Premium (seats differ only in capacity) — Jira/Linear/Autonomous Work/Ticket Balance/Plan Bypass allowed', () => {
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'team', status: 'active', seatTier: 'standard' });
     expect(entitlementService.isFeatureAvailable('connectJira')).toBe(true);
     expect(entitlementService.isFeatureAvailable('connectLinear')).toBe(true);
-    expect(entitlementService.isFeatureAvailable('autonomousTaskBilling')).toBe(false);
-    expect(entitlementService.isFeatureAvailable('autonomousPlanBypass')).toBe(false);
+    expect(entitlementService.isFeatureAvailable('autonomousTaskBilling')).toBe(true);
+    expect(entitlementService.isFeatureAvailable('autonomousPlanBypass')).toBe(true);
   });
 
   it('Team Premium: Jira/Linear/Autonomous Work/Ticket Balance/Plan Bypass all allowed', () => {

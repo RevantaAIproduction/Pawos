@@ -5,6 +5,8 @@
  * and balance thresholds without making live payments.
  */
 
+import { describe, expect, test } from "vitest";
+
 import {
   calculateMonthlyAllocation,
   calculateOutstandingUsd,

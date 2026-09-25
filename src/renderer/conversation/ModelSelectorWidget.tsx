@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import styles from './modelSelectorWidget.module.css';
 import type { PawModelId, PawModelDescriptor } from '../../shared/ai/PawModelTypes';
 import { PAW_MODEL_CATALOG, REASONING_PAW_MODEL_IDS } from '../../shared/ai/PawModelTypes';
-import type { EntitlementSnapshot, SubscriptionTierId } from '../../shared/billing/BillingTypes';
+import type { EffectiveTierId, EntitlementSnapshot } from '../../shared/billing/BillingTypes';
 import { canUsePawFable, getAvailableModelsForTier } from '../ai/ModelSelectionByTier';
 
 interface ModelSelectorWidgetProps {
@@ -11,7 +11,7 @@ interface ModelSelectorWidgetProps {
   onSelectModel?: (modelId: PawModelId) => void;
   entitlement?: EntitlementSnapshot | null;
   streamingElapsedSeconds?: number;
-  tier?: SubscriptionTierId;
+  tier?: EffectiveTierId;
 }
 
 const MODEL_DISPLAY_NAMES: Record<PawModelId, string> = {
@@ -57,8 +57,11 @@ export function ModelSelectorWidget({
           {[...new Set(REASONING_PAW_MODEL_IDS), ...PAW_MODEL_CATALOG.map((m) => m.id)]
             .slice(0, 4)
             .map((modelId) => {
-              const isDisabled = modelId === 'paw-fable' && !pawFableAvailable;
-              const disabledReason = isDisabled ? 'Paw Flash only available with usage credits' : '';
+              // The account's real model list (EntitlementService) is authoritative — e.g. PawOS Build
+              // excludes Paw Fable regardless of any purchased-credit balance.
+              const notEntitled = entitlement ? !entitlement.models.includes(modelId) : false;
+              const isDisabled = notEntitled || (modelId === 'paw-fable' && !pawFableAvailable);
+              const disabledReason = notEntitled ? 'Not included in your plan' : isDisabled ? 'Paw Fable is only available with usage credits' : '';
 
               return (
                 <button
@@ -74,7 +77,7 @@ export function ModelSelectorWidget({
                   title={disabledReason || `Select ${MODEL_DISPLAY_NAMES[modelId] || modelId}`}
                 >
                   {MODEL_DISPLAY_NAMES[modelId] || modelId}
-                  {isDisabled && ' (usage credits only)'}
+                  {notEntitled ? ' (not in your plan)' : isDisabled && ' (usage credits only)'}
                 </button>
               );
             })}

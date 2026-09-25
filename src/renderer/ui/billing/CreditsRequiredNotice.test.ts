@@ -17,15 +17,14 @@ describe('getExhaustionPrimaryActions — exactly two (or fewer) tier-determined
     expect(actions[0]!.label).toBe('Upgrade to Pro Max');
   });
 
-  it('Pro Max: Buy Paw Compute, Contact Sales — when Enterprise contact is available', () => {
-    const actions = getExhaustionPrimaryActions('proMax', undefined, false, true);
-    expect(actions).toHaveLength(2);
-    expect(actions.map((a) => a.id)).toEqual(['buyCompute', 'contactSales']);
-    expect(actions.some((a) => a.id === 'upgrade')).toBe(false);
+  it('Pro Max 5x: Upgrade to Pro Max 20x, Buy Paw Compute', () => {
+    const actions = getExhaustionPrimaryActions('proMax', undefined, false, true, '5x');
+    expect(actions.map((a) => a.id)).toEqual(['upgrade', 'buyCompute']);
+    expect(actions[0]!.label).toBe('Upgrade to Pro Max 20x');
   });
 
-  it('Pro Max: only Buy Paw Compute — when Enterprise contact is not available (never padded to two)', () => {
-    const actions = getExhaustionPrimaryActions('proMax', undefined, false, false);
+  it('Pro Max 20x: only Buy Paw Compute — the top of the personal ladder', () => {
+    const actions = getExhaustionPrimaryActions('proMax', undefined, false, true, '20x');
     expect(actions).toHaveLength(1);
     expect(actions[0]!.id).toBe('buyCompute');
   });

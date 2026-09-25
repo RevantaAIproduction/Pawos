@@ -1,6 +1,3 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import { app } from 'electron';
 
 /**
  * PawOS is Gemini-only, permanently — this is not "the current provider," it is the product's only
@@ -44,7 +41,6 @@ export type PawComputeConversionConfig = {
   pawComputePerUsd: number;
 };
 
-const FILE_NAME = 'paw-compute-config.json';
 
 function defaultConfig(): PawComputeConversionConfig {
   return {
@@ -84,28 +80,15 @@ function defaultConfig(): PawComputeConversionConfig {
  * or the metering pipeline itself.
  */
 class PawComputeConfigStore {
-  private file = '';
   private config: PawComputeConversionConfig = defaultConfig();
 
+  /**
+   * Metering (model prices and the Paw Compute scale) is always the built-in table. Earlier builds read
+   * it back from a paw-compute-config.json in the user's data folder — setting pawComputePerUsd near 0
+   * there made every request nearly free on every tier — so no file is read (or written) any more.
+   */
   init(): void {
-    this.file = path.join(app.getPath('userData'), 'billing', FILE_NAME);
-    fs.mkdirSync(path.dirname(this.file), { recursive: true });
-    try {
-      const persisted = JSON.parse(fs.readFileSync(this.file, 'utf-8')) as Partial<PawComputeConversionConfig>;
-      const defaults = defaultConfig();
-      this.config = {
-        modelPricing: { ...defaults.modelPricing, ...(persisted.modelPricing ?? {}) },
-        pawComputePerUsd: typeof persisted.pawComputePerUsd === 'number' ? persisted.pawComputePerUsd : defaults.pawComputePerUsd,
-      };
-      this.save();
-    } catch {
-      this.config = defaultConfig();
-      this.save();
-    }
-  }
-
-  private save(): void {
-    fs.writeFileSync(this.file, JSON.stringify(this.config, null, 2), 'utf-8');
+    this.config = defaultConfig();
   }
 
   get(): PawComputeConversionConfig {
@@ -123,7 +106,6 @@ class PawComputeConfigStore {
       modelPricing: { ...defaults.modelPricing, ...config.modelPricing },
       pawComputePerUsd: config.pawComputePerUsd,
     };
-    this.save();
   }
 
   /** Exact Gemini model id match, then the global default — never returns undefined. */

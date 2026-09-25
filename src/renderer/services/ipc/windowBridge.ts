@@ -18,6 +18,7 @@ import type {
   TicketPricingConfig,
   SubscriptionState,
   SubscriptionTierId,
+  BuildAccessSyncResult,
   CreditBalance,
   CreditConsumptionRecord,
   BillingCheckoutResult,
@@ -33,6 +34,8 @@ import type {
   SeatTier,
 } from '../../../shared/billing/BillingTypes';
 import type { AiUsageCategory } from '../../../shared/billing/AiUsageCategories';
+import type { BuildPdfDocument } from '../../../shared/billing/BuildPdfTypes';
+import type { CareerImportResult, CareerPdfExportResult, CareerToolRequest, CareerToolResult } from '../../../shared/career/CareerTypes';
 import type {
   TurnUsageSubmission,
   AggregatedTurnUsage,
@@ -186,6 +189,7 @@ export function contextBridge() {
 
     systemGetForegroundWindowInfo: async (): Promise<ForegroundWindowInfo> => ipcApi.invoke('system:getForegroundWindowInfo'),
     systemGetAppVersion: async (): Promise<string> => ipcApi.invoke('system:getAppVersion'),
+    systemSetContentProtection: async (enabled: boolean): Promise<boolean> => ipcApi.invoke('system:setContentProtection', enabled),
 
     authIsGoogleSignInConfigured: async (): Promise<boolean> => ipcApi.invoke('auth:isGoogleSignInConfigured'),
     authStartGoogleSignIn: async (): Promise<GoogleSignInResult> => ipcApi.invoke('auth:startGoogleSignIn'),
@@ -224,6 +228,15 @@ export function contextBridge() {
     billingReconcileForAccount: async (accountId: string): Promise<SubscriptionState> =>
       ipcApi.invoke('billing:reconcileForAccount', accountId),
     billingResetSubscription: async (): Promise<SubscriptionState> => ipcApi.invoke('billing:resetSubscription'),
+    billingSyncBuildAccess: async (accessToken: string): Promise<BuildAccessSyncResult> =>
+      ipcApi.invoke('billing:syncBuildAccess', accessToken),
+    billingClearBuildAccess: async (): Promise<void> => ipcApi.invoke('billing:clearBuildAccess'),
+    onEntitlementChanged: (cb: () => void): (() => void) => on('entitlement:changed', () => cb()) ?? (() => {}),
+    careerRun: async (request: CareerToolRequest): Promise<CareerToolResult> => ipcApi.invoke('career:run', request),
+    careerImportResume: async (): Promise<CareerImportResult> => ipcApi.invoke('career:importResume'),
+    careerExportPdf: async (doc: BuildPdfDocument, suggestedName: string): Promise<CareerPdfExportResult> =>
+      ipcApi.invoke('career:exportPdf', doc, suggestedName),
+    careerRevealFile: async (filePath: string): Promise<void> => ipcApi.invoke('career:revealFile', filePath),
     billingGetCreditBalance: async (): Promise<CreditBalance> => ipcApi.invoke('billing:getCreditBalance'),
     billingCanStartGeneration: async (pawModelId?: PawModelId): Promise<{ allowed: boolean; reason?: string; pooled?: boolean }> =>
       ipcApi.invoke('billing:canStartGeneration', pawModelId),

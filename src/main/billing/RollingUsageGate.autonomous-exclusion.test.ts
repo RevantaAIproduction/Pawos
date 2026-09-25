@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { rollingUsageGate, WINDOW_5H_MS } from './RollingUsageGate';
 import { usageEventStore } from './UsageEventStore';
 import type { NormalizedUsageRecord } from '../../shared/billing/UsageMeteringTypes';
@@ -13,6 +13,13 @@ import type { NormalizedUsageRecord } from '../../shared/billing/UsageMeteringTy
 describe('RollingUsageGate - Autonomous Work Exclusion', () => {
   const now = Date.now();
   const within5h = now - WINDOW_5H_MS / 2;
+
+  // Pro's 5-hour window and week are fixed blocks (UsageEventStore); pin both to start before the
+  // records so these tests isolate the runId rule rather than window boundaries.
+  beforeEach(() => {
+    vi.spyOn(usageEventStore, 'getActiveWindowStartAt').mockReturnValue(now - WINDOW_5H_MS + 1000);
+    vi.spyOn(usageEventStore, 'getWeeklyCycleStartAt').mockReturnValue(now - WINDOW_5H_MS);
+  });
 
   afterEach(() => vi.restoreAllMocks());
 
@@ -31,7 +38,7 @@ describe('RollingUsageGate - Autonomous Work Exclusion', () => {
       cachedInputTokens: 0,
       totalTokens: 7000,
       thoughtsTokens: null,
-      normalizedCompute: 500, // Large computation
+      normalizedCompute: (500) * 10, // Large computation
       timestamp: within5h,
     };
 
@@ -57,7 +64,7 @@ describe('RollingUsageGate - Autonomous Work Exclusion', () => {
       cachedInputTokens: 0,
       totalTokens: 1500,
       thoughtsTokens: null,
-      normalizedCompute: 100,
+      normalizedCompute: (100) * 10,
       timestamp: within5h,
     };
 
@@ -84,7 +91,7 @@ describe('RollingUsageGate - Autonomous Work Exclusion', () => {
         cachedInputTokens: 0,
         totalTokens: 150,
         thoughtsTokens: null,
-        normalizedCompute: 50,
+        normalizedCompute: (50) * 10,
         timestamp: within5h,
       },
       // Autonomous task
@@ -101,7 +108,7 @@ describe('RollingUsageGate - Autonomous Work Exclusion', () => {
         cachedInputTokens: 0,
         totalTokens: 3000,
         thoughtsTokens: null,
-        normalizedCompute: 300,
+        normalizedCompute: (300) * 10,
         timestamp: within5h,
       },
     ];

@@ -89,14 +89,21 @@ function makeRealIsolationDeps(overrides: {
   transitionRun?: ReturnType<typeof vi.fn>;
   markTerminal?: ReturnType<typeof vi.fn>;
   completeRun?: ReturnType<typeof vi.fn>;
+  settleWithActualPc?: ReturnType<typeof vi.fn>;
 }): AutonomousOrchestrationDeps {
   return {
     billingService: {
       ...autonomousTaskBillingService,
       transitionRun: overrides.transitionRun ?? vi.fn().mockResolvedValue({}),
       markTerminal: overrides.markTerminal ?? vi.fn().mockResolvedValue(undefined),
-      completeRun: overrides.completeRun ?? vi.fn().mockResolvedValue('billing-event-1'),
-    },
+      completeRun: overrides.completeRun ?? vi.fn().mockResolvedValue(undefined),
+      // Ticket Balance reserve -> settle contract (Supabase RPCs in production).
+      getTicketBalance: vi.fn().mockResolvedValue({ availableBalancePc: 10_000, reservedPc: 0 }),
+      reserveAutonomousPc: vi.fn().mockResolvedValue({ success: true, reservedPc: 300, availableRemaining: 9_700, errorMessage: null }),
+      extendAutonomousReservation: vi.fn().mockResolvedValue({ success: true, newReservedTotal: 300, availableRemaining: 9_700, errorMessage: null }),
+      // The settlement RPC returns the billing event for the run's ACTUAL recorded usage.
+      settleWithActualPc: overrides.settleWithActualPc ?? vi.fn().mockResolvedValue('billing-event-1'),
+    } as unknown as AutonomousOrchestrationDeps['billingService'],
     turnRunner: overrides.turnRunner,
     getConnectorStatus: vi.fn(),
     verifyPullRequestExists: vi.fn(),
@@ -169,11 +176,25 @@ function makeFailingTurnRunner(): AutonomousTurnRunner {
   };
 }
 
+/** Actual Paw Compute the main process reports for the run at settlement (billing:settleAutonomousRun). */
+let settlementActualPc = 42;
+
 describe('Autonomous Work — local acceptance test (real git isolation, real evidence pipeline)', () => {
   let sourceRepo: string;
   let worktreePath: string;
 
   beforeEach(() => {
+    settlementActualPc = 42;
+    (globalThis as any).window = {
+      electron: {
+        ipcRenderer: {
+          invoke: vi.fn(async (channel: string) => {
+            if (channel === 'billing:settleAutonomousRun') return { actualPc: settlementActualPc, recoveryRequired: false };
+            throw new Error(`Unexpected IPC channel in acceptance test: ${channel}`);
+          }),
+        },
+      },
+    };
     sourceRepo = makeSourceRepo();
     const spec = deriveWorkspaceIsolationSpec(sourceRepo, 'acceptance-run');
     worktreePath = spec.worktreePath;
@@ -220,6 +241,7 @@ describe('Autonomous Work — local acceptance test (real git isolation, real ev
   });
 
   it('a genuinely failed execution never charges — real validation failure evidence blocks completion', async () => {
+    settlementActualPc = 0; // the failed turn recorded no provider usage
     const deps = makeRealIsolationDeps({ turnRunner: makeFailingTurnRunner() });
 
     const result = await orchestrateAutonomousRun(
@@ -241,7 +263,8 @@ describe('Autonomous Work — local acceptance test (real git isolation, real ev
       expect(result.outcome.kind).toBe('failed');
       expect(deps.billingService.completeRun).not.toHaveBeenCalled();
       expect(deps.billingService.markTerminal).toHaveBeenCalledWith('acceptance-run', 'failed');
-      expect(result.billingEventId).toBeNull();
+      // Settled for actual work only — zero here — which releases the reservation without charging.
+      expect(deps.billingService.settleWithActualPc).toHaveBeenCalledWith('acceptance-run', 0);
     } finally {
       cleanupWorktree(sourceRepo, worktreePath);
     }
@@ -265,8 +288,9 @@ describe('Autonomous Work — local acceptance test (real git isolation, real ev
   it('duplicate completion cannot double-charge — the billing RPC is called with the same runId both times and reports the same billing event, exercising the local contract this codebase can enforce offline (full server-side idempotency is enforced by the mark_autonomous_task_completed RPC, verified separately via migration)', async () => {
     // Simulates the real RPC's documented idempotency contract: a second completion for the same
     // runId returns the SAME billing event id rather than minting a new one.
-    const completeRunMock = vi.fn().mockResolvedValue('billing-event-idempotent');
-    const deps = makeRealIsolationDeps({ turnRunner: makeRealCodeEditTurnRunner(() => worktreePath), completeRun: completeRunMock });
+    const completeRunMock = vi.fn().mockResolvedValue(undefined);
+    const settleMock = vi.fn().mockResolvedValue('billing-event-idempotent');
+    const deps = makeRealIsolationDeps({ turnRunner: makeRealCodeEditTurnRunner(() => worktreePath), completeRun: completeRunMock, settleWithActualPc: settleMock });
 
     const first = await orchestrateAutonomousRun(
       { runId: 'acceptance-run', organizationId: null, ticketSource: null, ticketId: 'ACCEPT-4', cwd: sourceRepo },
@@ -278,6 +302,7 @@ describe('Autonomous Work — local acceptance test (real git isolation, real ev
       expect(first.billingEventId).toBe('billing-event-idempotent');
       expect(completeRunMock).toHaveBeenCalledTimes(1);
       expect(completeRunMock).toHaveBeenCalledWith('acceptance-run', expect.objectContaining({}));
+      expect(settleMock).toHaveBeenCalledWith('acceptance-run', 42);
 
       // A stray/duplicate re-invocation for the exact same runId — e.g. a retried request after a
       // network blip made the caller think the first attempt never landed. Both the worktree AND its

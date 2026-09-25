@@ -1,4 +1,4 @@
-import type { PawModelId, SubscriptionTierId } from '../../shared/billing/BillingTypes';
+import type { EffectiveTierId, PawModelId } from '../../shared/billing/BillingTypes';
 
 /**
  * Model Compute Consumption Hierarchy:
@@ -13,10 +13,12 @@ import type { PawModelId, SubscriptionTierId } from '../../shared/billing/Billin
  * Paw Fable ONLY available when user has explicit usage credits.
  */
 
-export function getDefaultModelForTier(tier: SubscriptionTierId): PawModelId {
+export function getDefaultModelForTier(tier: EffectiveTierId): PawModelId {
   switch (tier) {
     case 'go':
       return 'paw-flash'; // Paw Flash - normal consumption for free tier
+    case 'build':
+      return 'paw-flash'; // PawOS Build - normal consumption stretches the student's 1,500 PC/week
     case 'pro':
     case 'proMax':
     case 'team':
@@ -42,12 +44,13 @@ export function canUsePawFable(hasUsageCredits: boolean): boolean {
  * Paw Fable excluded unless user has usage credits (burns 3x compute).
  */
 export function getAvailableModelsForTier(
-  tier: SubscriptionTierId,
+  tier: EffectiveTierId,
   hasUsageCredits: boolean
 ): PawModelId[] {
   // Base models available by tier
-  const baseModels: Record<SubscriptionTierId, PawModelId[]> = {
+  const baseModels: Record<EffectiveTierId, PawModelId[]> = {
     go: ['paw-flash'], // Go tier: only Flash (normal consumption)
+    build: ['paw-flash', 'paw-swift', 'paw-core'], // PawOS Build: never Fable (included capacity only)
     pro: ['paw-flash', 'paw-swift', 'paw-core'], // Pro: up to Core (double consumption)
     proMax: ['paw-flash', 'paw-swift', 'paw-core'], // Pro Max: full access except Fable
     team: ['paw-flash', 'paw-swift', 'paw-core'], // Team: full access except Fable
@@ -56,8 +59,8 @@ export function getAvailableModelsForTier(
 
   const models = baseModels[tier] || ['paw-flash'];
 
-  // Paw Fable ONLY available with usage credits (3x burn)
-  if (hasUsageCredits) {
+  // Paw Fable ONLY available with usage credits (3x burn) — never on PawOS Build
+  if (hasUsageCredits && tier !== 'build') {
     models.push('paw-fable');
   }
 

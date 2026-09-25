@@ -5,6 +5,8 @@ import type {
   SupportConversationStatus,
 } from './ipcTypes';
 import { getIpcBridge } from './ipcBridge';
+import type { BuildPdfDocument } from '../../../shared/billing/BuildPdfTypes';
+import type { CareerImportResult, CareerPdfExportResult, CareerToolRequest, CareerToolResult } from '../../../shared/career/CareerTypes';
 import type { CompanionCommand } from '../../../shared/companion/CompanionCommand';
 import type { CompanionPackageInput, ImportedCompanionPackage } from '../../../shared/companion/CompanionPackageTypes';
 import type { ActionRequest, ActionRequirement, ActionResult } from '../../../shared/actions/ActionTypes';
@@ -41,6 +43,7 @@ import type {
   PricingConfig,
   TicketPricingConfig,
   SubscriptionState,
+  BuildAccessSyncResult,
   SubscriptionTierId,
   CreditBalance,
   CreditConsumptionRecord,
@@ -226,6 +229,10 @@ export const ipc = {
   async systemGetAppVersion(): Promise<string> {
     return getBridge().systemGetAppVersion();
   },
+  /** Excludes this window from screenshots / recordings / screen sharing while true (admin console privacy). */
+  async systemSetContentProtection(enabled: boolean): Promise<boolean> {
+    return getBridge().systemSetContentProtection(enabled);
+  },
   async systemGetForegroundWindowInfo(): Promise<ForegroundWindowInfo> {
     return getBridge().systemGetForegroundWindowInfo();
   },
@@ -302,11 +309,27 @@ export const ipc = {
   async billingMarkGoRefresh(): Promise<boolean> {
     return getBridge().billingMarkGoRefresh();
   },
-    async billingSyncBuildEntitlement(accessToken: string): Promise<{ ok: boolean; state?: any; reason?: string }> {
-    return getBridge().billingSyncBuildEntitlement(accessToken);
+  async billingSyncBuildAccess(accessToken: string): Promise<BuildAccessSyncResult> {
+    return getBridge().billingSyncBuildAccess(accessToken);
   },
-  async billingClearBuildEntitlement(): Promise<{ ok: boolean }> {
-    return getBridge().billingClearBuildEntitlement();
+  async billingClearBuildAccess(): Promise<void> {
+    return getBridge().billingClearBuildAccess();
+  },
+  /** Subscribes to out-of-band entitlement changes (PawOS Build synced/cleared/expired). Returns an unsubscribe. */
+  onEntitlementChanged(cb: () => void): () => void {
+    return getBridge().onEntitlementChanged(cb);
+  },
+  async careerRun(request: CareerToolRequest): Promise<CareerToolResult> {
+    return getBridge().careerRun(request);
+  },
+  async careerImportResume(): Promise<CareerImportResult> {
+    return getBridge().careerImportResume();
+  },
+  async careerExportPdf(doc: BuildPdfDocument, suggestedName: string): Promise<CareerPdfExportResult> {
+    return getBridge().careerExportPdf(doc, suggestedName);
+  },
+  async careerRevealFile(filePath: string): Promise<void> {
+    return getBridge().careerRevealFile(filePath);
   },
   async billingGetCreditBalance(): Promise<CreditBalance> {
     return getBridge().billingGetCreditBalance();

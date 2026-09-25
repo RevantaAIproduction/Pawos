@@ -3,7 +3,7 @@ import styles from './onboardingWizard.module.css';
 import { ipc } from '../../services/ipc/ipcBridgeImplementation';
 import { pairingService } from '../../mobilePresence/PairingService';
 import type { AuthUser } from '../../auth/AuthTypes';
-import type { SubscriptionTierId } from '../../../shared/billing/BillingTypes';
+import { useEntitlementSnapshot } from '../../billing/useEntitlementSnapshot';
 import type { PairingSessionStart } from '../../../shared/mobilePresence/MobilePresenceTypes';
 
 function getErrorMessage(e: unknown): string {
@@ -38,7 +38,7 @@ const STEP_COUNT = 5;
 export function OnboardingWizard({ user, onFinish }: { user: AuthUser; onFinish: () => void }) {
   const [step, setStep] = useState(0);
   const [loaded, setLoaded] = useState(false);
-  const [tier, setTier] = useState<SubscriptionTierId>('go');
+  const entitlement = useEntitlementSnapshot();
   const [pairingSession, setPairingSession] = useState<PairingSessionStart | null>(null);
   const [paired, setPaired] = useState(false);
   const [pairingError, setPairingError] = useState<string | null>(null);
@@ -49,7 +49,6 @@ export function OnboardingWizard({ user, onFinish }: { user: AuthUser; onFinish:
       setStep(state.step);
       setLoaded(true);
     });
-    ipc.billingGetSubscription().then((s) => setTier(s.tier)).catch(() => {});
   }, []);
 
   const goTo = async (next: number) => {
@@ -65,7 +64,8 @@ export function OnboardingWizard({ user, onFinish }: { user: AuthUser; onFinish:
     onFinish();
   };
 
-  const canPairMobile = !user.isGuest && tier !== 'go';
+  // The real feature gate (Pro and above), not a tier-name check — PawOS Build has no mobile pairing.
+  const canPairMobile = !user.isGuest && (entitlement?.features.includes('mobilePairing') ?? false);
 
   const generatePairingCode = async () => {
     if (!canPairMobile) return;

@@ -15,6 +15,34 @@ export type PawModelId = PawModelIdType;
  */
 export type SubscriptionTierId = 'go' | 'pro' | 'proMax' | 'team' | 'enterprise';
 
+/**
+ * The tier that actually governs entitlements and Paw Compute capacity right now. Identical to the
+ * account's SubscriptionTierId except while an admin-granted PawOS Build access is active, when it
+ * is 'build'. Build is deliberately NOT a SubscriptionTierId: it is never purchasable, never part of
+ * pricing/checkout, and never stored in the local subscription file — see BuildAccessStore.ts.
+ */
+export type EffectiveTierId = SubscriptionTierId | 'build';
+
+/** Server-reported state of the signed-in account's PawOS Build grant (get_my_build_access()). */
+export type BuildAccessStatus = 'none' | 'active' | 'expired' | 'revoked';
+
+export type BuildAccessState = {
+  status: BuildAccessStatus;
+  cohortId: string | null;
+  /** Epoch ms. Null only when status === 'none'. */
+  startsAt: number | null;
+  /** Epoch ms — exactly two calendar months after the admin grant. Null only when status === 'none'. */
+  endsAt: number | null;
+  revokedAt: number | null;
+  /** When this state was last confirmed by the server (epoch ms, local clock). */
+  syncedAt: number;
+};
+
+export type BuildAccessSyncResult = { ok: true; access: BuildAccessState } | { ok: false; reason: string };
+
+/** Days before expiry at which the Build UI starts warning. */
+export const BUILD_EXPIRY_WARNING_DAYS = 7;
+
 /** Paw Compute usage multiplier for Pro Max: 5x ($100/month) or 20x ($250/month). Only meaningful when tier === 'proMax'. */
 export type ProMaxVariant = '5x' | '20x';
 
@@ -52,12 +80,16 @@ export type RuntimeEntitlementGrant = {
 export type SubscriptionState = {
   tier: SubscriptionTierId;
   status: SubscriptionStatus;
-  /** Optional overlay for the PawOS Build cohort. */
-  buildEntitlement?: BuildCohortState;
   /** Authenticated PawOS account this local subscription cache belongs to. Missing on legacy device-local files. */
   accountId?: string;
   /** Set only once a real payment provider is configured and a checkout actually completes. */
   renewsAt?: number;
+  /**
+   * True when this paid plan was confirmed by the server (get_my_subscription, backed by Razorpay).
+   * Such a plan ends at renewsAt (its paid-through date) — the server re-confirms it on every sign-in
+   * and token refresh, so a renewal extends it and a cancellation/halt lets it lapse.
+   */
+  serverVerified?: boolean;
   /** Only meaningful when tier === 'team' â€” which seat rate this account was invited/assigned at. */
   seatTier?: SeatTier;
   /** Only meaningful when tier === 'proMax' â€” which Paw Compute usage multiplier (5x or 20x). */
@@ -250,7 +282,8 @@ export type FeatureId =
   | 'jobSearch';
 
 export type TierEntitlements = {
-  tier: SubscriptionTierId;
+  /** Effective tier — 'build' while PawOS Build access is active. */
+  tier: EffectiveTierId;
   /** Paw Go includes only paw-flash (Think-class planning/analysis); Pro+ unlock the full roster. Empty would mean no AI at all â€” no tier is configured that way today. */
   models: PawModelId[];
   features: FeatureId[];
@@ -265,21 +298,13 @@ export type TierEntitlements = {
 export const SUBSCRIPTION_TIER_ORDER: SubscriptionTierId[] = ['go', 'pro', 'proMax', 'team', 'enterprise'];
 
 /** The read-only snapshot the UI polls to render plan/models/features/credits â€” see EntitlementService.ts. */
-export type BuildCohortState = {
-  active: boolean;
-  cohortId?: string | null;
-  cohortStartDate?: number;
-  cohortEndDate?: number;
-  includedPc: number;
-  purchasedPc: number;
-  exhaustedAt: string | number | null;
-  replenishedJustNow?: boolean;
-};
-
 export type EntitlementSnapshot = {
-  /** Optional overlay for the PawOS Build cohort. If active is true, this user belongs to the Build cohort. */
-  buildEntitlement?: BuildCohortState;
-  tier: SubscriptionTierId;
+  /** Effective tier: 'build' while PawOS Build access is active, otherwise the same as baseTier. */
+  tier: EffectiveTierId;
+  /** The account's own subscription tier, independent of Build (what it falls back to on expiry). */
+  baseTier: SubscriptionTierId;
+  /** Last server-confirmed PawOS Build state for this account, or null if never synced / signed out. */
+  buildAccess: BuildAccessState | null;
   models: PawModelId[];
   features: FeatureId[];
   runtimeEntitlements: RuntimeEntitlementId[];
@@ -335,7 +360,15 @@ export type EntitlementSnapshot = {
   activeHours5h: number | null;
   activeHoursUsed7d: number;
   activeHoursUsed5h: number;
-  
+  /** When the current 5-hour window ends (epoch ms); null for Paw Go's truly rolling window. */
+  usageWindowResetsAt: number | null;
+  /** When weekly Paw Compute / active-hour usage resets (epoch ms). */
+  usageWeekResetsAt: number;
+  /** PawOS Build's final week (no reset left before access ends): limit-reached offers Upgrade to Pro only, never Buy. */
+  buildFinalWeek?: boolean;
+  /** Only set when tier === 'proMax'. */
+  proMaxVariant?: ProMaxVariant;
+
   // Go Refreshes
   goRefreshesRemaining?: number;
 };

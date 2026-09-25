@@ -15,6 +15,8 @@ export type PendingDeduction = {
   usageEventId: string;
   amountUsd: number;
   timestamp: number;
+  /** The account the usage belongs to — a deduction is only ever sent with that account's session. */
+  userId?: string;
 };
 
 type State = {
@@ -46,11 +48,16 @@ class CreditStore {
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     try {
       const parsed = JSON.parse(fs.readFileSync(this.file, "utf-8"));
+      // The purchased balance and the account it belongs to are never trusted from this file (anyone
+      // can edit it): they start empty and come only from the server — syncUsageCredits() runs on
+      // every sign-in / token refresh and after each purchase. Only unsent deductions are kept, so
+      // usage already spent is still charged when the server balance arrives.
       this.state = {
         ...this.state,
         ...parsed,
-        purchasedUsageCreditsUsd: parsed.purchasedUsageCreditsUsd ?? 0,
-        pendingDeductions: parsed.pendingDeductions ?? [],
+        userId: null,
+        purchasedUsageCreditsUsd: 0,
+        pendingDeductions: Array.isArray(parsed.pendingDeductions) ? parsed.pendingDeductions : [],
       };
       this.rolloverIfNeeded();
     } catch {
@@ -76,7 +83,7 @@ class CreditStore {
       const usdAmount = customerPcToPurchaseUsd(amount);
       this.state.purchasedUsageCreditsUsd = Math.max(0, this.state.purchasedUsageCreditsUsd - usdAmount);
       if (usageEventId && usdAmount > 0) {
-        this.state.pendingDeductions.push({ usageEventId, amountUsd: usdAmount, timestamp: Date.now() });
+        this.state.pendingDeductions.push({ usageEventId, amountUsd: usdAmount, timestamp: Date.now(), userId: this.state.userId });
       }
     } else {
       this.state.usedThisPeriod += amount;
@@ -120,6 +127,8 @@ class CreditStore {
 
   async syncUsageCredits(accessToken: string, userId?: string): Promise<{ ok: boolean; reason?: string }> {
     this.state.userId = userId ?? this.state.userId;
+    // Unsent deductions belong to the account that spent them — never charge another account's balance.
+    this.state.pendingDeductions = this.state.pendingDeductions.filter((p) => p.userId === this.state.userId);
     this.save();
     const supabaseUrl = process.env.SUPABASE_URL;
     const anonKey = process.env.SUPABASE_PUBLISHABLE_KEY;

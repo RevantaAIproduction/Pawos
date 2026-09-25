@@ -6,6 +6,7 @@ import {
   verifyRazorpaySubscriptionPaymentSignature,
 } from "@/lib/billing/razorpay";
 import { createServiceClient } from "@/lib/supabase/serviceClient";
+import { recordRazorpaySubscription } from "@/lib/billing/subscriptionRecords";
 
 const ACTIVE_STATUSES = new Set(["active", "authenticated"]);
 const ALLOWED_RUNTIME_IDS = new Set(["coding"]);
@@ -58,6 +59,10 @@ export async function POST(request: Request) {
     .split(",")
     .map((id) => id.trim())
     .filter((id, index, list) => ALLOWED_RUNTIME_IDS.has(id) && list.indexOf(id) === index);
+
+  // Save the plan against the account (pawos_subscriptions) so the desktop app restores it on any
+  // sign-in, on any device, until it expires. Awaited so it's there before the app next syncs.
+  await recordRazorpaySubscription(subscription, "verify-subscription");
 
   // Async: grant $40 one-time benefit if this is an eligible tier and the user hasn't already received it.
   // The grant is idempotent and checked server-side in Supabase.

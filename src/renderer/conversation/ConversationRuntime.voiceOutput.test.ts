@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ConversationTaskRecord } from './ConversationTypes';
 import { ReasoningRuntime } from '../reasoning/ReasoningRuntime';
 import type { ReasoningProvider, ReasoningProviderCallbacks, ReasoningProviderRequest } from '../reasoning/ReasoningProvider';
 import type { ActionResult } from '../../shared/actions/ActionTypes';
@@ -165,10 +166,16 @@ describe('ConversationRuntime voice output', () => {
       reportActionResult: async (_request, result) => (result.ok ? 'Done.' : result.message ?? 'Execution stopped.'),
     });
 
+    // Finished task cards are removed from the chat and kept in Work History (finalizeTask), so
+    // read the finalized card from the snapshot stream the UI actually received.
+    let task: ConversationTaskRecord | undefined;
+    runtime.subscribe((snapshot) => {
+      const card = snapshot.messages.find((message) => message.task)?.task;
+      if (card) task = card;
+    });
     runtime.submitTranscript('Build a small SaaS dashboard called OrbitDesk.');
     await waitForIdle(runtime);
 
-    const task = runtime.getSnapshot().messages.find((message) => message.task)?.task;
     expect(runtime.getSnapshot().state).toBe('idle');
     expect(task).toBeDefined();
     expect(task?.status).toBe('stopped');

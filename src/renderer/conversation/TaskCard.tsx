@@ -8,7 +8,8 @@ import type { CapabilityConfirmation } from '../../shared/runtime/RequirementTyp
 import type { Finding, FindingSeverity, FindingConfidence } from '../../shared/intelligence/IntelligenceReportTypes';
 import { groupFindingsByProvenance } from '../../shared/intelligence/IntelligenceReportTypes';
 import type { EvidenceProvenance } from '../../shared/intelligence/EvidenceProvenance';
-import type { SubscriptionTierId } from '../../shared/billing/BillingTypes';
+import type { EffectiveTierId } from '../../shared/billing/BillingTypes';
+import { useEntitlementSnapshot } from '../billing/useEntitlementSnapshot';
 import { ipc } from '../services/ipc/ipcBridgeImplementation';
 import { getIntelligenceReport, getExecutionPlan } from './intelligenceReportShape';
 import { describeLaunchFailure, describeTaskLevelLaunchFailure, type FailurePresentation } from './LaunchReadinessUX';
@@ -765,7 +766,7 @@ function LaunchFailureDetails({
   onOpenTicketBalance,
 }: {
   action: ConversationTaskAction;
-  tier: SubscriptionTierId | null;
+  tier: EffectiveTierId | null;
   onOpenTicketBalance?: () => void;
 }) {
   const launchFailure = action.result ? describeLaunchFailure(action.result, action.request, tier) : null;
@@ -832,11 +833,9 @@ export function TaskCard({
   const [connectFieldValues, setConnectFieldValues] = useState<Record<string, Record<string, string>>>({});
   const [connectErrors, setConnectErrors] = useState<Record<string, string>>({});
   const [connecting, setConnecting] = useState<Set<string>>(new Set());
-  const [subscriptionTier, setSubscriptionTier] = useState<SubscriptionTierId | null>(null);
-
-  useEffect(() => {
-    ipc.billingGetSubscription().then((state) => setSubscriptionTier(state.tier)).catch(() => {});
-  }, []);
+  // Effective tier (PawOS Build while active) so failure guidance never offers a Build student an
+  // upgrade/purchase path that doesn't apply to them.
+  const subscriptionTier = useEntitlementSnapshot()?.tier ?? null;
 
   const toggleStage = (stage: Stage) => {
     setCollapsedStages((prev) => {

@@ -64,13 +64,22 @@ describe('pairingService', () => {
     await expect(pairingService.cancelPairing('session-1')).rejects.toEqual({ message: 'not found' });
   });
 
-  it('syncEntitlementTier() self-reports the real local tier snapshot into sync_my_entitlement_tier', async () => {
-    entitlementGetSnapshotMock.mockResolvedValueOnce({ tier: 'pro' });
+  it('syncEntitlementTier() self-reports the real local subscription tier into sync_my_entitlement_tier', async () => {
+    entitlementGetSnapshotMock.mockResolvedValueOnce({ tier: 'pro', baseTier: 'pro' });
     rpcMock.mockReturnValueOnce(makeRpcResult({ data: null, error: null }));
 
     await pairingService.syncEntitlementTier();
 
     expect(rpcMock).toHaveBeenCalledWith('sync_my_entitlement_tier', { p_tier: 'pro' });
+  });
+
+  it('syncEntitlementTier() never reports the PawOS Build overlay — only the purchasable base tier', async () => {
+    entitlementGetSnapshotMock.mockResolvedValueOnce({ tier: 'build', baseTier: 'go' });
+    rpcMock.mockReturnValueOnce(makeRpcResult({ data: null, error: null }));
+
+    await pairingService.syncEntitlementTier();
+
+    expect(rpcMock).toHaveBeenCalledWith('sync_my_entitlement_tier', { p_tier: 'go' });
   });
 
   it('syncEntitlementTier() surfaces an RPC error rather than pretending the sync succeeded', async () => {

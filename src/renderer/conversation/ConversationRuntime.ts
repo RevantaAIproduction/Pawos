@@ -271,7 +271,7 @@ export class ConversationRuntime {
       'copyPath': 'copy',
       'default': 'run'
     };
-    return verbMap[actionType] || verbMap['default'];
+    return verbMap[actionType] ?? 'run';
   }
 
   private getActionTarget(request: ActionRequest): string {
@@ -500,12 +500,12 @@ export class ConversationRuntime {
        * user approves a pending destructive action, this resumes execution
        * with confirmed=true.
        */
-      onGovernanceApproved?: (cb: (payload: { approvalId: string }) => void) => void;
+      onGovernanceApproved?: (cb: (payload: { approvalId: string }) => void) => (() => void) | undefined;
       /**
        * Subscribes to governance denial events (main process) — when a
        * user denies a pending destructive action, this cancels it.
        */
-      onGovernanceDenied?: (cb: (payload: { approvalId: string }) => void) => void;
+      onGovernanceDenied?: (cb: (payload: { approvalId: string }) => void) => (() => void) | undefined;
       /**
        * Request user approval for an action before executing
        */
@@ -1453,6 +1453,10 @@ export class ConversationRuntime {
     // Propagate projectId to all actions in this turn for RLS scoping
     if (this.currentTurnProjectId) {
       request.projectId = this.currentTurnProjectId;
+    }
+    // Autonomous (Ticket Balance-billed) work is excluded from the weekly code-file cap main-side.
+    if (this.args.autonomousRunId) {
+      request.autonomousRunId = this.args.autonomousRunId;
     }
 
     // Vision-backed actions always use Gemini regardless of the active

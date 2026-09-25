@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import type { Meeting, MeetingDraft, ScheduledSend } from '../../../shared/workspace/MeetingTypes';
 
 /**
@@ -18,6 +18,12 @@ import type { Meeting, MeetingDraft, ScheduledSend } from '../../../shared/works
 describe('Phase 7: Meeting Persistent Storage Architecture', () => {
   const userId = 'test-user-id';
   const meetingId = 'meeting-test-001';
+
+  // meetingHandler pulls in the Supabase client and the communication runtime; under a full parallel
+  // suite its first (cold) import can exceed the default 5s per-test timeout. Load it once here.
+  beforeAll(async () => {
+    await import('./meetingHandler');
+  }, 60_000);
 
   beforeEach(() => {
     vi.clearAllMocks();

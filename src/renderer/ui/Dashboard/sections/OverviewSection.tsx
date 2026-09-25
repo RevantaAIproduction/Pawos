@@ -3,8 +3,8 @@ import styles from '../dashboard.module.css';
 import type { SectionId } from './index';
 import { useIpcBridge } from '../../../services/ipc/useIpcBridge';
 import type { ExecutionRecord } from '../../../../shared/actions/ExecutionRecordTypes';
-import type { EntitlementSnapshot } from '../../../../shared/billing/BillingTypes';
 import { formatPawComputePercent, formatPawComputeSummary, formatTierLabel } from '../../../billing/EntitlementDisplay';
+import { useEntitlementSnapshot } from '../../../billing/useEntitlementSnapshot';
 
 function timeAgo(ts: number): string {
   const diffMs = Date.now() - ts;
@@ -41,7 +41,7 @@ export function OverviewSection({
 }) {
   const ipc = useIpcBridge();
   const [executions, setExecutions] = useState<ExecutionRecord[] | null>(null);
-  const [entitlement, setEntitlement] = useState<EntitlementSnapshot | null>(null);
+  const entitlement = useEntitlementSnapshot();
   const [appVersion, setAppVersion] = useState<string | null>(null);
 
   const refreshExecutions = () => {
@@ -50,7 +50,6 @@ export function OverviewSection({
 
   useEffect(() => {
     refreshExecutions();
-    ipc.entitlementGetSnapshot().then(setEntitlement).catch(() => {});
     ipc.getAppVersion().then(setAppVersion).catch(() => {});
     return ipc.onExecutionUpdated(refreshExecutions);
   }, []);

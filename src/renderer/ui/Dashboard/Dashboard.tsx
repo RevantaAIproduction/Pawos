@@ -13,6 +13,9 @@ import { InfrastructureRuntimeSection } from './sections/InfrastructureRuntimeSe
 import { DevelopmentRuntimeSection } from './sections/DevelopmentRuntimeSection';
 import { DesktopSection } from './sections/DesktopSection';
 import { AppsHubSection } from './sections/AppsHubSection';
+import { CareerSection } from './sections/CareerSection';
+import { AdminSection } from './sections/AdminSection';
+import { useIsBuildAdmin } from '../../billing/useIsBuildAdmin';
 import { ProjectsSection } from './sections/ProjectsSection';
 import { AnalyticsSection } from './sections/AnalyticsSection';
 import { SettingsSection, type SettingsTab } from './sections/SettingsSection';
@@ -24,11 +27,14 @@ import { useAutonomousWorkAuthorization } from './AutonomousWorkAuthorizationMod
 import type { SectionId } from './sections';
 import { useIpcBridge } from '../../services/ipc/useIpcBridge';
 import type { AuthUser } from '../../auth/AuthTypes';
-import type { SubscriptionTierId } from '../../../shared/billing/BillingTypes';
+import type { EffectiveTierId } from '../../../shared/billing/BillingTypes';
 import { autonomousTaskBillingService } from '../../organization/AutonomousTaskBillingService';
 import { ipc as ipcBridge } from '../../services/ipc/ipcBridgeImplementation';
+import { useEntitlementSnapshot } from '../../billing/useEntitlementSnapshot';
+import { BuildAccessBanner } from '../billing/BuildAccessBanner';
 
-const TIER_LABELS: Record<SubscriptionTierId, string> = {
+const TIER_LABELS: Record<EffectiveTierId, string> = {
+  build: 'PawOS Build',
   go: 'Go',
   pro: 'Pro',
   proMax: 'Pro Max',
@@ -87,7 +93,11 @@ export function Dashboard({
       wakeTimeoutRef.current = null;
     }
   }, []);
-  const [tierLabel, setTierLabel] = useState(user.isGuest ? 'Guest Preview' : 'Go');
+  const entitlement = useEntitlementSnapshot();
+  const isAdmin = useIsBuildAdmin(user);
+  // Effective tier (PawOS Build while active), never the raw subscription tier. Guests have no real
+  // subscription, so a guest session never displays a tier it never actually purchased.
+  const tierLabel = user.isGuest ? 'Guest Preview' : entitlement ? TIER_LABELS[entitlement.tier] : 'Go';
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('Home');
   const [helpWidgetOpen, setHelpWidgetOpen] = useState(false);
   const [helpWidgetInitialTab, setHelpWidgetInitialTab] = useState<'home' | 'messages' | 'help'>('home');
@@ -100,12 +110,7 @@ export function Dashboard({
 
   useEffect(() => {
     ipc.isCompanionEnabled().then(setCompanionEnabled).catch(() => {});
-    // Guests have no real subscription — SubscriptionStore is real-account-only,
-    // so a guest session must never display a tier it never actually purchased.
-    if (!user.isGuest) {
-      ipc.billingGetSubscription().then((s) => setTierLabel(TIER_LABELS[s.tier])).catch(() => {});
-    }
-  }, [ipc, user.isGuest]);
+  }, [ipc]);
 
   useEffect(() => {
     ipc.onCompanionReady(() => {
@@ -220,16 +225,21 @@ export function Dashboard({
         companionEnabled={companionEnabled}
         onProfileAction={handleProfileAction}
         onOpenUrl={openUrl}
+        isAdmin={isAdmin}
       />
       <main className={styles.main}>
         <div className={styles.topBar}>
-          <TicketBalanceIndicator
-            isGuest={user.isGuest}
-            onOpen={() => openSettingsTab('Billing')}
-            onRequestUpgrade={() => navigateTo('upgrade')}
-          />
+          {/* PawOS Build excludes the Autonomous Ticket System entirely — no locked wallet or upsell. */}
+          {entitlement?.tier !== 'build' && (
+            <TicketBalanceIndicator
+              isGuest={user.isGuest}
+              onOpen={() => openSettingsTab('Billing')}
+              onRequestUpgrade={() => navigateTo('upgrade')}
+            />
+          )}
         </div>
         <div className={styles.content}>
+          {!user.isGuest && <BuildAccessBanner entitlement={entitlement} />}
           {active === 'home' && (
             <OverviewSection
               onNavigate={setActive}
@@ -253,7 +263,9 @@ export function Dashboard({
           {active === 'projects' && (
             <ProjectsSection onOpenFolder={(path) => void ipc.executeAction({ type: 'openFolder', path })} />
           )}
-          {active === 'apps' && <AppsHubSection onNavigate={setActive} />}
+          {active === 'apps' && <AppsHubSection onNavigate={setActive} features={entitlement?.features ?? []} />}
+          {active === 'career' && <CareerSection onOpenUrl={openUrl} />}
+          {active === 'admin' && isAdmin && <AdminSection viewerEmail={user.isGuest ? null : user.email} />}
           {active === 'analytics' && <AnalyticsSection user={user} />}
           {active === 'workHistory' && <WorkHistorySection selectedWorkId={selectedWorkId} />}
           {active === 'browserCapabilities' && <BrowserCapabilitiesSection />}

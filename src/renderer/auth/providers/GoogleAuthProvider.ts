@@ -1,5 +1,6 @@
 import { ipc } from '../../services/ipc/ipcBridgeImplementation';
 import { getSupabaseClient } from '../supabaseClient';
+import { clearServerSessionLinkFailure, recordServerSessionLinkFailure } from '../serverSessionLink';
 import type { GoogleProfile } from '../../../shared/auth/AccountTypes';
 import type { AuthUser } from '../AuthTypes';
 import { cleanIpcErrorMessage } from '../ipcErrorMessage';
@@ -38,11 +39,15 @@ async function linkSupabaseSession(idToken: string, accessToken: string): Promis
     const { data, error } = await supabase.auth.signInWithIdToken({ provider: 'google', token: idToken, access_token: accessToken });
     if (error) {
       console.warn('Google→Supabase session link failed:', error.message);
+      recordServerSessionLinkFailure('google', error.message);
       return null;
     }
+    clearServerSessionLinkFailure();
     return data.user?.id ?? null;
   } catch (err) {
-    console.warn('Google→Supabase session link failed:', err instanceof Error ? err.message : err);
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn('Google→Supabase session link failed:', message);
+    recordServerSessionLinkFailure('google', message);
     return null;
   }
 }

@@ -1,11 +1,7 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import { app } from 'electron';
 import type { SeatTier, SubscriptionTierId } from '../../shared/billing/BillingTypes';
 import { TRACKED_USAGE_CAPABILITIES } from '../../shared/billing/UsageEngineTypes';
 import type { CapabilityQuotaConfig, UsageCapability, UsageQuotaConfig, UsageQuotaTierKey } from '../../shared/billing/UsageEngineTypes';
 
-const FILE_NAME = 'usage-quota-config.json';
 
 /** Builds the 7 tracked-capability entries at a flat limit; 'aiReasoning' is always set separately per tier since its number never matches the other 7's (see defaultConfig()). */
 function flatQuota(limit: number | null): Record<Exclude<UsageCapability, 'aiReasoning'>, CapabilityQuotaConfig> {
@@ -147,23 +143,15 @@ export function resolveQuotaTierKey(tier: SubscriptionTierId, seatTier: SeatTier
 }
 
 class UsageQuotaConfigStore {
-  private file = '';
   private config: UsageQuotaConfig = defaultConfig();
 
+  /**
+   * Always the built-in quotas. Earlier builds read them back from a usage-quota-config.json in the
+   * user's data folder, which anyone could edit to raise their own quotas — no file is read (or
+   * written) any more.
+   */
   init(): void {
-    this.file = path.join(app.getPath('userData'), 'billing', FILE_NAME);
-    fs.mkdirSync(path.dirname(this.file), { recursive: true });
-    try {
-      this.config = mergeMissingQuotaDefaults(JSON.parse(fs.readFileSync(this.file, 'utf-8')) as UsageQuotaConfig);
-      this.save();
-    } catch {
-      this.config = defaultConfig();
-      this.save();
-    }
-  }
-
-  private save(): void {
-    fs.writeFileSync(this.file, JSON.stringify(this.config, null, 2), 'utf-8');
+    this.config = defaultConfig();
   }
 
   get(): UsageQuotaConfig {
@@ -173,7 +161,6 @@ class UsageQuotaConfigStore {
   /** Called once the renderer has fetched the real usage_quota_config table from Supabase — replaces the placeholder cache with the live, admin-editable numbers. */
   applySyncedConfig(config: UsageQuotaConfig): void {
     this.config = mergeMissingQuotaDefaults(config);
-    this.save();
   }
 
   /**

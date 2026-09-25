@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { normalizedComputeToCustomerPc } from '../../../shared/billing/CustomerPcCommercialModel';
 /**
  * IPC handler for meeting management (recording, summarization, distribution).
  * Pro tier and higher feature - gated by tier checks in handlers.
@@ -282,7 +283,7 @@ Focus on:
       // Consume Tier Compute using the existing billing infrastructure
       // This uses the normal AI usage path, not Autonomous Work PC
       const normalizedCompute = computeNormalizedCompute(providerUsageMetadata);
-      creditStore.consume(normalizedCompute, 'meeting-summarization', 'meetings', false);
+      creditStore.consume(normalizedComputeToCustomerPc(normalizedCompute), 'meeting-summarization', 'meetings', false);
     }
 
     // Build structured summary

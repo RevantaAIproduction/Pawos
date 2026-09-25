@@ -379,16 +379,43 @@ export function verifyRazorpaySubscriptionPaymentSignature(
   }
 }
 
+/** The Razorpay subscription fields PawOS reads (see Razorpay's Subscriptions API). Times are Unix seconds. */
+export type RazorpaySubscription = {
+  id: string;
+  plan_id: string;
+  status: string;
+  quantity?: number;
+  notes?: Record<string, string>;
+  /** End of the currently paid billing cycle. */
+  current_end?: number | null;
+  /** Next scheduled charge. */
+  charge_at?: number | null;
+};
+
 /** Fetches a subscription from Razorpay's own API — used to re-derive the REAL plan/status/seat-count server-side rather than ever trusting a client-supplied tier. */
 export async function fetchRazorpaySubscription(
   subscriptionId: string,
   credentials: { keyId: string; keySecret: string }
-): Promise<{ id: string; plan_id: string; status: string; quantity?: number; notes?: Record<string, string> } | null> {
+): Promise<RazorpaySubscription | null> {
   const response = await fetch(`https://api.razorpay.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, {
     headers: { Authorization: razorpayAuthHeader(credentials.keyId, credentials.keySecret) },
   });
   if (!response.ok) return null;
   return response.json();
+}
+
+/** One page of the account's Razorpay subscriptions, newest first (Razorpay caps `count` at 100). */
+export async function listRazorpaySubscriptions(
+  credentials: { keyId: string; keySecret: string },
+  page: { count: number; skip: number }
+): Promise<RazorpaySubscription[] | null> {
+  const query = new URLSearchParams({ count: String(Math.min(Math.max(page.count, 1), 100)), skip: String(Math.max(page.skip, 0)) });
+  const response = await fetch(`https://api.razorpay.com/v1/subscriptions?${query}`, {
+    headers: { Authorization: razorpayAuthHeader(credentials.keyId, credentials.keySecret) },
+  });
+  if (!response.ok) return null;
+  const body = (await response.json().catch(() => null)) as { items?: RazorpaySubscription[] } | null;
+  return Array.isArray(body?.items) ? body.items : null;
 }
 
 /** Reverses getRazorpayPlanId() — given a real plan_id read back from Razorpay, finds which (tier, seatTier, proMaxVariant) it actually corresponds to. Returns null for a plan_id that matches no configured plan (never guesses). */

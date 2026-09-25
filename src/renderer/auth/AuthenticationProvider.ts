@@ -36,18 +36,33 @@ const SUPABASE_SESSION_KEY = 'pawos:supabase:session';
 export class AuthenticationProvider implements AuthService {
   private emailProvider = new EmailAuthProvider();
   constructor() {
-    // Listen for background token refreshes or external sign-outs to keep Build state synced
-    getSupabaseClient().then(supabase => {
-      supabase.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
-          if (session?.access_token) {
-            await ipc.billingSyncBuildEntitlement(session.access_token).catch(() => {});
+    // PawOS Build access is server-authoritative and held only in main-process memory
+    // (BuildAccessStore.ts), so it must be re-confirmed from Supabase whenever a session appears or
+    // its token rotates — including INITIAL_SESSION on app start, when a remembered session is
+    // restored without a SIGNED_IN event — and dropped on sign-out.
+    getSupabaseClient()
+      .then((supabase) => {
+        supabase.auth.onAuthStateChange((event, session) => {
+          if (event === 'SIGNED_OUT' || (event === 'INITIAL_SESSION' && !session)) {
+            ipc.billingClearBuildAccess().catch((err) => console.error('[PawOS Build] Clearing Build access failed:', err));
+            return;
           }
-        } else if (event === 'SIGNED_OUT') {
-          await ipc.billingClearBuildEntitlement().catch(() => {});
-        }
-      });
-    }).catch(() => {});
+          if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') && session?.access_token) {
+            // Deferred: supabase-js runs this callback while holding its auth lock; awaiting IPC
+            // inside it would stall other auth calls.
+            const accessToken = session.access_token;
+            setTimeout(() => {
+              ipc
+                .billingSyncBuildAccess(accessToken)
+                .then((result) => {
+                  if (!result.ok) console.error('[PawOS Build] Build access sync failed:', result.reason);
+                })
+                .catch((err) => console.error('[PawOS Build] Build access sync failed:', err));
+            }, 0);
+          }
+        });
+      })
+      .catch((err) => console.error('[PawOS Build] Could not subscribe to auth changes for Build sync:', err));
   }
   private googleProvider = new GoogleAuthProvider();
   private githubProvider = new GitHubAuthProvider();
@@ -149,8 +164,8 @@ export class AuthenticationProvider implements AuthService {
     window.localStorage.removeItem(REMEMBER_KEY);
     await this.emailProvider.signOut(); // clears the real Supabase session too, not just the local mirror
     
-    // Clear Build state to prevent inheritance by the next user
-    await ipc.billingClearBuildEntitlement().catch(() => {});
+    // Drop PawOS Build access so it can never carry over to the next account on this device.
+    await ipc.billingClearBuildAccess().catch((err) => console.error('[PawOS Build] Clearing Build access on sign-out failed:', err));
     // Local subscription state (subscription.json) is one file per device install, not namespaced
     // per account â€” without this reset, an account that once joined/created a Team/Enterprise org
     // (syncFromOrganization only ever raises the tier, never lowers it) would leave every

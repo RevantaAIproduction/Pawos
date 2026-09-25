@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ConversationTaskRecord } from './ConversationTypes';
 import { ReasoningRuntime } from '../reasoning/ReasoningRuntime';
 import type { ReasoningProvider, ReasoningProviderCallbacks, ReasoningProviderRequest } from '../reasoning/ReasoningProvider';
 import type { ActionRequest, ActionResult } from '../../shared/actions/ActionTypes';
@@ -213,6 +214,12 @@ describe('ConversationRuntime execution modes — confirmation wiring', () => {
       message: 'Your plan does not include this capability.',
     }));
     const runtime = await createRuntime({ toolName: 'run_command', executionMode: 'bypass', bypassPermissionsEnabled: true, executeAction });
+    // Finished task cards leave the chat for Work History — capture the finalized card as published.
+    let task: ConversationTaskRecord | undefined;
+    runtime.subscribe((snapshot) => {
+      const card = snapshot.messages.find((m) => m.task)?.task;
+      if (card) task = card;
+    });
 
     runtime.submitTranscript('run the build');
     await waitForIdle(runtime);
@@ -221,7 +228,6 @@ describe('ConversationRuntime execution modes — confirmation wiring', () => {
     // consulted at all — executeAction is called exactly once for the real action, and the real
     // refusal stands (regardless of how many times the unrelated recordTaskProvenance fires).
     expect(calledForType(executeAction, 'runCommand')).toHaveLength(1);
-    const task = runtime.getSnapshot().messages.find((m) => m.task)?.task;
     expect(task?.actions[0]?.result).toMatchObject({ ok: false, reason: 'entitlement-restricted' });
   }, 10000);
 });

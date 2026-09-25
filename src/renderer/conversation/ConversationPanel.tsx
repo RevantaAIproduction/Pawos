@@ -11,8 +11,11 @@ import { isSupportRequest } from '../../shared/support/SupportTrigger';
 import { useWindowContext } from './WindowContextProvider';
 import { getSupabaseClient } from '../auth/supabaseClient';
 import { useIpcBridge } from '../services/ipc/useIpcBridge';
+import { ipc as ipcBridge } from '../services/ipc/ipcBridgeImplementation';
 import { CreditsRequiredNotice, getExhaustionPrimaryActions } from '../ui/billing/CreditsRequiredNotice';
-import type { EntitlementSnapshot, SeatTier, SubscriptionTierId } from '../../shared/billing/BillingTypes';
+import { PlanUsageLimits } from '../ui/billing/PlanUsageLimits';
+import idleCharacterImage from './assets/idle-character.png';
+import type { EffectiveTierId, EntitlementSnapshot, SeatTier, SubscriptionTierId } from '../../shared/billing/BillingTypes';
 import { DEFAULT_EXECUTION_MODE, EXECUTION_MODE_CATALOG, type ConversationExecutionMode } from '../../shared/actions/ExecutionModeTypes';
 import {
   DEFAULT_PAW_MODEL_ID,
@@ -361,7 +364,7 @@ export function ConversationPanel({
   onOpenTicketBalance?: () => void;
   onPlanDecision?: (planId: string, decision: 'approved' | 'rejected', message: string) => void;
   /** Set when the last submit was blocked by the entitlement/credit gate (see useConversationController). */
-  creditsNoticeTier?: SubscriptionTierId | null;
+  creditsNoticeTier?: EffectiveTierId | null;
   /** Only meaningful when tier === 'team' â€” which seat rate determines the exhaustion notice's upgrade target. */
   creditsNoticeSeatTier?: SeatTier;
   /** True only for Enterprise (pooled Paw Compute) â€” see EntitlementSnapshot.pooled. */
@@ -450,6 +453,18 @@ export function ConversationPanel({
   const [planRevisionFeedback, setPlanRevisionFeedback] = useState('');
   const [showPlanSidebar, setShowPlanSidebar] = useState(false);
   const [showTierUpgradePopup, setShowTierUpgradePopup] = useState(false);
+  // Result of a chat-message "Download PDF" (shown under that message, never swallowed).
+  const [pdfExportStatus, setPdfExportStatus] = useState<{ messageId: string; text: string } | null>(null);
+  const exportMessagePdf = async (messageId: string, title: string, content: string) => {
+    const paragraphs = content.split('\n').map((line) => line.trim()).filter(Boolean);
+    try {
+      const result = await ipcBridge.careerExportPdf({ title, sections: [{ paragraphs }] }, title);
+      if (result.ok) setPdfExportStatus({ messageId, text: `Saved to ${result.filePath}` });
+      else if (!('canceled' in result && result.canceled)) setPdfExportStatus({ messageId, text: `Couldn't save the PDF: ${result.reason}` });
+    } catch (err) {
+      setPdfExportStatus({ messageId, text: `Couldn't save the PDF: ${err instanceof Error ? err.message : String(err)}` });
+    }
+  };
   const [usageDropdownOpen, setUsageDropdownOpen] = useState(false);
   // Incognito Mode (Go tier only): Private session, doesn't persist data or history
   // BUT still calculates Paw Computes usage in real-time (no free pass)
@@ -1551,6 +1566,28 @@ export function ConversationPanel({
     );
   };
 
+  const creditsNoticeElement =
+    creditsNoticeTier && onDismissCreditsNotice ? (
+      <CreditsRequiredNotice
+        tier={creditsNoticeTier}
+        seatTier={creditsNoticeSeatTier}
+        proMaxVariant={entitlement?.proMaxVariant}
+        buildFinalWeek={entitlement?.buildFinalWeek ?? false}
+        pooled={creditsNoticePooled ?? false}
+        enterpriseContactAvailable={enterpriseContactAvailable}
+        onDismiss={onDismissCreditsNotice}
+        onUpgrade={onUpgrade}
+        onBuyCompute={onBuyCompute}
+        onContactSales={onContactSales}
+        onContactAdmin={onContactAdmin}
+        onRequestMoreCompute={onRequestMoreCompute}
+        pawCreditsBalanceUsd={pawCreditsBalanceUsd}
+        onUseCredits={onUseCredits}
+        redeeming={redeemingCredits}
+        redeemError={redeemCreditsError}
+      />
+    ) : null;
+
   return (
     <section className={styles.panel} aria-label="Conversation panel">
       {/* PREMIUM HEADER */}
@@ -1598,7 +1635,7 @@ export function ConversationPanel({
             <div className={styles.idleState}>
               <div className={styles.idleCharacter}>
                 <img
-                  src="file:///C:/Users/APPLE/Pictures/Screenshots/Screenshot 2026-09-10 175724.png"
+                  src={idleCharacterImage}
                   alt="PawOS Character"
                   className={styles.characterImage}
                 />
@@ -1612,28 +1649,14 @@ export function ConversationPanel({
             </div>
           )}
 
+          {/* A request blocked before the first message still needs visible feedback. */}
+          {!hasMessages && creditsNoticeElement && <div style={{ padding: '0 16px 16px' }}>{creditsNoticeElement}</div>}
+
           {/* CONVERSATION SCROLL AREA */}
           {hasMessages && (
             <div className={styles.conversationArea} ref={transcriptRef}>
               {/* Credits exhaustion notice */}
-              {creditsNoticeTier && onDismissCreditsNotice && (
-                <CreditsRequiredNotice
-                  tier={creditsNoticeTier}
-                  seatTier={creditsNoticeSeatTier}
-                  pooled={creditsNoticePooled ?? false}
-                  enterpriseContactAvailable={enterpriseContactAvailable}
-                  onDismiss={onDismissCreditsNotice}
-                  onUpgrade={onUpgrade}
-                  onBuyCompute={onBuyCompute}
-                  onContactSales={onContactSales}
-                  onContactAdmin={onContactAdmin}
-                  onRequestMoreCompute={onRequestMoreCompute}
-                  pawCreditsBalanceUsd={pawCreditsBalanceUsd}
-                  onUseCredits={onUseCredits}
-                  redeeming={redeemingCredits}
-                  redeemError={redeemCreditsError}
-                />
-              )}
+              {creditsNoticeElement}
 
               {/* File context selector for hands-on coding */}
               {windowCtx.context.project && (
@@ -1721,49 +1744,16 @@ export function ConversationPanel({
                           role={message.role as 'user' | 'assistant'}
                           onCopy={() => navigator.clipboard.writeText(message.content)}
                           onDownloadPdf={
-                            (message.role === 'assistant' && message.content.toLowerCase().includes('ats analysis')) 
-                              ? async () => {
-                                  try {
-                                    // Structured extraction for PDF
-                                    const lines = message.content.split('\n');
-                                    const docData = {
-                                      title: 'ATS Analysis Result',
-                                      sections: [{ paragraphs: lines }]
-                                    };
-                                    // Assume window.ipc exposes the generated functions
-                                    const ipcAny = window.ipc as any;
-                                    const res = await ipcAny.billingGenerateBuildResumeAtsPdf(docData);
-                                    if (res?.ok) {
-                                      // Success
-                                    } else if (!res?.canceled) {
-                                      console.error(res?.reason || 'Failed to generate PDF');
-                                    }
-                                  } catch (e) {
-                                    console.error(e);
-                                  }
-                                }
-                              : (message.role === 'assistant' && message.content.toLowerCase().includes('rewritten resume'))
-                              ? async () => {
-                                  try {
-                                    const lines = message.content.split('\n');
-                                    const docData = {
-                                      title: 'Rewritten Resume',
-                                      sections: [{ paragraphs: lines }]
-                                    };
-                                    const ipcAny = window.ipc as any;
-                                    const res = await ipcAny.billingGenerateBuildResumeRewritePdf(docData);
-                                    if (res?.ok) {
-                                      // Success
-                                    } else if (!res?.canceled) {
-                                      console.error(res?.reason || 'Failed to generate PDF');
-                                    }
-                                  } catch (e) {
-                                    console.error(e);
-                                  }
-                                }
+                            message.role === 'assistant' && /ats analysis|rewritten resume/i.test(message.content)
+                              ? () => void exportMessagePdf(message.id, /ats analysis/i.test(message.content) ? 'ATS Analysis Result' : 'Rewritten Resume', message.content)
                               : undefined
                           }
                         />
+                      {pdfExportStatus?.messageId === message.id && (
+                        <div style={{ fontSize: 12, marginTop: 4, opacity: 0.8 }} role="status">
+                          {pdfExportStatus.text}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1811,7 +1801,11 @@ export function ConversationPanel({
             title="Click to open billing settings"
           >
             Limit reached to {Math.round((entitlement.usage5hPc / (entitlement.limit5hPc ?? 1)) * 100)}% â€¢{' '}
-            {entitlement.tier === 'pro_max'
+            {entitlement.tier === 'build'
+              ? entitlement.buildFinalWeek
+                ? 'PawOS Build limit reached — last week of Build access, no reset. Upgrade to Pro to keep going'
+                : 'PawOS Build limit reached — buy Paw Compute, or wait for the automatic reset (see Settings → Usage)'
+              : entitlement.tier === 'pro_max'
               ? 'Buy credits: 5x ($100) or 20x ($250)'
               : entitlement.tier === 'pro'
               ? 'Upgrade to Pro Max or buy credits: 5x ($100) or 20x ($250)'
@@ -1947,7 +1941,11 @@ export function ConversationPanel({
               const isStreaming = (streamingPawCompute ?? 0) > 0;
 
               let circleColor = 'rgba(120, 150, 200, 0.6)'; // muted blue
-              if (percentage >= 90) circleColor = 'rgba(180, 100, 100, 0.6)'; // muted red
+              const limitReached = entitlement ? !entitlement.pooled && !entitlement.hasCreditsRemaining : false;
+              if (entitlement?.tier === 'go') {
+                // Go sees status only — no percentage-based warning colours.
+                if (limitReached) circleColor = 'rgba(180, 100, 100, 0.6)';
+              } else if (limitReached || percentage >= 90) circleColor = 'rgba(180, 100, 100, 0.6)'; // muted red
               else if (percentage >= 65) circleColor = 'rgba(180, 150, 100, 0.6)'; // muted yellow
               if (isStreaming) circleColor = 'rgba(76, 175, 80, 0.6)'; // green when streaming
 
@@ -1961,55 +1959,7 @@ export function ConversationPanel({
                   />
                   {usageDropdownOpen && (
                     <div className={styles.usageDropdownMenu}>
-                      <div className={styles.usageHeader}>Plan usage limits - {entitlement?.tier === 'team'
-                          ? `TEAM ${entitlement?.seatTier?.toUpperCase() ?? 'STANDARD'}`
-                          : entitlement?.tier === 'proMax'
-                          ? `PRO MAX ${entitlement?.proMaxVariant?.toUpperCase() ?? '5X'}`
-                          : entitlement?.tier?.toUpperCase() ?? 'GO'}
-                        {(entitlement?.tier === 'team' || entitlement?.tier === 'enterprise') && ' (pooled)'}
-                      </div>
-                      {(limit5h !== null || entitlement?.limit5hPc) && sessionStartTime && (
-                        <div className={styles.usageRow}>
-                          <span>{entitlement?.limit5hPc ? `${(entitlement?.limit5hPc / 1000).toFixed(1)}k limit` : '5-hour limit'}</span>
-                          <span className={styles.usageValue}>
-                            {(() => {
-                              const remainingMs = Math.max(0, (limit5h || entitlement?.limit5hPc || 5 * 60 * 60 * 1000) - sessionElapsedMs);
-                              const hours = Math.floor(remainingMs / (60 * 60 * 1000));
-                              const mins = Math.floor((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
-                              const secs = Math.floor((remainingMs % (60 * 1000)) / 1000);
-                              return `${hours}h ${mins}m ${secs}s ${Math.round(percentage)}%`;
-                            })()}
-                          </span>
-                        </div>
-                      )}
-                      {entitlement?.activeHoursWeekly !== null && entitlement?.activeHoursWeekly > 0 && (
-                        <div className={styles.usageRow}>
-                          <span>Weekly · all models</span>
-                          <span className={styles.usageValue}>
-                            {(() => {
-                              const hoursUsed = entitlement?.activeHoursUsed7d ?? 0;
-                              const hoursLimit = entitlement?.activeHoursWeekly ?? 0;
-                              const percentage = hoursLimit > 0 ? (hoursUsed / hoursLimit) * 100 : 0;
-
-                              // Only show reset time if 100% exhausted
-                              if (percentage < 100) {
-                                return `${Math.round(percentage)}% (${Math.round(hoursUsed * 10) / 10}/${hoursLimit}h)`;
-                              }
-
-                              const cycleStartMs = entitlement?.weeklyCycleStartAt ?? currentTime;
-                              const weekEndMs = cycleStartMs + (7 * 24 * 60 * 60 * 1000);
-                              const resetDate = new Date(weekEndMs);
-                              const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-                              const resetDay = daysOfWeek[resetDate.getDay()];
-                              const resetHour = resetDate.getHours().toString().padStart(2, '0');
-                              const resetMin = resetDate.getMinutes().toString().padStart(2, '0');
-                              const ampm = resetDate.getHours() >= 12 ? 'PM' : 'AM';
-
-                              return `100% (${Math.round(hoursUsed * 10) / 10}/${hoursLimit}h) Resets ${resetDay} ${resetHour}:${resetMin} ${ampm}`;
-                            })()}
-                          </span>
-                        </div>
-                      )}
+                      <PlanUsageLimits entitlement={entitlement} onUpgrade={onUpgrade} onBuyCompute={onBuyCompute} />
                     </div>
                   )}
                 </>

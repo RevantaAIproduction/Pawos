@@ -1,5 +1,5 @@
 import type { ActionRequest, ActionResult } from '../../shared/actions/ActionTypes';
-import type { FeatureId, SubscriptionTierId } from '../../shared/billing/BillingTypes';
+import type { EffectiveTierId, FeatureId, SubscriptionTierId } from '../../shared/billing/BillingTypes';
 import { isExecutionClassification, type CodingRequestClassification } from '../../shared/actions/RequestClassification';
 import { isPersonalEmailDomain } from '../../shared/organization/PersonalEmailDomains';
 
@@ -71,10 +71,35 @@ export function describeTaskLevelLaunchFailure(finalReport?: string): FailurePre
 export function describeLaunchFailure(
   result: ActionResult,
   request: ActionRequest,
-  tier: SubscriptionTierId | null,
+  tier: EffectiveTierId | null,
   accountEmail?: string | null
 ): FailurePresentation | null {
   if (result.ok) return null;
+
+  if (result.reason === 'usage-restricted' && tier === 'build') {
+    // PawOS Build: before its final week, buying Paw Compute continues past the limit (it also resets
+    // on its own); in the final week nothing resets and the only way on is upgrading to Pro.
+    const finalWeek = Boolean((result as { data?: { buildFinalWeek?: boolean } }).data?.buildFinalWeek);
+    return finalWeek
+      ? {
+          title: 'BUILD STOPPED',
+          message: 'PawOS Build limit reached. This is the last week of your Build access, so it will not reset again — upgrade to Pro to keep going.',
+          actions: ['upgrade'],
+        }
+      : {
+          title: 'BUILD STOPPED',
+          message: 'PawOS Build limit reached. Buy Paw Compute to keep going, or wait — it resets automatically (Settings → Usage shows when).',
+          actions: ['buyCompute'],
+        };
+  }
+
+  if (result.reason === 'entitlement-restricted' && tier === 'build') {
+    return {
+      title: 'BUILD BLOCKED',
+      message: `${result.message ?? 'This action requires a plan that supports it.'} This capability isn't part of PawOS Build.`,
+      actions: ['none'],
+    };
+  }
 
   if (result.reason === 'usage-restricted') {
     if (isOrganizationRequest(request) || tier === 'team' || tier === 'enterprise') {

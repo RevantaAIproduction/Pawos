@@ -28,7 +28,9 @@ vi.mock('../../main/billing/UsageEventStore', () => ({
     list: usageMocks.list, 
     append: vi.fn(),
     getWeeklyCycleStartAt: usageMocks.getWeeklyCycleStartAt,
-    getActiveWindowStartAt: usageMocks.getActiveWindowStartAt
+    getActiveWindowStartAt: usageMocks.getActiveWindowStartAt,
+    // Weekly code-file cap bookkeeping — no files written in these scenarios.
+    countFileChangesSince: vi.fn(() => 0),
   },
 }));
 
@@ -46,7 +48,7 @@ describe('Billing separation', () => {
 
   it('requirement 10 — background task records excluded from rolling allowance', () => {
     usageMocks.list.mockReturnValue([
-      { id: '1', timestamp: Date.now(), normalizedCompute: 50, requestType: 'backgroundTask', fable: false },
+      { id: '1', timestamp: Date.now(), normalizedCompute: (50) * 10, requestType: 'backgroundTask', fable: false },
     ]);
     const result = rollingUsageGate.canStartGeneration('pro');
     expect(result.allowed).toBe(true);
@@ -55,7 +57,7 @@ describe('Billing separation', () => {
 
   it('requirement 11 — Fable records excluded from rolling allowance', () => {
     usageMocks.list.mockReturnValue([
-      { id: '2', timestamp: Date.now(), normalizedCompute: 200, requestType: 'conversationTurn', fable: true },
+      { id: '2', timestamp: Date.now(), normalizedCompute: (200) * 10, requestType: 'conversationTurn', fable: true },
     ]);
     const result = rollingUsageGate.canStartGeneration('pro');
     expect(result.allowed).toBe(true);
@@ -64,7 +66,7 @@ describe('Billing separation', () => {
 
   it('normal conversation turn DOES consume rolling allowance', () => {
     usageMocks.list.mockReturnValue([
-      { id: '3', timestamp: Date.now(), normalizedCompute: 100, requestType: 'conversationTurn', fable: false },
+      { id: '3', timestamp: Date.now(), normalizedCompute: (100) * 10, requestType: 'conversationTurn', fable: false },
     ]);
     const result = rollingUsageGate.canStartGeneration('pro');
     if (result.allowed && !result.pooled) expect(result.usage.usage5h).toBe(100);

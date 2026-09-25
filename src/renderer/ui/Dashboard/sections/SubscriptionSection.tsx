@@ -8,8 +8,9 @@ import {
   type PricingPlan,
   type SubscriptionState,
   type SubscriptionTierId,
-  type EntitlementSnapshot,
 } from '../../../../shared/billing/BillingTypes';
+import { useEntitlementSnapshot } from '../../../billing/useEntitlementSnapshot';
+import { describeBuildAccess, formatDate, formatTierLabel } from '../../../billing/EntitlementDisplay';
 
 const TIER_LABELS: Record<SubscriptionTierId, string> = {
   go: 'Go',
@@ -20,10 +21,10 @@ const TIER_LABELS: Record<SubscriptionTierId, string> = {
 };
 
 function formatPrice(plan: PricingPlan | undefined): string {
-  if (!plan) return 'â€¦';
+  if (!plan) return '…';
   if (plan.seatBased) {
-    const range = plan.maxSeats ? `${plan.minSeats}â€“${plan.maxSeats} members` : `${plan.minSeats}+ users`;
-    return plan.priceCents === null ? `Custom pricing â€” ${range}` : `$${(plan.priceCents / 100).toFixed(2)}/seat/${plan.billingPeriod} â€” ${range}`;
+    const range = plan.maxSeats ? `${plan.minSeats}–${plan.maxSeats} members` : `${plan.minSeats}+ users`;
+    return plan.priceCents === null ? `Custom pricing — ${range}` : `$${(plan.priceCents / 100).toFixed(2)}/seat/${plan.billingPeriod} — ${range}`;
   }
   if (plan.priceCents === null) return 'Pricing not finalized yet';
   if (plan.priceCents === 0) return 'Free';
@@ -41,7 +42,9 @@ export function SubscriptionSection({
 }) {
   const [pricing, setPricing] = useState<PricingConfig | null>(null);
   const [subscription, setSubscription] = useState<SubscriptionState | null>(null);
-  const [entitlement, setEntitlement] = useState<EntitlementSnapshot | null>(null);
+  const entitlement = useEntitlementSnapshot();
+  const buildAccess = describeBuildAccess(entitlement);
+  const isBuild = buildAccess.kind === 'active';
   const [message, setMessage] = useState<string | null>(null);
   const currentTier: SubscriptionTierId = subscription?.tier ?? 'go';
   const billingEmail = user.email ?? '';
@@ -49,7 +52,6 @@ export function SubscriptionSection({
   const refresh = async () => {
     ipc.billingGetPricing().then(setPricing).catch(() => {});
     ipc.billingGetSubscription().then(setSubscription).catch(() => {});
-    ipc.entitlementGetSnapshot().then(setEntitlement).catch(() => {});
   };
 
   const downgrade = async (tier: SubscriptionTierId) => {
@@ -81,7 +83,28 @@ export function SubscriptionSection({
       }}>
         <div>
           <div style={{ fontSize: "0.85em", color: "rgba(255, 255, 255, 0.5)", marginBottom: 4 }}>Current Plan</div>
-          <div style={{ fontSize: "1.2em", fontWeight: 600 }}>{TIER_LABELS[currentTier]}</div>
+          <div style={{ fontSize: "1.2em", fontWeight: 600 }} data-testid="current-plan-label">
+            {isBuild ? formatTierLabel('build') : TIER_LABELS[currentTier]}
+          </div>
+          {buildAccess.kind === 'active' && (
+            <div style={{ fontSize: "0.85em", marginTop: 6, color: "rgba(255, 255, 255, 0.7)", lineHeight: 1.5 }} data-testid="build-access-details">
+              Student program access · started {formatDate(buildAccess.startsAt)} · ends {formatDate(buildAccess.endsAt)}
+              {" "}({buildAccess.daysLeft} day{buildAccess.daysLeft === 1 ? "" : "s"} left)
+              <br />
+              Includes 1,500 PC per week (up to 500 PC in any 5-hour window) and 15 active hours per week.
+              After it ends your account returns to {TIER_LABELS[currentTier]}.
+            </div>
+          )}
+          {buildAccess.kind === 'expired' && (
+            <div style={{ fontSize: "0.85em", marginTop: 6, color: "rgba(255, 255, 255, 0.6)" }} data-testid="build-access-details">
+              PawOS Build access ended {formatDate(buildAccess.endsAt)}.
+            </div>
+          )}
+          {buildAccess.kind === 'revoked' && (
+            <div style={{ fontSize: "0.85em", marginTop: 6, color: "rgba(255, 255, 255, 0.6)" }} data-testid="build-access-details">
+              PawOS Build access was removed{buildAccess.revokedAt ? ` on ${formatDate(buildAccess.revokedAt)}` : ''}.
+            </div>
+          )}
         </div>
         
         <div style={{ display: "flex", gap: 12 }}>
@@ -104,9 +127,14 @@ export function SubscriptionSection({
         </div>
       </div>
 
-      {/* Payment Panels */}
-      <UsageCreditsPanel userEmail={billingEmail} onPaymentComplete={refresh} />
-      <AutonomousCreditsPanel userEmail={billingEmail} onPaymentComplete={refresh} currentTier={currentTier} />
+      {/* Payment Panels — not offered during PawOS Build: Build capacity is included-only (purchased
+          Compute Credits don't extend it) and the Autonomous Ticket System isn't part of the program. */}
+      {!isBuild && (
+        <>
+          <UsageCreditsPanel userEmail={billingEmail} onPaymentComplete={refresh} />
+          <AutonomousCreditsPanel userEmail={billingEmail} onPaymentComplete={refresh} currentTier={currentTier} />
+        </>
+      )}
 
       {/* Invoices */}
       <div style={{ marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>

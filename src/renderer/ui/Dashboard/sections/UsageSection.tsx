@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import styles from '../dashboard.module.css';
-import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import { useCompanionProfiles } from '../../../companion/manager/useCompanionProfiles';
 import type { AuthUser } from '../../../auth/AuthTypes';
-import type { EntitlementSnapshot } from '../../../../shared/billing/BillingTypes';
-import { formatPawComputeSummary, formatPlanAndRuntimeSummary } from '../../../billing/EntitlementDisplay';
+import { formatPlanAndRuntimeSummary } from '../../../billing/EntitlementDisplay';
+import { useEntitlementSnapshot } from '../../../billing/useEntitlementSnapshot';
+import { PlanUsageLimits } from '../../billing/PlanUsageLimits';
 
 /**
  * Real usage numbers only. Paw Compute comes from the entitlement snapshot,
@@ -12,13 +12,8 @@ import { formatPawComputeSummary, formatPlanAndRuntimeSummary } from '../../../b
  * yet" because no real measurement exists.
  */
 export function UsageSection({ user, onGoToAccount }: { user: AuthUser; onGoToAccount: () => void }) {
-  const [entitlement, setEntitlement] = useState<EntitlementSnapshot | null>(null);
+  const entitlement = useEntitlementSnapshot();
   const { profiles } = useCompanionProfiles();
-
-  useEffect(() => {
-    if (user.isGuest) return;
-    ipc.entitlementGetSnapshot().then(setEntitlement).catch(() => {});
-  }, [user.isGuest]);
 
   if (user.isGuest) {
     return (
@@ -38,9 +33,8 @@ export function UsageSection({ user, onGoToAccount }: { user: AuthUser; onGoToAc
     <div className={styles.card}>
       <h3 className={styles.cardTitle}>Paw Compute</h3>
       <div className={styles.grid} style={{ marginTop: 8 }}>
-        <div>
-          <p className={styles.cardBody}>Usage</p>
-          <p className={styles.cardTitle}>{formatPawComputeSummary(entitlement)}</p>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <PlanUsageLimits entitlement={entitlement} />
         </div>
         <div>
           <p className={styles.cardBody}>Plan & Runtime Access</p>

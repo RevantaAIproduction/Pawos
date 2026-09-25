@@ -1,7 +1,4 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import { app } from 'electron';
-import type { SeatTier, SubscriptionTierId } from '../../shared/billing/BillingTypes';
+import type { EffectiveTierId, SeatTier } from '../../shared/billing/BillingTypes';
 
 export type TierRollingCapacity = {
   /** Max Paw Compute allowed in any rolling 5-hour window. null = no 5-hour cap. */
@@ -25,7 +22,6 @@ export type RollingCapacityConfig = {
   tiers: Record<CapacityTierKey, TierRollingCapacity>;
 };
 
-const FILE_NAME = 'paw-compute-capacity.json';
 const CURRENT_CONFIG_VERSION = 4;
 
 function defaultConfig(): RollingCapacityConfig {
@@ -38,49 +34,38 @@ function defaultConfig(): RollingCapacityConfig {
       team:        { window5hPc: 1_250,       windowWeeklyPc: 5_000,  window5hActiveHours: null, windowWeeklyActiveHours: 20,  pooled: true  }, // Handled server-side usually, but defining limits here
       teamPremium: { window5hPc: 4_166.6667,  windowWeeklyPc: 25_000, window5hActiveHours: null, windowWeeklyActiveHours: 30,  pooled: true  },
       enterprise:  { window5hPc: null,    windowWeeklyPc: null,   window5hActiveHours: null, windowWeeklyActiveHours: null, pooled: true  },
+      // PawOS Build (admin-granted student tier): 1,500 PC per week in total, of which at most 500 PC
+      // may be used inside any one 5-hour window — the window cap is part of the weekly total, not extra.
       build:       { window5hPc: 500,     windowWeeklyPc: 1_500,  window5hActiveHours: 5,    windowWeeklyActiveHours: 15,  pooled: false },
     },
   };
 }
 
 class PawComputeCapacityStore {
-  private file = '';
   private config: RollingCapacityConfig = defaultConfig();
 
+  /**
+   * Limits are program terms, not user settings: always the built-in defaults. Earlier builds read
+   * them back from a paw-compute-capacity.json in the user's data folder — anyone could edit that file
+   * to raise their own limits — so no file is read (or written) any more.
+   */
   init(): void {
-    this.file = path.join(app.getPath('userData'), 'billing', FILE_NAME);
-    fs.mkdirSync(path.dirname(this.file), { recursive: true });
-    try {
-      const persisted = JSON.parse(fs.readFileSync(this.file, 'utf-8')) as Partial<RollingCapacityConfig>;
-      const defaults = defaultConfig();
-      
-      // Migration: if the persisted config is from an older version (e.g. version undefined/1),
-      // discard the stale tier values (like the old Go 132 PC limit) and apply the new defaults.
-      if (persisted.version !== CURRENT_CONFIG_VERSION) {
-        this.config = defaults;
-      } else {
-        this.config = { version: CURRENT_CONFIG_VERSION, tiers: { ...defaults.tiers, ...(persisted.tiers ?? {}) } };
-      }
-      this.save();
-    } catch {
-      this.config = defaultConfig();
-      this.save();
-    }
-  }
-
-  private save(): void {
-    fs.writeFileSync(this.file, JSON.stringify(this.config, null, 2), 'utf-8');
+    this.config = defaultConfig();
   }
 
   get(): RollingCapacityConfig {
     return this.config;
   }
 
-  resolve(tier: SubscriptionTierId | 'build', seatTier?: SeatTier, proMaxVariant?: '5x' | '20x'): TierRollingCapacity {
+  resolve(tier: EffectiveTierId, seatTier?: SeatTier, proMaxVariant?: '5x' | '20x'): TierRollingCapacity {
     let key: CapacityTierKey =
       tier === 'team' && seatTier === 'premium' ? 'teamPremium' : (tier as CapacityTierKey);
-    
-    let capacity = 
+
+    // Build's limits are fixed program terms, not tunable config: always the code defaults, never a
+    // value read back from the user-writable paw-compute-capacity.json.
+    if (key === 'build') return defaultConfig().tiers.build;
+
+    let capacity =
       this.config.tiers[key] ??
       defaultConfig().tiers[key as CapacityTierKey] ??
       { window5hPc: null, windowWeeklyPc: null, window5hActiveHours: null, windowWeeklyActiveHours: null, pooled: false };
@@ -98,11 +83,10 @@ class PawComputeCapacityStore {
     return capacity;
   }
 
-  /** Remote-sync override — same pattern as PawComputeConfigStore.applySyncedConfig(). */
+  /** Remote-sync override (in memory only) — same pattern as PawComputeConfigStore.applySyncedConfig(). */
   applySyncedConfig(config: RollingCapacityConfig): void {
     const defaults = defaultConfig();
     this.config = { version: CURRENT_CONFIG_VERSION, tiers: { ...defaults.tiers, ...config.tiers } };
-    this.save();
   }
 }
 

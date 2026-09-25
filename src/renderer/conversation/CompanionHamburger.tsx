@@ -98,7 +98,10 @@ export function CompanionHamburger({ onOpenSettings, userEmail = '', entitlement
               onClick={() => setFeedbackOpen(true)}
               title="Send feedback"
             >
-              <img src="file:///C:/Users/APPLE/Downloads/Bug.png" alt="Feedback" className={styles.bugIcon} />
+              <svg className={styles.bugIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" role="img" aria-label="Feedback">
+                <rect x="8" y="7" width="8" height="12" rx="4" />
+                <path d="M12 7V4.5M9.5 4.5 10.5 6M14.5 4.5 13.5 6M8 11H4.5M8 15H4.5M16 11h3.5M16 15h3.5M12 11v8" />
+              </svg>
             </button>
           </div>
         </div>

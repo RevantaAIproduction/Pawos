@@ -2,6 +2,14 @@ import type { ActionRequest, ActionResult } from '../../../shared/actions/Action
 import { BasePlugin } from '../BasePlugin';
 import { execSync } from 'child_process';
 
+/**
+ * Package identifiers only (winget ids like "Git.Git", npm names like "@scope/pkg@1.2.3", pip names like
+ * "requests==2.32"). The name is interpolated into a shell command (npm/pip are .cmd shims on Windows,
+ * so a shell is unavoidable), so anything outside this set — spaces, &, |, ;, quotes, $() — is refused
+ * rather than escaped.
+ */
+const SAFE_PACKAGE_NAME = /^[A-Za-z0-9@][A-Za-z0-9@._+\-\/=~]*$/;
+
 export class DownloadSoftwarePlugin extends BasePlugin {
   id = 'downloadSoftware';
 
@@ -12,7 +20,10 @@ export class DownloadSoftwarePlugin extends BasePlugin {
   async execute(request: ActionRequest): Promise<ActionResult> {
     if (request.type !== 'downloadSoftware') return { ok: false, reason: 'failed', message: 'Mismatched request.' };
 
-    const { name, manager = 'winget', installPath } = request;
+    const { name, manager = 'winget' } = request;
+    if (!SAFE_PACKAGE_NAME.test(name)) {
+      return { ok: false, reason: 'failed', message: `Refusing to install "${name}": not a valid package identifier.` };
+    }
 
     try {
       let command = '';
@@ -31,7 +42,7 @@ export class DownloadSoftwarePlugin extends BasePlugin {
           return { ok: false, reason: 'failed', message: `Unknown package manager: ${manager}` };
       }
 
-      execSync(command, { stdio: 'pipe', shell: true });
+      execSync(command, { stdio: 'pipe' });
       return { ok: true, data: { name, manager, installed: true } };
     } catch (error) {
       return { ok: false, reason: 'failed', message: `Failed to download ${name}: ${(error as Error).message}` };
@@ -44,6 +55,7 @@ export class DownloadSoftwarePlugin extends BasePlugin {
     try {
       if (request.type === 'downloadSoftware') {
         const { manager = 'winget', name } = request;
+        if (!SAFE_PACKAGE_NAME.test(name)) return { ok: false, reason: 'failed', message: `Not a valid package identifier: ${name}` };
 
         let verifyCommand = '';
         switch (manager) {
@@ -59,7 +71,7 @@ export class DownloadSoftwarePlugin extends BasePlugin {
         }
 
         if (verifyCommand) {
-          execSync(verifyCommand, { stdio: 'pipe', shell: true });
+          execSync(verifyCommand, { stdio: 'pipe' });
         }
       }
       return result;

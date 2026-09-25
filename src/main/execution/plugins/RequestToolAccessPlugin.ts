@@ -43,7 +43,7 @@ export class RequestToolAccessPlugin extends BasePlugin {
 
       if (verifyCommand) {
         try {
-          execSync(verifyCommand, { stdio: 'pipe', shell: true });
+          execSync(verifyCommand, { stdio: 'pipe' });
         } catch {
           return { ok: false, reason: 'failed', message: `Tool not found or not accessible: ${tool}` };
         }

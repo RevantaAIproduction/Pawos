@@ -112,6 +112,7 @@ export function useIpcBridge() {
       onCommunicationEvent: (cb: (event: CommunicationRuntimeEvent) => void) => ipc.onCommunicationEvent(cb),
 
       entitlementGetSnapshot: async (): Promise<EntitlementSnapshot> => ipc.entitlementGetSnapshot(),
+      onEntitlementChanged: (cb: () => void): (() => void) => ipc.onEntitlementChanged(cb),
       entitlementGetModelTierRequirements: async (): Promise<Partial<Record<PawModelId, SubscriptionTierId>>> =>
         ipc.entitlementGetModelTierRequirements(),
       entitlementGetFeatureTierRequirements: async (): Promise<Partial<Record<FeatureId, SubscriptionTierId>>> =>

@@ -50,7 +50,10 @@ function numberField(data: Record<string, unknown>, key: string): number | undef
 
 function statusFor(result: ActionResult): 'completed' | 'failed' | 'blocked' {
   if (result.ok) return 'completed';
-  return result.reason === 'requires-confirmation' || result.reason.endsWith('-restricted') ? 'blocked' : 'failed';
+  // A plugin that returns ok:false without a reason must not crash Work History recording (which
+  // would stall the whole turn) — treat it as a plain failure.
+  const reason = typeof result.reason === 'string' ? result.reason : '';
+  return reason === 'requires-confirmation' || reason.endsWith('-restricted') ? 'blocked' : 'failed';
 }
 
 function isBlockedFailure(result: ActionResult): boolean {

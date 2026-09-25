@@ -17,7 +17,7 @@ describe('entitlementRequirementResolver', () => {
   it('resolves unsatisfied with reason entitlement-restricted when the tier lacks the feature', async () => {
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'go', status: 'none' });
 
-    const result = await entitlementRequirementResolver.resolve({ kind: 'entitlement', feature: 'advancedRuntimes' }, {});
+    const result = await entitlementRequirementResolver.resolve({ kind: 'entitlement', feature: 'autonomousTaskBilling' }, {});
 
     expect(result.satisfied).toBe(false);
     expect(result.blockingResult?.ok).toBe(false);
@@ -62,7 +62,7 @@ describe('entitlementRequirementResolver', () => {
   it('resolves unsatisfied when the current account lacks the requested runtime entitlement', async () => {
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'go', status: 'none' });
 
-    const result = await entitlementRequirementResolver.resolve({ kind: 'entitlement', runtimeId: 'coding' }, {});
+    const result = await entitlementRequirementResolver.resolve({ kind: 'entitlement', runtimeId: 'office' }, {});
 
     expect(result.satisfied).toBe(false);
     expect(result.blockingResult && !result.blockingResult.ok ? result.blockingResult.message : undefined).toBe(

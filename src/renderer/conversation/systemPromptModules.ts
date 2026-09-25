@@ -62,5 +62,9 @@ export const INTELLIGENCE_PROMPT_MODULES: SystemPromptModule[] = [
  * core template literal further.
  */
 export function assemblePromptModules(canExecute: boolean, modules: SystemPromptModule[] = INTELLIGENCE_PROMPT_MODULES): string[] {
-  return modules.filter((m) => m.tier === 'always' || canExecute).map((m) => m.content);
+  // Every 'always' module first, then 'executeOnly' ones — so an executing tier's prompt is always
+  // the non-executing prompt plus more (additive, never reordered), regardless of registration order.
+  const always = modules.filter((m) => m.tier === 'always');
+  const executeOnly = canExecute ? modules.filter((m) => m.tier === 'executeOnly') : [];
+  return [...always, ...executeOnly].map((m) => m.content);
 }

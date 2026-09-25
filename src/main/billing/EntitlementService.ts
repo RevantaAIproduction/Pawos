@@ -5,7 +5,9 @@ import { rollingUsageGate } from './RollingUsageGate';
 import { customerPurchaseUsdToPurchasedPc } from '../../shared/billing/CustomerPcCommercialModel';
 import { testTierOverrideStore } from './TestTierOverrideStore';
 import { usageEventStore } from './UsageEventStore';
+import { buildAccessStore } from './BuildAccessStore';
 import type {
+  EffectiveTierId,
   EntitlementSnapshot,
   FeatureId,
   RuntimeEntitlementId,
@@ -13,6 +15,7 @@ import type {
   SubscriptionTierId,
   TierEntitlements,
 } from '../../shared/billing/BillingTypes';
+import type { GenerationCheckResult } from '../../shared/billing/UsageEngineTypes';
 import { SUBSCRIPTION_TIER_ORDER } from '../../shared/billing/BillingTypes';
 import { ALL_RUNTIME_ENTITLEMENT_IDS } from '../../shared/billing/RuntimeCatalog';
 import type { PawModelId } from '../../shared/ai/PawModelTypes';
@@ -158,6 +161,34 @@ const TEAM_FEATURES: FeatureId[] = [
  */
 const ENTERPRISE_FEATURES: FeatureId[] = [...TEAM_FEATURES, 'organizationCrossDeviceAlerts'];
 
+/**
+ * PawOS Build — the private, admin-granted student tier (see BuildAccessStore.ts). Listed explicitly
+ * rather than derived from GO_FEATURES so a change to Paw Go never silently changes the student
+ * program. Includes coding execution (advancedRuntimes), the student connectors, and the career
+ * tools (CareerService.ts). Deliberately excludes: autonomousTaskBilling / autonomousPlanBypass
+ * (Autonomous Work and the Autonomous Ticket System), Slack/Jira/Linear, every Team/Enterprise
+ * feature, Companion Studio, and mobile pairing/sync.
+ */
+const BUILD_FEATURES: FeatureId[] = [
+  'desktopCompanion',
+  'basicWorkspace',
+  'basicFileManagement',
+  'localRuntimeFeatures',
+  'advancedRuntimes',
+  'connectGithub',
+  'connectVercel',
+  'connectGoogleWorkspace',
+  'connectMicrosoft',
+  'resumeGeneration',
+  'resumeRewriting',
+  'atsScoring',
+  'jobSearch',
+];
+
+/** Build gets every included-capacity model. Paw Fable is excluded: it is funded only by purchased
+ *  credits, and Build capacity is included-only (see checkGeneration()). */
+const BUILD_MODELS: PawModelId[] = ['paw-flash', 'paw-swift', 'paw-core', 'paw-vision', 'paw-voice', 'paw-memory'];
+
 export const LEGACY_PLAN_RUNTIME_ENTITLEMENTS: RuntimeEntitlementId[] = ALL_RUNTIME_ENTITLEMENT_IDS;
 
 /**
@@ -213,7 +244,12 @@ class EntitlementService {
     this.userId = userId;
   }
 
-  public currentTier(): SubscriptionTierId {
+  /**
+   * The account's own subscription tier (plus an internal test override, if any) — what Build falls
+   * back to when it expires or is revoked. Never 'build'. Used for anything tied to the purchased
+   * subscription itself: pricing, upgrades, organization pooling, server tier sync.
+   */
+  public baseTier(): SubscriptionTierId {
     const realTier = subscriptionStore.getEffective().tier;
 
     // Check for test tier override (only applies to authorized internal accounts)
@@ -225,10 +261,23 @@ class EntitlementService {
     return realTier;
   }
 
+  /**
+   * The tier that governs entitlements and Paw Compute right now: 'build' while a server-confirmed,
+   * unexpired PawOS Build grant is loaded (BuildAccessStore.isActive()) and the account has no paid
+   * plan of its own, otherwise baseTier(). Every
+   * entitlement, capacity and usage decision goes through this — never a separate Build special case.
+   */
+  public effectiveTier(): EffectiveTierId {
+    const base = this.baseTier();
+    // A paid plan always wins over Build — e.g. a student who upgrades to Pro in Build's final week
+    // gets Pro immediately rather than waiting out the grant.
+    return base === 'go' && buildAccessStore.isActive() ? 'build' : base;
+  }
+
   /** Only meaningful for 'team' — which seat rate (Standard/Premium) this account was assigned. */
   getSeatTier(): SeatTier | undefined {
-    const effective = subscriptionStore.getEffective();
-    return effective.tier === 'team' ? effective.seatTier : undefined;
+    if (this.effectiveTier() !== 'team') return undefined;
+    return subscriptionStore.getEffective().seatTier;
   }
 
   /**
@@ -246,22 +295,16 @@ class EntitlementService {
    * Usage & Entitlement Engine, MOB-3), never a feature gap.
    */
   public currentProMaxVariant(): '5x' | '20x' | undefined {
+    if (this.effectiveTier() !== 'proMax') return undefined;
     return subscriptionStore.getEffective().proMaxVariant as '5x' | '20x' | undefined;
   }
 
   getEntitlements(): TierEntitlements {
-    const buildEntitlement = subscriptionStore.getEffective().buildEntitlement;
-    if (buildEntitlement && buildEntitlement.active) {
-      return {
-        tier: 'go',
-        models: AI_MODELS, // Build has all models
-        features: [...GO_FEATURES, 'connectGithub', 'connectVercel', 'connectGoogleWorkspace', 'connectMicrosoft', 'advancedRuntimes', 'atsScoring', 'resumeRewriting', 'resumeGeneration', 'jobSearch'],
-        monthlyCreditLimit: null,
-        weeklyCreditLimit: null,
-      };
+    const tier = this.effectiveTier();
+    if (tier === 'build') {
+      return { tier: 'build', models: [...BUILD_MODELS], features: [...BUILD_FEATURES], monthlyCreditLimit: null, weeklyCreditLimit: null };
     }
 
-    const tier = this.currentTier();
     const base = TIER_ENTITLEMENTS[tier];
     const seatTier = this.getSeatTier();
     // Monthly and weekly flat-credit limits are superseded by rolling windows (PawComputeCapacityStore).
@@ -272,7 +315,7 @@ class EntitlementService {
   }
 
   isModelAvailable(modelId: PawModelId): boolean {
-    if (modelId === 'paw-fable' && this.getPurchasedCreditsRemaining() > 0) {
+    if (modelId === 'paw-fable' && this.effectiveTier() !== 'build' && this.getPurchasedCreditsRemaining() > 0) {
       return true;
     }
     return this.getEntitlements().models.includes(modelId);
@@ -332,9 +375,8 @@ class EntitlementService {
   }
 
   getRuntimeEntitlements(): RuntimeEntitlementId[] {
-    const buildEntitlement = subscriptionStore.getEffective().buildEntitlement;
-    const tier = (buildEntitlement && buildEntitlement.active) ? 'build' : this.currentTier();
-    const baseIds = tier === 'build' ? (['coding', 'browser'] as RuntimeEntitlementId[]) : PLAN_DERIVED_RUNTIME_ENTITLEMENTS[tier];
+    const tier = this.effectiveTier();
+    const baseIds: RuntimeEntitlementId[] = tier === 'build' ? ['coding', 'browser'] : PLAN_DERIVED_RUNTIME_ENTITLEMENTS[tier];
     const ids = new Set<RuntimeEntitlementId>(baseIds);
     for (const grant of subscriptionStore.getPurchasedRuntimeEntitlements()) {
       ids.add(grant.runtimeId);
@@ -371,7 +413,8 @@ class EntitlementService {
    * behave for the other 7 tracked capabilities.
    */
   isComputePooled(): boolean {
-    return usageQuotaConfigStore.isPooled(this.currentTier());
+    const tier = this.effectiveTier();
+    return tier !== 'build' && usageQuotaConfigStore.isPooled(tier);
   }
 
   /**
@@ -401,34 +444,76 @@ class EntitlementService {
     return this.getPurchasedCreditsRemaining();
   }
 
+  /**
+   * Whether purchased Paw Compute may carry the account past exhausted included capacity (turns and
+   * counted file changes alike). Needs a purchased balance; on PawOS Build it works in every week
+   * except the final one (no reset left — the way on is upgrading to Pro).
+   */
+  canContinueOnPurchasedCompute(now = Date.now()): boolean {
+    if (this.getStandardBonusCreditsRemaining() <= 0) return false;
+    return !rollingUsageGate.isBuildFinalWeek(this.effectiveTier(), now);
+  }
+
+  /** True during PawOS Build's final (no-reset) week. */
+  isBuildFinalWeek(now = Date.now()): boolean {
+    return rollingUsageGate.isBuildFinalWeek(this.effectiveTier(), now);
+  }
+
   grantComputeBonus(_units: number): void {
     // Rolling-window Paw Compute no longer uses local bonus counters. The
     // handler is kept as a compatibility no-op for older renderer surfaces.
   }
 
-  hasCreditsRemaining(pawModelId?: PawModelId): boolean {
-    if (this.isComputePooled()) return true;
-    if (pawModelId === 'paw-fable') return this.getPurchasedCreditsRemaining() > 0;
-    const buildEntitlement = subscriptionStore.getEffective().buildEntitlement;
-    const tier = (buildEntitlement && buildEntitlement.active) ? 'build' : this.currentTier();
+  /**
+   * The single generation-admission decision used by the real chat/voice gate
+   * (billing:canStartGeneration), turn recording, the career tools and the snapshot. Rules:
+   *  - Pooled tiers (Enterprise/Team) defer to the organization pool (server-side).
+   *  - Paw Fable is gated purely on purchased-credit headroom — and is not part of PawOS Build.
+   *  - Otherwise the effective tier's four rolling limits apply (RollingUsageGate).
+   *  - Purchased Compute Credits may continue past exhausted included capacity
+   *    (canContinueOnPurchasedCompute). On PawOS Build that holds in every week except the final one
+   *    (no reset left before access ends) — there the only way on is upgrading to Pro.
+   */
+  checkGeneration(pawModelId?: PawModelId, now = Date.now()): GenerationCheckResult & { purchasedContinuation: boolean } {
+    const tier = this.effectiveTier();
     const seatTier = this.getSeatTier();
     const proMaxVariant = this.currentProMaxVariant();
-    const check = rollingUsageGate.canStartGeneration(tier, seatTier, Date.now(), proMaxVariant);
-    if (check.allowed) return true;
-    
-    return this.getPurchasedCreditsRemaining() > 0;
+    const usage = rollingUsageGate.getRollingUsage(tier, seatTier, now, proMaxVariant);
+
+    if (pawModelId === 'paw-fable') {
+      if (tier === 'build') {
+        return { allowed: false, pooled: false, reason: 'Paw Fable is not included in PawOS Build.', usage, purchasedContinuation: false };
+      }
+      if (this.getFableCreditsRemaining() > 0) return { allowed: true, pooled: false, usage, purchasedContinuation: false };
+      return { allowed: false, pooled: false, reason: 'Paw Fable credits exhausted', usage, purchasedContinuation: false };
+    }
+
+    const result = rollingUsageGate.canStartGeneration(tier, seatTier, now, proMaxVariant);
+    if (result.allowed || result.pooled) return { ...result, purchasedContinuation: false };
+    if (result.reason === 'inflight') return { ...result, purchasedContinuation: false };
+    if (this.canContinueOnPurchasedCompute(now)) {
+      return { allowed: true, pooled: false, usage: result.usage, purchasedContinuation: true };
+    }
+    return { ...result, purchasedContinuation: false };
+  }
+
+  hasCreditsRemaining(pawModelId?: PawModelId): boolean {
+    if (this.isComputePooled()) return true;
+    const check = this.checkGeneration(pawModelId);
+    // A reply currently being generated holds the in-flight slot — that's "busy", not "out of compute".
+    return check.allowed || check.reason === 'inflight';
   }
 
   getSnapshot(): EntitlementSnapshot {
     const entitlements = this.getEntitlements();
     const balance = creditStore.getBalance();
-    const buildEntitlement = subscriptionStore.getEffective().buildEntitlement;
-    const tier = (buildEntitlement && buildEntitlement.active) ? 'build' : this.currentTier();
+    const tier = this.effectiveTier();
     const seatTier = this.getSeatTier();
     const rolling = rollingUsageGate.getRollingUsage(tier, seatTier, Date.now(), this.currentProMaxVariant());
     return {
-      buildEntitlement: buildEntitlement,
-      tier: entitlements.tier,
+      tier,
+      baseTier: this.baseTier(),
+      buildAccess: buildAccessStore.get(),
       models: entitlements.models,
       features: entitlements.features,
       runtimeEntitlements: this.getRuntimeEntitlements(),
@@ -452,6 +537,10 @@ class EntitlementService {
       activeHours5h: rolling.activeHours5h,
       activeHoursUsed7d: rolling.activeHoursUsed7d,
       activeHoursUsed5h: rolling.activeHoursUsed5h,
+      usageWindowResetsAt: rolling.windowResetsAt,
+      usageWeekResetsAt: rolling.weekResetsAt,
+      buildFinalWeek: this.isBuildFinalWeek(),
+      proMaxVariant: this.currentProMaxVariant(),
       goRefreshesRemaining: usageEventStore.getGoRefreshesRemaining(),
     };
   }

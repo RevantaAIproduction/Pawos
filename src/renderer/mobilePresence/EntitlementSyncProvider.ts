@@ -34,6 +34,8 @@ import { getSupabaseClient } from '../auth/supabaseClient';
 export async function syncEntitlementTier(): Promise<void> {
   const snapshot = await ipc.entitlementGetSnapshot();
   const supabase = await getSupabaseClient();
-  const { error } = await supabase.rpc('sync_my_entitlement_tier', { p_tier: snapshot.tier });
+  // The purchasable subscription tier only — PawOS Build is an admin-granted overlay the server
+  // already knows about (pawos_build_grants) and grants no mobile pairing, so it's never reported here.
+  const { error } = await supabase.rpc('sync_my_entitlement_tier', { p_tier: snapshot.baseTier });
   if (error) throw error;
 }

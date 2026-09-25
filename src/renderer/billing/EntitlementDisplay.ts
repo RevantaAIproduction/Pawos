@@ -1,6 +1,8 @@
-import type { EntitlementSnapshot, RuntimeEntitlementId, SubscriptionTierId } from '../../shared/billing/BillingTypes';
+import type { EffectiveTierId, EntitlementSnapshot, RuntimeEntitlementId } from '../../shared/billing/BillingTypes';
+import { BUILD_EXPIRY_WARNING_DAYS } from '../../shared/billing/BillingTypes';
 
-const TIER_LABELS: Record<SubscriptionTierId, string> = {
+const TIER_LABELS: Record<EffectiveTierId, string> = {
+  build: 'PawOS Build',
   go: 'Paw Go',
   pro: 'Paw Pro',
   proMax: 'Paw Pro Max',
@@ -24,7 +26,7 @@ function formatNumber(value: number): string {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(value);
 }
 
-export function formatTierLabel(tier: SubscriptionTierId): string {
+export function formatTierLabel(tier: EffectiveTierId): string {
   return TIER_LABELS[tier];
 }
 
@@ -49,6 +51,10 @@ export function formatPawComputeSummary(entitlement: EntitlementSnapshot | null)
   if (entitlement.pooled) {
     return `Pooled organization allowance · ${formatNumber(entitlement.creditsUsedThisPeriod)} used`;
   }
+  // Paw Go shows a status only — never usage numbers.
+  if (entitlement.tier === 'go') {
+    return entitlement.hasCreditsRemaining ? 'Working normally' : 'Limit reached — upgrade or buy Paw Compute';
+  }
 
   const { usage5hPc, limit5hPc, usageWeeklyPc, limitWeeklyPc } = entitlement;
 
@@ -67,6 +73,7 @@ export function formatPawComputeSummary(entitlement: EntitlementSnapshot | null)
 export function formatPawComputePercent(entitlement: EntitlementSnapshot | null): string | null {
   if (!entitlement) return null;
   if (entitlement.pooled) return null;
+  if (entitlement.tier === 'go') return null; // status only for Go — no percentages
 
   const { usage5hPc, limit5hPc, usageWeeklyPc, limitWeeklyPc } = entitlement;
   if (limit5hPc === null && limitWeeklyPc === null) return null;
@@ -77,4 +84,32 @@ export function formatPawComputePercent(entitlement: EntitlementSnapshot | null)
   const daily = pct(usage5hPc, limit5hPc);
   const weekly = pct(usageWeeklyPc, limitWeeklyPc);
   return `Daily: ${daily}% · Weekly: ${weekly}%`;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export type BuildAccessDisplay =
+  | { kind: 'none' }
+  | { kind: 'active'; endsAt: number; startsAt: number; daysLeft: number; expiringSoon: boolean }
+  | { kind: 'expired'; endsAt: number }
+  | { kind: 'revoked'; revokedAt: number | null };
+
+/**
+ * How the signed-in account's PawOS Build access should be presented. "active" is decided by the
+ * effective tier the main process resolved (snapshot.tier === 'build'), never re-derived from dates
+ * here, so the UI can never show Build as active while enforcement has already fallen back.
+ */
+export function describeBuildAccess(entitlement: EntitlementSnapshot | null, now = Date.now()): BuildAccessDisplay {
+  const access = entitlement?.buildAccess;
+  if (!entitlement || !access || access.status === 'none') return { kind: 'none' };
+  if (access.status === 'revoked') return { kind: 'revoked', revokedAt: access.revokedAt };
+  if (entitlement.tier === 'build' && access.startsAt !== null && access.endsAt !== null) {
+    const daysLeft = Math.max(0, Math.ceil((access.endsAt - now) / DAY_MS));
+    return { kind: 'active', startsAt: access.startsAt, endsAt: access.endsAt, daysLeft, expiringSoon: daysLeft <= BUILD_EXPIRY_WARNING_DAYS };
+  }
+  return access.endsAt !== null ? { kind: 'expired', endsAt: access.endsAt } : { kind: 'none' };
+}
+
+export function formatDate(ms: number): string {
+  return new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }

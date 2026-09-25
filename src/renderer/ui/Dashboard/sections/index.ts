@@ -11,6 +11,8 @@ export type SectionId =
   | 'infrastructure'
   | 'development'
   | 'desktop'
+  | 'career'
+  | 'admin'
   | 'settings'
   | 'upgrade';
 
@@ -27,6 +29,8 @@ export const SECTION_TITLES: Record<SectionId, string> = {
   infrastructure: 'Cloud',
   development: 'Development',
   desktop: 'Files',
+  career: 'Career',
+  admin: 'Admin',
   settings: 'Settings',
   upgrade: 'Upgrade',
 };

@@ -25,6 +25,7 @@ import { ticketPricingConfigStore } from '../billing/TicketPricingConfigStore';
 import { pawComputeConfigStore } from '../billing/PawComputeConfigStore';
 import { subscriptionStore } from '../billing/SubscriptionStore';
 import { rollingUsageGate } from '../billing/RollingUsageGate';
+import { buildAccessStore } from '../billing/BuildAccessStore';
 import { normalizedComputeToCustomerPc, customerPcToPurchaseUsd } from '../../shared/billing/CustomerPcCommercialModel';
 import { creditStore } from '../billing/CreditStore';
 import { recordTurnUsage, recordUsageEvent, reportRequestStart, reportRequestEnd } from '../billing/UsageMeteringEngine';
@@ -82,13 +83,25 @@ import { supportConversationStore } from '../help/SupportConversationStore';
 import type { SupportConversationTurn } from '../help/SupportConversationTypes';
 import { ratingPromptStore } from '../feedback/RatingPromptStore';
 import { feedbackStore } from '../feedback/FeedbackStore';
+import { setServerAccessToken, callRpcAsUser, accessTokenUserId } from '../auth/ServerSessionToken';
+import { buildUsageReporter } from '../billing/BuildUsageReporter';
+import { syncSubscriptionFromServer } from '../billing/SubscriptionSync';
+import { onUsageLedgerRestored, scheduleUsageLedgerSync } from '../billing/UsageLedgerSync';
 import type { FeedbackSubmission } from '../../renderer/services/ipc/ipcTypes';
 import { registerConnectivityIpc } from './connectivityIpc';
 import { registerMobileAuthHandlers } from './handlers/mobileAuthHandler';
+import { registerCareerIpc } from './handlers/careerHandler';
 import { approveGovernanceRequest, denyGovernanceRequest, getPendingApprovals, pruneExpiredApprovals } from './handlers/governanceHandler';
 
 function toFileUrl(dir: string): string {
   return `file://${dir.replace(/\\/g, '/')}/`;
+}
+
+/** Tells every window to re-read the entitlement snapshot (account switch, Build sync/expiry). */
+function broadcastEntitlementChanged(): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send('entitlement:changed');
+  }
 }
 
 export function registerIpc(opts: {
@@ -230,6 +243,10 @@ export function registerIpc(opts: {
       appVersion: app.getVersion(),
     });
     ratingPromptStore.markRated();
+    // Also record it server-side (admin console) when signed in — best-effort, like the email below.
+    callRpcAsUser('submit_app_rating', { p_rating: entry.rating, p_comment: entry.comment ?? null, p_app_version: entry.appVersion }).catch((err) =>
+      console.error('Failed to upload rating:', err instanceof Error ? err.message : err),
+    );
     try {
       await emailService.sendFeedbackReceived('founder@revantaai.com', {
         rating: entry.rating,
@@ -350,6 +367,14 @@ export function registerIpc(opts: {
   // src/main/system/ForegroundWindowWatcher.ts and ActionController.
   ipcMain.handle('system:getForegroundWindowInfo', () => opts.getForegroundWindowInfo());
   ipcMain.handle('system:getAppVersion', () => app.getVersion());
+  // Admin console privacy: while enabled, the OS excludes this window from screenshots, screen
+  // recordings and screen sharing (it captures as blank). Only affects the sender's own window.
+  ipcMain.handle('system:setContentProtection', (evt, enabled: boolean) => {
+    const win = BrowserWindow.fromWebContents(evt.sender);
+    if (!win || win.isDestroyed()) return false;
+    win.setContentProtection(Boolean(enabled));
+    return true;
+  });
 
   ipcMain.handle('auth:isGoogleSignInConfigured', () => opts.isGoogleSignInConfigured());
   ipcMain.handle('auth:startGoogleSignIn', () => opts.startGoogleSignIn());
@@ -416,11 +441,40 @@ export function registerIpc(opts: {
   // Google Places API key for address autocomplete in billing checkout flow
   ipcMain.handle('billing:getGooglePlacesApiKey', () => process.env.GOOGLE_PLACES_API_KEY || '');
   ipcMain.handle('billing:getSubscription', () => subscriptionStore.getEffective());
-  ipcMain.handle('billing:syncBuildEntitlement', async (_evt, accessToken: string) => {
-    return subscriptionStore.syncBuildEntitlement(accessToken);
+  // Usage ledger scope: free Paw Go usage is per DEVICE (shared by every free account on this PC, so
+  // new emails can't reset the free allowance); paid tiers and PawOS Build use the ACCOUNT's own
+  // ledger, so switching to an unpaid account falls back to the device's free usage.
+  usageEventStore.setScopeResolver(() => (entitlementService.effectiveTier() === 'go' ? 'device' : 'account'));
+  // PawOS Build (admin-granted student tier): re-confirmed from Supabase with the signed-in user's
+  // own access token on sign-in / token refresh / app start, cleared on sign-out. Membership and
+  // expiry are server-authoritative — see BuildAccessStore.ts.
+  // The same token also lets main upload ratings / Build usage reports as this user (ServerSessionToken.ts).
+  // The same moment also restores the account's paid plan from the server (SubscriptionSync.ts), so a
+  // plan follows the account across sign-outs, other accounts and devices until it expires.
+  onUsageLedgerRestored(broadcastEntitlementChanged);
+  ipcMain.handle('billing:syncBuildAccess', async (_evt, accessToken: string) => {
+    setServerAccessToken(accessToken);
+    // Server copy of the usage ledgers — deleting the local usage files can't reset limits.
+    scheduleUsageLedgerSync(2000);
+    const [result] = await Promise.all([
+      buildAccessStore.sync(accessToken),
+      syncSubscriptionFromServer(() => {
+        broadcastEntitlementChanged();
+        for (const win of BrowserWindow.getAllWindows()) win.webContents.send('billing:subscriptionUpdated');
+      }),
+      // Purchased Paw Compute balance — server-authoritative (credits.json is never trusted for it).
+      creditStore
+        .syncUsageCredits(accessToken, accessTokenUserId(accessToken) ?? undefined)
+        .then(() => broadcastEntitlementChanged())
+        .catch((err) => console.error('[Credits] Balance sync failed:', err)),
+    ]);
+    if (result.ok && buildAccessStore.isActive()) buildUsageReporter.schedule(0);
+    return result;
   });
-  ipcMain.handle('billing:clearBuildEntitlement', () => {
-    subscriptionStore.clearBuildEntitlement();
+  ipcMain.handle('billing:clearBuildAccess', () => {
+    setServerAccessToken(null);
+    buildUsageReporter.reset();
+    buildAccessStore.clear();
   });
   // P0-3: reject any string that isn't a real tier id — defense in depth (this path was already
   // non-exploitable on its own since status stays 'none' here, but "arbitrary tier strings rejected"
@@ -441,10 +495,24 @@ export function registerIpc(opts: {
     if (!verified.ok) throw new Error(verified.reason);
     return subscriptionStore.syncFromOrganization(accessToken, organizationId, seatTier);
   });
-  ipcMain.handle('billing:reconcileForAccount', (_evt, accountId: string) => subscriptionStore.reconcileForAccount(accountId));
+  ipcMain.handle('billing:reconcileForAccount', (_evt, accountId: string) => {
+    // Load this account's own usage ledger (used whenever its effective tier is paid or Build; free
+    // Go usage stays on the shared device ledger — see UsageEventStore).
+    usageEventStore.setAccount(accountId);
+    scheduleUsageLedgerSync(2000);
+    const reconciled = subscriptionStore.reconcileForAccount(accountId);
+    broadcastEntitlementChanged();
+    return reconciled;
+  });
   // Called on sign-out so a stale, org-elevated tier from a previous account on this device never
   // carries over to the next account that signs in — see SubscriptionStore.reset()'s own comment.
-  ipcMain.handle('billing:resetSubscription', () => { subscriptionStore.reset(); creditStore.reset(); });
+  ipcMain.handle('billing:resetSubscription', () => {
+    subscriptionStore.reset();
+    creditStore.reset();
+    buildAccessStore.clear();
+    usageEventStore.setAccount(null);
+    broadcastEntitlementChanged();
+  });
   ipcMain.handle('billing:syncUsageCredits', (_evt, accessToken: string) => creditStore.syncUsageCredits(accessToken));
   ipcMain.handle('billing:getCreditBalance', () => ({ ...creditStore.getBalance(), limit: entitlementService.getCreditLimit() }));
   ipcMain.handle('billing:consumeCredit', (_evt, amount: number, reason: string, category?: AiUsageCategory, pawModelId?: PawModelId) => {
@@ -462,32 +530,19 @@ export function registerIpc(opts: {
    * organizationUsageService for the real server-side pool check.
    */
   ipcMain.handle('billing:canStartGeneration', (_evt, pawModelId?: PawModelId) => {
-    if (pawModelId === 'paw-fable') {
-      const remaining = entitlementService.getFableCreditsRemaining();
-      return { allowed: remaining > 0, reason: remaining > 0 ? undefined : 'Paw Fable credits exhausted' };
-    }
-    const tier = entitlementService.currentTier();
-    const seatTier = entitlementService.getSeatTier();
-    const proMaxVariant = entitlementService.currentProMaxVariant();
-    let result = rollingUsageGate.canStartGeneration(tier, seatTier, Date.now(), proMaxVariant);
-    
-    // Phase 2E: Purchased Compute Credit continuation
-    if (!result.allowed && !result.pooled && entitlementService.getStandardBonusCreditsRemaining() > 0) {
-      result = { ...result, allowed: true, reason: undefined };
-    }
+    // Effective tier ('build' while PawOS Build is active), Fable, purchased-credit continuation and
+    // Build's included-only rule all live in EntitlementService.checkGeneration().
+    const { purchasedContinuation: _purchasedContinuation, ...result } = entitlementService.checkGeneration(pawModelId);
 
     // Reserve an in-flight slot atomically (Node.js single-threaded — no race between the check
     // above and the reserve here). Released by billing:recordTurnUsage or auto-released on timeout.
-    if (result.allowed && !result.pooled) {
+    // Fable never reserves a rolling-window slot (see billing:recordTurnUsage).
+    if (result.allowed && !result.pooled && pawModelId !== 'paw-fable') {
       rollingUsageGate.reserveSlot();
     }
     return result;
   });
 
-  /** Marks the time of the last Go refresh, ignoring older usage events for Go tier constraints */
-  ipcMain.handle('billing:markGoRefresh', () => {
-    usageEventStore.setLastGoRefreshAt(Date.now());
-  });
   /**
    * Records real Gemini usage for one completed turn. The renderer sends only raw, provider-reported
    * usage — this handler is the ONLY place that turns real token counts into Paw Compute (via
@@ -501,24 +556,24 @@ export function registerIpc(opts: {
     'billing:recordTurnUsage',
     async (_evt, submission: TurnUsageSubmission, reason: string, category?: AiUsageCategory, pawModelId?: PawModelId) => {
       const isFable = pawModelId === 'paw-fable';
-      const tier = entitlementService.currentTier();
-      const seatTier = entitlementService.getSeatTier();
-      const proMaxVariant = entitlementService.currentProMaxVariant();
-      
+      const tier = entitlementService.effectiveTier();
+
       // Release the in-flight slot reserved by billing:canStartGeneration for non-Fable, non-pooled
       // turns. Fable turns gate on purchased-credit headroom and never reserve a rolling-window slot;
       // pooled (Enterprise) turns go through organizationUsageService and also don't reserve one.
       if (!isFable && !entitlementService.isComputePooled()) {
         rollingUsageGate.releaseSlot();
       }
-      
-      // Determine if this turn was unblocked by purchased credits (i.e. rolling quota was exhausted)
-      const check = rollingUsageGate.canStartGeneration(tier, seatTier, Date.now(), proMaxVariant);
-      const isPurchased = !check.allowed && !isFable;
+
+      // Whether this turn ran on purchased credits because included capacity was exhausted (on PawOS
+      // Build, only possible before its final week — see EntitlementService.checkGeneration()).
+      const isPurchased = !isFable && entitlementService.checkGeneration().purchasedContinuation;
 
       const aggregated = recordTurnUsage(submission.requests, { sessionId: submission.sessionId, runId: submission.runId }, isFable, submission.promptLineCount);
+      if (tier === 'build') buildUsageReporter.schedule();
+      scheduleUsageLedgerSync();
       let customerPc = normalizedComputeToCustomerPc(aggregated.newNormalizedCompute);
-      // GO tier charges 2x the actual PC cost
+      // Paw Go (only — never Build, which is its own effective tier) charges 2x the actual PC cost
       if (tier === 'go') {
         customerPc = customerPc * 2;
       }
@@ -1022,6 +1077,9 @@ export function registerIpc(opts: {
         if (!response.ok || !result?.ok || typeof result.amountUsd !== 'number') {
           return { ok: false, reason: cleanReason(result, `Payment could not be verified: ${response.statusText}`) };
         }
+        // Load the new balance from the server right away, so the purchase lets the user continue now.
+        await creditStore.syncUsageCredits(params.accessToken, accessTokenUserId(params.accessToken) ?? undefined).catch(() => undefined);
+        broadcastEntitlementChanged();
         for (const win of BrowserWindow.getAllWindows()) {
           win.webContents.send('billing:usageCreditsPurchased', { amountUsd: result.amountUsd, organizationId: params.organizationId });
         }
@@ -1139,6 +1197,11 @@ export function registerIpc(opts: {
   // Central entitlement queries — every runtime asks these instead of
   // hard-coding a tier check. See src/main/billing/EntitlementService.ts.
   ipcMain.handle('entitlement:getSnapshot', () => entitlementService.getSnapshot());
+  // Career tools (ATS scoring, resume rewrite/generation, career guidance, PDF export) — see CareerService.ts.
+  registerCareerIpc();
+  // Push a change notice whenever PawOS Build access is synced, cleared, or reaches its expiry, so
+  // every open surface re-reads the snapshot instead of showing a stale tier (see useEntitlementSnapshot).
+  buildAccessStore.onChange(broadcastEntitlementChanged);
   ipcMain.handle('entitlement:isModelAvailable', (_evt, modelId: PawModelId) => entitlementService.isModelAvailable(modelId));
   ipcMain.handle('entitlement:isFeatureAvailable', (_evt, featureId: FeatureId) => entitlementService.isFeatureAvailable(featureId));
   ipcMain.handle('entitlement:getModelTierRequirements', () => entitlementService.getModelTierRequirements());

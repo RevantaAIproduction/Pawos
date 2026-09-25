@@ -93,10 +93,11 @@ describe('UsageQuotaConfigStore — config-driven quotas, no hardcoded Pro Max n
 describe('UsageEngine — per-user (non-pooled) enforcement', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('blocks every execution-class capability for Go, since its configured quota is 0', () => {
+  it('Go: code execution is governed by Paw Compute + the weekly file cap, not this counter; other zero-quota capabilities stay blocked', () => {
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'go', status: 'none' });
-    const result = usageEngine.canConsume('codeExecution', 1);
-    expect(result).toEqual({ allowed: false, pooled: false, reason: expect.stringContaining('codeExecution') });
+    expect(usageEngine.canConsume('codeExecution', 1)).toEqual({ allowed: true, pooled: false });
+    const browser = usageEngine.canConsume('browserAutomation', 1);
+    expect(browser).toEqual({ allowed: false, pooled: false, reason: expect.stringContaining('browserAutomation') });
   });
 
   it('allows Pro to consume up to its configured limit, then blocks the request that would exceed it', () => {

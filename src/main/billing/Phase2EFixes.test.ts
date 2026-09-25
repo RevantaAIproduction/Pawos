@@ -1,12 +1,14 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { entitlementService } from './EntitlementService';
 import { subscriptionStore } from './SubscriptionStore';
+import { buildAccessStore } from './BuildAccessStore';
 import { ipcMain } from 'electron';
 import * as UsageMeteringEngine from './UsageMeteringEngine';
 
 describe('Phase 2E - Go Voice and Enterprise Billing', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    buildAccessStore.clear();
   });
 
   it('VOICE-GO-001: Go entitlement contains paw-voice', () => {
@@ -20,25 +22,21 @@ describe('Phase 2E - Go Voice and Enterprise Billing', () => {
     expect(entitlementService.isModelAvailable('paw-voice')).toBe(true);
   });
 
-  it('VOICE-GO-003: Go connector restrictions remain unchanged', () => {
+  it('VOICE-GO-003: Go connector restrictions — GitHub only (Vercel/Google Workspace/Microsoft removed from Go in 406663d)', () => {
     vi.spyOn(subscriptionStore, 'getEffective').mockReturnValue({ active: true, tier: 'go', expiresAt: null });
     const ent = entitlementService.getEntitlements();
     expect(ent.features).toContain('connectGithub');
-    expect(ent.features).toContain('connectVercel');
-    expect(ent.features).toContain('connectGoogleWorkspace');
-    expect(ent.features).toContain('connectMicrosoft');
+    expect(ent.features).not.toContain('connectVercel');
+    expect(ent.features).not.toContain('connectGoogleWorkspace');
+    expect(ent.features).not.toContain('connectMicrosoft');
     expect(ent.features).not.toContain('connectJira');
     expect(ent.features).not.toContain('connectSlack');
     expect(ent.features).not.toContain('connectLinear');
   });
 
   it('VOICE-GO-004: Build connector restrictions and voice', () => {
-    vi.spyOn(subscriptionStore, 'getEffective').mockReturnValue({ 
-      active: true, 
-      tier: 'go', 
-      expiresAt: null, 
-      buildEntitlement: { active: true, cohortId: '123', includedPc: 1500, purchasedPc: 0 } 
-    });
+    vi.spyOn(subscriptionStore, 'getEffective').mockReturnValue({ active: true, tier: 'go', expiresAt: null } as any);
+    buildAccessStore.set({ status: 'active', cohortId: '123', startsAt: Date.now() - 1000, endsAt: Date.now() + 60 * 24 * 60 * 60 * 1000, revokedAt: null, syncedAt: Date.now() });
     const ent = entitlementService.getEntitlements();
     expect(ent.models).toContain('paw-voice');
     expect(ent.features).toContain('connectGithub');

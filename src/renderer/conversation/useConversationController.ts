@@ -15,7 +15,7 @@ import type { VisemeFrame } from './LipSyncTypes';
 import type { SubmittedInputContext } from './ConversationTypes';
 import { buildSystemPrompt, buildLanguageInstruction } from './systemPrompt';
 import { DEFAULT_EXECUTION_MODE, buildPlanModeInstruction, type ConversationExecutionMode } from '../../shared/actions/ExecutionModeTypes';
-import type { EntitlementSnapshot, SubscriptionTierId } from '../../shared/billing/BillingTypes';
+import type { EffectiveTierId, EntitlementSnapshot, SubscriptionTierId } from '../../shared/billing/BillingTypes';
 import { DEFAULT_PAW_MODEL_ID, type PawModelId } from '../../shared/ai/PawModelTypes';
 import { categorizeTurn } from '../../shared/billing/AiUsageCategories';
 import { getToolDefinitionsForEntitlement } from '../ai/IntentRegistry';
@@ -60,7 +60,7 @@ export function useConversationController(args?: {
   // AI models) and an exhausted credit pool never reach the reasoning
   // provider at all; nothing here ever switches models automatically.
   const [entitlement, setEntitlement] = useState<EntitlementSnapshot | null>(null);
-  const [creditsNoticeTier, setCreditsNoticeTier] = useState<SubscriptionTierId | null>(null);
+  const [creditsNoticeTier, setCreditsNoticeTier] = useState<EffectiveTierId | null>(null);
   const entitlementRef = useRef(entitlement);
   entitlementRef.current = entitlement;
   // Personality addendum (see CompanionProfileTypes.ts's buildPersonalityAddendum) — kept here
@@ -522,28 +522,62 @@ export function useConversationController(args?: {
 
   const open = useCallback(() => runtimeRef.current?.open(), []);
   const openPanel = useCallback(() => runtimeRef.current?.openPanel(), []);
-  const startListening = useCallback(() => {
-    const tryGate = (retryCount = 0) => {
-      ipc
-        .billingCanStartGeneration(activePawModelRef.current)
-        .then((gateResult) => {
-          ipc.billingReleaseGenerationSlot();
-          if (!gateResult.allowed) {
-            if (gateResult.reason === 'inflight' && retryCount < 2) {
-              setTimeout(() => tryGate(retryCount + 1), 2000);
+  /**
+   * The one capacity-admission path for chat, dictation and speech. Asks the main-process gate
+   * (billing:canStartGeneration - effective tier, so PawOS Build limits apply) before `onAllowed`.
+   * A transient in-flight block is retried; a real block shows the tier's notice. If the gate call
+   * itself fails, only the authoritative entitlement snapshot can let the request through - never an
+   * unconditional fail-open - and if that also fails the request is blocked.
+   * `holdSlot` keeps the in-flight slot reserved for a turn that will call billingRecordTurnUsage;
+   * otherwise the slot is released as soon as the request is admitted.
+   */
+  const admitGeneration = useCallback(
+    (onAllowed: () => void, holdSlot: boolean) => {
+      const tryGate = (retryCount = 0) => {
+        ipc
+          .billingCanStartGeneration(activePawModelRef.current)
+          .then((gateResult) => {
+            if (!gateResult.allowed) {
+              // Distinguish in-flight slot blocking (transient, auto-resolves in <60s) from real
+              // quota exhaustion - retry rather than show the exhaustion notice.
+              if (gateResult.reason === 'inflight' && retryCount < 2) {
+                setTimeout(() => tryGate(retryCount + 1), 2000);
+                return;
+              }
+              setCreditsNoticeTier(entitlementRef.current?.tier ?? 'go');
               return;
             }
-            setCreditsNoticeTier(entitlementRef.current?.tier ?? 'go');
-            return;
-          }
-          runtimeRef.current?.startListening();
-        })
-        .catch(() => {
-          runtimeRef.current?.startListening();
-        });
-    };
-    tryGate();
-  }, [ipc]);
+            if (!holdSlot && !gateResult.pooled) {
+              ipc.billingReleaseGenerationSlot().catch((err) => console.error('[Billing] Failed to release generation slot:', err));
+            }
+            onAllowed();
+          })
+          .catch((gateError) => {
+            console.error('[Billing] Generation gate unavailable, checking entitlement snapshot:', gateError);
+            ipc
+              .entitlementGetSnapshot()
+              .then((snap) => {
+                setEntitlement(snap);
+                if (snap.hasCreditsRemaining) {
+                  onAllowed();
+                } else {
+                  setCreditsNoticeTier(snap.tier);
+                }
+              })
+              .catch((snapshotError) => {
+                console.error('[Billing] Entitlement snapshot unavailable - blocking request:', snapshotError);
+                setCreditsNoticeTier(entitlementRef.current?.tier ?? 'go');
+              });
+          });
+      };
+      tryGate();
+    },
+    [ipc]
+  );
+
+  const startListening = useCallback(() => {
+    admitGeneration(() => runtimeRef.current?.startListening(), false);
+  }, [admitGeneration]);
   const stopListening = useCallback(() => runtimeRef.current?.stopListening(), []);
   const close = useCallback(() => runtimeRef.current?.close(), []);
   const toggle = useCallback(() => runtimeRef.current?.toggle(), []);
@@ -645,78 +679,22 @@ export function useConversationController(args?: {
           return;
         }
 
-        const tryGate = (retryCount = 0) => {
-          ipc
-            .billingCanStartGeneration(activePawModelRef.current)
-            .then((gateResult) => {
-              if (!gateResult.allowed) {
-                // Distinguish in-flight slot blocking (transient, auto-resolves in <60s) from real
-                // quota exhaustion. In-flight blocking means another generation's slot hasn't been
-                // released yet — retry once after a short delay rather than showing the exhaustion
-                // banner, since the slot will be released when that turn's billingRecordTurnUsage
-                // completes (or auto-releases on its 60s timeout).
-                if (gateResult.reason === 'inflight' && retryCount < 2) {
-                  setTimeout(() => tryGate(retryCount + 1), 2000);
-                  return;
-                }
-                setCreditsNoticeTier(entitlementRef.current?.tier ?? 'go');
-                return;
-              }
-              lastInputSourceRef.current = finalContext?.source;
-              runtimeRef.current?.submitTranscript(text, finalContext);
-            })
-            .catch(() => {
-              // IPC failure — refresh entitlement to get the real, authoritative state before
-              // deciding whether to block. A transient IPC error should NOT show "More Paw Compute
-              // needed" if the account actually has capacity remaining.
-              ipc.entitlementGetSnapshot().then((snap) => {
-                if (snap.hasCreditsRemaining) {
-                  // Authoritative state says capacity remains — fail open rather than block a
-                  // legitimate user on a transient IPC error. The generation-time gate in the main
-                  // process will still enforce limits if the request actually proceeds.
-                  lastInputSourceRef.current = finalContext?.source;
-                  runtimeRef.current?.submitTranscript(text, finalContext);
-                } else {
-                  setCreditsNoticeTier(snap.tier);
-                }
-                setEntitlement(snap);
-              }).catch(() => {
-                // Both IPC calls failed — fail closed as a last resort.
-                setCreditsNoticeTier(entitlementRef.current?.tier ?? 'go');
-              });
-            });
-        };
-        tryGate();
+        // Holds the in-flight slot: this turn's billingRecordTurnUsage releases it.
+        admitGeneration(() => {
+          lastInputSourceRef.current = finalContext?.source;
+          runtimeRef.current?.submitTranscript(text, finalContext);
+        }, true);
       };
       checkAndSubmit();
     },
-    []
+    [admitGeneration]
   );
 
   const speak = useCallback(
     (text: string) => {
-      const tryGate = (retryCount = 0) => {
-        ipc
-          .billingCanStartGeneration(activePawModelRef.current)
-          .then((gateResult) => {
-            ipc.billingReleaseGenerationSlot();
-            if (!gateResult.allowed) {
-              if (gateResult.reason === 'inflight' && retryCount < 2) {
-                setTimeout(() => tryGate(retryCount + 1), 2000);
-                return;
-              }
-              setCreditsNoticeTier(entitlementRef.current?.tier ?? 'go');
-              return;
-            }
-            runtimeRef.current?.speak(text);
-          })
-          .catch(() => {
-            runtimeRef.current?.speak(text);
-          });
-      };
-      tryGate();
+      admitGeneration(() => runtimeRef.current?.speak(text), false);
     },
-    [ipc]
+    [admitGeneration]
   );
   const setVoiceOutputEnabled = useCallback((enabled: boolean) => runtimeRef.current?.setVoiceOutputEnabled(enabled), []);
   const stopSpeechPlayback = useCallback(() => runtimeRef.current?.stopSpeechPlayback(), []);

@@ -41,6 +41,7 @@ import type {
   PricingConfig,
   TicketPricingConfig,
   SubscriptionState,
+  BuildAccessSyncResult,
   SubscriptionTierId,
   CreditBalance,
   CreditConsumptionRecord,
@@ -56,6 +57,8 @@ import type {
   EntitlementSnapshot,
   SeatTier,
 } from "../../shared/billing/BillingTypes";
+import type { BuildPdfDocument } from "../../shared/billing/BuildPdfTypes";
+import type { CareerImportResult, CareerPdfExportResult, CareerToolRequest, CareerToolResult } from "../../shared/career/CareerTypes";
 import type { AiUsageCategory } from "../../shared/billing/AiUsageCategories";
 import type {
   TurnUsageSubmission,
@@ -196,6 +199,7 @@ export function contextBridge() {
 
     systemGetForegroundWindowInfo: () => ipcRenderer.invoke("system:getForegroundWindowInfo") as Promise<ForegroundWindowInfo>,
     systemGetAppVersion: () => ipcRenderer.invoke("system:getAppVersion") as Promise<string>,
+    systemSetContentProtection: (enabled: boolean) => ipcRenderer.invoke("system:setContentProtection", enabled) as Promise<boolean>,
 
     authIsGoogleSignInConfigured: () => ipcRenderer.invoke("auth:isGoogleSignInConfigured") as Promise<boolean>,
     authStartGoogleSignIn: () => ipcRenderer.invoke("auth:startGoogleSignIn") as Promise<GoogleSignInResult>,
@@ -234,6 +238,24 @@ export function contextBridge() {
     billingReconcileForAccount: (accountId: string) =>
       ipcRenderer.invoke("billing:reconcileForAccount", accountId) as Promise<SubscriptionState>,
     billingResetSubscription: () => ipcRenderer.invoke("billing:resetSubscription") as Promise<SubscriptionState>,
+    // PawOS Build (admin-granted student tier): server-authoritative sync with the user's own token.
+    billingSyncBuildAccess: (accessToken: string) =>
+      ipcRenderer.invoke("billing:syncBuildAccess", accessToken) as Promise<BuildAccessSyncResult>,
+    billingClearBuildAccess: () => ipcRenderer.invoke("billing:clearBuildAccess") as Promise<void>,
+    // Career tools — entitlement and capacity are enforced main-side in CareerService.ts.
+    careerRun: (request: CareerToolRequest) => ipcRenderer.invoke("career:run", request) as Promise<CareerToolResult>,
+    careerImportResume: () => ipcRenderer.invoke("career:importResume") as Promise<CareerImportResult>,
+    careerExportPdf: (doc: BuildPdfDocument, suggestedName: string) =>
+      ipcRenderer.invoke("career:exportPdf", doc, suggestedName) as Promise<CareerPdfExportResult>,
+    careerRevealFile: (filePath: string) => ipcRenderer.invoke("career:revealFile", filePath) as Promise<void>,
+    /** Fires when the effective entitlement changes out-of-band (Build synced/cleared/expired). Returns an unsubscribe. */
+    onEntitlementChanged: (cb: () => void) => {
+      const handler = () => cb();
+      ipcRenderer.on("entitlement:changed", handler);
+      return () => {
+        ipcRenderer.removeListener("entitlement:changed", handler);
+      };
+    },
     billingGetCreditBalance: () => ipcRenderer.invoke("billing:getCreditBalance") as Promise<CreditBalance>,
     billingConsumeCredit: (amount: number, reason: string, category?: AiUsageCategory, pawModelId?: PawModelId) =>
       ipcRenderer.invoke("billing:consumeCredit", amount, reason, category, pawModelId) as Promise<CreditBalance>,
@@ -529,11 +551,21 @@ export function contextBridge() {
       ipcRenderer.invoke("governance:deny", approvalId) as Promise<{ ok: boolean; error?: string }>,
     governanceGetPending: () =>
       ipcRenderer.invoke("governance:getPending") as Promise<Array<{ approvalId: string; actionType: string; requestedAt: number }>>,
+    // Both return an unsubscribe — without it every remount of a listener (ContextualGovernancePanel,
+    // ConversationRuntime) stacked another handler and one approval fired several times.
     onGovernanceApproved: (cb: (payload: { approvalId: string }) => void) => {
-      ipcRenderer.on("governance:approved", (_evt, payload) => cb(payload));
+      const handler = (_evt: unknown, payload: { approvalId: string }) => cb(payload);
+      ipcRenderer.on("governance:approved", handler);
+      return () => {
+        ipcRenderer.removeListener("governance:approved", handler);
+      };
     },
     onGovernanceDenied: (cb: (payload: { approvalId: string }) => void) => {
-      ipcRenderer.on("governance:denied", (_evt, payload) => cb(payload));
+      const handler = (_evt: unknown, payload: { approvalId: string }) => cb(payload);
+      ipcRenderer.on("governance:denied", handler);
+      return () => {
+        ipcRenderer.removeListener("governance:denied", handler);
+      };
     },
 
     selectFolder: () =>

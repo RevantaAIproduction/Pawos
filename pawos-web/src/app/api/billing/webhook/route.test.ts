@@ -6,6 +6,19 @@ const WEBHOOK_SECRET = "webhook_secret";
 const mocks = vi.hoisted(() => ({
   creditVerifiedTicketBalancePayment: vi.fn(),
   creditVerifiedUsageCreditsPayment: vi.fn(),
+  fetchRazorpaySubscription: vi.fn(),
+  getRazorpayCredentials: vi.fn(() => ({ keyId: "rzp_key", keySecret: "rzp_secret" })),
+  recordRazorpaySubscription: vi.fn(async () => "recorded"),
+}));
+
+vi.mock("@/lib/billing/razorpay", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/billing/razorpay")>()),
+  fetchRazorpaySubscription: mocks.fetchRazorpaySubscription,
+  getRazorpayCredentials: mocks.getRazorpayCredentials,
+}));
+
+vi.mock("@/lib/billing/subscriptionRecords", () => ({
+  recordRazorpaySubscription: mocks.recordRazorpaySubscription,
 }));
 
 vi.mock("@/lib/billing/ticketBalanceCrediting", () => ({
@@ -97,10 +110,13 @@ describe("Razorpay billing webhook", () => {
     expect(mocks.creditVerifiedTicketBalancePayment).not.toHaveBeenCalled();
   });
 
-  it("accepts subscription events without invoking one-time crediting", async () => {
+  it("accepts subscription events without invoking one-time crediting, recording the plan's CURRENT state from Razorpay", async () => {
+    const current = { id: "sub_123", plan_id: "plan_pro", status: "active", current_end: 1_800_000_000, notes: { userId: "user-1" } };
+    mocks.fetchRazorpaySubscription.mockResolvedValue(current);
     const subscriptionEvent = {
-      event: "subscription.activated",
-      payload: { subscription: { entity: { id: "sub_123" } } },
+      event: "subscription.charged",
+      // A stale payload status must not be what gets stored — the re-fetched subscription is.
+      payload: { subscription: { entity: { id: "sub_123", status: "created" } } },
     };
     const rawBody = JSON.stringify(subscriptionEvent);
 
@@ -108,6 +124,21 @@ describe("Razorpay billing webhook", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.creditVerifiedTicketBalancePayment).not.toHaveBeenCalled();
+    expect(mocks.fetchRazorpaySubscription).toHaveBeenCalledWith("sub_123", { keyId: "rzp_key", keySecret: "rzp_secret" });
+    expect(mocks.recordRazorpaySubscription).toHaveBeenCalledWith(current, "webhook:subscription.charged");
+  });
+
+  it("asks Razorpay to retry (500) when the subscription can't be re-fetched or stored", async () => {
+    const rawBody = JSON.stringify({ event: "subscription.cancelled", payload: { subscription: { entity: { id: "sub_9" } } } });
+    mocks.fetchRazorpaySubscription.mockResolvedValue(null);
+    expect((await POST(requestFor(rawBody, signatureFor(rawBody)))).status).toBe(500);
+
+    mocks.fetchRazorpaySubscription.mockResolvedValue({ id: "sub_9", plan_id: "plan_pro", status: "cancelled", notes: { userId: "u" } });
+    mocks.recordRazorpaySubscription.mockResolvedValueOnce("failed");
+    expect((await POST(requestFor(rawBody, signatureFor(rawBody)))).status).toBe(500);
+
+    mocks.recordRazorpaySubscription.mockResolvedValueOnce("skipped"); // e.g. a Team plan — nothing to store, no retry
+    expect((await POST(requestFor(rawBody, signatureFor(rawBody)))).status).toBe(200);
   });
 
   it("rejects malformed JSON after signature verification", async () => {

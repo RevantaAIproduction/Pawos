@@ -1,6 +1,19 @@
 import { PDFDocument, StandardFonts, rgb, PDFFont } from 'pdf-lib';
 import type { BuildPdfDocument } from '../../shared/billing/BuildPdfTypes';
 
+/** pdf-lib's standard fonts only encode WinAnsi — map common typography and replace anything else,
+ *  so user/model text (names, contact lines, headings) can never make PDF generation throw. */
+function toWinAnsiSafe(text: string): string {
+  return text.replace(/[^\x00-\xFF]/g, (char: string) => {
+    if (char === '“' || char === '”') return '"';
+    if (char === '‘' || char === '’') return "'";
+    if (char === '–' || char === '—') return '-';
+    if (char === '•') return '-';
+    if (char === '…') return '...';
+    return '?';
+  });
+}
+
 export class BuildPdfGenerator {
   static async generate(docData: BuildPdfDocument): Promise<Uint8Array> {
     const pdfDoc = await PDFDocument.create();
@@ -52,13 +65,13 @@ export class BuildPdfGenerator {
     
     // Draw Title
     if (docData.title) {
-      drawWrappedText(docData.title, helveticaBold, 24, MARGIN, MAX_WIDTH);
+      drawWrappedText(toWinAnsiSafe(docData.title), helveticaBold, 24, MARGIN, MAX_WIDTH);
       currentY -= 10;
     }
     
     // Draw Subtitle
     if (docData.subtitle) {
-      drawWrappedText(docData.subtitle, helvetica, 16, MARGIN, MAX_WIDTH);
+      drawWrappedText(toWinAnsiSafe(docData.subtitle), helvetica, 16, MARGIN, MAX_WIDTH);
       currentY -= 20;
     }
     
@@ -66,7 +79,7 @@ export class BuildPdfGenerator {
     for (const section of docData.sections) {
       if (section.heading) {
         currentY -= 15;
-        drawWrappedText(section.heading, helveticaBold, 14, MARGIN, MAX_WIDTH);
+        drawWrappedText(toWinAnsiSafe(section.heading), helveticaBold, 14, MARGIN, MAX_WIDTH);
         currentY -= 5;
       }
       

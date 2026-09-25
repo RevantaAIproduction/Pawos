@@ -11,7 +11,7 @@ export class ConnectDatabasePlugin extends BasePlugin {
   async execute(request: ActionRequest): Promise<ActionResult> {
     if (request.type !== 'connectDatabase') return { ok: false, reason: 'failed', message: 'Mismatched request.' };
 
-    const { type: dbType, host, port, username, database } = request;
+    const { dbType, host, port, username, database } = request;
 
     try {
       const connectionString = this.buildConnectionString(dbType, { host, port, username, database });
@@ -81,7 +81,7 @@ export class ConnectDatabasePlugin extends BasePlugin {
 
   describeInProgress(request: ActionRequest): string {
     if (request.type !== 'connectDatabase') return 'Working on that…';
-    return `Connecting to ${request.type} database…`;
+    return `Connecting to ${request.dbType} database…`;
   }
 
   describeDone(request: ActionRequest, result: ActionResult): string {

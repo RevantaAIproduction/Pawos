@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
-import { getRazorpayWebhookSecret, verifyRazorpayWebhookSignature } from "@/lib/billing/razorpay";
+import {
+  fetchRazorpaySubscription,
+  getRazorpayCredentials,
+  getRazorpayWebhookSecret,
+  verifyRazorpayWebhookSignature,
+  type RazorpaySubscription,
+} from "@/lib/billing/razorpay";
+import { recordRazorpaySubscription } from "@/lib/billing/subscriptionRecords";
 import { creditVerifiedTicketBalancePayment } from "@/lib/billing/ticketBalanceCrediting";
 import { creditVerifiedUsageCreditsPayment } from "@/lib/billing/usageCreditsCrediting";
 
@@ -11,20 +18,27 @@ type RazorpayWebhookEvent = {
 };
 
 /**
- * Applies a verified Razorpay SUBSCRIPTION event to the user's subscription record.
- * pawos-web has no persistent account/subscription database yet (auth and
- * subscription state today live only inside the Electron app's local
- * stores) — that's a real infrastructure decision out of scope here, so
- * this honestly logs the verified event instead of writing to a database
- * that doesn't exist. Once a real accounts database is wired up, this is
- * the one place that needs to change to persist it.
+ * Applies a verified Razorpay SUBSCRIPTION event (activated / charged / cancelled / halted / …) to the
+ * account's plan record (pawos_subscriptions), which the desktop app restores on every sign-in. The
+ * event is only the trigger: the subscription is re-fetched from Razorpay so its CURRENT state is
+ * stored — events can arrive out of order or be retried, and an old one must never roll a plan back.
+ * Returns false when the write should be retried (Razorpay retries non-2xx deliveries).
  */
-function applySubscriptionEvent(event: RazorpayWebhookEvent): void {
-  console.log(`[razorpay-webhook] Verified subscription event "${event.event}" received — no persistent account database configured yet, not persisted.`, {
-    event: event.event,
-    subscriptionId: event.payload.subscription?.entity?.id,
-    paymentId: event.payload.payment?.entity?.id,
-  });
+async function applySubscriptionEvent(event: RazorpayWebhookEvent): Promise<boolean> {
+  const payloadEntity = event.payload.subscription?.entity as RazorpaySubscription | undefined;
+  const subscriptionId = payloadEntity?.id;
+  if (!subscriptionId) {
+    console.warn(`[razorpay-webhook] "${event.event}" has no subscription id — skipping.`);
+    return true;
+  }
+  const credentials = getRazorpayCredentials();
+  const current = credentials ? await fetchRazorpaySubscription(subscriptionId, credentials) : null;
+  if (!current) {
+    console.error(`[razorpay-webhook] Could not re-fetch subscription ${subscriptionId} for "${event.event}" — asking Razorpay to retry.`);
+    return false;
+  }
+  const result = await recordRazorpaySubscription(current, `webhook:${event.event}`);
+  return result !== "failed";
 }
 
 /**
@@ -253,7 +267,9 @@ export async function POST(request: Request) {
   if (event.event === "payment.captured") {
     await applyPaymentCapturedEvent(event);
   } else if (SUBSCRIPTION_EVENTS.has(event.event)) {
-    applySubscriptionEvent(event);
+    if (!(await applySubscriptionEvent(event))) {
+      return NextResponse.json({ ok: false, reason: "Subscription could not be recorded yet." }, { status: 500 });
+    }
   } else if (event.event === "payment.failed" || event.event === "refund.processed") {
     // Failed/refund events affecting the wallet: honestly logged, never auto-reversing an already
     // -credited balance (clawback after funds may already be spent is a distinct business-policy

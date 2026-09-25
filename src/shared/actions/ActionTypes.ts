@@ -44,7 +44,14 @@ export type CodeEditHunk = {
  *  it (via RequirementGate); every existing call site that never sets it is unaffected.
  *  `projectId` is optional — when present, constrains execution to that project (org_projects.id).
  *  `approvalId` is optional — when destructive action requires approval, ties resume flow to this ID. */
-export type ActionRequest = { scope?: ConnectivityScope; codingRuntimeSession?: CodingRuntimeSession; projectId?: string; approvalId?: string } & (
+export type ActionRequest = {
+  scope?: ConnectivityScope;
+  codingRuntimeSession?: CodingRuntimeSession;
+  projectId?: string;
+  approvalId?: string;
+  /** Set on actions issued by an autonomous (Ticket Balance-billed) run — excluded from the weekly code-file cap. */
+  autonomousRunId?: string;
+} & (
   | { type: 'openUrl'; url: string }
   | { type: 'openApp'; appId: KnownAppId; path?: string }
   | { type: 'openFolder'; path: string }
@@ -288,7 +295,7 @@ export type ActionRequest = { scope?: ConnectivityScope; codingRuntimeSession?: 
   | { type: 'uninstallSoftware'; manager: 'winget' | 'npm' | 'pip' | 'code-extension'; packageId: string; confirmed?: boolean }
   | { type: 'repairSoftware'; manager: 'winget' | 'npm' | 'pip' | 'code-extension'; packageId: string; verifyCommand?: string; executableHint?: string; confirmed?: boolean }
   | { type: 'verifyToolInstalled'; command: string }
-  | { type: 'connectDatabase'; type: 'mysql' | 'postgres' | 'mongodb' | 'sqlite' | 'mssql'; host?: string; port?: number; username?: string; password?: string; database?: string; confirmed?: boolean }
+  | { type: 'connectDatabase'; dbType: 'mysql' | 'postgres' | 'mongodb' | 'sqlite' | 'mssql'; host?: string; port?: number; username?: string; password?: string; database?: string; confirmed?: boolean }
   // Claude Code-style governance: File access permissions
   | { type: 'requestFilePermission'; path: string; permission: 'read' | 'write' | 'edit' | 'delete'; confirmed?: boolean }
   // Claude Code-style governance: Tool access (Bash, PowerShell, GitHub CLI, etc.)
