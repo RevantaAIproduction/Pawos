@@ -1,18 +1,24 @@
 import { ipc } from '../../services/ipc/ipcBridgeImplementation';
 import { getSupabaseClient } from '../supabaseClient';
-import { clearServerSessionLinkFailure, getServerSessionLinkFailure, recordServerSessionLinkFailure } from '../serverSessionLink';
-import type { GoogleProfile } from '../../../shared/auth/AccountTypes';
 import type { AuthUser } from '../AuthTypes';
 import { cleanIpcErrorMessage } from '../ipcErrorMessage';
 
-function toAuthUser(profile: GoogleProfile, supabaseUserId: string): AuthUser {
+function toAuthUser(user: { id: string; email?: string; user_metadata?: Record<string, unknown> }): AuthUser {
+  const meta = user.user_metadata ?? {};
+  const name =
+    (typeof meta.full_name === 'string' && meta.full_name) ||
+    (typeof meta.name === 'string' && meta.name) ||
+    (user.email ? user.email.split('@')[0] : '') ||
+    'Google User';
+  const pictureUrl =
+    (typeof meta.avatar_url === 'string' && meta.avatar_url) || (typeof meta.picture === 'string' && meta.picture) || undefined;
   return {
-    // Always the PawOS server account id — the same one email and GitHub sign-in give for this
-    // email (Supabase links identities that share a verified email). Never a local-only id.
-    id: supabaseUserId,
-    name: profile.name,
-    email: profile.email,
-    pictureUrl: profile.picture,
+    // The PawOS server account id — the same one email and GitHub sign-in give for this email
+    // (Supabase links identities that share a verified email). Never a local-only id.
+    id: user.id,
+    name,
+    email: user.email,
+    pictureUrl,
     provider: 'google',
     isGuest: false,
     createdAt: Date.now(),
@@ -20,67 +26,50 @@ function toAuthUser(profile: GoogleProfile, supabaseUserId: string): AuthUser {
 }
 
 /**
- * Bridges a completed Google sign-in into a real Supabase session, so
- * Supabase-backed features (Organizations and their RLS policies) can see
- * this user via auth.uid() — without this, a Google-signed-in PawOS user
- * is fully authenticated locally but invisible to Supabase, and every
- * Organization action fails with "You must be signed in...".
+ * Real Google sign-in, run by Supabase itself — the same route as GitHub sign-in
+ * (GitHubAuthProvider.ts) and the website's Google login. Supabase is the OAuth client (the Google
+ * provider's Client ID/Secret in the Supabase project), so the result is always a real Supabase
+ * session: one PawOS account id across Google, GitHub and email.
  *
- * Requires the Supabase project's Auth settings to have the Google
- * provider enabled with this app's GOOGLE_CLIENT_ID added to its allowed
- * client ID list (Supabase dashboard → Authentication → Providers →
- * Google → "Authorized Client IDs") — that's a one-time dashboard
- * configuration step, not something this code can do. If it isn't
- * configured yet, this fails silently (best-effort) so basic Google
- * sign-in still works for users who never touch Organizations; the real
- * error surfaces later, at the point an Organization action is attempted.
- */
-async function linkSupabaseSession(idToken: string, accessToken: string): Promise<string | null> {
-  try {
-    const supabase = await getSupabaseClient();
-    const { data, error } = await supabase.auth.signInWithIdToken({ provider: 'google', token: idToken, access_token: accessToken });
-    if (error) {
-      console.warn('Google→Supabase session link failed:', error.message);
-      recordServerSessionLinkFailure('google', error.message);
-      return null;
-    }
-    clearServerSessionLinkFailure();
-    return data.user?.id ?? null;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.warn('Google→Supabase session link failed:', message);
-    recordServerSessionLinkFailure('google', message);
-    return null;
-  }
-}
-
-/**
- * Real Google OAuth (Authorization Code + PKCE via a loopback server — see
- * src/main/auth/GoogleOAuthFlow.ts) — the actual browser/token exchange
- * happens in the main process; this class shapes the returned profile into
- * an AuthUser and bridges the same sign-in into a real Supabase session
- * (see linkSupabaseSession above). Requires GOOGLE_CLIENT_ID in .env;
- * isAvailable() lets the UI show an honest "not configured yet" state
- * instead of a button that fails silently.
+ * (Desktop Google sign-in used to exchange Google's code itself and hand the id_token to Supabase
+ * via signInWithIdToken. Supabase's id_token check rejects it ("Internal Server Error", HTTP 400),
+ * and the app used to hide that by signing in with a local-only account — which had no plan, Build
+ * access, credits or Ticket Balance.)
+ *
+ * Flow: ask this Supabase client for its Google authorize URL (skipBrowserRedirect), hand it to the
+ * main process, which opens it in the system browser and waits for pawos-web to relay Supabase's
+ * PKCE `code` back (via the same GITHUB_REDIRECT_URI relay route GitHub uses — it carries any
+ * Supabase OAuth code), then exchange that code on this same client (its PKCE verifier lives here).
  */
 export class GoogleAuthProvider {
   async isAvailable(): Promise<boolean> {
-    return ipc.authIsGoogleSignInConfigured();
+    return ipc.authIsGithubSignInConfigured();
   }
 
   async signIn(): Promise<AuthUser> {
     try {
-      const { profile, idToken, accessToken } = await ipc.authStartGoogleSignIn();
-      const supabaseUserId = await linkSupabaseSession(idToken, accessToken);
-      if (!supabaseUserId) {
-        // No local-only fallback: a sign-in that never reached the PawOS account would silently
-        // lose the user's plan, Build access, credits and Ticket Balance.
-        const reason = getServerSessionLinkFailure()?.message;
-        throw new Error(
-          `Google sign-in worked, but PawOS could not connect it to your account${reason ? ` (server said: ${reason})` : ''}. Please try again in a moment, or sign in with email or GitHub.`
-        );
+      const supabase = await getSupabaseClient();
+      const { githubRedirectUri } = await ipc.envGetApiKeys();
+      if (!githubRedirectUri) {
+        throw new Error('Google sign-in isn’t configured yet — add GITHUB_REDIRECT_URI to your .env.');
       }
-      return toAuthUser(profile, supabaseUserId);
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: githubRedirectUri, skipBrowserRedirect: true, queryParams: { prompt: 'select_account' } },
+      });
+      if (error || !data.url) {
+        throw new Error(error?.message ?? 'Could not start Google sign-in.');
+      }
+
+      const { code } = await ipc.authStartGithubSignIn(data.url);
+
+      const { data: sessionData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+      if (exchangeError || !sessionData.user) {
+        throw new Error(exchangeError?.message ?? 'Google sign-in did not return a valid session.');
+      }
+
+      return toAuthUser(sessionData.user);
     } catch (err) {
       throw new Error(cleanIpcErrorMessage(err));
     }

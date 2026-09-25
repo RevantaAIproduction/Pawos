@@ -1,16 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  authStartGoogleSignIn: vi.fn(),
-  signInWithIdToken: vi.fn(),
+  authStartGithubSignIn: vi.fn(),
+  signInWithOAuth: vi.fn(),
+  exchangeCodeForSession: vi.fn(),
   getSession: vi.fn(),
   billingReconcileForAccount: vi.fn(async () => ({})),
 }));
 
 vi.mock('../services/ipc/ipcBridgeImplementation', () => ({
   ipc: {
-    authStartGoogleSignIn: mocks.authStartGoogleSignIn,
-    authIsGoogleSignInConfigured: vi.fn(async () => true),
+    authStartGithubSignIn: mocks.authStartGithubSignIn,
+    authIsGithubSignInConfigured: vi.fn(async () => true),
+    envGetApiKeys: vi.fn(async () => ({ githubRedirectUri: 'https://pawos.revantaai.com/auth/github/callback' })),
     billingReconcileForAccount: mocks.billingReconcileForAccount,
     billingClearBuildAccess: vi.fn(async () => {}),
     billingSyncBuildAccess: vi.fn(async () => ({ ok: true })),
@@ -20,7 +22,8 @@ vi.mock('../services/ipc/ipcBridgeImplementation', () => ({
 vi.mock('./supabaseClient', () => ({
   getSupabaseClient: vi.fn(async () => ({
     auth: {
-      signInWithIdToken: mocks.signInWithIdToken,
+      signInWithOAuth: mocks.signInWithOAuth,
+      exchangeCodeForSession: mocks.exchangeCodeForSession,
       getSession: mocks.getSession,
       onAuthStateChange: vi.fn(),
       signOut: vi.fn(async () => ({ error: null })),
@@ -47,20 +50,24 @@ describe('One account id for every sign-in method', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     store.clear();
-    mocks.authStartGoogleSignIn.mockResolvedValue({ profile, idToken: 'id-token', accessToken: 'access-token' });
+    mocks.signInWithOAuth.mockResolvedValue({ data: { url: 'https://x.supabase.co/auth/v1/authorize?provider=google' }, error: null });
+    mocks.authStartGithubSignIn.mockResolvedValue({ code: 'supabase-code' });
   });
 
-  it('Google sign-in uses the PawOS server account id (the same one email/GitHub give)', async () => {
-    mocks.signInWithIdToken.mockResolvedValue({ data: { user: { id: SERVER_ID } }, error: null });
+  it('Google sign-in runs through Supabase OAuth and returns the PawOS server account id', async () => {
+    mocks.exchangeCodeForSession.mockResolvedValue({
+      data: { user: { id: SERVER_ID, email: profile.email, user_metadata: { full_name: 'Tharun Esta', avatar_url: 'p.png' } } },
+      error: null,
+    });
     const user = await new GoogleAuthProvider().signIn();
-    expect(user.id).toBe(SERVER_ID);
-    expect(user.email).toBe('tharun.esta@gmail.com');
+    expect(mocks.signInWithOAuth).toHaveBeenCalledWith(expect.objectContaining({ provider: 'google' }));
+    expect(mocks.exchangeCodeForSession).toHaveBeenCalledWith('supabase-code');
+    expect(user).toMatchObject({ id: SERVER_ID, email: 'tharun.esta@gmail.com', name: 'Tharun Esta', provider: 'google' });
   });
 
-  it('never falls back to a local-only "google:…" id — sign-in stops with a clear message instead', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-    mocks.signInWithIdToken.mockResolvedValue({ data: { user: null }, error: { message: 'Unacceptable audience in id_token' } });
-    await expect(new GoogleAuthProvider().signIn()).rejects.toThrow(/could not connect it to your account/);
+  it('never produces a local-only "google:…" id — a failed exchange is an error', async () => {
+    mocks.exchangeCodeForSession.mockResolvedValue({ data: { user: null }, error: { message: 'invalid flow state' } });
+    await expect(new GoogleAuthProvider().signIn()).rejects.toThrow(/invalid flow state/);
   });
 
   it('a saved local-only sign-in with no server session is dropped at startup (sign in again → real account)', async () => {

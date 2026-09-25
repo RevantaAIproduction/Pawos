@@ -34,8 +34,12 @@ async function linkSupabaseSession(idToken: string, accessToken: string): Promis
       access_token: accessToken
     });
     if (error) {
-      console.warn('Microsoft→Supabase session link failed:', error.message);
-      recordServerSessionLinkFailure('microsoft', error.message);
+      // Keep Supabase's HTTP status and error code with the message — the code is what identifies
+      // which check failed (e.g. audience, nonce, provider settings).
+      const detail = [error.status ? `HTTP ${error.status}` : '', (error as { code?: string }).code ?? ''].filter(Boolean).join(', ');
+      const message = detail ? `${error.message} [${detail}]` : error.message;
+      console.warn('Microsoft→Supabase session link failed:', message);
+      recordServerSessionLinkFailure('microsoft', message);
       return null;
     }
     clearServerSessionLinkFailure();
