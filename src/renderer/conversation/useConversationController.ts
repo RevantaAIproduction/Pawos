@@ -133,13 +133,16 @@ export function useConversationController(args?: {
   const [sessionLimitModalOpen, setSessionLimitModalOpen] = useState(false);
   const [preservedPrompt, setPreservedPrompt] = useState<{ text: string; context?: SubmittedInputContext } | null>(null);
   const [activeSessionName, setActiveSessionName] = useState<string | null>(null);
+  /** Bumped when another chat is opened (New chat / a past chat) — a save from the previous chat finishing late must not re-select it. */
+  const chatGenerationRef = useRef(0);
   // For every model, the minimum tier that unlocks it — derived server-side from
   // EntitlementService's own TIER_ENTITLEMENTS (see entitlement:getModelTierRequirements), never a
   // second hardcoded gating table in the renderer. Static, account-independent; fetched once.
   const [modelTierRequirements, setModelTierRequirements] = useState<Partial<Record<PawModelId, SubscriptionTierId>>>({});
 
   const applySystemPrompt = useCallback((canExecute: boolean) => {
-    const base = buildSystemPrompt(canExecute);
+    const canMakeResumes = entitlementRef.current?.features.includes('resumeGeneration') ?? false;
+    const base = buildSystemPrompt(canExecute, canMakeResumes);
     const addendum = personalityAddendumRef.current;
     const languageInstruction = buildLanguageInstruction(speechLanguageRef.current);
     const planModeInstruction = executionModeRef.current === 'plan' ? buildPlanModeInstruction() : '';
@@ -216,7 +219,9 @@ export function useConversationController(args?: {
   useEffect(() => {
     if (!entitlement) return;
     const canExecute = entitlement.features.includes('advancedRuntimes');
-    runtimeRef.current?.setTools(getToolDefinitionsForEntitlement(canExecute));
+    const canMakeResumes = entitlement.features.includes('resumeGeneration');
+    runtimeRef.current?.setTools(getToolDefinitionsForEntitlement(canExecute, canMakeResumes));
+    runtimeRef.current?.setResumesAllowed(canMakeResumes);
     applySystemPrompt(canExecute);
   }, [entitlement, applySystemPrompt]);
 
@@ -256,8 +261,23 @@ export function useConversationController(args?: {
     setPreservedPrompt(null);
     setCurrentSessionId(null);
     setCurrentSessionPromptCount(0);
+    chatGenerationRef.current += 1;
+    runtimeRef.current?.openConversation(null);
     runtimeRef.current?.openPanel();
   }, []);
+
+  // Reopen a past chat from the Chats panel — its messages back on screen, the AI remembers it,
+  // and new messages keep going into that same chat.
+  const openSession = useCallback(async (id: string) => {
+    const session = await ipc.getSession(id).catch(() => undefined);
+    if (!session) return;
+    setSessionLimitModalOpen(false);
+    setPreservedPrompt(null);
+    chatGenerationRef.current += 1;
+    runtimeRef.current?.openConversation(session);
+    setCurrentSessionId(session.id);
+    setCurrentSessionPromptCount(session.turns.filter((t) => t.transcript.trim()).length);
+  }, [ipc]);
 
   // Handle Continue as New Session - creates new session with preserved prompt
   const handleContinueAsNewSession = useCallback(() => {
@@ -444,7 +464,9 @@ export function useConversationController(args?: {
       },
       onVisemeFrame: (frame) => onVisemeFrameRef.current?.(frame),
       persistTurn: (turn, hint) => {
+        const generation = chatGenerationRef.current;
         return ipc.appendSessionTurn(turn, hint).then((session) => {
+          if (generation !== chatGenerationRef.current) return session;
           setCurrentSessionId(session.id);
           // Count user prompts in the session
           const promptCount = session.turns.filter(t => t.transcript.trim()).length;
@@ -762,6 +784,7 @@ export function useConversationController(args?: {
     setSessionLimitModalOpen,
     preservedPrompt,
     handleNewChat,
+    openSession,
     handleContinueAsNewSession,
     checkSessionLimit,
     activeSessionName,

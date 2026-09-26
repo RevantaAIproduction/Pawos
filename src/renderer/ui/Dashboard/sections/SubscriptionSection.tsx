@@ -2,6 +2,7 @@
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import { UsageCreditsPanel } from './UsageCreditsPanel';
 import { AutonomousCreditsPanel } from './AutonomousCreditsPanel';
+import { InvoicesTable } from '../../billing/InvoicesTable';
 import type { AuthUser } from '../../../auth/AuthTypes';
 import {
   type PricingConfig,
@@ -143,26 +144,7 @@ export function SubscriptionSection({
       {/* Invoices */}
       <div style={{ marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         <h3 style={{ fontSize: '1em', fontWeight: 600, margin: '0 0 16px 0' }}>Invoices</h3>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9em' }}>
-            <thead>
-              <tr>
-                <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 600, opacity: 0.6, fontSize: '0.85em', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>Date</th>
-                <th style={{ textAlign: 'left', padding: '8px 16px 8px 0', fontWeight: 600, opacity: 0.6, fontSize: '0.85em', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>Total</th>
-                <th style={{ textAlign: 'left', padding: '8px 16px 8px 0', fontWeight: 600, opacity: 0.6, fontSize: '0.85em', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>Status</th>
-                <th style={{ textAlign: 'left', padding: '8px 0', fontWeight: 600, opacity: 0.6, fontSize: '0.85em', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {/* No invoices yet */}
-              <tr>
-                <td colSpan={4} style={{ padding: '16px 0', textAlign: 'center', opacity: 0.5, fontSize: '0.9em' }}>
-                  No invoices yet
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <InvoicesTable />
       </div>
 
       {/* Cancellation */}

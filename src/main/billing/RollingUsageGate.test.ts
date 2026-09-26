@@ -19,7 +19,7 @@ function makeRecord(overrides: Partial<NormalizedUsageRecord>): NormalizedUsageR
     inputTokens: 100,
     outputTokens: 50,
     activeDurationMs: 0,
-    normalizedCompute: (1) * 10,
+    normalizedCompute: (1) * 10 / 3,
     billedTo: 'pro',
     ...overrides,
   };
@@ -207,7 +207,7 @@ describe('RollingUsageGate - Fixed Cycles', () => {
 
     it('12b. Below every limit is allowed', () => {
       const now = Date.now();
-      vi.spyOn(usageEventStore, 'list').mockReturnValue([makeRecord({ normalizedCompute: (499) * 10, activeDurationMs: 4 * HOUR, timestamp: now - 1000 })]);
+      vi.spyOn(usageEventStore, 'list').mockReturnValue([makeRecord({ normalizedCompute: (499) * 10 / 3, activeDurationMs: 4 * HOUR, timestamp: now - 1000 })]);
       expect(rollingUsageGate.canStartGeneration('build', undefined, now).allowed).toBe(true);
     });
 
@@ -215,7 +215,7 @@ describe('RollingUsageGate - Fixed Cycles', () => {
       const now = Date.now();
       // Used in earlier windows of this week, so only the weekly cap can be what blocks.
       vi.spyOn(usageEventStore, 'list').mockReturnValue([
-        makeRecord({ normalizedCompute: (1500) * 10, activeDurationMs: 0, timestamp: now - 60_000 })
+        makeRecord({ normalizedCompute: (1500) * 10 / 3, activeDurationMs: 0, timestamp: now - 60_000 })
       ]);
       const result = rollingUsageGate.canStartGeneration('build', undefined, now);
       expect(result.allowed).toBe(false);
@@ -224,7 +224,7 @@ describe('RollingUsageGate - Fixed Cycles', () => {
 
     it('13b. 500 PC per 5-hour window is enforced while weekly capacity remains', () => {
       const now = Date.now();
-      vi.spyOn(usageEventStore, 'list').mockReturnValue([makeRecord({ normalizedCompute: (500) * 10, activeDurationMs: 0, timestamp: now - 1000 })]);
+      vi.spyOn(usageEventStore, 'list').mockReturnValue([makeRecord({ normalizedCompute: (500) * 10 / 3, activeDurationMs: 0, timestamp: now - 1000 })]);
       const result = rollingUsageGate.canStartGeneration('build', undefined, now);
       expect(result.allowed).toBe(false);
       expect(result.reason).toContain('5-hour Paw Compute limit reached');
@@ -276,7 +276,7 @@ describe('RollingUsageGate - Fixed Cycles', () => {
       const now = Date.now();
       grant(now - WEEK); // exactly one week ago → a new Build week starts now
       vi.spyOn(usageEventStore, 'list').mockReturnValue([
-        makeRecord({ normalizedCompute: (1500) * 10, activeDurationMs: 15 * HOUR, timestamp: now - WEEK + 1000 })
+        makeRecord({ normalizedCompute: (1500) * 10 / 3, activeDurationMs: 15 * HOUR, timestamp: now - WEEK + 1000 })
       ]);
       const result = rollingUsageGate.canStartGeneration('build', undefined, now);
       expect(result.allowed).toBe(true);
@@ -289,7 +289,7 @@ describe('RollingUsageGate - Fixed Cycles', () => {
       grant(now - WEEK - 60_000); // new week began 60s ago
       usageEventStore.getActiveWindowStartAt = vi.fn().mockReturnValue(now - 2 * HOUR); // window began in last week
       vi.spyOn(usageEventStore, 'list').mockReturnValue([
-        makeRecord({ normalizedCompute: (500) * 10, activeDurationMs: 0, timestamp: now - HOUR }) // last week, same window
+        makeRecord({ normalizedCompute: (500) * 10 / 3, activeDurationMs: 0, timestamp: now - HOUR }) // last week, same window
       ]);
       const result = rollingUsageGate.canStartGeneration('build', undefined, now);
       expect(result.allowed).toBe(true);
@@ -299,7 +299,7 @@ describe('RollingUsageGate - Fixed Cycles', () => {
     it('21. Autonomous-run records (runId) are excluded from Build usage — Build cannot start them', () => {
       const now = Date.now();
       vi.spyOn(usageEventStore, 'list').mockReturnValue([
-        makeRecord({ normalizedCompute: (1500) * 10, activeDurationMs: 15 * HOUR, runId: 'auto-123', timestamp: now - 1000 })
+        makeRecord({ normalizedCompute: (1500) * 10 / 3, activeDurationMs: 15 * HOUR, runId: 'auto-123', timestamp: now - 1000 })
       ]);
       const result = rollingUsageGate.canStartGeneration('build', undefined, now);
       expect(result.allowed).toBe(true);
@@ -309,8 +309,8 @@ describe('RollingUsageGate - Fixed Cycles', () => {
     it('21b. Background tasks and Paw Fable never count toward Build limits', () => {
       const now = Date.now();
       vi.spyOn(usageEventStore, 'list').mockReturnValue([
-        makeRecord({ normalizedCompute: (1500) * 10, requestType: 'backgroundTask', timestamp: now - 1000 }),
-        makeRecord({ normalizedCompute: (1500) * 10, fable: true, timestamp: now - 1000 }),
+        makeRecord({ normalizedCompute: (1500) * 10 / 3, requestType: 'backgroundTask', timestamp: now - 1000 }),
+        makeRecord({ normalizedCompute: (1500) * 10 / 3, fable: true, timestamp: now - 1000 }),
       ]);
       expect(rollingUsageGate.canStartGeneration('build', undefined, now).allowed).toBe(true);
     });
@@ -323,7 +323,7 @@ describe('RollingUsageGate - Fixed Cycles', () => {
       usageEventStore.getLastGoRefreshAt = vi.fn().mockReturnValue(undefined);
       
       vi.spyOn(usageEventStore, 'list').mockReturnValue([
-        makeRecord({ normalizedCompute: (1000) * 10, timestamp: now - 1000 })
+        makeRecord({ normalizedCompute: (1000) * 10 / 3, timestamp: now - 1000 })
       ]);
       const result = rollingUsageGate.canStartGeneration('go', undefined, now);
       expect(result.allowed).toBe(false);

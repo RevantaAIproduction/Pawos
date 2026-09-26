@@ -31,8 +31,12 @@ import { useActivityStream } from './ActivitySidebar/useActivityStream';
 import { LiveStatus } from './LiveStatus/LiveStatus';
 import { ExtensionRenderer, type ExtensionRendererProps } from './extensions/ExtensionRenderer';
 import { TasksPanel } from './TasksPanel';
+import { ChatsPanel } from './ChatsPanel';
 import { ChatWidget } from './ChatWidget';
 import { ChatResume } from './ChatResume';
+import { TerminalView } from './TerminalView';
+import { ProjectBar } from './ProjectBar';
+import { restartTerminal } from './userTerminalSession';
 import { resumeToExportDocument } from './resumeContent';
 import { ProjectOpener } from './ProjectOpener';
 import { isInsideFolder, joinPath, projectName } from './projectClone';
@@ -84,12 +88,67 @@ const SUPPORTED_FILE_EXTENSIONS = ['.txt', '.csv', '.json', '.md', '.log'];
 /** Reference material for Reference/Image Intelligence (a screenshot, mockup, logo) â€” analyzed via analyze_reference_image, never read as text. */
 const SUPPORTED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
 const MAX_FILE_CHARS = 20_000;
-const WORKSPACE_PANEL_TABS = ['tasks', 'terminal', 'browser', 'files', 'worktree'] as const;
+const WORKSPACE_PANEL_TABS = ['chats', 'tasks', 'terminal', 'browser', 'files', 'worktree'] as const;
 type WorkspacePanelTab = (typeof WORKSPACE_PANEL_TABS)[number];
+const SIDE_PANEL_WIDTH_KEY = 'pawos:sidePanelWidth';
+const DEFAULT_SIDE_PANEL_WIDTH = 380;
+const MIN_SIDE_PANEL_WIDTH = 280;
+const MIN_CHAT_WIDTH = 360;
+
+/** Header tabs are icons (label as tooltip / aria-label). Simple 24px line icons, currentColor. */
+const iconProps = { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': true };
+const WORKSPACE_PANEL_ICONS: Record<WorkspacePanelTab, React.ReactNode> = {
+  // clock with a back arrow — history
+  chats: (
+    <svg {...iconProps}>
+      <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+      <path d="M3 3v5h5M12 7v5l3 2" />
+    </svg>
+  ),
+  // checklist
+  tasks: (
+    <svg {...iconProps}>
+      <path d="M9 6h11M9 12h11M9 18h11" />
+      <path d="M3.5 6l1.5 1.5L7.5 5M3.5 12l1.5 1.5L7.5 11M3.5 18l1.5 1.5L7.5 17" />
+    </svg>
+  ),
+  // >_ prompt
+  terminal: (
+    <svg {...iconProps}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M7 9l3 3-3 3M12 15h5" />
+    </svg>
+  ),
+  // globe
+  browser: (
+    <svg {...iconProps}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+    </svg>
+  ),
+  // document
+  files: (
+    <svg {...iconProps}>
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5M9 13h6M9 17h4" />
+    </svg>
+  ),
+  // git branch
+  worktree: (
+    <svg {...iconProps}>
+      <circle cx="6" cy="5" r="2" />
+      <circle cx="6" cy="19" r="2" />
+      <circle cx="18" cy="8" r="2" />
+      <path d="M6 7v10M18 10a6 6 0 0 1-6 6H8" />
+    </svg>
+  ),
+};
+
 /** Never drawn inside the chat — the chat shows messages only. */
 const CHAT_HIDDEN_EXTENSIONS = new Set(['task-progress', 'file-change', 'permission']);
 
 const WORKSPACE_PANEL_LABELS: Record<WorkspacePanelTab, string> = {
+  chats: 'Chats',
   tasks: 'Tasks',
   terminal: 'Terminal',
   browser: 'Browser',
@@ -350,6 +409,10 @@ export function ConversationPanel({
   activeTask,
   projectFolder,
   onSetProjectFolder,
+  sessionName,
+  activeChatId,
+  onOpenChat,
+  onNewChat,
 }: {
   snapshot: ConversationSnapshot;
   onClose: () => void;
@@ -419,6 +482,14 @@ export function ConversationPanel({
   /** The project opened from the header's project button (folder or cloned repo). */
   projectFolder?: string | null;
   onSetProjectFolder?: (folder: string | null) => void;
+  /** The chat's session name (shown at the top). */
+  sessionName?: string | null;
+  /** The saved chat on screen (null for a new, unsaved one). */
+  activeChatId?: string | null;
+  /** Opens a past chat from the Chats panel. */
+  onOpenChat?: (id: string) => void;
+  /** Clears the chat and starts a new one. */
+  onNewChat?: () => void;
 }) {
   const windowCtx = useWindowContext();
   const isStreaming = snapshot.state === 'thinking' || snapshot.state === 'performingAction';
@@ -487,6 +558,46 @@ export function ConversationPanel({
   const [incognitoMode, setIncognitoMode] = useState(false);
   const [activeWorkspacePanel, setActiveWorkspacePanel] = useState<WorkspacePanelTab | null>(null);
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
+  // Side panel (Tasks / Terminal / Browser / Files / Worktree): drag-resizable, width remembered, can maximize.
+  const [sidePanelWidth, setSidePanelWidth] = useState<number>(() => {
+    try {
+      const saved = Number(window.localStorage.getItem(SIDE_PANEL_WIDTH_KEY));
+      return Number.isFinite(saved) && saved >= MIN_SIDE_PANEL_WIDTH ? saved : DEFAULT_SIDE_PANEL_WIDTH;
+    } catch {
+      return DEFAULT_SIDE_PANEL_WIDTH;
+    }
+  });
+  const [sidePanelMaximized, setSidePanelMaximized] = useState(false);
+  useEffect(() => {
+    if (!activeWorkspacePanel) setSidePanelMaximized(false);
+  }, [activeWorkspacePanel]);
+  const startSidePanelResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = sidePanelWidth;
+    let latest = startWidth;
+    const onMove = (e: PointerEvent) => {
+      // Dragging left widens the panel; the chat always keeps at least MIN_CHAT_WIDTH.
+      const max = Math.max(MIN_SIDE_PANEL_WIDTH, window.innerWidth - MIN_CHAT_WIDTH);
+      latest = Math.round(Math.min(max, Math.max(MIN_SIDE_PANEL_WIDTH, startWidth + (startX - e.clientX))));
+      setSidePanelWidth(latest);
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      try {
+        window.localStorage.setItem(SIDE_PANEL_WIDTH_KEY, String(latest));
+      } catch {
+        // storage unavailable — width resets next time
+      }
+    };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
   const [removedTaskIds, setRemovedTaskIds] = useState<ReadonlySet<string>>(() => new Set());
   const taskPanelEntries = useMemo(() => buildTaskPanelEntries(snapshot.taskHistory, removedTaskIds), [snapshot.taskHistory, removedTaskIds]);
   const runningTaskCount = countRunning(taskPanelEntries);
@@ -1332,7 +1443,7 @@ export function ConversationPanel({
   const selectWorkspaceTab = (tab: WorkspacePanelTab) => {
     setActiveWorkspacePanel((current) => (current === tab ? null : tab));
     if (tab !== 'files') setSelectedWorkspaceFile(null);
-    if (tab === 'tasks') return;
+    if (tab === 'tasks' || tab === 'chats') return;
     onOpenSidebar?.(tab === 'files' ? 'worktree' : tab);
   };
   const openEditedFile = (path: string) => {
@@ -1500,14 +1611,66 @@ export function ConversationPanel({
     if (!activeWorkspacePanel) return null;
     const title = WORKSPACE_PANEL_LABELS[activeWorkspacePanel];
     return (
-      <aside className={styles.splitRight} aria-label={`${title} panel`}>
+      <aside
+        className={`${styles.splitRight} ${sidePanelMaximized ? styles.splitRightMaximized : ''}`}
+        style={sidePanelMaximized ? undefined : { width: sidePanelWidth }}
+        aria-label={`${title} panel`}
+      >
+        {!sidePanelMaximized && (
+          <div
+            className={styles.panelResizeHandle}
+            onPointerDown={startSidePanelResize}
+            onDoubleClick={() => setSidePanelWidth(DEFAULT_SIDE_PANEL_WIDTH)}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize panel"
+            title="Drag to resize · double-click to reset"
+          />
+        )}
         <div className={styles.panelHeader}>
-          <div className={styles.panelTitle}>{title}</div>
-          <button type="button" className={styles.panelCloseBtn} onClick={() => setActiveWorkspacePanel(null)} title="Close panel" aria-label="Close panel">
-            x
-          </button>
+          <div className={styles.panelTitle} title={title} aria-label={title}>{WORKSPACE_PANEL_ICONS[activeWorkspacePanel]}</div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              type="button"
+              className={styles.panelCloseBtn}
+              onClick={() => setSidePanelMaximized((v) => !v)}
+              title={sidePanelMaximized ? 'Restore' : 'Maximize'}
+              aria-label={sidePanelMaximized ? 'Restore panel' : 'Maximize panel'}
+            >
+              {sidePanelMaximized ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" />
+                </svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+                </svg>
+              )}
+            </button>
+            {activeWorkspacePanel === 'terminal' && (
+              <button
+                type="button"
+                className={styles.panelCloseBtn}
+                onClick={() => void restartTerminal(projectFolder ?? null)}
+                title="New terminal"
+                aria-label="New terminal"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </button>
+            )}
+            <button type="button" className={styles.panelCloseBtn} onClick={() => setActiveWorkspacePanel(null)} title="Close panel" aria-label="Close panel">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          </div>
         </div>
-        <div className={styles.panelContent}>
+        <div className={activeWorkspacePanel === 'terminal' ? `${styles.panelContent} ${styles.panelContentFlush}` : styles.panelContent}>
+          {activeWorkspacePanel === 'chats' && (
+            <ChatsPanel activeChatId={activeChatId ?? null} onOpenChat={(id) => onOpenChat?.(id)} onNewChat={() => onNewChat?.()} />
+          )}
           {activeWorkspacePanel === 'tasks' && (
             <TasksPanel
               entries={taskPanelEntries}
@@ -1523,29 +1686,7 @@ export function ConversationPanel({
               }}
             />
           )}
-          {activeWorkspacePanel === 'terminal' && (
-            <div className={styles.workspaceSurface}>
-              <div className={styles.metaRow}><span>PWD</span><strong>{terminalPwd || 'System folder unavailable'}</strong></div>
-              <pre className={styles.terminalPreview}>{terminalOutput}</pre>
-              <div className={styles.terminalCommandRow}>
-                <input
-                  value={terminalCommand}
-                  onChange={(event) => setTerminalCommand(event.currentTarget.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault();
-                      void runUserTerminalCommand();
-                    }
-                  }}
-                  placeholder="Run a command in this folder..."
-                  disabled={!terminalPwd || terminalRunning}
-                />
-                <button type="button" onClick={() => void runUserTerminalCommand()} disabled={!terminalCommand.trim() || !terminalPwd || terminalRunning}>
-                  {terminalRunning ? 'Running' : 'Run'}
-                </button>
-              </div>
-            </div>
-          )}
+          {activeWorkspacePanel === 'terminal' && <TerminalView cwd={projectFolder ?? null} />}
           {activeWorkspacePanel === 'browser' && (
             <div className={styles.workspaceSurface}>
               {browserScreenshot ? (
@@ -1638,17 +1779,27 @@ export function ConversationPanel({
         </div>
 
         <div className={styles.headerCenter}>
-          <ProjectContextBar activeTask={latestTask} currentWorkingFile={currentWorkingFile} />
+          {/* Session name, with the file PawOS is working on beside it. */}
+          <div className={styles.sessionTitleRow}>
+            <span className={styles.sessionTitle} title={sessionName ?? 'New chat'}>{sessionName || 'New chat'}</span>
+            {(currentWorkingFile || activeFilePath) && (
+              <span className={styles.sessionFileBadge} title={currentWorkingFile || activeFilePath}>
+                {getPathBasename(currentWorkingFile || activeFilePath || '')}
+              </span>
+            )}
+          </div>
           <div className={styles.workspaceTopCards} aria-label="Workspace panels">
             {WORKSPACE_PANEL_TABS.filter((tab) => hasProject || (tab !== 'files' && tab !== 'worktree')).map((tab) => (
               <button
                 key={tab}
                 type="button"
-                className={`${styles.workspaceTopCard} ${activeWorkspacePanel === tab ? styles.workspaceTopCardActive : ''}`}
+                className={`${styles.workspaceTopCard} ${styles.workspaceTopCardIcon} ${activeWorkspacePanel === tab ? styles.workspaceTopCardActive : ''}`}
                 onClick={() => selectWorkspaceTab(tab)}
                 aria-pressed={activeWorkspacePanel === tab}
+                aria-label={WORKSPACE_PANEL_LABELS[tab]}
+                title={WORKSPACE_PANEL_LABELS[tab]}
               >
-                {WORKSPACE_PANEL_LABELS[tab]}
+                {WORKSPACE_PANEL_ICONS[tab]}
               </button>
             ))}
           </div>
@@ -1667,7 +1818,7 @@ export function ConversationPanel({
       {/* â• SPLIT LAYOUT: Conversation (left) + Panel (right) â• */}
       <div className={styles.splitContainer}>
         {/* LEFT SIDE: Conversation & Idle State */}
-        <div className={styles.splitLeft}>
+        <div className={activeWorkspacePanel && sidePanelMaximized ? `${styles.splitLeft} ${styles.splitLeftHidden}` : styles.splitLeft}>
           {/* IDLE STATE: Character + Greeting */}
           {isIdleState && (
             <div className={styles.idleState}>
@@ -1892,6 +2043,17 @@ export function ConversationPanel({
             <span className={extensionStyles.runningTaskChevron} aria-hidden="true">›</span>
           </button>
         </div>
+      )}
+
+      {/* Folder · branch · +/− · Create PR — only while a project is open. */}
+      {projectFolder && (
+        <ProjectBar
+          projectFolder={projectFolder}
+          snapshot={snapshot}
+          executeAction={(request) => ipc.executeAction(request)}
+          onCreatePr={(request) => onSendTranscript(request)}
+          onClose={() => onSetProjectFolder?.(null)}
+        />
       )}
 
       <div className={styles.composer}>

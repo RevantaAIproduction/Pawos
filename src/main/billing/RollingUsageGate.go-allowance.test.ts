@@ -14,7 +14,7 @@ const makeRecord = (overrides: Partial<NormalizedUsageRecord>): NormalizedUsageR
   inputTokens: 0,
   outputTokens: 0,
   cachedInputTokens: 0,
-  normalizedCompute: (1) * 10,
+  normalizedCompute: (1) * 10 / 3,
   fable: false,
   ...overrides,
 });
@@ -47,7 +47,7 @@ describe('Go Tier 14-Day Cycle - GO-001 to GO-011', () => {
     // Simulate consuming 1000 PC
     usageEventStore['state'].goCycleStartAt = cycleStart;
     usageEventStore['state'].goRefreshesUsed = 0;
-    usageEventStore.append(makeRecord({ normalizedCompute: (1000) * 10, timestamp: now - 500 }));
+    usageEventStore.append(makeRecord({ normalizedCompute: (1000) * 10 / 3, timestamp: now - 500 }));
     
     let result = rollingUsageGate.canStartGeneration('go', undefined, now);
     expect(result.allowed).toBe(false);
@@ -100,7 +100,7 @@ describe('Go Tier 14-Day Cycle - GO-001 to GO-011', () => {
     
     usageEventStore['state'].goCycleStartAt = start;
     usageEventStore['state'].goRefreshesUsed = 0;
-    usageEventStore.append(makeRecord({ normalizedCompute: (1000) * 10, timestamp: boundary - 1000 }));
+    usageEventStore.append(makeRecord({ normalizedCompute: (1000) * 10 / 3, timestamp: boundary - 1000 }));
     
     // Right before boundary, blocked
     expect(rollingUsageGate.canStartGeneration('go', undefined, boundary - 1).allowed).toBe(false);
@@ -139,7 +139,7 @@ describe('Go Tier 14-Day Cycle - GO-001 to GO-011', () => {
     // unaffected by Go's 14-day boundary. Put Pro's current week start just before the record.
     // Pro limit is 5000 weekly
     usageEventStore['state'].weeklyCycleStartAt = start + cycleMs - WINDOW_7D_MS + 500;
-    usageEventStore.append(makeRecord({ normalizedCompute: (5000) * 10, timestamp: start + cycleMs - WINDOW_7D_MS + 1000 }));
+    usageEventStore.append(makeRecord({ normalizedCompute: (5000) * 10 / 3, timestamp: start + cycleMs - WINDOW_7D_MS + 1000 }));
     
     // For Go, cycle just reset, so it would allow
     expect(rollingUsageGate.canStartGeneration('go', undefined, start + cycleMs).allowed).toBe(true);
@@ -158,7 +158,7 @@ describe('Go Tier 14-Day Cycle - GO-001 to GO-011', () => {
     const grantStart = start + cycleMs - WINDOW_7D_MS + 500;
     buildAccessStore.set({ status: 'active', cohortId: 'test', startsAt: grantStart, endsAt: grantStart + 61 * 24 * 60 * 60 * 1000, revokedAt: null, syncedAt: start });
     vi.spyOn(Date, 'now').mockReturnValue(start + cycleMs);
-    usageEventStore.append(makeRecord({ normalizedCompute: (1500) * 10, timestamp: start + cycleMs - WINDOW_7D_MS + 1000 }));
+    usageEventStore.append(makeRecord({ normalizedCompute: (1500) * 10 / 3, timestamp: start + cycleMs - WINDOW_7D_MS + 1000 }));
     
     expect(rollingUsageGate.canStartGeneration('build', undefined, start + cycleMs).allowed).toBe(false);
     buildAccessStore.clear();
@@ -170,7 +170,7 @@ describe('Go Tier 14-Day Cycle - GO-001 to GO-011', () => {
     
     usageEventStore['state'].goCycleStartAt = start;
     // Autonomous work is excluded from rolling gates (runId !== null).
-    usageEventStore.append(makeRecord({ runId: 'autonomous-1', normalizedCompute: (1000) * 10, timestamp: start + cycleMs - 1000 }));
+    usageEventStore.append(makeRecord({ runId: 'autonomous-1', normalizedCompute: (1000) * 10 / 3, timestamp: start + cycleMs - 1000 }));
     
     // Autonomous work shouldn't affect standard gate anyway
     expect(rollingUsageGate.canStartGeneration('go', undefined, start + cycleMs).allowed).toBe(true);

@@ -3,14 +3,14 @@ import { normalizedComputeToCustomerPc, customerPurchaseUsdToPurchasedPc, custom
 import { creditStore } from "../../main/billing/CreditStore";
 
 describe("Customer PC Accounting", () => {
-  it("NORMAL-001: $1 provider cost -> 1000 NC -> 100 Customer PC", () => {
-    expect(normalizedComputeToCustomerPc(1000)).toBe(100);
+  it("NORMAL-001: $1 provider cost -> 1000 NC -> 300 Customer PC ($3 of value, 3x markup)", () => {
+    expect(normalizedComputeToCustomerPc(1000)).toBe(300);
   });
-  it("NORMAL-002: $0.10 provider cost -> 100 NC -> 10 Customer PC", () => {
-    expect(normalizedComputeToCustomerPc(100)).toBe(10);
+  it("NORMAL-002: $0.10 provider cost -> 100 NC -> 30 Customer PC", () => {
+    expect(normalizedComputeToCustomerPc(100)).toBe(30);
   });
-  it("NORMAL-003: $0.01 provider cost -> 10 NC -> 1 Customer PC", () => {
-    expect(normalizedComputeToCustomerPc(10)).toBe(1);
+  it("NORMAL-003: $0.01 provider cost -> 10 NC -> 3 Customer PC", () => {
+    expect(normalizedComputeToCustomerPc(10)).toBe(3);
   });
   it("FABLE-001: $1 customer purchase -> 100 Purchased PC", () => {
     expect(customerPurchaseUsdToPurchasedPc(1.00)).toBe(100);

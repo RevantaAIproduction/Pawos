@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, dialog, Notification } from 'electron';
+import * as fs from 'fs';
 import { SettingsStore } from '../../shared/settings/SettingsStore';
 import { CompanionLoader } from '../../shared/CompanionLoader';
 import type { CompanionCommand } from '../../shared/companion/CompanionCommand';
@@ -48,6 +49,10 @@ import type {
   NativePaymentMethodId,
   NativePaymentMethodsResult,
   NativeSubscriptionCheckoutResult,
+  BillingInvoice,
+  BillingInvoicesResult,
+  BillingWebResponse,
+  PaymentEvidenceUpload,
   NativeCreditsCheckoutResult,
   NativeCreditsVerificationResult,
   NativeTierCheckoutResult,
@@ -57,6 +62,8 @@ import { ALL_RUNTIME_ENTITLEMENT_IDS } from '../../shared/billing/RuntimeCatalog
 import type { AiUsageCategory } from '../../shared/billing/AiUsageCategories';
 
 const PAWOS_BILLING_API_BASE_URL = 'https://pawos.revantaai.com';
+/** Website endpoints the renderer may reach through billing:postWebApi (see there). */
+const BILLING_WEB_API_PATHS = new Set(['/api/billing/create-billing-case', '/api/billing/create-high-value-invoice']);
 
 const VALID_NATIVE_BILLING_TIERS: SubscriptionTierId[] = ['pro', 'proMax', 'team', 'enterprise'];
 
@@ -190,6 +197,14 @@ export function registerIpc(opts: {
   // startInteractiveShell doc comment) — gated by human-to-human Remote
   // Assistance consent, not the AI command allowlist.
   ipcMain.handle('remoteAssistance:startSharedTerminal', (_evt, cwd: string, label: string) => processManager.startInteractiveShell(cwd, label));
+
+  // The chat's Terminal panel: the USER's own real PowerShell (they type every command themselves —
+  // the AI never writes to it), same persistent shell as above. Starts in the open project folder, or
+  // the home folder when none is open / the folder no longer exists.
+  ipcMain.handle('terminal:startUserShell', (_evt, cwd?: string) => {
+    const startIn = typeof cwd === 'string' && cwd && fs.existsSync(cwd) ? cwd : app.getPath('home');
+    return processManager.startInteractiveShell(startIn, 'PawOS terminal');
+  });
 
   // Phase 5 shared terminal: the host's own home directory as the default
   // starting cwd for a remote-assistance shared shell (the renderer has no
@@ -1184,6 +1199,55 @@ export function registerIpc(opts: {
         return result || { ok: false, reason: 'No response from server.' };
       } catch (error) {
         return { ok: false, reason: error instanceof Error ? error.message : 'Invoice creation failed.' };
+      }
+    }
+  );
+  // The account's subscription invoices (Invoices table in Settings → Subscription).
+  ipcMain.handle('billing:listInvoices', async (_evt, accessToken: string): Promise<BillingInvoicesResult> => {
+    try {
+      const response = await fetch(`${PAWOS_BILLING_API_BASE_URL}/api/billing/invoices`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken }),
+      });
+      const result = (await response.json().catch(() => null)) as { ok?: boolean; reason?: string; invoices?: BillingInvoice[] } | null;
+      if (!response.ok || !result?.ok || !Array.isArray(result.invoices)) {
+        return { ok: false, reason: cleanReason(result, `Could not load invoices: ${response.statusText}`) };
+      }
+      return { ok: true, invoices: result.invoices };
+    } catch (error) {
+      return { ok: false, reason: error instanceof Error ? error.message : 'Could not load invoices.' };
+    }
+  });
+  // The high-value (≥ ₹50,000) checkout's own website calls. The renderer runs from file://, where a
+  // relative /api/... URL reaches nothing and the website allows no cross-origin calls — so the main
+  // process makes them, for these endpoints only.
+  ipcMain.handle('billing:postWebApi', async (_evt, path: string, payload: unknown): Promise<{ status: number; body: unknown }> => {
+    if (!BILLING_WEB_API_PATHS.has(path)) return { status: 400, body: { ok: false, reason: 'Unknown billing endpoint.' } };
+    try {
+      const response = await fetch(`${PAWOS_BILLING_API_BASE_URL}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload ?? {}),
+      });
+      return { status: response.status, body: await response.json().catch(() => null) };
+    } catch (error) {
+      return { status: 0, body: { ok: false, reason: error instanceof Error ? error.message : 'Network error.' } };
+    }
+  });
+  ipcMain.handle(
+    'billing:uploadPaymentEvidence',
+    async (_evt, upload: { accessToken: string; billingCaseId: string; invoiceId: string; fileName: string; fileType: string; bytes: Uint8Array }): Promise<{ status: number; body: unknown }> => {
+      try {
+        const form = new FormData();
+        form.append('accessToken', upload.accessToken);
+        form.append('billingCaseId', upload.billingCaseId);
+        form.append('invoiceId', upload.invoiceId);
+        form.append('file', new Blob([upload.bytes], { type: upload.fileType || 'application/octet-stream' }), upload.fileName);
+        const response = await fetch(`${PAWOS_BILLING_API_BASE_URL}/api/billing/upload-payment-evidence`, { method: 'POST', body: form });
+        return { status: response.status, body: await response.json().catch(() => null) };
+      } catch (error) {
+        return { status: 0, body: { ok: false, reason: error instanceof Error ? error.message : 'Upload failed.' } };
       }
     }
   );

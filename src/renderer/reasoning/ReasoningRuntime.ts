@@ -94,6 +94,12 @@ export class ReasoningRuntime {
     this.history = [];
   }
 
+  /** Starts from an earlier conversation (a reopened chat) — plain user/assistant text, oldest first. */
+  seedHistory(entries: { role: 'user' | 'assistant'; content: string }[]) {
+    this.cancel();
+    this.history = entries.filter((e) => e.content.trim()).map((e) => createMessage(e.role, e.content, 'final'));
+  }
+
   cancel() {
     const reject = this.activeTurnReject;
     this.activeTurnId += 1;
@@ -276,6 +282,17 @@ export class ReasoningRuntime {
             } else {
               assistantMessage = createMessage('assistant', response, 'final', { toolCalls: toolCallsForMessage });
               this.history = [...this.history, assistantMessage];
+            }
+            // A tool can finish while its response is still streaming, so its result may already be in
+            // history ahead of the message that asked for it — every result must follow its call.
+            if (toolCallsForMessage) {
+              const ids = new Set(toolCallsForMessage.map((call) => call.id));
+              const early = this.history.filter((m) => m.role === 'tool' && m.toolCallId !== undefined && ids.has(m.toolCallId) && this.history.indexOf(m) < this.history.indexOf(assistantMessage!));
+              if (early.length > 0) {
+                const rest = this.history.filter((m) => !early.includes(m));
+                const at = rest.indexOf(assistantMessage) + 1;
+                this.history = [...rest.slice(0, at), ...early, ...rest.slice(at)];
+              }
             }
 
             const result = {

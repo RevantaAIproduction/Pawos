@@ -57,7 +57,7 @@ function defaultConfig(): PawComputeConversionConfig {
       // request whose real prompt exceeds 200k tokens will be honestly under-priced by this table
       // until a context-length-aware tier is added, a disclosed simplification, not a silent one).
       'gemini-pro-latest': { inputPerMillionUsd: 2.0, outputPerMillionUsd: 12.0, cachedInputPerMillionUsd: 0.2 },
-      'gemini-3.1-pro': { inputPerMillionUsd: 2.0, outputPerMillionUsd: 12.0, cachedInputPerMillionUsd: 0.2 },
+      'gemini-3.1-pro-preview': { inputPerMillionUsd: 2.0, outputPerMillionUsd: 12.0, cachedInputPerMillionUsd: 0.2 },
       // Fallback for any Gemini model id not explicitly listed above (e.g. a version-pinned model a
       // future change might request) — the Flash tier's real rate, a conservative mid-range default
       // rather than silently charging $0.

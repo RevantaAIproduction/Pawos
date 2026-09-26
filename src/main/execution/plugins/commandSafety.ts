@@ -30,6 +30,9 @@ import type { CommandShell } from '../../../shared/actions/ActionTypes';
  */
 const ALLOWED_PREFIXES = [
   'npm', 'npx', 'node', 'git', 'python', 'python3', 'py', 'pip', 'pip3', 'yarn', 'pnpm',
+  // The user's own authenticated GitHub CLI — how "Create PR" opens a pull request (gh pr create).
+  // Like every command here, it only runs after the user replies "allow" in chat.
+  'gh',
   'claude', 'codex', 'gemini', 'ollama',
   'java', 'javac',
   // Infrastructure Runtime — the user's own installed, authenticated CLIs.

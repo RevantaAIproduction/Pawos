@@ -335,7 +335,11 @@ export default function CompanionExperience() {
               streamingElapsedSeconds={conversation.streamingElapsedSeconds}
               onCancel={() => conversation.cancel()}
               projectFolder={conversation.projectFolder}
+              sessionName={conversation.activeSessionName}
               onSetProjectFolder={(folder) => conversation.setProjectFolder(folder)}
+              activeChatId={conversation.currentSessionId}
+              onOpenChat={(id) => void conversation.openSession(id)}
+              onNewChat={() => conversation.handleNewChat()}
             />
           </div>
         </WindowContextProvider>

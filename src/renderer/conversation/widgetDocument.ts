@@ -169,3 +169,45 @@ export function stripLeakedWidgetCode(text: string): string {
   const cut = text.search(/(^|\n)[ \t]*(widget_code\s*:|<(style|svg|script|div|html|canvas|link|section|table|main|body|head)[\s>]|<!DOCTYPE|```)/i);
   return cut >= 0 ? text.slice(0, cut).trimEnd() : text;
 }
+
+/** Chart/layout vocabulary that every widget shares — not what the visual is about. */
+const WIDGET_BOILERPLATE_WORDS = new Set(['bar', 'line', 'pie', 'doughnut', 'radar', 'scatter', '2d', 'canvas', 'chart', 'top', 'bottom', 'left', 'right', 'center', 'start', 'end', 'middle', 'none', 'auto', 'index', 'x', 'y', 'px', 'the', 'and', 'of', 'a', 'to', 'in', 'on', 'for', 'per', 'usd']);
+
+/**
+ * What a widget shows, as a set of words: its visible text plus its script's string literals and data
+ * numbers (Chart.js labels/data live there). Styling, markup and chart-type vocabulary are ignored,
+ * so a redraw of the same chart under a new title or with new colors has the same content.
+ */
+export function widgetContentWords(code: string): Set<string> {
+  const withoutStyles = code.replace(/<style[\s\S]*?<\/style>/gi, ' ');
+  const pieces: string[] = [];
+  for (const m of withoutStyles.matchAll(/>([^<]+)</g)) pieces.push(m[1]!);
+  // Quoted text counts only inside scripts (chart labels); attribute values like viewBox are markup.
+  const scripts = [...withoutStyles.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)].map((m) => m[1]!).join('\n');
+  for (const m of scripts.matchAll(/(["'`])([^"'`\n]{1,120})\1/g)) {
+    const literal = m[2]!;
+    if (literal.startsWith('--') || literal.includes('://') || literal.startsWith('#') || /^[\w-]+:[^:]/.test(literal)) continue;
+    pieces.push(literal);
+  }
+  for (const m of scripts.matchAll(/data\s*:\s*\[([^\]]*)\]/g)) pieces.push(m[1]!);
+  const words = new Set<string>();
+  for (const piece of pieces) {
+    if (/[{};=]|\bfunction\b|=>/.test(piece)) continue; // script code between tags, not text
+    for (const word of piece.toLowerCase().match(/[a-z0-9$%.]+/g) ?? []) {
+      const clean = word.replace(/^[.]+|[.]+$/g, '');
+      if (clean && !WIDGET_BOILERPLATE_WORDS.has(clean)) words.add(clean);
+    }
+  }
+  return words;
+}
+
+/** True when two widgets show essentially the same content (≥ 60% of their words shared). */
+export function isSameWidgetContent(a: string, b: string): boolean {
+  if (a === b) return true;
+  const wa = widgetContentWords(a);
+  const wb = widgetContentWords(b);
+  if (wa.size === 0 || wb.size === 0) return false;
+  let shared = 0;
+  for (const w of wa) if (wb.has(w)) shared += 1;
+  return shared / Math.min(wa.size, wb.size) >= 0.6;
+}

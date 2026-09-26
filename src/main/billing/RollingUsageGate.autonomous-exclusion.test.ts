@@ -38,7 +38,7 @@ describe('RollingUsageGate - Autonomous Work Exclusion', () => {
       cachedInputTokens: 0,
       totalTokens: 7000,
       thoughtsTokens: null,
-      normalizedCompute: (500) * 10, // Large computation
+      normalizedCompute: (500) * 10 / 3, // Large computation
       timestamp: within5h,
     };
 
@@ -64,7 +64,7 @@ describe('RollingUsageGate - Autonomous Work Exclusion', () => {
       cachedInputTokens: 0,
       totalTokens: 1500,
       thoughtsTokens: null,
-      normalizedCompute: (100) * 10,
+      normalizedCompute: (100) * 10 / 3,
       timestamp: within5h,
     };
 
@@ -91,7 +91,7 @@ describe('RollingUsageGate - Autonomous Work Exclusion', () => {
         cachedInputTokens: 0,
         totalTokens: 150,
         thoughtsTokens: null,
-        normalizedCompute: (50) * 10,
+        normalizedCompute: (50) * 10 / 3,
         timestamp: within5h,
       },
       // Autonomous task
@@ -108,7 +108,7 @@ describe('RollingUsageGate - Autonomous Work Exclusion', () => {
         cachedInputTokens: 0,
         totalTokens: 3000,
         thoughtsTokens: null,
-        normalizedCompute: (300) * 10,
+        normalizedCompute: (300) * 10 / 3,
         timestamp: within5h,
       },
     ];

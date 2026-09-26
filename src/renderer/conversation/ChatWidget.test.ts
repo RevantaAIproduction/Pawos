@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildWidgetDocument, parseWidgetMessage, safeWidgetLink, WIDGET_CSP } from './widgetDocument';
 import { restoreConversationSnapshot } from './RestoreConversationAdapter';
 import type { ConversationSession } from '../../shared/conversation/ConversationSessionTypes';
-import { stripLeakedWidgetCode } from './widgetDocument';
+import { isSameWidgetContent, stripLeakedWidgetCode, widgetContentWords } from './widgetDocument';
 
 describe('Widget code a model pasted into its reply never shows as text', () => {
   it.each([
@@ -64,5 +64,22 @@ describe('Chat widgets (show_widget)', () => {
       'widget:sales_chart',
       'assistant:Sales doubled.',
     ]);
+  });
+});
+
+describe('Same visual twice vs a different visual', () => {
+  const chart = (title: string, color: string) => `<style>.w{color:${color}}</style><div style="height:240px"><canvas id="c"></canvas></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>new Chart(document.getElementById('c'), { type: 'bar', data: { labels: ['Go', 'Pro', 'Pro Max'], datasets: [{ label: '${title}', data: [0, 20, 100], backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--accent') }] }, options: { maintainAspectRatio: false } });</script>`;
+  const flow = `<svg viewBox="0 0 680 120" width="100%"><rect x="10" y="40" width="140" height="40" rx="6"/><text x="80" y="64">Download</text><rect x="180" y="40" width="140" height="40" rx="6"/><text x="250" y="64">Sign in</text><text x="420" y="64">Pick plan</text><text x="590" y="64">Start chatting</text></svg>`;
+
+  it('a restyled/retitled redraw of the same chart counts as the same visual', () => {
+    expect(isSameWidgetContent(chart('Monthly price', 'red'), chart('Monthly price (USD)', 'blue'))).toBe(true);
+  });
+
+  it('a chart and a flow diagram from the same answer are different visuals', () => {
+    expect(isSameWidgetContent(chart('Monthly price', 'red'), flow)).toBe(false);
+    expect([...widgetContentWords(flow)]).toEqual(expect.arrayContaining(['download', 'sign', 'chatting']));
+    expect(widgetContentWords(flow).has('680')).toBe(false); // markup attributes are not content
   });
 });

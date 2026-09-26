@@ -193,6 +193,13 @@ export type NativePaymentMethodsResult =
   | { ok: true; methods: NativePaymentMethodId[] }
   | { ok: false; reason: string };
 
+/** One Razorpay invoice of the account's subscriptions (amount in the smallest unit, e.g. paise). */
+export type BillingInvoice = { id: string; date: number; amount: number; currency: string; status: string; url: string | null };
+export type BillingInvoicesResult = { ok: true; invoices: BillingInvoice[] } | { ok: false; reason: string };
+/** A website billing call made by the main process for the renderer — the HTTP status and parsed JSON body. */
+export type BillingWebResponse = { status: number; body: unknown };
+export type PaymentEvidenceUpload = { accessToken: string; billingCaseId: string; invoiceId: string; fileName: string; fileType: string; bytes: Uint8Array };
+
 export type NativeSubscriptionCheckoutResult =
   | { ok: true; keyId: string; subscriptionId: string; tier: SubscriptionTierId; seatTier?: SeatTier; runtimeIds?: RuntimeEntitlementId[]; proMaxVariant?: ProMaxVariant }
   | { ok: false; reason: string };

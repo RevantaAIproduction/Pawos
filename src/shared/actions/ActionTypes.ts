@@ -241,7 +241,8 @@ export type ActionRequest = {
   // line counts (git diff --numstat), for the Coding Canvas, distinct from
   // gitDiff's raw unified diff text. Honestly fails for non-git projects —
   // never fabricates line counts.
-  | { type: 'gitDiffStat'; cwd: string; staged?: boolean }
+  /** includeUntracked: everything a PR would contain — all changes vs HEAD plus new (untracked, not ignored) files. */
+  | { type: 'gitDiffStat'; cwd: string; staged?: boolean; includeUntracked?: boolean }
   | { type: 'gitLog'; cwd: string; maxCount?: number }
   | { type: 'gitBranch'; cwd: string }
   | { type: 'gitShow'; cwd: string; ref: string }

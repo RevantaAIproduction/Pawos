@@ -93,7 +93,7 @@ describe('PawOS Build — effective tier resolution and enforcement', () => {
 
   it('uses Build capacity in the real generation decision: below limits → allowed', () => {
     grantBuild();
-    vi.spyOn(usageEventStore, 'list').mockReturnValue([record({ normalizedCompute: (100) * 10, activeDurationMs: HOUR })]);
+    vi.spyOn(usageEventStore, 'list').mockReturnValue([record({ normalizedCompute: (100) * 10 / 3, activeDurationMs: HOUR })]);
     const check = entitlementService.checkGeneration();
     expect(check.allowed).toBe(true);
     expect(check.usage.limit5h).toBe(500);
@@ -101,8 +101,8 @@ describe('PawOS Build — effective tier resolution and enforcement', () => {
   });
 
   it.each([
-    ['500 PC in the current 5-hour window', record({ normalizedCompute: (500) * 10 }), '5-hour Paw Compute limit reached'],
-    ['1,500 PC this week', record({ normalizedCompute: (1500) * 10, timestamp: Date.now() - 2 * HOUR }), 'Weekly limit reached'],
+    ['500 PC in the current 5-hour window', record({ normalizedCompute: (500) * 10 / 3 }), '5-hour Paw Compute limit reached'],
+    ['1,500 PC this week', record({ normalizedCompute: (1500) * 10 / 3, timestamp: Date.now() - 2 * HOUR }), 'Weekly limit reached'],
     ['5 active hours in the current window', record({ activeDurationMs: 5 * HOUR }), '5-hour active-use limit reached'],
     ['15 active hours this week', record({ activeDurationMs: 15 * HOUR, timestamp: Date.now() - 2 * HOUR }), 'Weekly limit reached'],
   ])('blocks at %s', (_label, usage, reason) => {
@@ -117,7 +117,7 @@ describe('PawOS Build — effective tier resolution and enforcement', () => {
 
   it('purchased Paw Compute continues Build past its limit in weeks 1–7, and on Go', () => {
     vi.spyOn(creditStore, 'getBalance').mockReturnValue({ purchasedUsageCreditsUsd: 50 } as any);
-    vi.spyOn(usageEventStore, 'list').mockReturnValue([record({ normalizedCompute: (1500) * 10, timestamp: Date.now() - 2 * HOUR })]);
+    vi.spyOn(usageEventStore, 'list').mockReturnValue([record({ normalizedCompute: (1500) * 10 / 3, timestamp: Date.now() - 2 * HOUR })]);
 
     grantBuild();
     expect(entitlementService.isBuildFinalWeek()).toBe(false);
@@ -133,7 +133,7 @@ describe('PawOS Build — effective tier resolution and enforcement', () => {
 
   it('in Build\'s final (no-reset) week purchases cannot continue it — the way on is upgrading to Pro', () => {
     vi.spyOn(creditStore, 'getBalance').mockReturnValue({ purchasedUsageCreditsUsd: 50 } as any);
-    vi.spyOn(usageEventStore, 'list').mockReturnValue([record({ normalizedCompute: (1500) * 10, timestamp: Date.now() - 2 * HOUR })]);
+    vi.spyOn(usageEventStore, 'list').mockReturnValue([record({ normalizedCompute: (1500) * 10 / 3, timestamp: Date.now() - 2 * HOUR })]);
     const start = Date.now() - 52 * DAY; // day 52 of 56: the final week 8 (days 50–56)
     grantBuild(start, start + 56 * DAY);
 

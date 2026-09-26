@@ -24,6 +24,9 @@ import type {
   BillingCheckoutResult,
   NativePaymentMethodsResult,
   NativeSubscriptionCheckoutResult,
+  BillingInvoicesResult,
+  BillingWebResponse,
+  PaymentEvidenceUpload,
   NativeCreditsCheckoutResult,
   NativeCreditsVerificationResult,
   NativeTierCheckoutResult,
@@ -125,6 +128,8 @@ export function contextBridge() {
       ipcApi.invoke(`${CONNECTIVITY_CREDENTIAL_REVOKE_RESPONSE_CHANNEL_PREFIX}:${requestId}`, response),
     processWriteStdin: async (processId: string, data: string): Promise<{ ok: true } | { ok: false; message: string }> =>
       ipcApi.invoke('process:writeStdin', processId, data),
+    terminalStartUserShell: async (cwd?: string): Promise<{ ok: true; info: { id: string; pid: number | null } } | { ok: false; message: string }> =>
+      ipcApi.invoke('terminal:startUserShell', cwd),
     systemGetHomeDir: async (): Promise<string> => ipcApi.invoke('system:getHomeDir'),
     remoteAssistanceStartSharedTerminal: async (
       cwd: string,
@@ -292,6 +297,9 @@ export function contextBridge() {
       ipcApi.invoke('billing:createCheckoutSession', tier, callbackUrl, options),
     billingGetNativePaymentMethods: async (accessToken?: string): Promise<NativePaymentMethodsResult> =>
       ipcApi.invoke('billing:getNativePaymentMethods', accessToken),
+    billingListInvoices: async (accessToken: string): Promise<BillingInvoicesResult> => ipcApi.invoke('billing:listInvoices', accessToken),
+    billingPostWebApi: async (path: string, payload: unknown): Promise<BillingWebResponse> => ipcApi.invoke('billing:postWebApi', path, payload),
+    billingUploadPaymentEvidence: async (upload: PaymentEvidenceUpload): Promise<BillingWebResponse> => ipcApi.invoke('billing:uploadPaymentEvidence', upload),
     billingCreateNativeSubscriptionCheckout: async (tier: SubscriptionTierId, options?: CheckoutOptions, accessToken?: string): Promise<NativeSubscriptionCheckoutResult> =>
       ipcApi.invoke('billing:createNativeSubscriptionCheckout', tier, options, accessToken),
     billingConfirmNativeSubscriptionPayment: async (paymentId: string, subscriptionId: string, signature: string, accessToken?: string): Promise<{ ok: true; subscription: SubscriptionState } | { ok: false; reason: string }> =>

@@ -24,6 +24,7 @@ const CONFIRMED_PARAM_DESCRIPTION =
 const WIDGET_TOOL_DESCRIPTION = [
   'Show a visual inline in the chat — a chart, diagram, flowchart, comparison, dashboard, UI/layout mockup or small interactive widget — drawn from HTML or SVG you write.',
   'WHEN: use it when a picture explains better than words (numbers, trends, comparisons, processes, architectures, page layouts). Never for plain text answers. Put all explanation in your normal reply, never inside the widget, and do not repeat the widget\'s contents in text.',
+  'HOW MANY: usually one. If the request genuinely needs more than one visual (e.g. "a chart of revenue and a diagram of the pipeline"), call show_widget once for each — at most 3 per answer, each showing something different. Each call adds a new panel, so never re-send or "fix" a visual you already drew.',
   'FORMAT: a self-contained HTML fragment (no <!DOCTYPE>, <html>, <head> or <body>) or a single <svg> root with a viewBox (width 100%). Put <style> (short) first, then content, then <script> last. No HTML comments.',
   'FRAME: the widget is already shown inside a dark, bordered, rounded panel with padding — do not add your own outer card, border, background or padding around everything.',
   'THEME (the chat is dark — always use these variables, never hard-coded colors, never a white or light background): text --text-primary, --text-secondary, --text-muted; surfaces --surface-1 (cards), --surface-2 (raised); --border (hairline, use 1px solid var(--border)); roles --accent, --success, --warning, --danger (and --accent-bg, --success-bg, --warning-bg, --danger-bg for tinted chips); fonts --font-sans, --font-mono; --radius (8px). The page background stays transparent.',
@@ -2393,11 +2394,13 @@ function toolNameToActionType(name: string): string {
  * INFRA_EXECUTION_ACTION_TYPES) are omitted outright when `canExecute` is false, so a Go-tier
  * session's model never even considers calling a tool it can't use, rather than being refused only
  * at execution time by DesktopExecutionEngine's entitlement gate. Every Think-class tool (including
- * every future Intelligence Runtime tool) stays available regardless of tier.
+ * every future Intelligence Runtime tool) stays available regardless of tier. present_resume is
+ * offered only when the plan includes resume building (PawOS Build).
  */
-export function getToolDefinitionsForEntitlement(canExecute: boolean): ReasoningToolDefinition[] {
-  if (canExecute) return ACTION_TOOL_DEFINITIONS;
-  return ACTION_TOOL_DEFINITIONS.filter((tool) => !EXECUTE_CLASS_ACTION_TYPES.has(toolNameToActionType(tool.name)));
+export function getToolDefinitionsForEntitlement(canExecute: boolean, canMakeResumes = false): ReasoningToolDefinition[] {
+  const tools = canMakeResumes ? ACTION_TOOL_DEFINITIONS : ACTION_TOOL_DEFINITIONS.filter((tool) => tool.name !== 'present_resume');
+  if (canExecute) return tools;
+  return tools.filter((tool) => !EXECUTE_CLASS_ACTION_TYPES.has(toolNameToActionType(tool.name)));
 }
 
 function isStringArray(value: unknown): value is string[] {

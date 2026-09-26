@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { confirmationPrompt, isAllowReply, isDenyReply } from './confirmationPrompt';
-import { stripLeakedWidgetCode } from './widgetDocument';
+import { isSameWidgetContent, stripLeakedWidgetCode } from './widgetDocument';
+import { isTrustedProjectRead } from './projectTrust';
 import { findResumeProblems, resumeAsText, toChatResume } from './resumeContent';
 import { startCommunicationAudioCapture, type CaptureHandle } from '../communication/CommunicationAudioCapture';
 import type {
@@ -28,7 +29,8 @@ import { aiProviderConfigStore } from '../ai/AIProviderConfigStore';
 import { voiceDebugBus } from './VoiceDebugBus';
 import type { ActionRequest, ActionRequirement, ActionResult } from '../../shared/actions/ActionTypes';
 import { DEFAULT_EXECUTION_MODE, shouldAutoConfirmAction, type ConversationExecutionMode } from '../../shared/actions/ExecutionModeTypes';
-import type { SessionContinuationHint } from '../../shared/conversation/ConversationSessionTypes';
+import type { ConversationSession, SessionContinuationHint } from '../../shared/conversation/ConversationSessionTypes';
+import { restoreConversationSnapshot } from './RestoreConversationAdapter';
 import type { ProcessOutputEvent, ProcessExitEvent } from '../../shared/actions/ProcessTypes';
 import type { WorkspaceObservationEvent } from '../../shared/actions/ExecutionLifecycle';
 import type { CommunicationRuntimeEvent } from '../../shared/communication/CommunicationTypes';
@@ -66,6 +68,21 @@ const PROCESS_OUTPUT_DEBOUNCE_MS = 200;
 const MAX_TOOL_ITERATIONS_PER_TURN = 10;
 /** show_widget code cap — a chart or mockup is a few KB; anything near this is a runaway. */
 const MAX_WIDGET_CODE_CHARS = 200_000;
+/**
+ * The tool calls one model response asked for. A model can ask for several at once (two visuals, two
+ * file reads); it must get every result back before it continues, so the continuation waits until the
+ * response has finished streaming and each call has its result — then runs once.
+ */
+type ToolCallBatch = { open: Set<string>; streamDone: boolean; continueWanted: boolean; flushed: boolean };
+/** How many earlier turns of a reopened chat the AI gets back as memory (older ones stay on screen only). */
+const REOPENED_CHAT_MEMORY_TURNS = 30;
+/** Distinct visuals one answer may draw (e.g. a chart plus a diagram) — more is a redraw loop. */
+const MAX_WIDGETS_PER_ANSWER = 3;
+/** "Sales chart" vs "sales chart (v2)" / "Sales Chart - fixed" — the same visual, redrawn. */
+function sameWidgetTitle(a: string, b: string): boolean {
+  const norm = (t: string) => t.toLowerCase().replace(/\((?:v\d+|updated|fixed|revised|new)\)|\b(?:v\d+|updated|fixed|revised|new|again)\b/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  return norm(a) === norm(b);
+}
 /** Recovery Policy: after this many consecutive failures that look like the same underlying problem, stop retrying that approach and make the model explain + ask instead. */
 const MAX_SAME_FAILURE_ATTEMPTS = 3;
 /** Friendly platform names for the proactive meeting-detected prompt — cosmetic only, the real medium id (used for start_communication_capture) always comes from the event itself. */
@@ -222,6 +239,10 @@ export class ConversationRuntime {
   private currentTurnAssistantMessageId: string | null = null;
   /** Which persisted session the next turn continues, once persistTurn resolves one — null means "let the store decide". */
   private activeSessionId: string | null = null;
+  /** The user started a new chat themselves — its first turn is saved as a new chat, never filed into an old one. */
+  private startNewSession = false;
+  /** Bumped whenever a different chat is opened — a save still in flight from the previous chat must not re-point this one. */
+  private conversationGeneration = 0;
 
   /** Sentence-sized chunks waiting to be spoken — lets Paw start talking as soon as the first sentence is ready instead of waiting for the whole reply. */
   private speechQueue: string[] = [];
@@ -231,8 +252,12 @@ export class ConversationRuntime {
   private speechQueuePromise: Promise<void> = Promise.resolve();
   /** True while a tool call has deliberately stopped speech mid-sentence to run an action — distinguishes that from a real playback error in the queue's catch. */
   private pausingSpeechForAction = false;
+  /** Whether this plan includes resume building (PawOS Build) — see setResumesAllowed. */
+  private resumesAllowed = false;
   /** Tool-call handlers currently in flight — handleTranscript's tail waits for these too, so a turn never finalizes while an action (and the speech it may resume) is still running. */
   private pendingActionPromises: Promise<void>[] = [];
+  /** Which model response each in-flight tool call came from — see ToolCallBatch. */
+  private toolBatchByCallId = new Map<string, ToolCallBatch>();
   /** An action that came back needing confirmation — the next plain reply is checked against this before anything else, rather than trusting the model to remember and re-invoke the tool itself. */
   /** The project folder opened from the header (folder or cloned repo) — told to the model on every turn. */
   private projectFolder: string | null = null;
@@ -584,6 +609,11 @@ export class ConversationRuntime {
     this.args.reasoningRuntime.setTools(tools);
   }
 
+  /** Resume building is a PawOS Build feature — off until the entitlement snapshot says the plan includes it. */
+  setResumesAllowed(allowed: boolean) {
+    this.resumesAllowed = allowed;
+  }
+
   /** Swaps the STT backend at runtime (e.g. once an API key finishes loading after mount) without recreating the whole runtime. */
   setSpeechRecognitionProvider(provider: SpeechRecognitionProvider) {
     this.args.speechRecognition = provider;
@@ -811,6 +841,26 @@ export class ConversationRuntime {
     }
     this.appendMessage('user', trimmed);
     void this.handleTranscript(trimmed, context);
+  }
+
+  /**
+   * Opens a saved chat (or, with null, a fresh one): its messages and visuals on screen, its text as
+   * the AI's memory, and every new turn saved into that same chat.
+   */
+  openConversation(session: ConversationSession | null) {
+    this.cancel();
+    this.args.reasoningRuntime.seedHistory(
+      (session?.turns ?? []).slice(-REOPENED_CHAT_MEMORY_TURNS).flatMap((turn) => [
+        { role: 'user' as const, content: turn.transcript },
+        { role: 'assistant' as const, content: turn.assistantResponse },
+      ])
+    );
+    this.conversationGeneration += 1;
+    this.activeSessionId = session?.id ?? null;
+    this.startNewSession = !session;
+    this.currentTurnAssistantMessageId = null;
+    this.toolBatchByCallId.clear();
+    this.updateSnapshot({ messages: restoreConversationSnapshot(session)?.messages ?? [], taskHistory: [] });
   }
 
   cancel() {
@@ -1333,6 +1383,7 @@ export class ConversationRuntime {
     ctx: TurnContext,
     requestType: UsageRequestType = 'conversationTurn'
   ): ReasoningRuntimeCallbacks {
+    const batch: ToolCallBatch = { open: new Set(), streamDone: false, continueWanted: false, flushed: false };
     return {
       onDelta: (delta, assistantMessage) => {
         if (this.closed || currentTurn !== this.turnId) return;
@@ -1398,9 +1449,14 @@ export class ConversationRuntime {
         const leftover = (ctx.finalResponse || ctx.ttsBuffer).trim();
         ctx.ttsBuffer = '';
         if (leftover) this.enqueueSpeech(leftover, currentTurn);
+        // Last: tool calls whose results are all in continue the turn now (see ToolCallBatch).
+        batch.streamDone = true;
+        if (batch.open.size === 0 && batch.continueWanted) this.pendingActionPromises.push(this.flushToolBatch(batch, currentTurn, ctx));
       },
       onToolCall: (toolCall) => {
         if (this.closed || currentTurn !== this.turnId) return;
+        batch.open.add(toolCall.id);
+        this.toolBatchByCallId.set(toolCall.id, batch);
         this.pendingActionPromises.push(this.handleToolCall(toolCall, currentTurn, ctx));
       },
       onError: (error) => {
@@ -1523,7 +1579,8 @@ export class ConversationRuntime {
     // Every action asks first, in chat only — "I need permission to read …", "… to run …" — and
     // runs after the user replies "allow" (handleTranscript → executeConfirmedAction). Autonomous
     // (headless, no human) runs and the composer's auto modes (Accept edits / Bypass) don't ask.
-    if (!this.args.autonomousRunId && !('confirmed' in request && request.confirmed)) {
+    // Reading / searching inside the open project is trusted (projectTrust.ts) — no question for that.
+    if (!this.args.autonomousRunId && !('confirmed' in request && request.confirmed) && !isTrustedProjectRead(request, this.projectFolder)) {
       const tempMode = this.getTemporaryExecutionModeForTurn(currentTurn);
       const mode = tempMode ?? this.args.getExecutionMode?.() ?? DEFAULT_EXECUTION_MODE;
       const bypassPermissionsEnabled = this.args.isBypassPermissionsEnabled?.() ?? false;
@@ -1531,7 +1588,7 @@ export class ConversationRuntime {
         await this.executeConfirmedAction(request, toolCall, currentTurn);
         return;
       }
-      this.askPermissionInChat(request, toolCall, currentTurn);
+      this.askPermissionInChat(request, toolCall, currentTurn, ctx);
       return;
     }
 
@@ -1651,7 +1708,7 @@ export class ConversationRuntime {
       const waitingText = 'Waiting for you to reply "allow"';
       this.finishTaskAction(actionId, result, waitingText);
       this.executionSupervisor.recordAction(request, result, { label: waitingText, startedAt: actionStartedAt, endedAt: Date.now() });
-      this.askPermissionInChat(request, toolCall, currentTurn);
+      this.askPermissionInChat(request, toolCall, currentTurn, ctx);
       return;
     }
 
@@ -1686,9 +1743,30 @@ export class ConversationRuntime {
     const shouldContinue = this.recordToolOutcomeAndCheckBudget(request, result);
     this.resumeAfterAction(currentTurn);
 
+    const batch = this.settleToolCall(toolCall.id);
+    if (batch) {
+      if (shouldContinue) batch.continueWanted = true;
+      await this.flushToolBatch(batch, currentTurn, ctx);
+      return;
+    }
     if (shouldContinue && !this.closed && currentTurn === this.turnId) {
       await this.continueReasoningTurn(currentTurn, ctx);
     }
+  }
+
+  /** Marks a tool call's result as recorded; returns the batch it belongs to (none for a call confirmed later by the user). */
+  private settleToolCall(toolCallId: string): ToolCallBatch | undefined {
+    const batch = this.toolBatchByCallId.get(toolCallId);
+    this.toolBatchByCallId.delete(toolCallId);
+    batch?.open.delete(toolCallId);
+    return batch;
+  }
+
+  /** Continues once every call of the batch has its result and the response has finished — see ToolCallBatch. */
+  private async flushToolBatch(batch: ToolCallBatch, currentTurn: number, ctx: TurnContext): Promise<void> {
+    if (batch.flushed || !batch.streamDone || batch.open.size > 0 || !batch.continueWanted) return;
+    batch.flushed = true;
+    if (!this.closed && currentTurn === this.turnId) await this.continueReasoningTurn(currentTurn, ctx);
   }
 
   /**
@@ -1706,6 +1784,15 @@ export class ConversationRuntime {
    */
   /** present_resume: the finished resume as its own chat message (with a Download button) — never a file on disk. */
   private async presentResume(toolCall: ReasoningToolCall, currentTurn: number, ctx: TurnContext): Promise<void> {
+    if (!this.resumesAllowed) {
+      this.log('resume-presented', { ok: false, notOnPlan: true });
+      await this.recordAndMaybeContinueAfterTool(toolCall, { type: 'presentResume' } as unknown as ActionRequest, {
+        ok: false,
+        reason: 'failed',
+        message: 'Not shown — resume building is part of PawOS Build only and is not included in this plan. Tell the user that in one short sentence; do not write the resume in chat or in a file.',
+      }, currentTurn, ctx);
+      return;
+    }
     const parsed = toChatResume(toolCall.arguments);
     // Checked against what the user actually typed in this conversation — a wrong email, a dropped
     // section or a missing name header goes back to the model to fix instead of being shown.
@@ -1746,11 +1833,15 @@ export class ConversationRuntime {
     const args = (toolCall.arguments ?? {}) as Record<string, unknown>;
     const code = typeof args.widget_code === 'string' ? args.widget_code.trim() : '';
     const title = typeof args.title === 'string' && args.title.trim() ? args.title.trim().slice(0, 80) : 'visual';
-    // One visual per answer: models tend to keep redrawing (seen live: 10 redraws of one diagram).
-    const alreadyDrew = (this.currentTurnRecord?.widgets?.length ?? 0) > 0;
+    // Several visuals per answer are fine when each shows something different; models also tend to
+    // keep redrawing the same one (seen live: 10 redraws of one diagram), so a repeat is refused.
+    const drawn = this.currentTurnRecord?.widgets ?? [];
+    const isRedraw = drawn.some((w) => sameWidgetTitle(w.title, title) || isSameWidgetContent(w.code, code));
     const result: ActionResult =
-      alreadyDrew
-        ? { ok: false, reason: 'failed', message: 'A visual is already on screen for this answer — do not draw another. Reply in plain words now (one or two short sentences, or nothing).' }
+      drawn.length >= MAX_WIDGETS_PER_ANSWER
+        ? { ok: false, reason: 'failed', message: `This answer already shows ${drawn.length} visuals — do not draw more. Reply in plain words now (one or two short sentences, or nothing).` }
+        : isRedraw
+        ? { ok: false, reason: 'failed', message: 'That visual is already on screen for this answer — do not redraw or re-send it. Reply in plain words now (one or two short sentences, or nothing).' }
         : !code
         ? { ok: false, reason: 'failed', message: 'widget_code was empty — nothing to show.' }
         : code.length > MAX_WIDGET_CODE_CHARS
@@ -1759,7 +1850,7 @@ export class ConversationRuntime {
               ok: true,
               data: {
                 shown: true,
-                note: 'Done — the visual is already on screen. Now reply in plain words only (one or two short sentences, or nothing). Never write HTML, SVG, CSS, code or "widget_code" in your reply, do not describe the visual line by line, and do not call show_widget again for this answer.',
+                note: `Done — this visual is on screen and finished. If the user asked for more than one visual, call show_widget now for the next one they asked for that is not drawn yet (each must show different content, at most ${MAX_WIDGETS_PER_ANSWER} per answer). Otherwise do NOT call show_widget again — a second version of the same visual is never wanted. Then reply in plain words only (one or two short sentences, or nothing). Never write HTML, SVG, CSS, code or "widget_code" in your reply and do not describe the visual line by line.`,
               },
             };
 
@@ -1789,7 +1880,7 @@ export class ConversationRuntime {
    * Plain chat message — "I need permission to read …. Reply "allow" …" — then wait. No panel, bar
    * or card. The user's "allow"/"deny" reply is handled in handleTranscript.
    */
-  private askPermissionInChat(request: ActionRequest, toolCall: ReasoningToolCall, currentTurn: number): void {
+  private askPermissionInChat(request: ActionRequest, toolCall: ReasoningToolCall, currentTurn: number, ctx: TurnContext): void {
     this.pendingConfirmation = {
       request,
       toolCall,
@@ -1815,6 +1906,9 @@ export class ConversationRuntime {
         message: 'PawOS asked the user in chat for permission to do this exact action ("allow" or "deny"). Do not ask again and do not say anything else — wait for their reply.',
       }),
     });
+    // Other calls from the same response may still continue the turn once they finish.
+    const batch = this.settleToolCall(toolCall.id);
+    if (batch) this.pendingActionPromises.push(this.flushToolBatch(batch, currentTurn, ctx));
     this.resumeAfterAction(currentTurn);
   }
 
@@ -2349,12 +2443,15 @@ export class ConversationRuntime {
     turn: ConversationTurnRecord,
     persist: (turn: ConversationTurnRecord, hint: SessionContinuationHint) => Promise<{ id: string } | void>
   ): Promise<void> {
+    const generation = this.conversationGeneration;
     try {
       let hint: SessionContinuationHint;
       if (this.activeSessionId) {
         // Already know which session this conversation is in — every turn
         // after the first stays there, no re-classification needed.
         hint = { type: 'continue', sessionId: this.activeSessionId };
+      } else if (this.startNewSession) {
+        hint = { type: 'new' };
       } else if (this.args.resolveSession) {
         hint = await this.args.resolveSession(turn.transcript);
       } else {
@@ -2365,7 +2462,10 @@ export class ConversationRuntime {
         { ...turn, actionsExecuted: [...turn.actionsExecuted], errors: [...turn.errors] },
         hint
       );
-      if (session) this.activeSessionId = session.id;
+      if (session && generation === this.conversationGeneration) {
+        this.activeSessionId = session.id;
+        this.startNewSession = false;
+      }
     } catch (error) {
       console.error('[ConversationRuntime] failed to persist turn to session history', error);
     }

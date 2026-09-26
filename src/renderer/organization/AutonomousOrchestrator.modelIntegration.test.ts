@@ -75,12 +75,12 @@ describe('Phase 2B Integration: Model Identity Through Execution Path', () => {
       expect(authModel).toBe('gemini-3.5-flash-lite'); // The correct tier model
     });
 
-    it('paw-core → gemini-3.1-pro used consistently', () => {
+    it('paw-core → gemini-3.1-pro-preview used consistently', () => {
       const pawModelId = 'paw-core';
       const providerId = 'gemini';
       const resolvedModel = resolveReasoningModel(providerId, pawModelId);
 
-      expect(resolvedModel).toBe('gemini-3.1-pro');
+      expect(resolvedModel).toBe('gemini-3.1-pro-preview');
 
       const mockProvider: ReasoningProvider = {
         id: providerId,
@@ -89,18 +89,18 @@ describe('Phase 2B Integration: Model Identity Through Execution Path', () => {
         isSupported: () => true,
         streamResponse: (request, callbacks) => {
           // Authorization uses provider.model
-          expect(mockProvider.model).toBe('gemini-3.1-pro');
+          expect(mockProvider.model).toBe('gemini-3.1-pro-preview');
 
           // Gemini generateContent uses same model
           const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${mockProvider.model}:streamGenerateContent`;
-          expect(geminiUrl).toContain('gemini-3.1-pro');
+          expect(geminiUrl).toContain('gemini-3.1-pro-preview');
 
           callbacks.onComplete('Response');
           return { cancel: () => {} };
         },
       };
 
-      expect(mockProvider.model).toBe('gemini-3.1-pro');
+      expect(mockProvider.model).toBe('gemini-3.1-pro-preview');
     });
 
     it('no hardcoded fallback exists at any step of the path', () => {
@@ -142,7 +142,7 @@ describe('Phase 2B Integration: Model Identity Through Execution Path', () => {
       const modes = [
         { paw: 'paw-flash' as const, expected: 'gemini-3.5-flash-lite' },
         { paw: 'paw-swift' as const, expected: 'gemini-3.6-flash' },
-        { paw: 'paw-core' as const, expected: 'gemini-3.1-pro' },
+        { paw: 'paw-core' as const, expected: 'gemini-3.1-pro-preview' },
       ];
 
       for (const mode of modes) {
@@ -235,7 +235,7 @@ describe('Phase 2B Integration: Model Identity Through Execution Path', () => {
       const provider: ReasoningProvider = {
         id: 'gemini',
         label: 'Gemini',
-        model: 'gemini-3.1-pro',
+        model: 'gemini-3.1-pro-preview',
         isSupported: () => true,
         streamResponse: (request, callbacks) => {
           callbacks.onComplete('Response');
@@ -246,7 +246,7 @@ describe('Phase 2B Integration: Model Identity Through Execution Path', () => {
       // This is what AutonomousOrchestrator.createAuthorizedProvider does (after Phase 2B):
       const model = provider.model; // Never falls back to hardcoded value
 
-      expect(model).toBe('gemini-3.1-pro');
+      expect(model).toBe('gemini-3.1-pro-preview');
 
       // If model were missing, it would throw (fail-safe):
       const providerWithoutModel: any = {
@@ -291,7 +291,7 @@ describe('Phase 2B Integration: Model Identity Through Execution Path', () => {
       const mockPricing = {
         'gemini-3.5-flash-lite': { inputPerMillionUsd: 0.075, outputPerMillionUsd: 0.3 },
         'gemini-3.6-flash': { inputPerMillionUsd: 0.075, outputPerMillionUsd: 3.75 },
-        'gemini-3.1-pro': { inputPerMillionUsd: 1.25, outputPerMillionUsd: 5.0 },
+        'gemini-3.1-pro-preview': { inputPerMillionUsd: 1.25, outputPerMillionUsd: 5.0 },
       };
 
       const pricing = mockPricing[model as keyof typeof mockPricing];
@@ -343,7 +343,7 @@ describe('Phase 2B Integration: Model Identity Through Execution Path', () => {
       const provider: ReasoningProvider = {
         id: 'gemini',
         label: 'Gemini',
-        model: 'gemini-3.1-pro',
+        model: 'gemini-3.1-pro-preview',
         isSupported: () => true,
         streamResponse: (request, callbacks, usage) => {
           // Gemini returns usage metadata with model from request (GeminiReasoningProvider.ts:200)
@@ -354,7 +354,7 @@ describe('Phase 2B Integration: Model Identity Through Execution Path', () => {
           // });
 
           const usageModel = provider.model; // Same as request
-          expect(usageModel).toBe('gemini-3.1-pro');
+          expect(usageModel).toBe('gemini-3.1-pro-preview');
 
           callbacks.onUsage?.({
             provider: 'gemini',
@@ -382,7 +382,7 @@ describe('Phase 2B Integration: Model Identity Through Execution Path', () => {
         }
       );
 
-      expect(capturedUsageModel).toBe('gemini-3.1-pro');
+      expect(capturedUsageModel).toBe('gemini-3.1-pro-preview');
     });
   });
 

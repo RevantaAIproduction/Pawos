@@ -14,7 +14,7 @@ const REASONING_SIZE_MODELS: Partial<Record<ReasoningProviderId, Record<Reasonin
   gemini: {
     'paw-flash': 'gemini-3.5-flash-lite',
     'paw-swift': 'gemini-3.6-flash',
-    'paw-core': 'gemini-3.1-pro',
+    'paw-core': 'gemini-3.1-pro-preview',
   },
   openai: {
     'paw-flash': 'gpt-4o-mini',

@@ -445,3 +445,31 @@ export function resolveTierFromRazorpayPlanId(planId: string): { tier: Subscript
   if (planIdFor("enterpriseBase") === planId) return { tier: "enterprise" };
   return null;
 }
+
+/** The fields of a Razorpay invoice the account's Invoices list shows. Amounts are in the smallest unit (paise). */
+export type RazorpayInvoice = {
+  id: string;
+  subscription_id?: string | null;
+  status: string;
+  amount: number;
+  amount_paid?: number;
+  currency: string;
+  date?: number | null;
+  issued_at?: number | null;
+  paid_at?: number | null;
+  short_url?: string | null;
+};
+
+/** Every invoice Razorpay generated for one subscription (one per billing cycle). Null when Razorpay can't be read. */
+export async function listRazorpayInvoices(
+  credentials: { keyId: string; keySecret: string },
+  subscriptionId: string
+): Promise<RazorpayInvoice[] | null> {
+  const query = new URLSearchParams({ subscription_id: subscriptionId, count: "100" });
+  const response = await fetch(`https://api.razorpay.com/v1/invoices?${query}`, {
+    headers: { Authorization: razorpayAuthHeader(credentials.keyId, credentials.keySecret) },
+  });
+  if (!response.ok) return null;
+  const body = (await response.json().catch(() => null)) as { items?: RazorpayInvoice[] } | null;
+  return Array.isArray(body?.items) ? body.items : null;
+}

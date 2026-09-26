@@ -50,6 +50,9 @@ import type {
   BillingCheckoutResult,
   NativePaymentMethodsResult,
   NativeSubscriptionCheckoutResult,
+  BillingInvoicesResult,
+  BillingWebResponse,
+  PaymentEvidenceUpload,
   NativeCreditsCheckoutResult,
   NativeCreditsVerificationResult,
   NativeTierCheckoutResult,
@@ -96,6 +99,9 @@ export const ipc = {
   },
   async processWriteStdin(processId: string, data: string): Promise<{ ok: true } | { ok: false; message: string }> {
     return getBridge().processWriteStdin(processId, data);
+  },
+  async terminalStartUserShell(cwd?: string): Promise<{ ok: true; info: { id: string; pid: number | null } } | { ok: false; message: string }> {
+    return getBridge().terminalStartUserShell(cwd);
   },
   async systemGetHomeDir(): Promise<string> {
     return getBridge().systemGetHomeDir();
@@ -390,6 +396,15 @@ export const ipc = {
   },
   async billingGetNativePaymentMethods(accessToken?: string): Promise<NativePaymentMethodsResult> {
     return getBridge().billingGetNativePaymentMethods(accessToken);
+  },
+  async billingListInvoices(accessToken: string): Promise<BillingInvoicesResult> {
+    return getBridge().billingListInvoices(accessToken);
+  },
+  async billingPostWebApi(path: string, payload: unknown): Promise<BillingWebResponse> {
+    return getBridge().billingPostWebApi(path, payload);
+  },
+  async billingUploadPaymentEvidence(upload: PaymentEvidenceUpload): Promise<BillingWebResponse> {
+    return getBridge().billingUploadPaymentEvidence(upload);
   },
   async billingCreateNativeSubscriptionCheckout(tier: SubscriptionTierId, options?: CheckoutOptions, accessToken?: string): Promise<NativeSubscriptionCheckoutResult> {
     return getBridge().billingCreateNativeSubscriptionCheckout(tier, options, accessToken);

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { uploadPaymentEvidence } from './billingWebApi';
 
 interface PaymentEvidenceUploadProps {
   billingCaseId: string;
@@ -46,16 +47,7 @@ export function PaymentEvidenceUpload({
     setSuccess(null);
 
     try {
-      const formData = new FormData();
-      formData.append('accessToken', accessToken);
-      formData.append('billingCaseId', billingCaseId);
-      formData.append('invoiceId', selectedInvoiceId);
-      formData.append('file', file);
-
-      const response = await fetch('/api/billing/upload-payment-evidence', {
-        method: 'POST',
-        body: formData,
-      });
+      const response = await uploadPaymentEvidence({ accessToken, billingCaseId, invoiceId: selectedInvoiceId }, file);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ reason: 'Upload failed' }));

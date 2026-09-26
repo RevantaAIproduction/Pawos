@@ -276,6 +276,143 @@ describe('ConversationRuntime execution modes — confirmation wiring', () => {
     expect(runtime.getSnapshot().messages.some((m) => m.content === 'Sales doubled.')).toBe(true);
   }, 10000);
 
+  it('one answer can draw several different visuals (up to 3); a redraw of one already shown is refused', async () => {
+    const { ConversationRuntime } = await import('./ConversationRuntime');
+    const draws = [
+      { title: 'Revenue chart', widget_code: '<svg viewBox="0 0 10 10"><rect/></svg>' },
+      { title: 'Pipeline diagram', widget_code: '<svg viewBox="0 0 10 10"><circle/></svg>' },
+      { title: 'Revenue Chart (v2)', widget_code: '<svg viewBox="0 0 10 10"><rect x="1"/></svg>' }, // redraw by title
+      { title: 'Something else', widget_code: '<svg viewBox="0 0 10 10"><circle/></svg>' }, // redraw by code
+      { title: 'Team table', widget_code: '<div>team</div>' },
+      { title: 'Region map', widget_code: '<div>map</div>' }, // over the limit
+    ];
+    const replies: string[] = [];
+    let calls = 0;
+    const provider: ReasoningProvider = {
+      id: 'test-reasoning',
+      label: 'Test Reasoning',
+      isSupported: () => true,
+      streamResponse(request, callbacks) {
+        const draw = draws[calls];
+        calls += 1;
+        if (calls > 1) replies.push(JSON.stringify(request));
+        if (draw) {
+          callbacks.onToolCall?.({ id: `w-${calls}`, name: 'show_widget', arguments: draw });
+          callbacks.onComplete('');
+        } else {
+          callbacks.onDelta('Here are the visuals.');
+          callbacks.onComplete('Here are the visuals.');
+        }
+        return { cancel: () => {} };
+      },
+    };
+    const runtime = new ConversationRuntime({
+      speechRecognition: createSpeechRecognitionProvider(),
+      speechSynthesis: createSpeechSynthesisProvider(),
+      reasoningRuntime: new ReasoningRuntime(provider),
+      executeAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
+      getExecutionMode: () => 'manual',
+      isBypassPermissionsEnabled: () => false,
+    });
+
+    runtime.submitTranscript('chart revenue, diagram the pipeline and show the team');
+    for (let i = 0; i < 200 && !runtime.getSnapshot().messages.some((m) => m.content === 'Here are the visuals.'); i += 1) await Promise.resolve();
+
+    expect(runtime.getSnapshot().messages.filter((m) => m.widget).map((m) => m.widget!.title)).toEqual(['Revenue chart', 'Pipeline diagram', 'Team table']);
+    expect(replies.join('')).toContain('already on screen for this answer');
+    expect(replies.join('')).toContain('already shows 3 visuals');
+  }, 10000);
+
+  it('two tool calls in ONE response: both run, then the model continues once with both results after its call', async () => {
+    const { ConversationRuntime } = await import('./ConversationRuntime');
+    const requests: { history: { role: string; toolCallId?: string; toolCalls?: { id: string }[] }[] }[] = [];
+    const provider: ReasoningProvider = {
+      id: 'test-reasoning',
+      label: 'Test Reasoning',
+      isSupported: () => true,
+      streamResponse(request, callbacks) {
+        requests.push(request as never);
+        if (requests.length === 1) {
+          callbacks.onToolCall?.({ id: 'a', name: 'show_widget', arguments: { title: 'Price chart', widget_code: '<div>Go Pro Max</div>' } });
+          callbacks.onToolCall?.({ id: 'b', name: 'show_widget', arguments: { title: 'Signup flow', widget_code: '<div>Download then sign in</div>' } });
+          callbacks.onComplete('');
+        } else {
+          callbacks.onDelta('Both are above.');
+          callbacks.onComplete('Both are above.');
+        }
+        return { cancel: () => {} };
+      },
+    };
+    const runtime = new ConversationRuntime({
+      speechRecognition: createSpeechRecognitionProvider(),
+      speechSynthesis: createSpeechSynthesisProvider(),
+      reasoningRuntime: new ReasoningRuntime(provider),
+      executeAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
+      getExecutionMode: () => 'manual',
+      isBypassPermissionsEnabled: () => false,
+    });
+
+    runtime.submitTranscript('chart the prices and draw the signup flow');
+    for (let i = 0; i < 200 && !runtime.getSnapshot().messages.some((m) => m.content === 'Both are above.'); i += 1) await Promise.resolve();
+
+    expect(runtime.getSnapshot().messages.filter((m) => m.widget).map((m) => m.widget!.title)).toEqual(['Price chart', 'Signup flow']);
+    expect(requests).toHaveLength(2); // one continuation, not one per tool call
+    const history = requests[1]!.history;
+    const callAt = history.findIndex((m) => m.toolCalls?.length === 2);
+    expect(callAt).toBeGreaterThanOrEqual(0);
+    expect(history.slice(callAt + 1).map((m) => m.toolCallId)).toEqual(['a', 'b']);
+  }, 10000);
+
+  it('reopening a past chat: messages and visuals back on screen, the AI remembers it, new turns saved into it; New chat starts clean', async () => {
+    const { ConversationRuntime } = await import('./ConversationRuntime');
+    const seen: { history: { role: string; content: string }[] }[] = [];
+    const provider: ReasoningProvider = {
+      id: 'test-reasoning',
+      label: 'Test Reasoning',
+      isSupported: () => true,
+      streamResponse(request, callbacks) {
+        seen.push(request as never);
+        callbacks.onDelta('Sure.');
+        callbacks.onComplete('Sure.');
+        return { cancel: () => {} };
+      },
+    };
+    const hints: unknown[] = [];
+    const runtime = new ConversationRuntime({
+      speechRecognition: createSpeechRecognitionProvider(),
+      speechSynthesis: createSpeechSynthesisProvider(),
+      reasoningRuntime: new ReasoningRuntime(provider),
+      executeAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
+      getExecutionMode: () => 'manual',
+      isBypassPermissionsEnabled: () => false,
+      persistTurn: async (_turn, hint) => {
+        hints.push(hint);
+        return { id: (hint as { sessionId?: string }).sessionId ?? 'brand-new' };
+      },
+      resolveSession: async () => ({ type: 'continue', sessionId: 'some-old-chat' }),
+    });
+
+    const widget = { title: 'Sales chart', code: '<svg viewBox="0 0 1 1"></svg>' };
+    runtime.openConversation({
+      id: 'chat-1',
+      title: 'Sales',
+      turns: [{ id: 't1', transcript: 'chart my sales', assistantResponse: 'Sales doubled.', startedAt: 1, endedAt: 2, widgets: [widget] }],
+    } as never);
+    expect(runtime.getSnapshot().messages.map((m) => m.content || m.widget?.title)).toEqual(['chart my sales', 'Sales chart', 'Sales doubled.']);
+
+    runtime.submitTranscript('and last year?');
+    for (let i = 0; i < 100 && hints.length === 0; i += 1) await Promise.resolve();
+    expect(seen[0]!.history.map((m) => `${m.role}:${m.content}`)).toEqual(['user:chart my sales', 'assistant:Sales doubled.']);
+    expect(hints[0]).toEqual({ type: 'continue', sessionId: 'chat-1' });
+
+    runtime.openConversation(null); // New chat
+    expect(runtime.getSnapshot().messages).toEqual([]);
+    runtime.submitTranscript('hello');
+    for (let i = 0; i < 100 && hints.length < 2; i += 1) await Promise.resolve();
+    expect(seen[1]!.history).toEqual([]);
+    expect(hints[1]).toEqual({ type: 'new' }); // never filed into an old chat
+  }, 10000);
+
   it('present_resume shows the resume in chat for download — nothing is saved, no permission question', async () => {
     const { ConversationRuntime } = await import('./ConversationRuntime');
     let calls = 0;
@@ -309,6 +446,7 @@ describe('ConversationRuntime execution modes — confirmation wiring', () => {
       isBypassPermissionsEnabled: () => false,
     });
 
+    runtime.setResumesAllowed(true); // PawOS Build
     runtime.setProjectFolder('C:\\code\\my-app'); // an open coding project must not matter
     runtime.submitTranscript('make my resume');
     for (let i = 0; i < 60 && !runtime.getSnapshot().messages.some((m) => m.content.startsWith('Here it is')); i += 1) await Promise.resolve();
@@ -317,6 +455,43 @@ describe('ConversationRuntime execution modes — confirmation wiring', () => {
     expect(shown?.resume).toEqual({ title: 'Asha — Resume', sections: [{ heading: 'Asha Rao', paragraphs: ['asha@example.com'] }, { heading: 'Skills', paragraphs: ['TypeScript'] }] });
     expect(runtime.getSnapshot().pendingConfirmation).toBe(false);
     expect(executeAction.mock.calls.filter(([r]) => (r as { type?: string }).type !== 'recordTaskProvenance')).toHaveLength(0);
+  }, 10000);
+
+  it('present_resume on a plan without resume building (not PawOS Build): nothing shown, the AI is told why', async () => {
+    const { ConversationRuntime } = await import('./ConversationRuntime');
+    const toolResults: string[] = [];
+    let calls = 0;
+    const provider: ReasoningProvider = {
+      id: 'test-reasoning',
+      label: 'Test Reasoning',
+      isSupported: () => true,
+      streamResponse(request, callbacks) {
+        calls += 1;
+        if (calls === 1) {
+          callbacks.onToolCall?.({ id: 'r-1', name: 'present_resume', arguments: { title: 'Asha — Resume', sections: [{ heading: 'Asha Rao', paragraphs: ['asha@example.com'] }] } });
+          callbacks.onComplete('');
+        } else {
+          toolResults.push(JSON.stringify(request));
+          callbacks.onDelta('Resume building is available with PawOS Build.');
+          callbacks.onComplete('Resume building is available with PawOS Build.');
+        }
+        return { cancel: () => {} };
+      },
+    };
+    const runtime = new ConversationRuntime({
+      speechRecognition: createSpeechRecognitionProvider(),
+      speechSynthesis: createSpeechSynthesisProvider(),
+      reasoningRuntime: new ReasoningRuntime(provider),
+      executeAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
+      getExecutionMode: () => 'manual',
+      isBypassPermissionsEnabled: () => false,
+    });
+
+    runtime.submitTranscript('make my resume: Asha Rao, asha@example.com');
+    for (let i = 0; i < 60 && !runtime.getSnapshot().messages.some((m) => m.content.startsWith('Resume building')); i += 1) await Promise.resolve();
+
+    expect(runtime.getSnapshot().messages.some((m) => m.resume)).toBe(false);
+    expect(toolResults.join('')).toContain('PawOS Build only');
   }, 10000);
 
   it('the open project folder is sent to the AI with every message; closing it stops that', async () => {

@@ -48,6 +48,9 @@ import type {
   BillingCheckoutResult,
   NativePaymentMethodsResult,
   NativeSubscriptionCheckoutResult,
+  BillingInvoicesResult,
+  BillingWebResponse,
+  PaymentEvidenceUpload,
   NativeCreditsCheckoutResult,
   NativeCreditsVerificationResult,
   NativeTierCheckoutResult,
@@ -118,6 +121,8 @@ export function contextBridge() {
       ipcRenderer.invoke(`${CONNECTIVITY_CREDENTIAL_REVOKE_RESPONSE_CHANNEL_PREFIX}:${requestId}`, response) as Promise<void>,
     processWriteStdin: (processId: string, data: string) =>
       ipcRenderer.invoke("process:writeStdin", processId, data) as Promise<{ ok: true } | { ok: false; message: string }>,
+    terminalStartUserShell: (cwd?: string) =>
+      ipcRenderer.invoke("terminal:startUserShell", cwd) as Promise<{ ok: true; info: { id: string; pid: number | null } } | { ok: false; message: string }>,
     systemGetHomeDir: () => ipcRenderer.invoke("system:getHomeDir") as Promise<string>,
     remoteAssistanceStartSharedTerminal: (cwd: string, label: string) =>
       ipcRenderer.invoke("remoteAssistance:startSharedTerminal", cwd, label) as Promise<
@@ -296,6 +301,9 @@ export function contextBridge() {
       ipcRenderer.invoke("billing:createCheckoutSession", tier, callbackUrl, options) as Promise<BillingCheckoutResult>,
     billingGetNativePaymentMethods: (accessToken?: string) =>
       ipcRenderer.invoke("billing:getNativePaymentMethods", accessToken) as Promise<NativePaymentMethodsResult>,
+    billingListInvoices: (accessToken: string) => ipcRenderer.invoke("billing:listInvoices", accessToken) as Promise<BillingInvoicesResult>,
+    billingPostWebApi: (path: string, payload: unknown) => ipcRenderer.invoke("billing:postWebApi", path, payload) as Promise<BillingWebResponse>,
+    billingUploadPaymentEvidence: (upload: PaymentEvidenceUpload) => ipcRenderer.invoke("billing:uploadPaymentEvidence", upload) as Promise<BillingWebResponse>,
     billingCreateNativeSubscriptionCheckout: (tier: SubscriptionTierId, options?: CheckoutOptions, accessToken?: string) =>
       ipcRenderer.invoke("billing:createNativeSubscriptionCheckout", tier, options, accessToken) as Promise<NativeSubscriptionCheckoutResult>,
     billingConfirmNativeSubscriptionPayment: (paymentId: string, subscriptionId: string, signature: string, accessToken?: string) =>

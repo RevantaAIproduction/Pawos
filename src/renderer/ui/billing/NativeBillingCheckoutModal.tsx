@@ -6,6 +6,7 @@ import { ipc } from '../../services/ipc/ipcBridgeImplementation';
 import { organizationService } from '../../organization/OrganizationService';
 import { HighValueOrderForm, type HighValueOrderData } from './HighValueOrderForm';
 import { PaymentEvidenceUpload } from './PaymentEvidenceUpload';
+import { billingWebPost } from './billingWebApi';
 import {
   formatInr,
   formatUsd,
@@ -1573,11 +1574,7 @@ export function NativeBillingCheckoutModal({
         }
       }
 
-      const caseResponse = await fetch('/api/billing/create-billing-case', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(casePayload),
-      });
+      const caseResponse = await billingWebPost('/api/billing/create-billing-case', casePayload);
 
       if (!caseResponse.ok) {
         const error = await caseResponse.json().catch(() => ({ reason: 'Failed to create billing case' }));
@@ -1602,19 +1599,15 @@ export function NativeBillingCheckoutModal({
         invoiceDescription = `Usage Credits - $${totalUsd.toFixed(2)}`;
       }
 
-      const invoiceResponse = await fetch('/api/billing/create-high-value-invoice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          accessToken,
-          organizationId,
-          billingEmail: formData.billingEmail,
-          organizationName: formData.organizationName,
-          amountInr: totalInr,
-          description: invoiceDescription,
-          gstPercent: formData.hasGst ? formData.gstPercent : undefined,
-          billingCaseId: caseData.caseId,
-        }),
+      const invoiceResponse = await billingWebPost('/api/billing/create-high-value-invoice', {
+        accessToken,
+        organizationId,
+        billingEmail: formData.billingEmail,
+        organizationName: formData.organizationName,
+        amountInr: totalInr,
+        description: invoiceDescription,
+        gstPercent: formData.hasGst ? formData.gstPercent : undefined,
+        billingCaseId: caseData.caseId,
       });
 
       if (!invoiceResponse.ok) {

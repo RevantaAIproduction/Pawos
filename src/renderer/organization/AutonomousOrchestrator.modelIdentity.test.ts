@@ -17,19 +17,19 @@ describe('Autonomous Model Identity Resolution', () => {
       const model = resolveReasoningModel('gemini', 'paw-flash');
       expect(model).toBe('gemini-3.5-flash-lite');
       expect(model).not.toBe('gemini-3.6-flash');
-      expect(model).not.toBe('gemini-3.1-pro');
+      expect(model).not.toBe('gemini-3.1-pro-preview');
     });
 
     it('paw-swift maps to gemini-3.6-flash', () => {
       const model = resolveReasoningModel('gemini', 'paw-swift');
       expect(model).toBe('gemini-3.6-flash');
       expect(model).not.toBe('gemini-3.5-flash-lite');
-      expect(model).not.toBe('gemini-3.1-pro');
+      expect(model).not.toBe('gemini-3.1-pro-preview');
     });
 
-    it('paw-core maps to gemini-3.1-pro', () => {
+    it('paw-core maps to gemini-3.1-pro-preview', () => {
       const model = resolveReasoningModel('gemini', 'paw-core');
-      expect(model).toBe('gemini-3.1-pro');
+      expect(model).toBe('gemini-3.1-pro-preview');
       expect(model).not.toBe('gemini-3.6-flash');
       expect(model).not.toBe('gemini-3.5-flash-lite');
     });
@@ -92,7 +92,7 @@ describe('Autonomous Model Identity Resolution', () => {
       const model = resolveReasoningModel('gemini', 'paw-core');
       expect(model).toBeTruthy();
       expect(model).not.toBe('gemini-3.6-flash'); // Not the default
-      expect(model).toBe('gemini-3.1-pro'); // The configured model
+      expect(model).toBe('gemini-3.1-pro-preview'); // The configured model
     });
 
     it('all reasoning Paw models return truthy (non-empty) models', () => {
@@ -102,7 +102,7 @@ describe('Autonomous Model Identity Resolution', () => {
       expect(models).toEqual([
         'gemini-3.5-flash-lite',
         'gemini-3.6-flash',
-        'gemini-3.1-pro',
+        'gemini-3.1-pro-preview',
       ]);
       models.forEach((m) => {
         expect(m).toBeTruthy();
@@ -182,13 +182,13 @@ describe('Autonomous Model Identity Resolution', () => {
       const mockProviderWithModel = {
         id: 'gemini',
         label: 'Gemini',
-        model: 'gemini-3.1-pro', // NOW REQUIRED
+        model: 'gemini-3.1-pro-preview', // NOW REQUIRED
         isSupported: () => true,
         streamResponse: () => ({ cancel: () => {} }),
       };
 
       expect(mockProviderWithModel.model).toBeTruthy();
-      expect(mockProviderWithModel.model).toBe('gemini-3.1-pro');
+      expect(mockProviderWithModel.model).toBe('gemini-3.1-pro-preview');
 
       // Authorization code can now use this directly:
       // const model = baseProvider.model; // NEVER undefined
@@ -219,7 +219,7 @@ describe('Autonomous Model Identity Resolution', () => {
       // PawComputeConfigStore.modelPricing MUST have entries for:
       // - gemini-3.5-flash-lite (paw-flash)
       // - gemini-3.6-flash (paw-swift)
-      // - gemini-3.1-pro (paw-core)
+      // - gemini-3.1-pro-preview (paw-core)
 
       // The test here just documents the requirement.
       // Actual verification: see src/main/billing/PawComputeConfigStore.ts
@@ -228,7 +228,7 @@ describe('Autonomous Model Identity Resolution', () => {
       const requiredModelsForGemini = [
         'gemini-3.5-flash-lite',
         'gemini-3.6-flash',
-        'gemini-3.1-pro',
+        'gemini-3.1-pro-preview',
       ];
 
       requiredModelsForGemini.forEach((model) => {
@@ -241,7 +241,7 @@ describe('Autonomous Model Identity Resolution', () => {
   describe('Model Identity Through Settlement (Audit Trail)', () => {
     it('settlement path receives correct model from usage metadata', () => {
       // Usage metadata includes the model that was actually executed:
-      // ProviderUsageMetadata.model = 'gemini-3.1-pro' (or whichever was used)
+      // ProviderUsageMetadata.model = 'gemini-3.1-pro-preview' (or whichever was used)
       //
       // Settlement path:
       // 1. UsageMeteringEngine reads usage metadata (includes model)
@@ -256,14 +256,14 @@ describe('Autonomous Model Identity Resolution', () => {
 
       const exampleUsageMetadata = {
         provider: 'gemini' as const,
-        model: 'gemini-3.1-pro', // Must be the concrete model used
+        model: 'gemini-3.1-pro-preview', // Must be the concrete model used
         inputTokens: 1000,
         outputTokens: 2000,
         totalTokens: 3000,
         requestId: 'req-123',
       };
 
-      expect(exampleUsageMetadata.model).toBe('gemini-3.1-pro');
+      expect(exampleUsageMetadata.model).toBe('gemini-3.1-pro-preview');
       expect(exampleUsageMetadata.model).not.toBe('gemini-3.6-flash');
     });
   });

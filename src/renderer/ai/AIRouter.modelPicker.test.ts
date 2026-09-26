@@ -44,7 +44,7 @@ describe('AIRouter/AIProviderConfigStore — model picker wiring', () => {
     expect(resolvedModelFor(aiRouter)).toBe('gemini-3.5-flash-lite');
 
     aiRouter.setActivePawModel('paw-core');
-    expect(resolvedModelFor(aiRouter)).toBe('gemini-3.1-pro');
+    expect(resolvedModelFor(aiRouter)).toBe('gemini-3.1-pro-preview');
   });
 
   it('a selected model choice survives a fresh module load (same guarantee as an app restart or a new session)', async () => {
