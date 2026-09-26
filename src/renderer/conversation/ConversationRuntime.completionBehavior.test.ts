@@ -71,7 +71,10 @@ describe('ConversationRuntime Completion & Error Recovery Behavior', () => {
           return { ok: true, data: { exitCode: 0, stdout: 'Build passed', stderr: '' } };
         }
         return { ok: true, data: {} };
-      }
+      },
+      // Permission already granted up front — this test is about recovery, not the chat "allow" question.
+      getExecutionMode: () => 'bypass',
+      isBypassPermissionsEnabled: () => true,
     });
 
     runtime.submitTranscript('Add a home page.');

@@ -42,11 +42,18 @@ module.exports = {
   // outputs, so it's left unbundled and resolved from node_modules at runtime, same as
   // sharp/docx/xlsx below (it moved from devDependencies to a real dependency in package.json so
   // electron-builder actually ships it in the packaged app's node_modules).
+  // bufferutil / utf-8-validate are ws's OPTIONAL native speed-ups: ws require()s them inside a
+  // try/catch and falls back to its pure-JS code when they're absent (they aren't installed).
+  // Declaring them external keeps that runtime try/catch instead of webpack failing to resolve them
+  // at build time ("Module not found" warnings).
   externals: {
     sharp: 'commonjs sharp',
     docx: 'commonjs docx',
     xlsx: 'commonjs xlsx',
+    typescript: 'commonjs typescript',
     'electron-updater': 'commonjs electron-updater',
+    bufferutil: 'commonjs bufferutil',
+    'utf-8-validate': 'commonjs utf-8-validate',
   },
   module: {
     rules: [

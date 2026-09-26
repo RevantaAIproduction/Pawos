@@ -79,4 +79,29 @@ describe('Checkout Route - Commercial Availability Gate', () => {
     expect(data.ok).toBe(true);
     expect(data.subscriptionId).toBe('sub_123');
   });
+
+  it('Pro yearly uses the yearly plan, 10 yearly cycles, and records the frequency in the subscription notes', async () => {
+    const { getRazorpayPlanId } = await import('@/lib/billing/razorpay');
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'sub_y' }) }));
+    global.fetch = fetchMock as any;
+
+    const response = await makeRequest('pro', { proBillingFrequency: 'yearly' });
+    expect(response.status).toBe(200);
+    expect(getRazorpayPlanId).toHaveBeenLastCalledWith('pro', undefined, undefined, 'yearly');
+    const sent = JSON.parse((fetchMock.mock.calls[0] as unknown as [string, { body: string }])[1].body);
+    expect(sent).toMatchObject({ plan_id: 'plan_123', total_count: 10, notes: { userId: 'user_1', billingFrequency: 'yearly' } });
+  });
+
+  it('Pro monthly (default) uses 100 monthly cycles; Pro Max never becomes yearly', async () => {
+    const { getRazorpayPlanId } = await import('@/lib/billing/razorpay');
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'sub_m' }) }));
+    global.fetch = fetchMock as any;
+
+    await makeRequest('pro');
+    expect(getRazorpayPlanId).toHaveBeenLastCalledWith('pro', undefined, undefined, 'monthly');
+    expect(JSON.parse((fetchMock.mock.calls[0] as unknown as [string, { body: string }])[1].body)).toMatchObject({ total_count: 100, notes: { billingFrequency: 'monthly' } });
+
+    await makeRequest('proMax', { proMaxVariant: '20x', proBillingFrequency: 'yearly' });
+    expect(getRazorpayPlanId).toHaveBeenLastCalledWith('proMax', undefined, '20x', 'monthly');
+  });
 });

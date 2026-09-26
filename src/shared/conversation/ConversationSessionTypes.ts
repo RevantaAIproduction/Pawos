@@ -23,6 +23,8 @@ export type ConversationSessionTurn = {
   model: string;
   voice: string;
   endedReason: 'completed' | 'interrupted' | 'error' | null;
+  /** Visuals drawn this turn (show_widget) — restored before the reply when the chat is reopened. */
+  widgets?: { title: string; code: string; loadingMessages?: string[] }[];
 };
 
 export type ConversationSession = {

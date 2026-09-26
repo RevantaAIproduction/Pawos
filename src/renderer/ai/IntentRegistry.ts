@@ -17,7 +17,71 @@ const CONFIRMED_PARAM_DESCRIPTION =
  * what the AI claims. Only intents the engine actually implements are
  * listed here — nothing is offered to the AI that would just fail silently.
  */
+/**
+ * show_widget's instructions — the design guide PawOS follows so every visual looks native to the
+ * chat (same idea as Claude's visual guide): when to draw, the theme tokens, layout and safety rules.
+ */
+const WIDGET_TOOL_DESCRIPTION = [
+  'Show a visual inline in the chat — a chart, diagram, flowchart, comparison, dashboard, UI/layout mockup or small interactive widget — drawn from HTML or SVG you write.',
+  'WHEN: use it when a picture explains better than words (numbers, trends, comparisons, processes, architectures, page layouts). Never for plain text answers. Put all explanation in your normal reply, never inside the widget, and do not repeat the widget\'s contents in text.',
+  'FORMAT: a self-contained HTML fragment (no <!DOCTYPE>, <html>, <head> or <body>) or a single <svg> root with a viewBox (width 100%). Put <style> (short) first, then content, then <script> last. No HTML comments.',
+  'FRAME: the widget is already shown inside a dark, bordered, rounded panel with padding — do not add your own outer card, border, background or padding around everything.',
+  'THEME (the chat is dark — always use these variables, never hard-coded colors, never a white or light background): text --text-primary, --text-secondary, --text-muted; surfaces --surface-1 (cards), --surface-2 (raised); --border (hairline, use 1px solid var(--border)); roles --accent, --success, --warning, --danger (and --accent-bg, --success-bg, --warning-bg, --danger-bg for tinted chips); fonts --font-sans, --font-mono; --radius (8px). The page background stays transparent.',
+  'DESIGN: flat and quiet like the rest of the chat — no gradients, shadows, glow or emoji; sentence case; font weights 400 and 500 only; body text 14px, never below 11px; cards = var(--surface-1) with 12px radius and 12–16px padding; metric cards = small --text-secondary label above a 22–24px number; at most 2–3 colors and only with meaning (accent for the key series, success/danger for good/bad); round every displayed number; use grids with repeat(auto-fit, minmax(160px, 1fr)) so it fits narrow widths; no nested scrolling, no position:fixed, no tabs or hidden sections.',
+  'CHARTS: load Chart.js (https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js) with a <script src> BEFORE the script that uses it; wrap the canvas in a div with a fixed height (e.g. 240px) and set maintainAspectRatio:false; read colors with getComputedStyle(document.documentElement).getPropertyValue("--accent").',
+  'DIAGRAMS: prefer SVG — rounded rects (rx 6), 1px strokes, arrows via <marker>, labels in --text-primary and short (≤5 words per box).',
+  'SAFETY: scripts only from https://cdnjs.cloudflare.com or https://cdn.jsdelivr.net; no fetch/XHR/websockets (blocked); no external images (inline SVG or data: URIs); no forms that submit. Links: normal <a href="https://…"> or openLink(url) — the user is asked before it opens.',
+  'INTERACTION: a button can call sendPrompt("text") to send a follow-up question as the user.',
+].join(' ');
+
 export const ACTION_TOOL_DEFINITIONS: ReasoningToolDefinition[] = [
+  {
+    // Renderer-only (ConversationRuntime.presentResume) — nothing is written to disk; the user downloads it.
+    name: 'present_resume',
+    description:
+      'Show a finished resume / CV / cover letter in the chat with Download PDF and Download Word buttons. This is the ONLY way to deliver a resume: never save one with create_docx, write_file or any other file tool, and never put it in the open project folder — resumes are not part of coding projects. Call it once the content is complete (from the user\'s existing resume or the details they gave you). Use real content only — no placeholders or invented facts. Include EVERY detail the user gave — never drop their contact details, education, dates, numbers or skills. Copy names, emails, phone numbers, links, companies, dates and figures EXACTLY as the user wrote them, character for character. You may polish wording, but never add achievements, responsibilities, results or skills the user did not state. Required order: (1) a header section whose heading is the person\'s full name and whose paragraphs are their contact details (email · phone · city · links), then (2) Summary, (3) Experience, (4) Education, (5) Skills, then any other sections they gave (Projects, Certifications, Languages).',
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Document title, e.g. "Tharun Esta — Resume" (also the suggested download file name).' },
+        sections: {
+          type: 'array',
+          description: 'The document in order. First section: the person\'s name as heading and contact line(s) as paragraphs. Then Summary, Experience, Education, Skills, Projects, etc.',
+          items: {
+            type: 'object',
+            properties: {
+              heading: { type: 'string', description: 'Section heading, e.g. "Experience".' },
+              paragraphs: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Lines of this section — one entry per line/bullet (e.g. "Software Engineer, Acme — 2022–2024", "• Cut API latency 40%").',
+              },
+            },
+            required: ['paragraphs'],
+          },
+        },
+      },
+      required: ['title', 'sections'],
+    },
+  },
+  {
+    // Renderer-only (ConversationRuntime.showWidget) — never reaches the Desktop Execution Engine.
+    name: 'show_widget',
+    description: WIDGET_TOOL_DESCRIPTION,
+    parameters: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Short snake_case name for the visual, e.g. "monthly_revenue_chart".' },
+        widget_code: { type: 'string', description: 'The HTML fragment or <svg> markup to render.' },
+        loading_messages: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '1–4 short loading lines (about 5 words each) shown while the visual loads, e.g. ["Drawing the bars", "Lining up the labels"]. Keep them plain for serious topics.',
+        },
+      },
+      required: ['title', 'widget_code'],
+    },
+  },
   {
     name: 'open_url',
     description: 'Open a URL in the default web browser.',

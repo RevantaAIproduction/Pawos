@@ -67,7 +67,16 @@ export type ConversationMessage = {
   task?: ConversationTaskRecord;
   /** Inline message extensions — live interactive cards for permissions, progress, files, previews, etc. */
   extensions?: import('./extensions/ExtensionTypes').MessageExtension[];
+  /** A visual PawOS drew inline (show_widget) — rendered in a locked-down frame, see ChatWidget.tsx. */
+  widget?: ChatWidgetData;
+  /** A resume/CV PawOS wrote (present_resume) — shown in chat with a Download button, never saved on its own. */
+  resume?: ChatResumeData;
 };
+
+export type ChatResumeData = { title: string; sections: { heading?: string; paragraphs: string[] }[] };
+
+/** One show_widget visual — kept on the message, and on the turn so it's saved with the chat. */
+export type ChatWidgetData = { title: string; code: string; loadingMessages?: string[] };
 
 /**
  * Voice and typing feed the exact same pipeline (submitTranscript) — this is
@@ -114,6 +123,8 @@ export type ConversationSnapshot = {
   speechPlaybackState: 'off' | 'on' | 'speaking' | 'paused';
   /** True while a destructive action is waiting on a plain "yes"/"no" reply (see ConversationRuntime's pendingConfirmation) — the structured signal the Approval Center (MOB-9) watches for, since parsing message text for confirmation language would be unreliable. */
   pendingConfirmation: boolean;
+  /** Every task this conversation ran, newest last (kept after its chat card is gone) — the right-side Tasks panel. */
+  taskHistory?: ConversationTaskRecord[];
 };
 
 export const conversationStateLabels: Record<ConversationState, string> = {
@@ -153,6 +164,8 @@ export type ConversationTurnRecord = {
   model: string;
   voice: string;
   endedReason: 'completed' | 'interrupted' | 'error' | null;
+  /** Visuals PawOS drew this turn (show_widget), saved with the chat and restored before the reply. */
+  widgets?: ChatWidgetData[];
 };
 
 /** A single state transition or notable runtime event — structured, dev-console-only debugging, never rendered to the user. */

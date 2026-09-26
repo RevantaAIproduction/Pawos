@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EntitlementSnapshot } from '../../shared/billing/BillingTypes';
-import { formatPawComputeSummary, formatPlanAndRuntimeSummary } from './EntitlementDisplay';
+import { formatPawComputeSummary, formatPlanAndRuntimeSummary, formatPlanName } from './EntitlementDisplay';
 
 const base: EntitlementSnapshot = {
   tier: 'pro',
@@ -60,4 +60,16 @@ describe('EntitlementDisplay', () => {
       'Pooled organization allowance · 25 used'
     );
   });
+});
+
+describe('formatPlanName — the exact plan the customer bought', () => {
+  it.each([
+    [{ tier: 'pro' as const, proBillingFrequency: 'monthly' as const }, 'Paw Pro · Monthly'],
+    [{ tier: 'pro' as const, proBillingFrequency: 'yearly' as const }, 'Paw Pro · Yearly'],
+    [{ tier: 'pro' as const }, 'Paw Pro · Monthly'],
+    [{ tier: 'proMax' as const, proMaxVariant: '5x' as const }, 'Paw Pro Max 5x'],
+    [{ tier: 'proMax' as const, proMaxVariant: '20x' as const }, 'Paw Pro Max 20x'],
+    [{ tier: 'go' as const }, 'Paw Go'],
+    [{ tier: 'build' as const }, 'PawOS Build'],
+  ])('%j → %s', (plan, label) => expect(formatPlanName(plan)).toBe(label));
 });

@@ -1,0 +1,147 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.count {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.removeAll,
+.stop {
+  padding: 4px 10px;
+  font-size: 11px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+
+.removeAll:hover:not(:disabled),
+.stop:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.removeAll:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.stop {
+  border-color: rgba(248, 113, 113, 0.4);
+  color: rgb(252, 165, 165);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.empty,
+.muted {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.task {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.focused {
+  border-color: rgba(96, 165, 250, 0.5);
+}
+
+.taskHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.goal {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.9);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.running {
+  background: rgba(96, 165, 250, 0.18);
+  color: rgb(147, 197, 253);
+}
+
+.waiting {
+  background: rgba(251, 191, 36, 0.16);
+  color: rgb(252, 211, 77);
+}
+
+.done {
+  background: rgba(74, 222, 128, 0.14);
+  color: rgb(134, 239, 172);
+}
+
+.failed {
+  background: rgba(248, 113, 113, 0.16);
+  color: rgb(252, 165, 165);
+}
+
+.stopped {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.terminal {
+  background: rgba(0, 0, 0, 0.45);
+  padding: 8px 10px;
+  font-family: Consolas, 'Cascadia Mono', monospace;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.85);
+  max-height: 320px;
+  overflow: auto;
+  user-select: text;
+}
+
+.step + .step {
+  margin-top: 8px;
+}
+
+.prompt {
+  word-break: break-all;
+}
+
+.path {
+  color: rgb(134, 239, 172);
+}
+
+.output {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: rgba(255, 255, 255, 0.65);
+  font: inherit;
+}
+
+.failedOutput {
+  color: rgb(252, 165, 165);
+}

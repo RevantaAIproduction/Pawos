@@ -8,6 +8,8 @@ type ServerSubscription = {
   active: boolean;
   tier: 'pro' | 'proMax' | null;
   proMaxVariant: '5x' | '20x' | null;
+  /** Pro monthly vs yearly — absent before the billing-frequency migration (treated as monthly). */
+  billingFrequency?: 'monthly' | 'yearly' | null;
   status: string | null;
   expiresAt: string | null;
   hasHistory: boolean;
@@ -91,7 +93,7 @@ export async function syncSubscriptionFromServer(onChange: () => void, now = Dat
 
   let result: SubscriptionSyncResult;
   if (server.active && (server.tier === 'pro' || server.tier === 'proMax') && Number.isFinite(expiresAt)) {
-    subscriptionStore.applyServerSubscription(server.userId, { tier: server.tier, proMaxVariant: server.proMaxVariant, expiresAt });
+    subscriptionStore.applyServerSubscription(server.userId, { tier: server.tier, proMaxVariant: server.proMaxVariant, billingFrequency: server.billingFrequency, expiresAt });
     scheduleExpiry(expiresAt - now, onChange);
     result = 'applied';
   } else if (server.hasHistory) {

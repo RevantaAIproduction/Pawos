@@ -164,6 +164,9 @@ describe('ConversationRuntime voice output', () => {
       executeAction: async () => blocked,
       describeAction: async () => 'Running Build Project from the approved PROJECT PLAN.',
       reportActionResult: async (_request, result) => (result.ok ? 'Done.' : result.message ?? 'Execution stopped.'),
+      // Permission already granted up front, so the action runs without the chat "allow" question.
+      getExecutionMode: () => 'bypass',
+      isBypassPermissionsEnabled: () => true,
     });
 
     // Finished task cards are removed from the chat and kept in Work History (finalizeTask), so

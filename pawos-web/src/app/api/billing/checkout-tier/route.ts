@@ -4,25 +4,12 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
 const VALID_TIERS: SubscriptionTierId[] = ["pro", "proMax", "team", "enterprise"];
 const VALID_SEAT_TIERS: SeatTier[] = ["standard", "premium"];
-const PURCHASABLE_RUNTIME_IDS = ["coding"] as const;
-type PurchasableRuntimeId = (typeof PURCHASABLE_RUNTIME_IDS)[number];
-
 
 /**
- * Tier pricing in INR paise (1 INR = 100 paise).
- * These are monthly equivalents for now — displayed as one-time purchases to the user.
- * In the future, these can be moved to the database for editability.
+ * Organization plan pricing in INR paise (1 INR = 100 paise) for one-time orders. Pro / Pro Max are
+ * not here — they're Razorpay subscriptions priced by their Razorpay plans (/api/billing/checkout).
  */
-const TIER_PRICING_PAISE: Record<SubscriptionTierId, Record<string, number>> = {
-  go: {},
-  pro: {
-    monthly: 191300, // ₹1,913
-    yearly: 1905300, // ₹19,053
-  },
-  proMax: {
-    "5x": 956500, // ₹9,565
-    "20x": 2391300, // ₹23,913
-  },
+const TIER_PRICING_PAISE: Record<"team" | "enterprise", Record<string, number>> = {
   team: {
     standard: 191300, // ₹1,913 per seat
     premium: 956500, // ₹9,565 per seat
@@ -33,8 +20,8 @@ const TIER_PRICING_PAISE: Record<SubscriptionTierId, Record<string, number>> = {
 };
 
 /**
- * Creates a Razorpay Order for a tier purchase (one-time payment, not subscription).
- * Returns the order ID which the client uses with createPayment().
+ * Creates a Razorpay Order for an organization plan purchase (Team / Enterprise — one-time order).
+ * Pro and Pro Max are refused: they're subscriptions (/api/billing/checkout).
  * Team/Enterprise with seat counts multiply the base price by seat count.
  */
 export async function POST(request: Request) {
@@ -47,7 +34,6 @@ export async function POST(request: Request) {
   const seatCount = typeof (options?.seatCount ?? body?.seatCount) === "number" && Number.isInteger(options?.seatCount ?? body?.seatCount) ? (options?.seatCount ?? body?.seatCount) : undefined;
   const runtimeIds = Array.isArray(options?.runtimeIds) ? options.runtimeIds : (Array.isArray(body?.runtimeIds) ? body.runtimeIds : []);
   const proMaxVariant = (options?.proMaxVariant ?? body?.proMaxVariant) as ProMaxVariant | undefined;
-  const proBillingFrequency = (options?.proBillingFrequency ?? body?.proBillingFrequency) as string | undefined;
   const accessToken = typeof body?.accessToken === "string" ? body.accessToken : undefined;
 
   // ---- Authentication ----
@@ -71,6 +57,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, reason: "Unknown tier requested." }, { status: 400 });
   }
 
+  // ---- Pro / Pro Max are subscriptions, never one-time orders ----
+  // They go through /api/billing/checkout (a Razorpay subscription that renews and is recorded in
+  // pawos_subscriptions). A one-time order here would charge the customer without activating anything.
+  if (tier === "pro" || tier === "proMax") {
+    return NextResponse.json(
+      { ok: false, reason: "Pro and Pro Max are subscriptions — please update PawOS and try again." },
+      { status: 400 }
+    );
+  }
+
   // ---- Commercial Availability Gate for V1 Launch ----
   if ((tier as string) === "team" || (tier as string) === "enterprise") {
     return NextResponse.json(
@@ -80,9 +76,6 @@ export async function POST(request: Request) {
   }
 
   // ---- Tier-specific parameter validation ----
-  if (tier === "proMax" && !proMaxVariant) {
-    return NextResponse.json({ ok: false, reason: "Pro Max requires a variant: 5x or 20x." }, { status: 400 });
-  }
   if (tier === "team") {
     if (!seatTier || !VALID_SEAT_TIERS.includes(seatTier)) {
       return NextResponse.json({ ok: false, reason: "Team requires a seat tier: standard or premium." }, { status: 400 });
@@ -96,11 +89,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, reason: "Enterprise plans require a minimum of 20 seats." }, { status: 400 });
     }
   }
-  if (
-    runtimeIds.some((runtimeId: unknown): runtimeId is string => typeof runtimeId !== "string") ||
-    runtimeIds.some((runtimeId: string) => !PURCHASABLE_RUNTIME_IDS.includes(runtimeId as PurchasableRuntimeId)) ||
-    (runtimeIds.length > 0 && tier !== "pro" && tier !== "proMax")
-  ) {
+  // Runtime add-ons only come with Pro / Pro Max, which are subscriptions — never on an order here.
+  if (runtimeIds.length > 0) {
     return NextResponse.json({ ok: false, reason: "Requested runtime is not available for purchase." }, { status: 400 });
   }
 
@@ -114,14 +104,7 @@ export async function POST(request: Request) {
 
   // ---- Calculate order amount in INR rupees ----
   let amountInr: number | null = null;
-  if (tier === "pro") {
-    const frequency = proBillingFrequency === "yearly" ? "yearly" : "monthly";
-    const paise = TIER_PRICING_PAISE.pro[frequency as keyof typeof TIER_PRICING_PAISE.pro];
-    amountInr = paise ? paise / 100 : null;
-  } else if (tier === "proMax" && proMaxVariant) {
-    const paise = TIER_PRICING_PAISE.proMax[proMaxVariant] ?? null;
-    amountInr = paise ? paise / 100 : null;
-  } else if (tier === "team" && seatTier && seatCount) {
+  if (tier === "team" && seatTier && seatCount) {
     const basePaise = TIER_PRICING_PAISE.team[seatTier] ?? null;
     amountInr = basePaise ? (basePaise / 100) * seatCount : null;
   } else if (tier === "enterprise" && seatCount) {

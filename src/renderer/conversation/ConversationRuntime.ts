@@ -1,4 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
+import { confirmationPrompt, isAllowReply, isDenyReply } from './confirmationPrompt';
+import { stripLeakedWidgetCode } from './widgetDocument';
+import { findResumeProblems, resumeAsText, toChatResume } from './resumeContent';
 import { startCommunicationAudioCapture, type CaptureHandle } from '../communication/CommunicationAudioCapture';
 import type {
   ConversationLogEntry,
@@ -40,7 +43,7 @@ import {
   isVoiceOutputOnRequest,
 } from './SpeechPresentation';
 import type { TurnUsageSubmission, UsageRequestType } from '../../shared/billing/UsageMeteringTypes';
-import { createTaskProgressExtension, createFileChangeExtension, createPermissionExtension, updateExtension } from './extensions/ExtensionHelpers';
+import { createTaskProgressExtension, createFileChangeExtension, updateExtension } from './extensions/ExtensionHelpers';
 import { approvalRequestService } from '../organization/ApprovalRequestService';
 
 const MAX_LOG_ENTRIES = 200;
@@ -61,6 +64,8 @@ function isTerminalExecutionBlock(result: ActionResult): boolean {
 const PROCESS_OUTPUT_DEBOUNCE_MS = 200;
 /** Hard backstop against a runaway tool-call/continuation loop within one turn, regardless of whether failures look related. */
 const MAX_TOOL_ITERATIONS_PER_TURN = 10;
+/** show_widget code cap — a chart or mockup is a few KB; anything near this is a runaway. */
+const MAX_WIDGET_CODE_CHARS = 200_000;
 /** Recovery Policy: after this many consecutive failures that look like the same underlying problem, stop retrying that approach and make the model explain + ask instead. */
 const MAX_SAME_FAILURE_ATTEMPTS = 3;
 /** Friendly platform names for the proactive meeting-detected prompt — cosmetic only, the real medium id (used for start_communication_capture) always comes from the event itself. */
@@ -122,7 +127,14 @@ function estimatePawComputeFromUsage(usages: TurnUsageSubmission['requests']): n
  * natural instruction when it arrived as pasted text or a file, so Paw
  * reads/summarizes it instead of answering as if it were a spoken command.
  */
-function buildReasoningInput(transcript: string, context?: SubmittedInputContext, pendingImageCount?: number): string {
+function buildReasoningInput(transcript: string, context?: SubmittedInputContext, pendingImageCount?: number, projectFolder?: string | null): string {
+  const body = buildReasoningBody(transcript, context, pendingImageCount);
+  if (!projectFolder) return body;
+  // The project the user opened with the header's project button — the default place to work.
+  return `[Open project folder: ${projectFolder} — use it as the default folder (cwd / rootPath / path) for reading, searching, editing files, running commands and git, unless the user names a different place.]\n\n${body}`;
+}
+
+function buildReasoningBody(transcript: string, context?: SubmittedInputContext, pendingImageCount?: number): string {
   const text = context?.reasoningText ?? transcript;
   if (context?.source === 'pasted') {
     return `[The user just pasted the text below into the conversation rather than typing a question or command. Do not call any tool/function for this message. Just reply in plain conversation: briefly summarize what it is, then ask what they'd like to do with it.]\n\n${text}`;
@@ -142,10 +154,8 @@ function buildReasoningInput(transcript: string, context?: SubmittedInputContext
  * (anchored to the start of the message) so it doesn't misfire on a reply
  * that merely contains "yes" somewhere inside a longer, unrelated message.
  */
-const AFFIRMATIVE_REPLY = /^\s*(yes|yeah|yep|yup|sure|ok(ay)?|go ahead|do it|please do|confirmed?|proceed|sounds good)\b/i;
-
 function isAffirmativeReply(text: string): boolean {
-  return AFFIRMATIVE_REPLY.test(text.trim());
+  return isAllowReply(text);
 }
 
 /** Sentence-ending punctuation followed by whitespace — a simple heuristic (not a full NLP tokenizer), good enough to pace speech naturally without waiting for a whole paragraph. */
@@ -224,7 +234,14 @@ export class ConversationRuntime {
   /** Tool-call handlers currently in flight — handleTranscript's tail waits for these too, so a turn never finalizes while an action (and the speech it may resume) is still running. */
   private pendingActionPromises: Promise<void>[] = [];
   /** An action that came back needing confirmation — the next plain reply is checked against this before anything else, rather than trusting the model to remember and re-invoke the tool itself. */
-  private pendingConfirmation: { request: ActionRequest; toolCall: ReasoningToolCall } | null = null;
+  /** The project folder opened from the header (folder or cloned repo) — told to the model on every turn. */
+  private projectFolder: string | null = null;
+
+  setProjectFolder(folder: string | null): void {
+    this.projectFolder = folder && folder.trim() ? folder.trim() : null;
+  }
+
+  private pendingConfirmation: { request: ActionRequest; toolCall: ReasoningToolCall; task?: ConversationTaskRecord | null; goal?: string } | null = null;
 
   /** Project ID (org_projects.id) for this turn's context — propagated to all ActionRequests created in this turn for RLS scoping. */
   private currentTurnProjectId: string | undefined = undefined;
@@ -259,28 +276,6 @@ export class ConversationRuntime {
     void this.args.persistExecution?.(record);
   });
 
-  private getActionVerb(actionType: string): string {
-    const verbMap: Record<string, string> = {
-      'readFile': 'read',
-      'writeFile': 'edit',
-      'createFolder': 'create',
-      'deletePath': 'delete',
-      'movePath': 'move',
-      'executeCommand': 'run',
-      'runProcess': 'run',
-      'copyPath': 'copy',
-      'default': 'run'
-    };
-    return verbMap[actionType] ?? 'run';
-  }
-
-  private getActionTarget(request: ActionRequest): string {
-    const target = (request as Record<string, unknown>)['path'] ||
-                   (request as Record<string, unknown>)['cwd'] ||
-                   (request as Record<string, unknown>)['command'] ||
-                   request.type;
-    return String(target).split('/').pop() || request.type;
-  }
 
   private handleWorkspaceObservation = (event: WorkspaceObservationEvent) => {
     const actionId = this.activeActionIdByType.get(event.actionType);
@@ -506,10 +501,6 @@ export class ConversationRuntime {
        * user denies a pending destructive action, this cancels it.
        */
       onGovernanceDenied?: (cb: (payload: { approvalId: string }) => void) => (() => void) | undefined;
-      /**
-       * Request user approval for an action before executing
-       */
-      onRequestApproval?: (options: { verb: string; target: string; action: string }) => Promise<boolean>;
       /**
        * Request user approval for a plan/proposal before execution
        */
@@ -788,7 +779,7 @@ export class ConversationRuntime {
     // speech itself, same as the barge-in path below, without treating this
     // as an interruption (handleTranscript's own pendingConfirmation branch
     // already bumps turnId and starts a fresh turn record for it).
-    if (this.pendingConfirmation && !context && isAffirmativeReply(trimmed)) {
+    if (this.pendingConfirmation && !context && (isAffirmativeReply(trimmed) || isDenyReply(trimmed))) {
       this.speechQueue = [];
       this.args.speechSynthesis.stop();
       this.appendMessage('user', trimmed);
@@ -1035,7 +1026,27 @@ export class ConversationRuntime {
         this.startTurnRecord(transcript);
         this.pendingActionPromises = [];
         this.log('turn-start', { turnId: currentTurn, transcript, source: 'confirmation-reply' });
+        // Same task continues (its card/Tasks entry keeps the original goal, not "allow").
+        if (pending.task) {
+          this.currentTaskRecord = { ...pending.task, status: 'running', endedAt: null, finalReport: undefined };
+        } else if (pending.goal) {
+          this.currentTaskRecord = { id: uuidv4(), goal: pending.goal, status: 'running', startedAt: Date.now(), endedAt: null, actions: [] };
+        }
         void this.executeConfirmedAction(pending.request, pending.toolCall, currentTurn);
+        return;
+      }
+      if (isDenyReply(transcript)) {
+        const currentTurn = ++this.turnId;
+        this.stopRecognition();
+        this.startTurnRecord(transcript);
+        this.pendingActionPromises = [];
+        this.log('action-denied', { type: pending.request.type });
+        const ctx: TurnContext = { ttsBuffer: '', finalResponse: '', assistantMessageId: null, startedAtMs: Date.now(), usages: [] };
+        const denied: ActionResult = { ok: false, reason: 'cancelled', message: 'The user replied "deny" — this action was skipped. Do not run it.' };
+        void (async () => {
+          await this.recordAndMaybeContinueAfterTool(pending.toolCall, pending.request, denied, currentTurn, ctx);
+          await this.drainPendingActionsAndFinalize(currentTurn, ctx, 'deny');
+        })();
         return;
       }
       // Not a clear yes — treat the confirmation as abandoned and handle
@@ -1062,7 +1073,7 @@ export class ConversationRuntime {
     // and uploaded files get a natural instruction prefix so Paw reads and
     // summarizes them instead of treating a content dump as a spoken
     // command — the displayed/stored transcript above stays untouched.
-    const reasoningInput = buildReasoningInput(transcript, context, this.pendingReferenceImages.length);
+    const reasoningInput = buildReasoningInput(transcript, context, this.pendingReferenceImages.length, this.projectFolder);
 
     this.updateSnapshot({
       state: 'transcribing',
@@ -1181,7 +1192,16 @@ export class ConversationRuntime {
       return;
     }
 
-    if (!ctx.finalResponse) {
+    if (!ctx.finalResponse && this.pendingConfirmation) {
+      // The turn ended on a permission question — that chat message IS the reply (spoken too),
+      // never an extra "I heard: …" line after it.
+      ctx.finalResponse = confirmationPrompt(this.pendingConfirmation.request);
+      this.enqueueSpeech(ctx.finalResponse, currentTurn);
+      await this.speechQueuePromise;
+    }
+
+    // A turn that only drew a widget is a complete answer — no "I heard: …" filler after it.
+    if (!ctx.finalResponse && (this.currentTurnRecord?.widgets?.length ?? 0) === 0) {
       // Nothing streamed at all, even after any continuation (e.g. a
       // tool-call-only turn whose result needed no further comment) — still
       // say something, and make sure the visible chat bubble matches what's
@@ -1316,6 +1336,16 @@ export class ConversationRuntime {
     return {
       onDelta: (delta, assistantMessage) => {
         if (this.closed || currentTurn !== this.turnId) return;
+        // After a widget is drawn, some models paste widget markup into their reply as text —
+        // that never reaches the chat or the voice.
+        const drewWidget = (this.currentTurnRecord?.widgets?.length ?? 0) > 0;
+        const content = drewWidget ? stripLeakedWidgetCode(assistantMessage.content) : assistantMessage.content;
+        if (drewWidget && content.length < assistantMessage.content.length) {
+          if (content.trim() && this.currentTurnAssistantMessageId) {
+            this.upsertMessage({ id: this.currentTurnAssistantMessageId, role: 'assistant', content, createdAt: assistantMessage.createdAt, status: assistantMessage.status });
+          }
+          return;
+        }
         // Reuse turn-level assistant message ID to avoid creating duplicates across phases
         const messageId = this.currentTurnAssistantMessageId || assistantMessage.id;
         if (!this.currentTurnAssistantMessageId) {
@@ -1324,7 +1354,7 @@ export class ConversationRuntime {
         this.upsertMessage({
           id: messageId,
           role: 'assistant',
-          content: assistantMessage.content,
+          content,
           createdAt: assistantMessage.createdAt,
           status: assistantMessage.status,
         });
@@ -1422,7 +1452,9 @@ export class ConversationRuntime {
     try {
       const result = await handle.completed;
       if (this.closed || currentTurn !== this.turnId) return;
-      ctx.finalResponse = result.response || result.assistantMessage?.content || ctx.finalResponse;
+      const response = result.response || result.assistantMessage?.content || '';
+      const drewWidget = (this.currentTurnRecord?.widgets?.length ?? 0) > 0;
+      ctx.finalResponse = (drewWidget ? stripLeakedWidgetCode(response) : response) || ctx.finalResponse;
     } catch (error) {
       if (this.closed || currentTurn !== this.turnId) return;
       this.failTurn(error instanceof Error ? error.message : 'Failed to continue after that.');
@@ -1433,22 +1465,25 @@ export class ConversationRuntime {
     const executeAction = this.args.executeAction;
     if (!executeAction) return;
 
+    // A visual drawn inline in the chat — nothing runs on the computer, so no permission question.
+    if (toolCall.name === 'show_widget') {
+      await this.showWidget(toolCall, currentTurn, ctx);
+      return;
+    }
+    // A resume shown in chat for download — nothing is written to disk, so no permission question.
+    if (toolCall.name === 'present_resume') {
+      await this.presentResume(toolCall, currentTurn, ctx);
+      return;
+    }
+
     const request = toolCallToActionRequest(toolCall);
     if (!request) {
       this.appendMessage('system', "I'm not sure how to do that yet.");
       return;
     }
 
-    // Request user approval before executing
-    const approved = await this.args.onRequestApproval?.({
-      verb: this.getActionVerb(request.type),
-      target: this.getActionTarget(request),
-      action: request.type
-    }) ?? true;
-    if (!approved) {
-      this.log('action-denied', { type: request.type });
-      return;
-    }
+    // No approval panel: an action that needs the user's go-ahead comes back from the main process
+    // as requires-confirmation, and PawOS asks in chat ("I'm going to … reply allow") — see below.
 
     // Propagate projectId to all actions in this turn for RLS scoping
     if (this.currentTurnProjectId) {
@@ -1483,6 +1518,21 @@ export class ConversationRuntime {
     // AI-backed action above.
     if (request.type === 'processCommunication' || request.type === 'searchCommunications' || request.type === 'resumeInterruptedCommunications' || request.type === 'draftFollowupEmail') {
       request.apiKey = aiProviderConfigStore.getApiKey('gemini');
+    }
+
+    // Every action asks first, in chat only — "I need permission to read …", "… to run …" — and
+    // runs after the user replies "allow" (handleTranscript → executeConfirmedAction). Autonomous
+    // (headless, no human) runs and the composer's auto modes (Accept edits / Bypass) don't ask.
+    if (!this.args.autonomousRunId && !('confirmed' in request && request.confirmed)) {
+      const tempMode = this.getTemporaryExecutionModeForTurn(currentTurn);
+      const mode = tempMode ?? this.args.getExecutionMode?.() ?? DEFAULT_EXECUTION_MODE;
+      const bypassPermissionsEnabled = this.args.isBypassPermissionsEnabled?.() ?? false;
+      if (shouldAutoConfirmAction(mode, request.type, bypassPermissionsEnabled)) {
+        await this.executeConfirmedAction(request, toolCall, currentTurn);
+        return;
+      }
+      this.askPermissionInChat(request, toolCall, currentTurn);
+      return;
     }
 
     // Real mic/system-audio capture lives in THIS renderer process
@@ -1598,35 +1648,11 @@ export class ConversationRuntime {
         await this.executeConfirmedAction(request, toolCall, currentTurn);
         return;
       }
-      this.pendingConfirmation = { request, toolCall };
-
-      // Store for approval → resume flow (P1-A governance)
-      if (result.approvalRequestId) {
-        this.pendingApprovalAction = { approvalId: result.approvalRequestId, request, toolCall };
-        this.updateSnapshot({ pendingConfirmation: true });
-      }
-
-      // Create inline permission extension for confirmation request
-      const permExt = createPermissionExtension({
-        title: `Confirm ${request.type}`,
-        description: `PawOS needs your approval to ${request.type}.`,
-        allowedActions: ['allow-once', 'deny'],
-        actionId: toolCall.id,
-        taskId: this.currentTaskRecord?.id,
-        approvalId: result.approvalRequestId,
-        state: 'pending',
-      });
-
-      this.upsertMessage({
-        id: `confirm-${toolCall.id}`,
-        role: 'assistant',
-        content: `I need your confirmation to proceed.`,
-        createdAt: Date.now(),
-        status: 'final' as const,
-        extensions: [permExt],
-      });
-
-      this.updateSnapshot({ pendingConfirmation: true });
+      const waitingText = 'Waiting for you to reply "allow"';
+      this.finishTaskAction(actionId, result, waitingText);
+      this.executionSupervisor.recordAction(request, result, { label: waitingText, startedAt: actionStartedAt, endedAt: Date.now() });
+      this.askPermissionInChat(request, toolCall, currentTurn);
+      return;
     }
 
     const doneText =
@@ -1678,6 +1704,120 @@ export class ConversationRuntime {
    * isAffirmativeReply handling in handleTranscript) — this only concerns
    * what happens AFTER the confirmed action has already finished executing.
    */
+  /** present_resume: the finished resume as its own chat message (with a Download button) — never a file on disk. */
+  private async presentResume(toolCall: ReasoningToolCall, currentTurn: number, ctx: TurnContext): Promise<void> {
+    const parsed = toChatResume(toolCall.arguments);
+    // Checked against what the user actually typed in this conversation — a wrong email, a dropped
+    // section or a missing name header goes back to the model to fix instead of being shown.
+    const userTexts = this.snapshot.messages.filter((m) => m.role === 'user').map((m) => m.content);
+    const problems = parsed ? findResumeProblems(parsed, userTexts) : [];
+    const resume = parsed && problems.length === 0 ? parsed : null;
+    const result: ActionResult = parsed && problems.length > 0
+      ? {
+          ok: false,
+          reason: 'failed',
+          message: `Not shown — fix these and call present_resume again with the corrected resume: ${problems.join('; ')}. Use the user's details exactly as they typed them.`,
+        }
+      : resume
+      ? {
+          ok: true,
+          data: {
+            shown: true,
+            note: 'The resume is on screen with Download PDF and Download Word buttons — it is not saved anywhere unless the user downloads it. Reply in one short sentence (e.g. offer changes); do not repeat the resume text and do not save it with any file tool.',
+          },
+        }
+      : { ok: false, reason: 'failed', message: 'The resume had no content — pass a title and at least one section with paragraphs.' };
+    if (resume) {
+      this.upsertMessage({
+        id: `resume-${toolCall.id}`,
+        role: 'assistant',
+        content: resumeAsText(resume),
+        createdAt: Date.now(),
+        status: 'final',
+        resume,
+      });
+    }
+    this.log('resume-presented', { ok: result.ok, sections: resume?.sections.length ?? 0 });
+    await this.recordAndMaybeContinueAfterTool(toolCall, { type: 'presentResume' } as unknown as ActionRequest, result, currentTurn, ctx);
+  }
+
+  /** show_widget: add the visual to the chat as its own message, then let the model keep talking. */
+  private async showWidget(toolCall: ReasoningToolCall, currentTurn: number, ctx: TurnContext): Promise<void> {
+    const args = (toolCall.arguments ?? {}) as Record<string, unknown>;
+    const code = typeof args.widget_code === 'string' ? args.widget_code.trim() : '';
+    const title = typeof args.title === 'string' && args.title.trim() ? args.title.trim().slice(0, 80) : 'visual';
+    // One visual per answer: models tend to keep redrawing (seen live: 10 redraws of one diagram).
+    const alreadyDrew = (this.currentTurnRecord?.widgets?.length ?? 0) > 0;
+    const result: ActionResult =
+      alreadyDrew
+        ? { ok: false, reason: 'failed', message: 'A visual is already on screen for this answer — do not draw another. Reply in plain words now (one or two short sentences, or nothing).' }
+        : !code
+        ? { ok: false, reason: 'failed', message: 'widget_code was empty — nothing to show.' }
+        : code.length > MAX_WIDGET_CODE_CHARS
+          ? { ok: false, reason: 'failed', message: `The widget is too large (${code.length} characters, limit ${MAX_WIDGET_CODE_CHARS}). Make it simpler.` }
+          : {
+              ok: true,
+              data: {
+                shown: true,
+                note: 'Done — the visual is already on screen. Now reply in plain words only (one or two short sentences, or nothing). Never write HTML, SVG, CSS, code or "widget_code" in your reply, do not describe the visual line by line, and do not call show_widget again for this answer.',
+              },
+            };
+
+    if (result.ok) {
+      const loadingMessages = Array.isArray(args.loading_messages)
+        ? args.loading_messages.filter((m): m is string => typeof m === 'string' && m.trim().length > 0).map((m) => m.trim().slice(0, 60)).slice(0, 4)
+        : [];
+      const widget = { title, code, ...(loadingMessages.length > 0 ? { loadingMessages } : {}) };
+      this.upsertMessage({
+        id: `widget-${toolCall.id}`,
+        role: 'assistant',
+        content: '',
+        createdAt: Date.now(),
+        status: 'final',
+        widget,
+      });
+      // Saved with the chat (the turn record is what ConversationSessionStore persists).
+      if (this.currentTurnRecord) {
+        this.currentTurnRecord.widgets = [...(this.currentTurnRecord.widgets ?? []), widget];
+      }
+    }
+    this.log('widget-shown', { title, ok: result.ok, chars: code.length });
+    await this.recordAndMaybeContinueAfterTool(toolCall, { type: 'showWidget' } as unknown as ActionRequest, result, currentTurn, ctx);
+  }
+
+  /**
+   * Plain chat message — "I need permission to read …. Reply "allow" …" — then wait. No panel, bar
+   * or card. The user's "allow"/"deny" reply is handled in handleTranscript.
+   */
+  private askPermissionInChat(request: ActionRequest, toolCall: ReasoningToolCall, currentTurn: number): void {
+    this.pendingConfirmation = {
+      request,
+      toolCall,
+      task: this.currentTaskRecord,
+      goal: this.currentTaskRecord?.goal ?? this.currentTurnRecord?.transcript,
+    };
+    this.upsertMessage({
+      id: `confirm-${toolCall.id}`,
+      role: 'assistant',
+      content: confirmationPrompt(request),
+      createdAt: Date.now(),
+      status: 'final' as const,
+    });
+    this.updateSnapshot({ pendingConfirmation: true });
+
+    // The model hears it is waiting on the user — it must not ask a second time in its own words.
+    this.args.reasoningRuntime.provideToolResult({
+      toolCallId: toolCall.id,
+      name: toolCall.name,
+      content: JSON.stringify({
+        ok: false,
+        reason: 'requires-confirmation',
+        message: 'PawOS asked the user in chat for permission to do this exact action ("allow" or "deny"). Do not ask again and do not say anything else — wait for their reply.',
+      }),
+    });
+    this.resumeAfterAction(currentTurn);
+  }
+
   private async executeConfirmedAction(request: ActionRequest, toolCall: ReasoningToolCall, currentTurn: number): Promise<void> {
     const executeAction = this.args.executeAction;
     if (!executeAction) return;
@@ -1850,6 +1990,14 @@ export class ConversationRuntime {
 
     console.log(`[TRACE.upsertTaskMessage] START | taskId=${task.id} | status=${task.status}`);
 
+    // Keep the Tasks panel's copy current — it outlives the chat card (removed on finalize).
+    const taskCopy: ConversationTaskRecord = { ...task, actions: task.actions.map((a) => ({ ...a })) };
+    const history = this.snapshot.taskHistory ?? [];
+    const existing = history.findIndex((t) => t.id === task.id);
+    this.updateSnapshot({
+      taskHistory: existing >= 0 ? history.map((t, i) => (i === existing ? taskCopy : t)) : [...history, taskCopy].slice(-50),
+    });
+
     // Build task progress extension for inline preview
     const completedActions = task.actions.filter((a) => a.endedAt).length;
     const totalActions = task.actions.length;
@@ -1952,8 +2100,10 @@ export class ConversationRuntime {
     }
     console.log(`[TRACE.finalizeTask] START | taskId=${task.id} | reason=${reason}`);
     task.endedAt = Date.now();
-    task.status =
-      task.actions.some((a) => a.result && isTerminalExecutionBlock(a.result))
+    const waitingForAllow = this.pendingConfirmation?.task?.id === task.id;
+    task.status = waitingForAllow
+      ? 'stopped'
+      : task.actions.some((a) => a.result && isTerminalExecutionBlock(a.result))
         ? 'stopped'
         : reason === 'interrupted'
         ? 'interrupted'

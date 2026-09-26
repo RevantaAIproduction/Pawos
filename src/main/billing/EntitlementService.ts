@@ -541,6 +541,7 @@ class EntitlementService {
       usageWeekResetsAt: rolling.weekResetsAt,
       buildFinalWeek: this.isBuildFinalWeek(),
       proMaxVariant: this.currentProMaxVariant(),
+      ...(this.effectiveTier() === 'pro' ? { proBillingFrequency: subscriptionStore.getEffective().proBillingFrequency ?? 'monthly' } : {}),
       goRefreshesRemaining: usageEventStore.getGoRefreshesRemaining(),
     };
   }

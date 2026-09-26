@@ -78,6 +78,7 @@ export async function POST(request: Request) {
     tier: resolved.tier,
     seatTier: resolved.seatTier,
     proMaxVariant: resolved.proMaxVariant,
+    billingFrequency: resolved.billingFrequency ?? "monthly",
     subscriptionId: subscription.id,
     runtimeIds,
   });

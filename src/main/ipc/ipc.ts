@@ -859,6 +859,7 @@ export function registerIpc(opts: {
             ...(options?.seatCount ? { seatCount: options.seatCount } : {}),
             ...(options?.runtimeIds?.length ? { runtimeIds: options.runtimeIds } : {}),
             ...(options?.proMaxVariant ? { proMaxVariant: options.proMaxVariant } : {}),
+            ...(tier === 'pro' && options?.proBillingFrequency ? { proBillingFrequency: options.proBillingFrequency } : {}),
             ...(accessToken ? { accessToken } : {}),
           }),
         });
@@ -899,6 +900,7 @@ export function registerIpc(opts: {
         runtimeIds: parseVerifiedRuntimeIds(verified.runtimeIds),
         orderId: verified.subscriptionId,
         proMaxVariant: verified.proMaxVariant,
+        proBillingFrequency: verified.billingFrequency,
       });
       for (const win of BrowserWindow.getAllWindows()) win.webContents.send('billing:subscriptionUpdated');
       return { ok: true, subscription: subscriptionStore.getEffective() };

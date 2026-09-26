@@ -23,6 +23,9 @@ import { organizationService } from '../organization/OrganizationService';
 import { organizationUsageService } from '../billing/OrganizationUsageService';
 import type { TurnUsageSubmission } from '../../shared/billing/UsageMeteringTypes';
 
+/** localStorage key for the project opened from the header — a per-device convenience, like a remembered tab. */
+const PROJECT_FOLDER_KEY = 'pawos:projectFolder';
+
 export function useConversationController(args?: {
   onStateChange?: (state: ConversationSnapshot['state']) => void;
   onVisemeFrame?: (frame: VisemeFrame) => void;
@@ -43,6 +46,28 @@ export function useConversationController(args?: {
   const [streamingElapsedSeconds, setStreamingElapsedSeconds] = useState(0);
 
   const runtimeRef = useRef<ConversationRuntime | null>(null);
+
+  // The project opened from the header's project button (a folder or a cloned repo). Remembered on
+  // this device so it's still open after a restart; the runtime tells the model about it each turn.
+  const [projectFolder, setProjectFolderState] = useState<string | null>(() => {
+    try {
+      return window.localStorage.getItem(PROJECT_FOLDER_KEY) || null;
+    } catch {
+      return null;
+    }
+  });
+  const projectFolderRef = useRef(projectFolder);
+  const setProjectFolder = useCallback((folder: string | null) => {
+    projectFolderRef.current = folder;
+    setProjectFolderState(folder);
+    runtimeRef.current?.setProjectFolder(folder);
+    try {
+      if (folder) window.localStorage.setItem(PROJECT_FOLDER_KEY, folder);
+      else window.localStorage.removeItem(PROJECT_FOLDER_KEY);
+    } catch {
+      // storage unavailable — the project stays open for this session only
+    }
+  }, []);
   // The just-completed turn's real, aggregate Gemini usage — set synchronously by
   // ConversationRuntime's onTurnUsage callback, always right before it fires onStateChange('completed')
   // for the same turn (see ConversationRuntime.ts's drainPendingActionsAndFinalize). Never read except
@@ -417,48 +442,6 @@ export function useConversationController(args?: {
           window.dispatchEvent(new CustomEvent('pawos-request-plan', { detail: plan }));
         });
       },
-      onRequestApproval: async (options) => {
-        // Check if user has "Always allow" preference for this action
-        try {
-          const alwaysAllowKey = `gov_always_allow_${options.action}`;
-          const alwaysAllow = localStorage.getItem(alwaysAllowKey) === 'true';
-          if (alwaysAllow) {
-            console.log(`[GOVERNANCE] Auto-approved (always allow): ${options.verb} ${options.target}`);
-            return true;
-          }
-        } catch (e) {
-          // localStorage may not be available
-        }
-
-        return new Promise((resolve) => {
-          let resolved = false;
-          const timeout = setTimeout(() => {
-            if (!resolved) {
-              resolved = true;
-              console.warn('[GOVERNANCE] Approval timeout, allowing by default');
-              resolve(true);
-            }
-          }, 30000);
-
-          // Store resolver so ConversationPanel can call it when user decides
-          (window as any).__governanceResolve = (approved: boolean, rememberChoice?: boolean) => {
-            if (!resolved) {
-              resolved = true;
-              clearTimeout(timeout);
-              if (rememberChoice && approved) {
-                try {
-                  localStorage.setItem(`gov_always_allow_${options.action}`, 'true');
-                } catch (e) {
-                  // localStorage may not be available
-                }
-              }
-              resolve(approved);
-            }
-          };
-          // Dispatch custom event that ConversationPanel listens to
-          window.dispatchEvent(new CustomEvent('pawos-request-approval', { detail: options }));
-        });
-      },
       onVisemeFrame: (frame) => onVisemeFrameRef.current?.(frame),
       persistTurn: (turn, hint) => {
         return ipc.appendSessionTurn(turn, hint).then((session) => {
@@ -498,6 +481,7 @@ export function useConversationController(args?: {
       },
     });
 
+    runtimeRef.current.setProjectFolder(projectFolderRef.current);
     const unsubscribe = runtimeRef.current.subscribe(setSnapshot);
 
     // Re-point at the newly-configured provider the moment Settings changes
@@ -762,6 +746,8 @@ export function useConversationController(args?: {
     executionMode,
     setExecutionMode,
     bypassPermissionsEnabled,
+    projectFolder,
+    setProjectFolder,
     activePawModel,
     modelTierRequirements,
     selectModel,

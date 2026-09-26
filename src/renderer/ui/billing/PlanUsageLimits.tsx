@@ -1,13 +1,12 @@
 import React from 'react';
 import type { EntitlementSnapshot } from '../../../shared/billing/BillingTypes';
-import { formatTierLabel } from '../../billing/EntitlementDisplay';
+import { formatPlanName } from '../../billing/EntitlementDisplay';
 import { getExhaustionPrimaryActions } from './CreditsRequiredNotice';
 
 function formatPlanHeading(entitlement: EntitlementSnapshot): string {
   if (entitlement.tier === 'team') return `Team ${entitlement.seatTier === 'premium' ? 'Premium' : 'Standard'} (pooled)`;
   if (entitlement.tier === 'enterprise') return 'Enterprise (pooled)';
-  if (entitlement.tier === 'proMax') return `Pro Max ${entitlement.proMaxVariant === '20x' ? '20x' : '5x'}`;
-  return formatTierLabel(entitlement.tier).replace(/^Paw /, '');
+  return formatPlanName(entitlement).replace(/^Paw /, '');
 }
 
 function formatResetIn(resetsAt: number, now: number): string {

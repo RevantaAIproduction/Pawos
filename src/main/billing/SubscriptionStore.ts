@@ -232,7 +232,7 @@ class SubscriptionStore {
    * back in — after using another account, a reinstall, or on another PC — restores it until
    * `expiresAt`. An organization tier (Team/Enterprise) already active for this account is kept.
    */
-  applyServerSubscription(accountId: string, plan: { tier: 'pro' | 'proMax'; proMaxVariant?: string | null; expiresAt: number }): SubscriptionState {
+  applyServerSubscription(accountId: string, plan: { tier: 'pro' | 'proMax'; proMaxVariant?: string | null; billingFrequency?: string | null; expiresAt: number }): SubscriptionState {
     if (this.state.accountId === accountId && isActiveStatus(this.state.status) && (this.state.tier === 'team' || this.state.tier === 'enterprise')) {
       return this.getEffective();
     }
@@ -246,6 +246,7 @@ class SubscriptionStore {
       serverVerified: true,
       runtimeEntitlements: keepGrants,
       ...(plan.tier === 'proMax' ? { proMaxVariant: (plan.proMaxVariant === '20x' ? '20x' : '5x') as import('../../shared/billing/BillingTypes').ProMaxVariant } : {}),
+      ...(plan.tier === 'pro' ? { proBillingFrequency: (plan.billingFrequency === 'yearly' ? 'yearly' : 'monthly') as 'monthly' | 'yearly' } : {}),
     };
     this.save();
     return this.getEffective();

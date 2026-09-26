@@ -119,7 +119,8 @@ describe('ConversationRuntime execution modes — confirmation wiring', () => {
     runtime.submitTranscript('write the file');
     await waitForIdle(runtime);
 
-    expect(calledForType(executeAction, 'writeFile')).toHaveLength(1);
+    // Asked in chat first — nothing runs before the user replies "allow".
+    expect(calledForType(executeAction, 'writeFile')).toHaveLength(0);
     expect(runtime.getSnapshot().pendingConfirmation).toBe(true);
   }, 10000);
 
@@ -135,7 +136,8 @@ describe('ConversationRuntime execution modes — confirmation wiring', () => {
     runtime.submitTranscript('write the file');
     await waitForIdle(runtime);
 
-    expect(calledForType(executeAction, 'writeFile')).toHaveLength(1);
+    // Asked in chat first — nothing runs before the user replies "allow".
+    expect(calledForType(executeAction, 'writeFile')).toHaveLength(0);
     expect(runtime.getSnapshot().pendingConfirmation).toBe(true);
   }, 10000);
 
@@ -152,8 +154,8 @@ describe('ConversationRuntime execution modes — confirmation wiring', () => {
     await waitForIdle(runtime);
 
     const writeFileCalls = calledForType(executeAction, 'writeFile');
-    expect(writeFileCalls).toHaveLength(2);
-    expect(writeFileCalls[1]?.[0]).toMatchObject({ confirmed: true });
+    expect(writeFileCalls).toHaveLength(1);
+    expect(writeFileCalls[0]?.[0]).toMatchObject({ confirmed: true });
     expect(runtime.getSnapshot().pendingConfirmation).toBe(false);
   }, 10000);
 
@@ -169,7 +171,7 @@ describe('ConversationRuntime execution modes — confirmation wiring', () => {
     runtime.submitTranscript('run the build');
     await waitForIdle(runtime);
 
-    expect(calledForType(executeAction, 'runCommand')).toHaveLength(1);
+    expect(calledForType(executeAction, 'runCommand')).toHaveLength(0);
     expect(runtime.getSnapshot().pendingConfirmation).toBe(true);
   }, 10000);
 
@@ -185,7 +187,7 @@ describe('ConversationRuntime execution modes — confirmation wiring', () => {
     runtime.submitTranscript('run the build');
     await waitForIdle(runtime);
 
-    expect(calledForType(executeAction, 'runCommand')).toHaveLength(1);
+    expect(calledForType(executeAction, 'runCommand')).toHaveLength(0);
     expect(runtime.getSnapshot().pendingConfirmation).toBe(true);
   }, 10000);
 
@@ -202,8 +204,164 @@ describe('ConversationRuntime execution modes — confirmation wiring', () => {
     await waitForIdle(runtime);
 
     const runCommandCalls = calledForType(executeAction, 'runCommand');
-    expect(runCommandCalls).toHaveLength(2);
-    expect(runCommandCalls[1]?.[0]).toMatchObject({ confirmed: true });
+    expect(runCommandCalls).toHaveLength(1);
+    expect(runCommandCalls[0]?.[0]).toMatchObject({ confirmed: true });
+    expect(runtime.getSnapshot().pendingConfirmation).toBe(false);
+  }, 10000);
+
+  it('asks in chat only ("I need permission to run …"), then "allow" runs it confirmed', async () => {
+    const executeAction = vi.fn(async (): Promise<ActionResult> => ({ ok: true }));
+    const runtime = await createRuntime({ toolName: 'run_command', executionMode: 'manual', bypassPermissionsEnabled: false, executeAction });
+
+    runtime.submitTranscript('run the build');
+    await waitForIdle(runtime);
+
+    const chat = runtime.getSnapshot().messages.filter((m) => m.role === 'assistant').map((m) => m.content);
+    expect(chat).toContain('I need permission to run `npm run build` in C:\\scratch.\nReply "allow" and I\'ll proceed, or "deny" to skip.');
+    expect(chat.some((c) => c.startsWith('I heard'))).toBe(false);
+    expect(runtime.getSnapshot().messages.some((m) => m.extensions?.some((e) => e.type === 'permission'))).toBe(false);
+
+    runtime.submitTranscript('allow');
+    for (let i = 0; i < 50 && calledForType(executeAction, 'runCommand').length === 0; i += 1) await Promise.resolve();
+    expect(calledForType(executeAction, 'runCommand')[0]?.[0]).toMatchObject({ type: 'runCommand', confirmed: true });
+    expect(runtime.getSnapshot().pendingConfirmation).toBe(false);
+  }, 10000);
+
+  it('show_widget draws the visual in the chat — no permission question, nothing executed', async () => {
+    const { ConversationRuntime } = await import('./ConversationRuntime');
+    const { ACTION_TOOL_DEFINITIONS } = await import('../ai/IntentRegistry');
+    expect(ACTION_TOOL_DEFINITIONS.find((t) => t.name === 'show_widget')?.parameters).toMatchObject({ required: ['title', 'widget_code'] });
+    let calls = 0;
+    const provider: ReasoningProvider = {
+      id: 'test-reasoning',
+      label: 'Test Reasoning',
+      isSupported: () => true,
+      streamResponse(_request, callbacks) {
+        calls += 1;
+        if (calls === 1) {
+          callbacks.onToolCall?.({ id: 'w-1', name: 'show_widget', arguments: { title: 'sales_chart', widget_code: '<svg viewBox="0 0 10 10"></svg>', loading_messages: ['Drawing the bars', 7] } });
+          callbacks.onComplete('');
+        } else {
+          callbacks.onDelta('Sales doubled.');
+          callbacks.onComplete('Sales doubled.');
+        }
+        return { cancel: () => {} };
+      },
+    };
+    const executeAction = vi.fn(async (): Promise<ActionResult> => ({ ok: true }));
+    const saved: { widgets?: unknown }[] = [];
+    const runtime = new ConversationRuntime({
+      speechRecognition: createSpeechRecognitionProvider(),
+      speechSynthesis: createSpeechSynthesisProvider(),
+      reasoningRuntime: new ReasoningRuntime(provider),
+      executeAction,
+      getExecutionMode: () => 'manual',
+      isBypassPermissionsEnabled: () => false,
+      persistTurn: async (turn) => {
+        saved.push({ widgets: turn.widgets });
+        return { id: 'session-1' } as never;
+      },
+    });
+
+    runtime.submitTranscript('chart my sales');
+    for (let i = 0; i < 60 && !runtime.getSnapshot().messages.some((m) => m.content === 'Sales doubled.'); i += 1) await Promise.resolve();
+
+    const widget = runtime.getSnapshot().messages.find((m) => m.widget);
+    const expected = { title: 'sales_chart', code: '<svg viewBox="0 0 10 10"></svg>', loadingMessages: ['Drawing the bars'] };
+    expect(widget?.widget).toEqual(expected);
+    for (let i = 0; i < 60 && saved.length === 0; i += 1) await Promise.resolve();
+    expect(saved[0]?.widgets).toEqual([expected]); // saved with the chat
+    expect(runtime.getSnapshot().pendingConfirmation).toBe(false);
+    expect(executeAction.mock.calls.filter(([r]) => (r as { type?: string }).type !== 'recordTaskProvenance')).toHaveLength(0);
+    expect(runtime.getSnapshot().messages.some((m) => m.content === 'Sales doubled.')).toBe(true);
+  }, 10000);
+
+  it('present_resume shows the resume in chat for download — nothing is saved, no permission question', async () => {
+    const { ConversationRuntime } = await import('./ConversationRuntime');
+    let calls = 0;
+    const provider: ReasoningProvider = {
+      id: 'test-reasoning',
+      label: 'Test Reasoning',
+      isSupported: () => true,
+      streamResponse(_request, callbacks) {
+        calls += 1;
+        if (calls === 1) {
+          callbacks.onToolCall?.({
+            id: 'r-1',
+            name: 'present_resume',
+            arguments: { title: 'Asha — Resume', sections: [{ heading: 'Asha Rao', paragraphs: ['asha@example.com'] }, { heading: 'Skills', paragraphs: ['TypeScript'] }] },
+          });
+          callbacks.onComplete('');
+        } else {
+          callbacks.onDelta('Here it is — want any changes?');
+          callbacks.onComplete('Here it is — want any changes?');
+        }
+        return { cancel: () => {} };
+      },
+    };
+    const executeAction = vi.fn(async (): Promise<ActionResult> => ({ ok: true }));
+    const runtime = new ConversationRuntime({
+      speechRecognition: createSpeechRecognitionProvider(),
+      speechSynthesis: createSpeechSynthesisProvider(),
+      reasoningRuntime: new ReasoningRuntime(provider),
+      executeAction,
+      getExecutionMode: () => 'manual',
+      isBypassPermissionsEnabled: () => false,
+    });
+
+    runtime.setProjectFolder('C:\\code\\my-app'); // an open coding project must not matter
+    runtime.submitTranscript('make my resume');
+    for (let i = 0; i < 60 && !runtime.getSnapshot().messages.some((m) => m.content.startsWith('Here it is')); i += 1) await Promise.resolve();
+
+    const shown = runtime.getSnapshot().messages.find((m) => m.resume);
+    expect(shown?.resume).toEqual({ title: 'Asha — Resume', sections: [{ heading: 'Asha Rao', paragraphs: ['asha@example.com'] }, { heading: 'Skills', paragraphs: ['TypeScript'] }] });
+    expect(runtime.getSnapshot().pendingConfirmation).toBe(false);
+    expect(executeAction.mock.calls.filter(([r]) => (r as { type?: string }).type !== 'recordTaskProvenance')).toHaveLength(0);
+  }, 10000);
+
+  it('the open project folder is sent to the AI with every message; closing it stops that', async () => {
+    const { ConversationRuntime } = await import('./ConversationRuntime');
+    const seen: string[] = [];
+    const provider: ReasoningProvider = {
+      id: 'test-reasoning',
+      label: 'Test Reasoning',
+      isSupported: () => true,
+      streamResponse(request, callbacks) {
+        seen.push(request.input);
+        callbacks.onDelta('ok');
+        callbacks.onComplete('ok');
+        return { cancel: () => {} };
+      },
+    };
+    const runtime = new ConversationRuntime({
+      speechRecognition: createSpeechRecognitionProvider(),
+      speechSynthesis: createSpeechSynthesisProvider(),
+      reasoningRuntime: new ReasoningRuntime(provider),
+      executeAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
+    });
+
+    runtime.setProjectFolder('C:\\code\\my-app');
+    runtime.submitTranscript('fix the login bug');
+    await waitForIdle(runtime);
+    expect(seen[0]).toMatch(/^\[Open project folder: C:\\code\\my-app — use it as the default folder/);
+    expect(seen[0]).toContain('fix the login bug');
+
+    runtime.setProjectFolder(null);
+    runtime.submitTranscript('hello');
+    for (let i = 0; i < 40 && seen.length < 2; i += 1) await Promise.resolve();
+    expect(seen[1]).toBe('hello');
+  }, 10000);
+
+  it('"deny" skips it — the action never runs', async () => {
+    const executeAction = vi.fn(async (): Promise<ActionResult> => ({ ok: true }));
+    const runtime = await createRuntime({ toolName: 'run_command', executionMode: 'manual', bypassPermissionsEnabled: false, executeAction });
+
+    runtime.submitTranscript('run the build');
+    await waitForIdle(runtime);
+    runtime.submitTranscript('deny');
+    for (let i = 0; i < 50; i += 1) await Promise.resolve();
+
+    expect(calledForType(executeAction, 'runCommand')).toHaveLength(0);
     expect(runtime.getSnapshot().pendingConfirmation).toBe(false);
   }, 10000);
 

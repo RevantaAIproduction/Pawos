@@ -45,16 +45,18 @@ describe('Checkout Tier Route - Commercial Availability Gate', () => {
     expect(data.reason).toMatch(/coming soon/i);
   });
 
-  it('allows Pro checkout', async () => {
-    global.fetch = vi.fn(() => Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({ id: 'order_123' }),
-    })) as any;
-
-    const response = await makeRequest('pro');
-    expect(response.status).toBe(200);
+  it.each([
+    ['pro', {}],
+    ['pro', { options: { proBillingFrequency: 'yearly' } }],
+    ['proMax', { options: { proMaxVariant: '5x' } }],
+    ['proMax', { options: { proMaxVariant: '20x' } }],
+  ])('refuses a one-time order for %s — plans are subscriptions (never charges without activating)', async (tier, overrides) => {
+    global.fetch = vi.fn() as any;
+    const response = await makeRequest(tier, overrides);
+    expect(response.status).toBe(400);
     const data = await response.json();
-    expect(data.ok).toBe(true);
-    expect(data.orderId).toBe('order_123');
+    expect(data.ok).toBe(false);
+    expect(data.reason).toMatch(/subscriptions/i);
+    expect(global.fetch).not.toHaveBeenCalled(); // no Razorpay order is ever created
   });
 });

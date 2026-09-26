@@ -358,3 +358,49 @@
   color: rgba(255, 255, 255, 0.7);
   line-height: 1.4;
 }
+
+/* Inline task card — just "N running task(s)"; opens the right-side Tasks panel. */
+.runningTaskPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.runningTaskPill:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.runningTaskSpinner {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid rgba(96, 165, 250, 0.3);
+  border-top-color: rgb(96, 165, 250);
+  animation: runningTaskSpin 0.8s linear infinite;
+}
+
+.runningTaskDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.runningTaskChevron {
+  opacity: 0.5;
+}
+
+@keyframes runningTaskSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}

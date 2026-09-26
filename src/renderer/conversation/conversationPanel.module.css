@@ -938,3 +938,9 @@
     max-width: 100%;
   }
 }
+
+/* Row above the composer holding the single "N running tasks" chip. */
+.runningTasksRow {
+  display: flex;
+  padding: 0 16px 8px;
+}

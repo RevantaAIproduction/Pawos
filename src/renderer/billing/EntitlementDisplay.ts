@@ -30,6 +30,16 @@ export function formatTierLabel(tier: EffectiveTierId): string {
   return TIER_LABELS[tier];
 }
 
+/**
+ * The exact plan the account is on — "Paw Pro · Monthly", "Paw Pro · Yearly", "Paw Pro Max 5x",
+ * "Paw Pro Max 20x" — so every screen names the same plan the customer actually bought.
+ */
+export function formatPlanName(plan: { tier: EffectiveTierId; proMaxVariant?: '5x' | '20x'; proBillingFrequency?: 'monthly' | 'yearly' }): string {
+  if (plan.tier === 'proMax') return `${TIER_LABELS.proMax} ${plan.proMaxVariant === '20x' ? '20x' : '5x'}`;
+  if (plan.tier === 'pro') return `${TIER_LABELS.pro} · ${plan.proBillingFrequency === 'yearly' ? 'Yearly' : 'Monthly'}`;
+  return TIER_LABELS[plan.tier];
+}
+
 export function formatRuntimeEntitlements(runtimeEntitlements: readonly RuntimeEntitlementId[]): string {
   if (runtimeEntitlements.length === 0) return 'No paid runtime selected';
   return runtimeEntitlements.map((id) => RUNTIME_LABELS[id]).join(', ');

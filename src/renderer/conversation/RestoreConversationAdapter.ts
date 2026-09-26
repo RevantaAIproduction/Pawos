@@ -24,6 +24,18 @@ export function restoreConversationSnapshot(session: ConversationSession | null 
       });
     }
 
+    // Visuals PawOS drew this turn, in order, before its reply (same place they appeared live).
+    (turn.widgets ?? []).forEach((widget, index) => {
+      messages.push({
+        id: `${turn.id}-widget-${index}`,
+        role: 'assistant',
+        content: '',
+        createdAt: turn.startedAt,
+        status: 'final',
+        widget,
+      });
+    });
+
     // Assistant message from assistantResponse
     if (turn.assistantResponse) {
       messages.push({

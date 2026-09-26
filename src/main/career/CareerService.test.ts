@@ -19,6 +19,7 @@ import { creditStore } from '../billing/CreditStore';
 import { rollingUsageGate } from '../billing/RollingUsageGate';
 import * as geminiJson from '../ai/geminiJson';
 import * as fsPromises from 'fs/promises';
+import { readDocument } from '../execution/plugins/documentReaders';
 import * as os from 'os';
 import * as path from 'path';
 import type { NormalizedUsageRecord } from '../../shared/billing/UsageMeteringTypes';
@@ -150,6 +151,31 @@ describe('Career tools (PawOS Build student features)', () => {
     const bytes = await fsPromises.readFile(target);
     expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
     await fsPromises.unlink(target);
+  });
+
+  it('exports a real Word .docx to the path the user chose — readable back with the name, contact line and sections', async () => {
+    const target = path.join(os.tmpdir(), `pawos-career-${Date.now()}.docx`);
+    saveDialog.mockResolvedValueOnce({ canceled: false, filePath: target });
+    const result = await handlers.get('career:exportDocx')!(
+      { sender: {} },
+      { title: 'Priya Sharma', subtitle: 'priya@example.com · +91 98', sections: [{ heading: 'Skills', paragraphs: ['React, TypeScript'] }, { heading: 'Education', paragraphs: ['B.Tech CS, VIT — 2021'] }] },
+      'Priya Sharma — Resume'
+    );
+    expect(result).toEqual({ ok: true, filePath: target });
+    expect(saveDialog.mock.calls.at(-1)?.[1]).toMatchObject({ defaultPath: 'Priya Sharma — Resume.docx', filters: [{ name: 'Word document', extensions: ['docx'] }] });
+    const bytes = await fsPromises.readFile(target);
+    expect(bytes.subarray(0, 2).toString()).toBe('PK'); // a real .docx is a zip package
+    const read = await readDocument(target, 'docx', 10_000);
+    for (const text of ['Priya Sharma', 'priya@example.com · +91 98', 'Skills', 'React, TypeScript', 'Education', 'B.Tech CS, VIT — 2021']) {
+      expect(read.content).toContain(text);
+    }
+    await fsPromises.unlink(target);
+  });
+
+  it('Word export returns canceled without writing when the user cancels', async () => {
+    saveDialog.mockResolvedValueOnce({ canceled: true, filePath: undefined });
+    const result = await handlers.get('career:exportDocx')!({ sender: {} }, { title: 'x', sections: [] }, 'x');
+    expect(result).toEqual({ ok: false, canceled: true });
   });
 
   it('PDF export returns canceled without writing when the user cancels', async () => {

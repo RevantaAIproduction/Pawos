@@ -3,6 +3,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { runCareerTool } from '../../career/CareerService';
 import { BuildPdfGenerator } from '../../billing/BuildPdfGenerator';
+import { buildResumeDocx } from '../../career/ResumeDocxGenerator';
 import { detectFormat, readDocument } from '../../execution/plugins/documentReaders';
 import type { BuildPdfDocument } from '../../../shared/billing/BuildPdfTypes';
 import type { CareerImportResult, CareerPdfExportResult, CareerToolRequest } from '../../../shared/career/CareerTypes';
@@ -16,9 +17,9 @@ function isPdfDocument(value: unknown): value is BuildPdfDocument {
   return typeof doc.title === 'string' && Array.isArray(doc.sections);
 }
 
-function safeFileName(name: string): string {
+function safeFileName(name: string, extension: 'pdf' | 'docx' = 'pdf'): string {
   const base = name.replace(/[<>:"/\\|?*\x00-\x1F]/g, '').trim().slice(0, 80) || 'PawOS document';
-  return base.toLowerCase().endsWith('.pdf') ? base : `${base}.pdf`;
+  return base.toLowerCase().endsWith(`.${extension}`) ? base : `${base}.${extension}`;
 }
 
 /**
@@ -71,6 +72,30 @@ export function registerCareerIpc(): void {
       return { ok: true, filePath: target.filePath };
     } catch (err) {
       return { ok: false, reason: `Could not save the PDF: ${err instanceof Error ? err.message : String(err)}` };
+    }
+  });
+
+  // Same document, as a Word .docx — also saved only where the user chooses.
+  ipcMain.handle('career:exportDocx', async (evt, doc: BuildPdfDocument, suggestedName: string): Promise<CareerPdfExportResult> => {
+    if (!isPdfDocument(doc)) return { ok: false, reason: 'Nothing to export.' };
+    let bytes: Buffer;
+    try {
+      bytes = await buildResumeDocx(doc);
+    } catch (err) {
+      return { ok: false, reason: `Could not create the Word document: ${err instanceof Error ? err.message : String(err)}` };
+    }
+    const win = BrowserWindow.fromWebContents(evt.sender) ?? undefined;
+    const target = await dialog.showSaveDialog(win as BrowserWindow, {
+      title: 'Save Word document',
+      defaultPath: safeFileName(typeof suggestedName === 'string' ? suggestedName : doc.title, 'docx'),
+      filters: [{ name: 'Word document', extensions: ['docx'] }],
+    });
+    if (target.canceled || !target.filePath) return { ok: false, canceled: true };
+    try {
+      await fs.writeFile(target.filePath, bytes);
+      return { ok: true, filePath: target.filePath };
+    } catch (err) {
+      return { ok: false, reason: `Could not save the Word document: ${err instanceof Error ? err.message : String(err)}` };
     }
   });
 

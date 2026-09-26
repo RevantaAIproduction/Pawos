@@ -14,7 +14,7 @@ const DAY = 24 * 60 * 60 * 1000;
 const PAID = 'user-paid';   // e.g. tharun.esta@gmail.com
 const FREE = 'user-free';
 
-type ServerRow = { active: boolean; tier?: 'pro' | 'proMax'; proMaxVariant?: '5x' | '20x' | null; expiresAt?: number; hasHistory: boolean };
+type ServerRow = { active: boolean; tier?: 'pro' | 'proMax'; proMaxVariant?: '5x' | '20x' | null; billingFrequency?: 'monthly' | 'yearly'; expiresAt?: number; hasHistory: boolean };
 
 /** Fake Supabase: get_my_subscription answers for whichever account's token is current. */
 function serveSubscriptions(rows: Record<string, ServerRow>) {
@@ -27,6 +27,7 @@ function serveSubscriptions(rows: Record<string, ServerRow>) {
         active: row.active,
         tier: row.tier ?? null,
         proMaxVariant: row.proMaxVariant ?? null,
+        ...(row.billingFrequency ? { billingFrequency: row.billingFrequency } : {}),
         status: row.active ? 'active' : null,
         expiresAt: row.expiresAt ? new Date(row.expiresAt).toISOString() : null,
         hasHistory: row.hasHistory,
@@ -86,6 +87,33 @@ describe('Paid plan follows the account (server-backed)', () => {
     const restored = subscriptionStore.getEffective();
     expect(restored).toMatchObject({ tier: 'proMax', proMaxVariant: '20x', status: 'active' });
     expect(Math.abs((restored.renewsAt ?? 0) - expiresAt)).toBeLessThan(2000);
+  });
+
+  it('Pro yearly vs monthly and Pro Max 5x vs 20x each come back exactly as bought — across sign-out / sign-in', async () => {
+    const yearlyEnds = Date.now() + 360 * DAY;
+    serveSubscriptions({
+      [PAID]: { active: true, tier: 'pro', billingFrequency: 'yearly', expiresAt: yearlyEnds, hasHistory: true },
+      [FREE]: { active: true, tier: 'pro', billingFrequency: 'monthly', expiresAt: Date.now() + 25 * DAY, hasHistory: true },
+    });
+
+    await signIn(PAID);
+    expect(subscriptionStore.getEffective()).toMatchObject({ tier: 'pro', proBillingFrequency: 'yearly' });
+    // Yearly stays paid for the year (not ~30 days).
+    expect(subscriptionStore.getEffective(Date.now() + 200 * DAY).tier).toBe('pro');
+
+    signOut();
+    await signIn(FREE);
+    expect(subscriptionStore.getEffective()).toMatchObject({ tier: 'pro', proBillingFrequency: 'monthly' });
+
+    signOut();
+    await signIn(PAID);
+    expect(subscriptionStore.getEffective()).toMatchObject({ tier: 'pro', proBillingFrequency: 'yearly' });
+  });
+
+  it('a server that predates the billing-frequency column still shows Pro as monthly', async () => {
+    serveSubscriptions({ [PAID]: { active: true, tier: 'pro', expiresAt: Date.now() + 20 * DAY, hasHistory: true } });
+    await signIn(PAID);
+    expect(subscriptionStore.getEffective()).toMatchObject({ tier: 'pro', proBillingFrequency: 'monthly' });
   });
 
   it('the plan lasts only until it expires — after that the account is free again', async () => {

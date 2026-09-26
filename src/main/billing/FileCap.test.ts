@@ -11,6 +11,8 @@ import { usageEventStore, addMonths } from './UsageEventStore';
 import { entitlementService } from './EntitlementService';
 import { buildAccessStore } from './BuildAccessStore';
 import { changedLineCount, classifyFileChange, enforceFileCap, recordCodeFileWrite } from '../execution/CodingRuntimeUsageBoundary';
+import { creditStore } from './CreditStore';
+import { fileOveragePricePc, fileOveragePriceUsd } from '../../shared/billing/FileOveragePricing';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -276,5 +278,85 @@ describe('Hidden code-file cap', () => {
     const before = usageEventStore.countFileChangesSince(0);
     recordCodeFileWrite(request, { ok: true });
     expect(usageEventStore.countFileChangesSince(0)).toBe(before);
+  });
+
+  describe('past the cap, each file is paid from purchased Paw Compute: $1 = 5 files, or 8 small ones', () => {
+    beforeEach(() => {
+      vi.spyOn(entitlementService, 'effectiveTier').mockReturnValue('pro');
+      vi.spyOn(entitlementService, 'currentProMaxVariant').mockReturnValue(undefined);
+      writeFiles(225);
+    });
+
+    it('prices: small (under 100 lines) $0.125, others $0.20 — new files and edits alike', () => {
+      expect(fileOveragePriceUsd(10)).toBe(0.125);
+      expect(fileOveragePriceUsd(99)).toBe(0.125);
+      expect(fileOveragePriceUsd(100)).toBe(0.2);
+      expect(fileOveragePricePc(10)).toBe(12.5);
+      expect(fileOveragePricePc(250)).toBe(20);
+      expect(Math.round(1 / fileOveragePriceUsd(10))).toBe(8);
+      expect(Math.round(1 / fileOveragePriceUsd(250))).toBe(5);
+    });
+
+    it('charges a small new file 12.5 PC and a large one 20 PC — once, after the write succeeds', () => {
+      vi.spyOn(entitlementService, 'getStandardBonusCreditsRemaining').mockReturnValue(100);
+      const consume = vi.spyOn(creditStore, 'consume').mockImplementation(() => {});
+
+      const small = { type: 'writeFile' as const, path: path.join(projectDir, 'small.ts'), content: lines(10), confirmed: true };
+      expect(enforceFileCap(small)).toBeNull();
+      expect(consume).not.toHaveBeenCalled(); // nothing charged before the write happens
+      recordCodeFileWrite(small, { ok: true });
+      expect(consume).toHaveBeenLastCalledWith(12.5, 'file-overage:create', 'coding', false, true, expect.stringMatching(/^file-overage:/));
+
+      const large = { type: 'writeFile' as const, path: path.join(projectDir, 'large.ts'), content: lines(150), confirmed: true };
+      expect(enforceFileCap(large)).toBeNull();
+      recordCodeFileWrite(large, { ok: true });
+      expect(consume).toHaveBeenLastCalledWith(20, 'file-overage:create', 'coding', false, true, expect.stringMatching(/^file-overage:/));
+      expect(consume).toHaveBeenCalledTimes(2);
+      // Each write has its own idempotency key.
+      expect(consume.mock.calls[0]?.[5]).not.toBe(consume.mock.calls[1]?.[5]);
+    });
+
+    it('a failed write is never charged', () => {
+      vi.spyOn(entitlementService, 'getStandardBonusCreditsRemaining').mockReturnValue(100);
+      const consume = vi.spyOn(creditStore, 'consume').mockImplementation(() => {});
+      const request = { type: 'writeFile' as const, path: path.join(projectDir, 'fails.ts'), content: lines(10), confirmed: true };
+      expect(enforceFileCap(request)).toBeNull();
+      recordCodeFileWrite(request, { ok: false, reason: 'failed', message: 'disk full' });
+      expect(consume).not.toHaveBeenCalled();
+    });
+
+    it('a balance that cannot cover the next file blocks it (buy more or wait) — never goes negative', () => {
+      vi.spyOn(entitlementService, 'getStandardBonusCreditsRemaining').mockReturnValue(15); // $0.15
+      const consume = vi.spyOn(creditStore, 'consume').mockImplementation(() => {});
+
+      const large = { type: 'writeFile' as const, path: path.join(projectDir, 'big.ts'), content: lines(150), confirmed: true };
+      const blocked = enforceFileCap(large);
+      expect(blocked).toMatchObject({ ok: false, reason: 'usage-restricted', data: { filePriceUsd: 0.2 } });
+      expect((blocked as { message: string }).message).toContain('This file needs $0.20 of Paw Compute and you have $0.15 left.');
+
+      const small = { type: 'writeFile' as const, path: path.join(projectDir, 'tiny.ts'), content: lines(5), confirmed: true };
+      expect(enforceFileCap(small)).toBeNull(); // $0.125 still fits
+      expect(consume).not.toHaveBeenCalled();
+    });
+
+    it('within the cap nothing is charged', () => {
+      vi.spyOn(entitlementService, 'effectiveTier').mockReturnValue('proMax');
+      vi.spyOn(entitlementService, 'getStandardBonusCreditsRemaining').mockReturnValue(100);
+      const consume = vi.spyOn(creditStore, 'consume').mockImplementation(() => {});
+      const request = { type: 'writeFile' as const, path: path.join(projectDir, 'free.ts'), content: lines(10), confirmed: true };
+      expect(enforceFileCap(request)).toBeNull(); // Pro Max cap is 375, only 225 used
+      recordCodeFileWrite(request, { ok: true });
+      expect(consume).not.toHaveBeenCalled();
+    });
+
+    it('Go pays the same way once its monthly cap is used', () => {
+      vi.spyOn(entitlementService, 'effectiveTier').mockReturnValue('go');
+      vi.spyOn(entitlementService, 'getStandardBonusCreditsRemaining').mockReturnValue(100);
+      const consume = vi.spyOn(creditStore, 'consume').mockImplementation(() => {});
+      const request = { type: 'writeFile' as const, path: path.join(projectDir, 'go.ts'), content: lines(150), confirmed: true };
+      expect(enforceFileCap(request)).toBeNull();
+      recordCodeFileWrite(request, { ok: true });
+      expect(consume).toHaveBeenLastCalledWith(20, 'file-overage:create', 'coding', false, true, expect.any(String));
+    });
   });
 });

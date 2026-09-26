@@ -30,6 +30,15 @@ import { ActivitySidebar } from './ActivitySidebar/ActivitySidebar';
 import { useActivityStream } from './ActivitySidebar/useActivityStream';
 import { LiveStatus } from './LiveStatus/LiveStatus';
 import { ExtensionRenderer, type ExtensionRendererProps } from './extensions/ExtensionRenderer';
+import { TasksPanel } from './TasksPanel';
+import { ChatWidget } from './ChatWidget';
+import { ChatResume } from './ChatResume';
+import { resumeToExportDocument } from './resumeContent';
+import { ProjectOpener } from './ProjectOpener';
+import { isInsideFolder, joinPath, projectName } from './projectClone';
+import { isAllowReply, isDenyReply } from './confirmationPrompt';
+import { buildTaskPanelEntries, countRunning } from './tasksPanelModel';
+import extensionStyles from './extensions/extensions.module.css';
 import type { ExtensionExpandRequest } from './extensions/ExtensionTypes';
 import { LiveWorkStream } from './LiveWorkStream/LiveWorkStream';
 import { useCurrentFileContext, buildFileContextPrompt } from '../workspace/useCurrentFileContext';
@@ -42,7 +51,6 @@ import { CompanionHamburger } from './CompanionHamburger';
 import { PlusMenu } from './PlusMenu';
 import { AcceptEditsControl } from './AcceptEditsControl';
 import { ModelSelectorWidget } from './ModelSelectorWidget';
-import { ContextualGovernancePanel } from './ContextualGovernancePanel';
 import { ContextualPlanPanel } from './ContextualPlanPanel';
 import { MessageActions } from './MessageActions/MessageActions';
 import {
@@ -76,10 +84,13 @@ const SUPPORTED_FILE_EXTENSIONS = ['.txt', '.csv', '.json', '.md', '.log'];
 /** Reference material for Reference/Image Intelligence (a screenshot, mockup, logo) â€” analyzed via analyze_reference_image, never read as text. */
 const SUPPORTED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
 const MAX_FILE_CHARS = 20_000;
-const WORKSPACE_PANEL_TABS = ['terminal', 'browser', 'files', 'worktree'] as const;
+const WORKSPACE_PANEL_TABS = ['tasks', 'terminal', 'browser', 'files', 'worktree'] as const;
 type WorkspacePanelTab = (typeof WORKSPACE_PANEL_TABS)[number];
+/** Never drawn inside the chat — the chat shows messages only. */
+const CHAT_HIDDEN_EXTENSIONS = new Set(['task-progress', 'file-change', 'permission']);
 
 const WORKSPACE_PANEL_LABELS: Record<WorkspacePanelTab, string> = {
+  tasks: 'Tasks',
   terminal: 'Terminal',
   browser: 'Browser',
   files: 'Files',
@@ -337,6 +348,8 @@ export function ConversationPanel({
   onCancel,
   onOpenSidebar,
   activeTask,
+  projectFolder,
+  onSetProjectFolder,
 }: {
   snapshot: ConversationSnapshot;
   onClose: () => void;
@@ -403,6 +416,9 @@ export function ConversationPanel({
   streamingElapsedSeconds?: number;
   onOpenSidebar?: (cardType: 'terminal' | 'worktree' | 'browser' | 'background-tasks') => void;
   activeTask?: ConversationTaskRecord;
+  /** The project opened from the header's project button (folder or cloned repo). */
+  projectFolder?: string | null;
+  onSetProjectFolder?: (folder: string | null) => void;
 }) {
   const windowCtx = useWindowContext();
   const isStreaming = snapshot.state === 'thinking' || snapshot.state === 'performingAction';
@@ -470,6 +486,10 @@ export function ConversationPanel({
   // BUT still calculates Paw Computes usage in real-time (no free pass)
   const [incognitoMode, setIncognitoMode] = useState(false);
   const [activeWorkspacePanel, setActiveWorkspacePanel] = useState<WorkspacePanelTab | null>(null);
+  const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
+  const [removedTaskIds, setRemovedTaskIds] = useState<ReadonlySet<string>>(() => new Set());
+  const taskPanelEntries = useMemo(() => buildTaskPanelEntries(snapshot.taskHistory, removedTaskIds), [snapshot.taskHistory, removedTaskIds]);
+  const runningTaskCount = countRunning(taskPanelEntries);
   const [directoryEntries, setDirectoryEntries] = useState<CodingWorkspaceDirEntry[]>([]);
   const [directoryError, setDirectoryError] = useState<string | null>(null);
   const [selectedWorkspaceFile, setSelectedWorkspaceFile] = useState<string | null>(null);
@@ -570,11 +590,6 @@ export function ConversationPanel({
     storeData: false,
     shareContext: false,
   });
-  const [pendingGovernanceApproval, setPendingGovernanceApproval] = useState<{
-    approvalId: string;
-    actionType: string;
-    requestedAt: number;
-  } | null>(null);
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [slashCommandsMenuOpen, setSlashCommandsMenuOpen] = useState(false);
@@ -626,8 +641,35 @@ export function ConversationPanel({
   // Activity sidebar
   const { activities, selectedActivityId, setSelectedActivityId, hasActivity } = useActivityStream(snapshot);
 
+  // Widget sendPrompt(): sent as the user, like Claude — except it can never answer a permission
+  // question ("allow"/"deny") or send while one is pending; those only go into the message box.
+  const lastWidgetPromptAtRef = useRef(0);
+  const handleWidgetPrompt = (text: string) => {
+    const now = Date.now();
+    if (now - lastWidgetPromptAtRef.current < 1500) return;
+    lastWidgetPromptAtRef.current = now;
+    if (snapshot.pendingConfirmation || isAllowReply(text) || isDenyReply(text)) {
+      setDraft(text);
+      requestAnimationFrame(() => textareaRef.current?.focus());
+      return;
+    }
+    onSendTranscript(text);
+  };
+  // Widget links open in the user's browser only after they say yes to the exact address.
+  const handleWidgetLink = (url: string) => {
+    if (window.confirm(`Open this link in your browser?\n\n${url}`)) {
+      void ipc.executeAction({ type: 'openUrl', url });
+    }
+  };
+
   // Message extension handlers
-  const handleExtensionExpand = (request: ExtensionExpandRequest) => {
+  const handleExtensionExpand =(request: ExtensionExpandRequest) => {
+    // A task's "N running tasks" card opens the right-side Tasks panel on that task.
+    if (request.extensionType === 'task-progress') {
+      setFocusedTaskId(typeof request.payload?.taskId === 'string' ? request.payload.taskId : null);
+      setActiveWorkspacePanel('tasks');
+      return;
+    }
     // Map extension expand requests to the appropriate tool
     switch (request.target) {
       case 'terminal':
@@ -850,25 +892,6 @@ export function ConversationPanel({
     return () => document.removeEventListener('mousedown', onClick);
   }, [slashCommandsMenuOpen]);
 
-  useEffect(() => {
-    const handleGovernanceRequest = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      const { verb, target, action } = customEvent.detail || {};
-      if (action) {
-        const approvalId = `${action}_${Date.now()}`;
-        const actionType = `${verb} ${target}`.trim();
-        setPendingGovernanceApproval({
-          approvalId,
-          actionType: actionType || action,
-          requestedAt: Date.now(),
-        });
-      }
-    };
-
-    window.addEventListener('pawos-request-approval', handleGovernanceRequest);
-    return () => window.removeEventListener('pawos-request-approval', handleGovernanceRequest);
-  }, []);
-
   // Countdown timer for limits
   useEffect(() => {
     if (!limitsState.activeLimit || !limitsState.limit5hrResetAt && !limitsState.limitWeeklyResetAt && !limitsState.limitMonthlyResetAt) return;
@@ -948,12 +971,25 @@ export function ConversationPanel({
   const latestMessage = useMemo(() => snapshot.messages[snapshot.messages.length - 1], [snapshot.messages]);
   const latestTask = useMemo(() => getLatestTask(snapshot, activeTask), [snapshot, activeTask]);
   const workspaceRoot = useMemo(() => (latestTask ? getLatestCodingWorkspaceRoot(latestTask) : undefined), [latestTask]);
-  const panelRoot = workspaceRoot ?? addedFolders[0] ?? (addedFiles[0] ? getPathDirname(addedFiles[0]) : undefined);
+  const panelRoot = projectFolder ?? workspaceRoot ?? addedFolders[0] ?? (addedFiles[0] ? getPathDirname(addedFiles[0]) : undefined);
   const terminalPwd = panelRoot ?? systemPwd;
   const workspaceRoots = useMemo(() => (latestTask ? getCodingWorkspaceRoots(latestTask) : []), [latestTask]);
   const activeFilePath = useMemo(() => (latestTask ? getLatestActiveFilePath(latestTask) : undefined), [latestTask]);
-  const editedFiles = useMemo(() => getTaskEditedFiles(latestTask), [latestTask]);
-  const createdFiles = useMemo(() => getTaskCreatedFiles(latestTask), [latestTask]);
+  // Files / Worktree exist only while a project is open, and show only that project's files.
+  const hasProject = Boolean(projectFolder);
+  const inProject = (filePath: string) => (projectFolder ? isInsideFolder(filePath, projectFolder) : false);
+  const editedFiles = useMemo(() => getTaskEditedFiles(latestTask).filter((f) => inProject(f.path)), [latestTask, projectFolder]);
+  const createdFiles = useMemo(() => getTaskCreatedFiles(latestTask).filter((f) => inProject(f.path)), [latestTask, projectFolder]);
+  // The project sub-folder being browsed in Files / Worktree (never above the project root).
+  const [browseDir, setBrowseDir] = useState<string | null>(null);
+  const currentDir = browseDir && projectFolder && isInsideFolder(browseDir, projectFolder) ? browseDir : projectFolder ?? null;
+  useEffect(() => {
+    setBrowseDir(null);
+    setSelectedWorkspaceFile(null);
+  }, [projectFolder]);
+  useEffect(() => {
+    if (!hasProject && (activeWorkspacePanel === 'files' || activeWorkspacePanel === 'worktree')) setActiveWorkspacePanel(null);
+  }, [hasProject, activeWorkspacePanel]);
   const browserScreenshot = useMemo(() => (latestTask ? getLatestScreenshot(latestTask) : undefined), [latestTask]);
   const browserConsoleErrors = useMemo(
     () => (latestTask ? (getLatestDevBrowserConsole(latestTask) ?? []).filter((entry) => entry.level === 'error') : []),
@@ -975,10 +1011,10 @@ export function ConversationPanel({
   }, [ipc]);
 
   useEffect(() => {
-    if (!activeWorkspacePanel || (activeWorkspacePanel !== 'files' && activeWorkspacePanel !== 'worktree') || !panelRoot) return;
+    if (!activeWorkspacePanel || (activeWorkspacePanel !== 'files' && activeWorkspacePanel !== 'worktree') || !currentDir) return;
     let cancelled = false;
     setDirectoryError(null);
-    ipc.executeAction({ type: 'listDirectory', path: panelRoot })
+    ipc.executeAction({ type: 'listDirectory', path: currentDir })
       .then((result) => {
         if (cancelled) return;
         if (!result.ok) {
@@ -997,7 +1033,7 @@ export function ConversationPanel({
     return () => {
       cancelled = true;
     };
-  }, [activeWorkspacePanel, ipc, panelRoot]);
+  }, [activeWorkspacePanel, ipc, currentDir]);
 
   useEffect(() => {
     if (!selectedWorkspaceFile) {
@@ -1091,31 +1127,6 @@ export function ConversationPanel({
     const text = draft.trim();
     if (!text) {
       return;
-    }
-
-    // GOVERNANCE APPROVAL: If user types/says "allow" and there's a pending approval, approve it
-    const lowerText = text.toLowerCase();
-    if (pendingGovernanceApproval) {
-      if (lowerText === 'allow') {
-        ipc.governanceApprove(pendingGovernanceApproval.approvalId);
-        setPendingGovernanceApproval(null);
-        setDraft('');
-        lastSyncedVoiceDraftRef.current = '';
-        setWasPasted(false);
-        requestAnimationFrame(resizeTextarea);
-        return;
-      }
-
-      // GOVERNANCE DENIAL: If user types/says "deny" or anything else while approval is pending, deny it
-      if (lowerText === 'deny' || lowerText !== 'allow') {
-        ipc.governanceDeny(pendingGovernanceApproval.approvalId);
-        setPendingGovernanceApproval(null);
-        setDraft('');
-        lastSyncedVoiceDraftRef.current = '';
-        setWasPasted(false);
-        requestAnimationFrame(resizeTextarea);
-        return;
-      }
     }
 
     // If task is running and text is not empty, queue the message instead of sending
@@ -1321,6 +1332,7 @@ export function ConversationPanel({
   const selectWorkspaceTab = (tab: WorkspacePanelTab) => {
     setActiveWorkspacePanel((current) => (current === tab ? null : tab));
     if (tab !== 'files') setSelectedWorkspaceFile(null);
+    if (tab === 'tasks') return;
     onOpenSidebar?.(tab === 'files' ? 'worktree' : tab);
   };
   const openEditedFile = (path: string) => {
@@ -1329,14 +1341,18 @@ export function ConversationPanel({
     onOpenPath?.(path, 'file');
   };
   const openDirectoryEntry = (entry: CodingWorkspaceDirEntry) => {
-    if (!panelRoot) return;
-    const separator = panelRoot.includes('\\') ? '\\' : '/';
-    const path = `${panelRoot.replace(/[\\/]+$/, '')}${separator}${entry.name}`;
+    if (!currentDir) return;
+    const path = joinPath(currentDir, entry.name);
     if (entry.isDirectory) {
-      onOpenPath?.(path, 'folder');
+      setBrowseDir(path); // step into the sub-folder, inside PawOS
       return;
     }
     openEditedFile(path);
+  };
+  const browseUp = () => {
+    if (!currentDir || !projectFolder || !isInsideFolder(currentDir, projectFolder)) return;
+    const parent = getPathDirname(currentDir);
+    setBrowseDir(isInsideFolder(parent, projectFolder) ? parent : null);
   };
   const addPickedFiles = (files: FileList) => {
     const paths = Array.from(files)
@@ -1361,6 +1377,15 @@ export function ConversationPanel({
     ));
     setActiveWorkspacePanel('files');
     setSelectedWorkspaceFile(null);
+  };
+  /** Opens a folder (picked or freshly cloned) as the project PawOS works on, and shows its files. */
+  const openProject = (folder: string) => {
+    onSetProjectFolder?.(folder);
+    setAddedFolders((previous) => (
+      previous.some((existing) => existing.toLowerCase() === folder.toLowerCase()) ? previous : [folder, ...previous]
+    ));
+    setSelectedWorkspaceFile(null);
+    setActiveWorkspacePanel('files');
   };
   const requestCloneRepo = () => {
     const url = cloneRepoUrl.trim();
@@ -1421,9 +1446,30 @@ export function ConversationPanel({
     );
   };
   const renderDirectoryList = () => {
-    if (!panelRoot) return <div className={styles.panelPlaceholder}>No project or folder added yet.</div>;
-    if (directoryError) return <div className={styles.panelPlaceholder}>{directoryError}</div>;
-    if (directoryEntries.length === 0) return <div className={styles.panelPlaceholder}>No project files loaded yet.</div>;
+    if (!currentDir || !projectFolder) return null;
+    const relative = currentDir.slice(projectFolder.replace(/[\\/]+$/, '').length).replace(/^[\\/]+/, '');
+    return (
+      <>
+        <div className={styles.metaRow}>
+          <span>{projectName(projectFolder)}</span>
+          <strong title={currentDir}>{relative ? relative : '/'}</strong>
+        </div>
+        {relative && (
+          <button type="button" className={styles.workspaceListItem} onClick={browseUp}>
+            <span className={styles.workspaceItemName}>.. (up)</span>
+          </button>
+        )}
+        {directoryError ? (
+          <div className={styles.panelPlaceholder}>{directoryError}</div>
+        ) : directoryEntries.length === 0 ? (
+          <div className={styles.panelPlaceholder}>This folder is empty.</div>
+        ) : (
+          renderEntries()
+        )}
+      </>
+    );
+  };
+  const renderEntries = () => {
     return (
       <div className={styles.workspaceList}>
         {directoryEntries.map((entry) => (
@@ -1462,6 +1508,21 @@ export function ConversationPanel({
           </button>
         </div>
         <div className={styles.panelContent}>
+          {activeWorkspacePanel === 'tasks' && (
+            <TasksPanel
+              entries={taskPanelEntries}
+              focusTaskId={focusedTaskId}
+              onStopTask={(entry) => {
+                // A task waiting for "allow" is stopped by answering "deny"; a running one is cancelled.
+                if (entry.status === 'waiting') onSendTranscript('deny');
+                else onCancel?.();
+              }}
+              onRemoveAll={() => {
+                if (taskPanelEntries.some((entry) => entry.status === 'running')) onCancel?.();
+                setRemovedTaskIds(new Set((snapshot.taskHistory ?? []).map((task) => task.id)));
+              }}
+            />
+          )}
           {activeWorkspacePanel === 'terminal' && (
             <div className={styles.workspaceSurface}>
               <div className={styles.metaRow}><span>PWD</span><strong>{terminalPwd || 'System folder unavailable'}</strong></div>
@@ -1501,63 +1562,33 @@ export function ConversationPanel({
               )}
             </div>
           )}
-          {activeWorkspacePanel === 'files' && (
+          {/* Files / Worktree: the open project's files only (the tabs don't exist without a project). */}
+          {activeWorkspacePanel === 'files' && hasProject && (
             selectedWorkspaceFile ? renderSelectedFile() : (
               <div className={styles.workspaceSurface}>
-                <div className={styles.metaRow}><span>Current</span><strong>{activeFilePath ? getPathBasename(activeFilePath) : 'No active file'}</strong></div>
-                <section className={styles.workspaceSection}>
-                  <h3>Added files</h3>
-                  {renderAddedFiles()}
-                </section>
-                <section className={styles.workspaceSection}>
-                  <h3>Recently edited</h3>
-                  {renderFileList(editedFiles, 'No edited files in this conversation yet.')}
-                </section>
                 <section className={styles.workspaceSection}>
                   <h3>Project files</h3>
                   {renderDirectoryList()}
                 </section>
+                {editedFiles.length > 0 && (
+                  <section className={styles.workspaceSection}>
+                    <h3>Recently edited</h3>
+                    {renderFileList(editedFiles, '')}
+                  </section>
+                )}
               </div>
             )
           )}
-          {activeWorkspacePanel === 'worktree' && (
+          {activeWorkspacePanel === 'worktree' && hasProject && (
             <div className={styles.workspaceSurface}>
-              <div className={styles.metaRow}><span>Root</span><strong>{panelRoot ?? 'No project, folder, or file added yet'}</strong></div>
-              <div className={styles.cloneBox}>
-                <input
-                  value={cloneRepoUrl}
-                  onChange={(event) => setCloneRepoUrl(event.currentTarget.value)}
-                  placeholder="Paste a Git repository URL..."
-                />
-                <button type="button" onClick={requestCloneRepo} disabled={!cloneRepoUrl.trim()}>
-                  Clone
-                </button>
-              </div>
-              {addedFolders.length > 0 && (
-                <section className={styles.workspaceSection}>
-                  <h3>Added folders</h3>
-                  <div className={styles.workspaceList}>
-                    {addedFolders.map((folder) => (
-                      <button key={folder} type="button" className={styles.workspaceListItem} onClick={() => onOpenPath?.(folder, 'folder')} title={folder}>
-                        <span className={styles.workspaceItemName}>{getPathBasename(folder)}</span>
-                        <span className={styles.workspaceItemPath}>{folder}</span>
-                      </button>
-                    ))}
-                  </div>
-                </section>
-              )}
-              {workspaceRoots.length > 1 && (
-                <div className={styles.workspaceRoots}>
-                  {workspaceRoots.map((root) => <div key={root}>{root}</div>)}
-                </div>
-              )}
+              <div className={styles.metaRow}><span>Root</span><strong title={projectFolder ?? undefined}>{projectFolder}</strong></div>
               <section className={styles.workspaceSection}>
-                <h3>Created</h3>
-                {renderFileList(createdFiles, 'No created files in this conversation yet.')}
+                <h3>Created in this project</h3>
+                {renderFileList(createdFiles, 'No files created in this project yet.')}
               </section>
               <section className={styles.workspaceSection}>
-                <h3>Edited</h3>
-                {renderFileList(editedFiles, 'No edited files in this conversation yet.')}
+                <h3>Edited in this project</h3>
+                {renderFileList(editedFiles, 'No files edited in this project yet.')}
               </section>
             </div>
           )}
@@ -1597,12 +1628,19 @@ export function ConversationPanel({
           <div className={styles.pawosLogo}>
             PawOS
           </div>
+          <ProjectOpener
+            projectFolder={projectFolder ?? null}
+            onOpenProject={openProject}
+            onCloseProject={() => onSetProjectFolder?.(null)}
+            selectFolder={() => ipc.selectFolder()}
+            executeAction={(request) => ipc.executeAction(request)}
+          />
         </div>
 
         <div className={styles.headerCenter}>
           <ProjectContextBar activeTask={latestTask} currentWorkingFile={currentWorkingFile} />
           <div className={styles.workspaceTopCards} aria-label="Workspace panels">
-            {WORKSPACE_PANEL_TABS.map((tab) => (
+            {WORKSPACE_PANEL_TABS.filter((tab) => hasProject || (tab !== 'files' && tab !== 'worktree')).map((tab) => (
               <button
                 key={tab}
                 type="button"
@@ -1676,11 +1714,37 @@ export function ConversationPanel({
               {/* Messages container - conversation history */}
               <div className={styles.transcript}>
                 {snapshot.messages.map((message, idx) => {
-                  // Skip governance confirmation messages - they're shown in ContextualGovernancePanel instead
-                  if (message.id.startsWith('confirm-')) {
-                    return null;
+                  // Chat is only chat (like ChatGPT): no task cards, file-change cards or approval
+                  // cards. Tasks live in the header's Tasks panel; approvals are plain messages.
+                  if (message.task || message.id.startsWith('filechange-')) return null;
+                  if (message.resume) {
+                    return (
+                      <div key={message.id} style={{ marginBottom: '12px', width: '100%' }}>
+                        <ChatResume
+                          resume={message.resume}
+                          onDownload={(format, resume) => {
+                            const doc = resumeToExportDocument(resume);
+                            return format === 'pdf' ? ipcBridge.careerExportPdf(doc, resume.title) : ipcBridge.careerExportDocx(doc, resume.title);
+                          }}
+                        />
+                      </div>
+                    );
                   }
-
+                  if (message.widget) {
+                    return (
+                      <div key={message.id} style={{ marginBottom: '12px', width: '100%' }}>
+                        <ChatWidget
+                          id={message.id}
+                          title={message.widget.title}
+                          code={message.widget.code}
+                          loadingMessages={message.widget.loadingMessages}
+                          onPrompt={handleWidgetPrompt}
+                          onLink={handleWidgetLink}
+                        />
+                      </div>
+                    );
+                  }
+                  const chatExtensions = (message.extensions ?? []).filter((ext) => !CHAT_HIDDEN_EXTENSIONS.has(ext.type));
                   const timestamp = message.createdAt ? new Date(message.createdAt) : new Date();
                   const now = new Date();
                   const diffMs = now.getTime() - timestamp.getTime();
@@ -1731,9 +1795,9 @@ export function ConversationPanel({
                           See more ({msgLines.length - 10} more lines)
                         </button>
                       )}
-                      {message.extensions && message.extensions.length > 0 && (
+                      {chatExtensions.length > 0 && (
                         <ExtensionRenderer
-                          extensions={message.extensions}
+                          extensions={chatExtensions}
                           onExpand={handleExtensionExpand}
                           onAction={handleExtensionAction}
                         />
@@ -1774,17 +1838,6 @@ export function ConversationPanel({
                   onRevise={() => {}}
                 />
               )}
-
-              {/* Governance approval panel - contextual */}
-              <ContextualGovernancePanel
-                pendingApproval={pendingGovernanceApproval}
-                onApprove={(approvalId) => {
-                  setPendingGovernanceApproval(null);
-                }}
-                onDeny={(approvalId) => {
-                  setPendingGovernanceApproval(null);
-                }}
-              />
           </div>
           )}
         </div>
@@ -1809,7 +1862,7 @@ export function ConversationPanel({
               ? 'Buy credits: 5x ($100) or 20x ($250)'
               : entitlement.tier === 'pro'
               ? 'Upgrade to Pro Max or buy credits: 5x ($100) or 20x ($250)'
-              : 'Upgrade to Pro or Pro Max (no credits option in Go tier)'}
+              : 'Upgrade to Pro or Pro Max, or buy Paw Compute'}
           </button>
           <button
             className={styles.upgradeClose}
@@ -1822,13 +1875,32 @@ export function ConversationPanel({
       )}
 
       {/* â• BOTTOM COMPOSER â• */}
+      {/* "N running tasks" — the one task indicator in the chat; opens the Tasks sidebar. */}
+      {runningTaskCount > 0 && (
+        <div className={styles.runningTasksRow}>
+          <button
+            type="button"
+            className={extensionStyles.runningTaskPill}
+            onClick={() => {
+              setFocusedTaskId(taskPanelEntries.find((entry) => entry.status === 'running')?.id ?? null);
+              setActiveWorkspacePanel('tasks');
+            }}
+            title="Show running tasks"
+          >
+            <span className={extensionStyles.runningTaskSpinner} aria-hidden="true" />
+            {runningTaskCount} running task{runningTaskCount === 1 ? '' : 's'}
+            <span className={extensionStyles.runningTaskChevron} aria-hidden="true">›</span>
+          </button>
+        </div>
+      )}
+
       <div className={styles.composer}>
         {/* Input row: textarea + voice + send */}
         <div className={styles.composerInputRow}>
           <textarea
             ref={textareaRef}
             className={styles.input}
-            placeholder={pendingGovernanceApproval ? 'Type "allow" to proceed or "deny" to skip...' : 'Describe a task or ask a question...'}
+            placeholder={snapshot.pendingConfirmation ?'Type "allow" to proceed or "deny" to skip...' : 'Describe a task or ask a question...'}
             value={draft}
             onChange={(e) => {
               setDraft(e.currentTarget.value);
@@ -1845,7 +1917,7 @@ export function ConversationPanel({
               }
             }}
             onPaste={() => setWasPasted(true)}
-            disabled={isStreaming && !pendingGovernanceApproval}
+            disabled={isStreaming && !snapshot.pendingConfirmation}
           />
 
           <div className={styles.composerInputControls}>

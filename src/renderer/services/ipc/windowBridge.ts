@@ -236,6 +236,8 @@ export function contextBridge() {
     careerImportResume: async (): Promise<CareerImportResult> => ipcApi.invoke('career:importResume'),
     careerExportPdf: async (doc: BuildPdfDocument, suggestedName: string): Promise<CareerPdfExportResult> =>
       ipcApi.invoke('career:exportPdf', doc, suggestedName),
+    careerExportDocx: async (doc: BuildPdfDocument, suggestedName: string): Promise<CareerPdfExportResult> =>
+      ipcApi.invoke('career:exportDocx', doc, suggestedName),
     careerRevealFile: async (filePath: string): Promise<void> => ipcApi.invoke('career:revealFile', filePath),
     billingGetCreditBalance: async (): Promise<CreditBalance> => ipcApi.invoke('billing:getCreditBalance'),
     billingCanStartGeneration: async (pawModelId?: PawModelId): Promise<{ allowed: boolean; reason?: string; pooled?: boolean }> =>

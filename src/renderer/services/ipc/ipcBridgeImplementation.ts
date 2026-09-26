@@ -328,6 +328,9 @@ export const ipc = {
   async careerExportPdf(doc: BuildPdfDocument, suggestedName: string): Promise<CareerPdfExportResult> {
     return getBridge().careerExportPdf(doc, suggestedName);
   },
+  async careerExportDocx(doc: BuildPdfDocument, suggestedName: string): Promise<CareerPdfExportResult> {
+    return getBridge().careerExportDocx(doc, suggestedName);
+  },
   async careerRevealFile(filePath: string): Promise<void> {
     return getBridge().careerRevealFile(filePath);
   },

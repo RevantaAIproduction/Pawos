@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getRazorpayCredentials, getRazorpayPlanId, razorpayAuthHeader, type SeatTier, type SubscriptionTierId, type ProMaxVariant } from "@/lib/billing/razorpay";
+import { getRazorpayCredentials, getRazorpayPlanId, razorpayAuthHeader, type BillingFrequency, type SeatTier, type SubscriptionTierId, type ProMaxVariant } from "@/lib/billing/razorpay";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
 const VALID_TIERS: SubscriptionTierId[] = ["go", "pro", "proMax", "team", "enterprise"];
@@ -44,6 +44,8 @@ export async function POST(request: Request) {
   const seatCount = typeof body?.seatCount === "number" && Number.isInteger(body.seatCount) ? body.seatCount : undefined;
   const runtimeIds = Array.isArray(body?.runtimeIds) ? body.runtimeIds : [];
   const proMaxVariant = body?.proMaxVariant as ProMaxVariant | undefined;
+  // Pro is sold monthly or yearly (separate Razorpay plans); anything else is monthly.
+  const billingFrequency: BillingFrequency = plan === "pro" && body?.proBillingFrequency === "yearly" ? "yearly" : "monthly";
   const accessToken = typeof body?.accessToken === "string" ? body.accessToken : undefined;
 
   // ---- Authentication ----
@@ -112,7 +114,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const planId = getRazorpayPlanId(plan, seatTier, proMaxVariant);
+  const planId = getRazorpayPlanId(plan, seatTier, proMaxVariant, billingFrequency);
   if (!planId) {
     return NextResponse.json(
       {
@@ -122,7 +124,9 @@ export async function POST(request: Request) {
             ? `No payment plan is configured for Paw Team's ${seatTier} seat. Business Configuration Required.`
             : plan === "proMax"
               ? `No payment plan is configured for Paw Pro Max ${proMaxVariant}. Business Configuration Required.`
-              : `No payment plan is configured for Paw ${plan}. Business Configuration Required.`,
+              : plan === "pro" && billingFrequency === "yearly"
+                ? "Pro yearly isn't available yet. Business Configuration Required."
+                : `No payment plan is configured for Paw ${plan}. Business Configuration Required.`,
       },
       { status: 503 }
     );
@@ -137,13 +141,20 @@ export async function POST(request: Request) {
     body: JSON.stringify({
       plan_id: planId,
       customer_notify: 1,
-      total_count: 100, // Razorpay requires a finite cycle count; 100 monthly cycles (~8 years) is the standard way integrations express "renews indefinitely" rather than silently lapsing after a year.
+      // Razorpay requires a finite cycle count; a large one is the standard way to express "renews
+      // until cancelled": 100 monthly cycles (~8 years), or 10 yearly cycles for Pro yearly.
+      total_count: billingFrequency === "yearly" ? 10 : 100,
       ...((plan === "team" || plan === "enterprise") && seatCount ? { quantity: seatCount } : {}),
       // P0-3 security fix: runtimeIds round-trips through Razorpay's own notes field so
       // /api/billing/verify-subscription can read it back as real, Razorpay-attested data instead of
       // trusting whatever a forged local callback claims. userId is also included so the verification
       // endpoint can identify the user for one-time benefit grants. proMaxVariant is also stored for proper entitlement application.
-      notes: { runtimeIds: runtimeIds.length > 0 ? runtimeIds.join(",") : "", userId, ...(proMaxVariant ? { proMaxVariant } : {}) },
+      notes: {
+        runtimeIds: runtimeIds.length > 0 ? runtimeIds.join(",") : "",
+        userId,
+        ...(proMaxVariant ? { proMaxVariant } : {}),
+        billingFrequency,
+      },
     }),
   });
 

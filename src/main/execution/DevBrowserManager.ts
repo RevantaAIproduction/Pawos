@@ -1,9 +1,17 @@
 import { app, BrowserWindow } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
-import type { DevBrowserConsoleEntry, DevBrowserNetworkEntry } from '../../shared/actions/DevBrowserTypes';
+import type {
+  DevBrowserConsoleEntry,
+  DevBrowserCrashEntry,
+  DevBrowserInputEvent,
+  DevBrowserNetworkEntry,
+  DevBrowserScreencastFrame,
+} from '../../shared/actions/DevBrowserTypes';
 
 const MAX_LOG_ENTRIES = 500;
+/** requestId → method/type, kept only until the response arrives; capped so a chatty page can't grow it. */
+const MAX_PENDING_REQUESTS = 1000;
 
 export type DevBrowserDownloadState = {
   state: 'progressing' | 'completed' | 'cancelled' | 'interrupted';
@@ -21,7 +29,44 @@ type DevBrowserSession = {
   /** The path the next triggered download should be saved to, consumed by the will-download handler so no native save dialog ever appears. */
   expectedDownloadPath?: string;
   activeDownload?: DevBrowserDownloadState;
+  /** Renderer crashes / failed main-page loads — Live Preview's crash signals. */
+  crashLog: DevBrowserCrashEntry[];
+  /** Method + CDP resource type per in-flight request, so a finished request can say whether it was an API call or an asset. */
+  pendingRequests: Map<string, { url?: string; method?: string; resourceType?: string }>;
+  /** Live Preview's frame sink while a screencast is running. */
+  onScreencastFrame?: (frame: DevBrowserScreencastFrame) => void;
 };
+
+export type DevBrowserOpenOptions = {
+  /**
+   * No visible window — used by Live Preview for its background self-tester and for the preview the
+   * user watches inside PawOS's sidebar (via screencast). Background throttling is turned off so a
+   * hidden page keeps running timers, animations and painting at full speed.
+   */
+  hidden?: boolean;
+};
+
+const INPUT_TYPES = new Set(['mouseDown', 'mouseUp', 'mouseMove', 'mouseWheel', 'keyDown', 'keyUp', 'char']);
+
+/** Validates a forwarded input event — only the shapes a person can produce, finite coordinates, short key codes. */
+export function toSafeInputEvent(event: unknown): DevBrowserInputEvent | null {
+  if (typeof event !== 'object' || event === null) return null;
+  const e = event as Record<string, unknown>;
+  if (typeof e.type !== 'string' || !INPUT_TYPES.has(e.type)) return null;
+  const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+  if (e.type === 'keyDown' || e.type === 'keyUp' || e.type === 'char') {
+    return typeof e.keyCode === 'string' && e.keyCode.length > 0 && e.keyCode.length <= 32
+      ? { type: e.type, keyCode: e.keyCode }
+      : null;
+  }
+  if (!finite(e.x) || !finite(e.y)) return null;
+  if (e.type === 'mouseWheel') {
+    return finite(e.deltaX) && finite(e.deltaY) ? { type: 'mouseWheel', x: e.x, y: e.y, deltaX: e.deltaX, deltaY: e.deltaY } : null;
+  }
+  const button = e.button === 'middle' || e.button === 'right' ? e.button : 'left';
+  const clickCount = finite(e.clickCount) ? Math.max(1, Math.min(3, Math.round(e.clickCount))) : 1;
+  return { type: e.type as 'mouseDown' | 'mouseUp' | 'mouseMove', x: e.x, y: e.y, button, clickCount };
+}
 
 /**
  * Extra allowed origins beyond localhost/127.0.0.1/0.0.0.0 — populated per
@@ -73,38 +118,114 @@ class DevBrowserManager {
     wc.debugger.on('message', (_event, method, params) => {
       if (method === 'Runtime.consoleAPICalled') {
         const text = (params.args ?? []).map((a: { value?: unknown; description?: string }) => String(a.value ?? a.description ?? '')).join(' ');
-        session.consoleLog.push({ level: params.type ?? 'log', text, timestamp: Date.now() });
+        const frame = params.stackTrace?.callFrames?.[0];
+        session.consoleLog.push({
+          level: params.type ?? 'log',
+          text,
+          timestamp: Date.now(),
+          source: 'console',
+          ...(frame?.url ? { location: { url: frame.url, line: (frame.lineNumber ?? 0) + 1, column: (frame.columnNumber ?? 0) + 1 } } : {}),
+        });
         if (session.consoleLog.length > MAX_LOG_ENTRIES) session.consoleLog.shift();
       } else if (method === 'Runtime.exceptionThrown') {
-        const text = params.exceptionDetails?.exception?.description ?? params.exceptionDetails?.text ?? 'Uncaught exception';
-        session.consoleLog.push({ level: 'error', text, timestamp: Date.now() });
+        const details = params.exceptionDetails ?? {};
+        const text = details.exception?.description ?? details.text ?? 'Uncaught exception';
+        const frame = details.stackTrace?.callFrames?.[0];
+        const url: string | undefined = details.url ?? frame?.url;
+        const line = details.url ? details.lineNumber : frame?.lineNumber;
+        const column = details.url ? details.columnNumber : frame?.columnNumber;
+        session.consoleLog.push({
+          level: 'error',
+          text,
+          timestamp: Date.now(),
+          source: 'exception',
+          ...(url ? { location: { url, line: (line ?? 0) + 1, column: (column ?? 0) + 1 } } : {}),
+        });
         if (session.consoleLog.length > MAX_LOG_ENTRIES) session.consoleLog.shift();
+      } else if (method === 'Network.requestWillBeSent') {
+        if (session.pendingRequests.size >= MAX_PENDING_REQUESTS) session.pendingRequests.clear();
+        session.pendingRequests.set(params.requestId, { url: params.request?.url, method: params.request?.method, resourceType: params.type });
       } else if (method === 'Network.responseReceived') {
         const status: number = params.response?.status ?? 0;
-        session.networkLog.push({ url: params.response?.url ?? '', status, failed: status >= 400, timestamp: Date.now() });
+        const meta = session.pendingRequests.get(params.requestId);
+        session.pendingRequests.delete(params.requestId);
+        session.networkLog.push({
+          url: params.response?.url ?? '',
+          status,
+          failed: status >= 400,
+          timestamp: Date.now(),
+          resourceType: params.type ?? meta?.resourceType,
+          method: meta?.method,
+        });
         if (session.networkLog.length > MAX_LOG_ENTRIES) session.networkLog.shift();
       } else if (method === 'Network.loadingFailed') {
-        session.networkLog.push({ url: params.url ?? '', status: null, failed: true, timestamp: Date.now() });
+        const meta = session.pendingRequests.get(params.requestId);
+        session.pendingRequests.delete(params.requestId);
+        session.networkLog.push({
+          url: params.url ?? meta?.url ?? '',
+          status: null,
+          failed: true,
+          timestamp: Date.now(),
+          resourceType: params.type ?? meta?.resourceType,
+          method: meta?.method,
+          errorText: params.errorText,
+          canceled: Boolean(params.canceled),
+        });
         if (session.networkLog.length > MAX_LOG_ENTRIES) session.networkLog.shift();
+      } else if (method === 'Page.screencastFrame') {
+        // Ack every frame (Chromium stops sending until acked), even if nobody is listening anymore.
+        wc.debugger.sendCommand('Page.screencastFrameAck', { sessionId: params.sessionId }).catch(() => {});
+        session.onScreencastFrame?.({
+          data: params.data,
+          deviceWidth: params.metadata?.deviceWidth ?? 0,
+          deviceHeight: params.metadata?.deviceHeight ?? 0,
+          timestamp: Date.now(),
+        });
       }
     });
   }
 
-  private getOrCreate(sessionId: string): DevBrowserSession {
+  /** Renderer crashes and failed main-page loads — never visible in the console log. */
+  private attachCrashWatch(session: DevBrowserSession): void {
+    const wc = session.window.webContents;
+    const push = (entry: DevBrowserCrashEntry) => {
+      session.crashLog.push(entry);
+      if (session.crashLog.length > MAX_LOG_ENTRIES) session.crashLog.shift();
+    };
+    wc.on('render-process-gone', (_event, details) => {
+      push({ kind: 'renderer-gone', detail: `The page's renderer stopped (${details.reason}, exit code ${details.exitCode}).`, url: wc.getURL(), timestamp: Date.now() });
+    });
+    wc.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      // -3 = ERR_ABORTED: a navigation replaced by another one, not a failure.
+      if (!isMainFrame || errorCode === -3) return;
+      push({ kind: 'load-failed', detail: `${errorDescription} (${errorCode})`, url: validatedURL, timestamp: Date.now() });
+    });
+    wc.on('unresponsive', () => {
+      push({ kind: 'unresponsive', detail: 'The page stopped responding (a script is likely stuck in a loop).', url: wc.getURL(), timestamp: Date.now() });
+    });
+  }
+
+  private getOrCreate(sessionId: string, opts: DevBrowserOpenOptions = {}): DevBrowserSession {
     let session = this.sessions.get(sessionId);
     if (session && !session.window.isDestroyed()) return session;
 
+    const hidden = opts.hidden === true;
     const win = new BrowserWindow({
-      show: true,
+      show: !hidden,
       width: 1000,
       height: 700,
       title: `Paw Browser — ${sessionId}`,
-      webPreferences: { nodeIntegration: false, contextIsolation: true },
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        ...(hidden ? { backgroundThrottling: false } : {}),
+      },
     });
-    session = { window: win, consoleLog: [], networkLog: [], approvedGeneralBrowsing: false };
+    session = { window: win, consoleLog: [], networkLog: [], crashLog: [], pendingRequests: new Map(), approvedGeneralBrowsing: false };
     win.on('closed', () => this.sessions.delete(sessionId));
     this.sessions.set(sessionId, session);
     this.attachDebugger(session);
+    this.attachCrashWatch(session);
     this.ensureDownloadInterception(win.webContents.session);
     return session;
   }
@@ -176,12 +297,13 @@ class DevBrowserManager {
   async open(
     sessionId: string,
     url: string,
-    allowedDeploymentOrigins: string[] = []
+    allowedDeploymentOrigins: string[] = [],
+    opts: DevBrowserOpenOptions = {}
   ): Promise<{ ok: true } | { ok: false; message: string }> {
     if (!isAllowedUrl(url, allowedDeploymentOrigins)) {
       return { ok: false, message: 'The Development Browser can only open localhost/127.0.0.1 URLs or a workspace\'s own recorded deployment URL.' };
     }
-    const session = this.getOrCreate(sessionId);
+    const session = this.getOrCreate(sessionId, opts);
     try {
       await session.window.loadURL(url);
       return { ok: true };
@@ -289,6 +411,77 @@ class DevBrowserManager {
     const session = this.sessions.get(sessionId);
     if (!session) return null;
     return session.networkLog.filter((entry) => entry.failed);
+  }
+
+  /** Every recorded request (not just failures) — Live Preview needs successes too, to tell expected 401s from real breakage. */
+  getNetworkLog(sessionId: string): DevBrowserNetworkEntry[] | null {
+    const session = this.sessions.get(sessionId);
+    if (!session) return null;
+    return [...session.networkLog];
+  }
+
+  getCrashLog(sessionId: string): DevBrowserCrashEntry[] | null {
+    const session = this.sessions.get(sessionId);
+    if (!session) return null;
+    return [...session.crashLog];
+  }
+
+  /** Empties console/network/crash logs so a retest round only sees what happened after the fix. */
+  clearLogs(sessionId: string): boolean {
+    const session = this.sessions.get(sessionId);
+    if (!session) return false;
+    session.consoleLog = [];
+    session.networkLog = [];
+    session.crashLog = [];
+    session.pendingRequests.clear();
+    return true;
+  }
+
+  /**
+   * Streams the page as JPEG frames (CDP Page.startScreencast) — how Live Preview shows the real,
+   * instrumented session inside PawOS instead of a separate unverified browser. One sink per
+   * session; starting again replaces it.
+   */
+  async startScreencast(
+    sessionId: string,
+    onFrame: (frame: DevBrowserScreencastFrame) => void,
+    opts: { maxWidth?: number; maxHeight?: number; quality?: number } = {}
+  ): Promise<{ ok: true } | { ok: false; message: string }> {
+    const session = this.sessions.get(sessionId);
+    if (!session || session.window.isDestroyed()) return { ok: false, message: 'No open Development Browser session with that id.' };
+    session.onScreencastFrame = onFrame;
+    try {
+      await session.window.webContents.debugger.sendCommand('Page.enable');
+      await session.window.webContents.debugger.sendCommand('Page.startScreencast', {
+        format: 'jpeg',
+        quality: opts.quality ?? 70,
+        maxWidth: opts.maxWidth ?? 1280,
+        maxHeight: opts.maxHeight ?? 800,
+        everyNthFrame: 1,
+      });
+      return { ok: true };
+    } catch (error) {
+      session.onScreencastFrame = undefined;
+      return { ok: false, message: (error as Error).message };
+    }
+  }
+
+  async stopScreencast(sessionId: string): Promise<void> {
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+    session.onScreencastFrame = undefined;
+    if (session.window.isDestroyed()) return;
+    await session.window.webContents.debugger.sendCommand('Page.stopScreencast').catch(() => {});
+  }
+
+  /** Forwards one user input (click, scroll, key) into the session — Live Preview's interactivity. Rejects anything malformed. */
+  sendInput(sessionId: string, event: unknown): { ok: true } | { ok: false; message: string } {
+    const session = this.sessions.get(sessionId);
+    if (!session || session.window.isDestroyed()) return { ok: false, message: 'No open Development Browser session with that id.' };
+    const safe = toSafeInputEvent(event);
+    if (!safe) return { ok: false, message: 'Unsupported input event.' };
+    session.window.webContents.sendInputEvent(safe as Electron.MouseInputEvent | Electron.MouseWheelInputEvent | Electron.KeyboardInputEvent);
+    return { ok: true };
   }
 
   async captureScreenshot(sessionId: string): Promise<{ ok: true; base64Png: string } | { ok: false; message: string }> {

@@ -19,6 +19,17 @@ export interface TierPaymentHandler {
   userEmail: string;
 }
 
+/**
+ * Pro / Pro Max checkout — a real Razorpay SUBSCRIPTION (renews automatically), never a one-time
+ * order. (Ticket Balance and Usage Credits are the one-time orders.)
+ *
+ *   1. /api/billing/checkout creates the subscription on the right Razorpay plan (Pro monthly /
+ *      Pro yearly / Pro Max 5x / Pro Max 20x), with the buyer's userId stamped server-side.
+ *   2. Razorpay's own checkout collects the payment and the recurring mandate (card / UPI autopay).
+ *   3. verify-subscription checks Razorpay's signature, saves the plan against the account
+ *      (pawos_subscriptions) and returns the tier — the app activates it immediately, then re-syncs
+ *      from the server so the plan follows the account on every sign-in until it ends.
+ */
 export async function initiateRazorpayTierPayment(
   tier: SubscriptionTierId,
   options: TierPaymentHandler,
@@ -28,63 +39,61 @@ export async function initiateRazorpayTierPayment(
     options.setBusy(true);
     options.setMessage(null);
 
-    // Get access token
     const supabase = await getSupabaseClient();
     const { data: sessionData } = await supabase.auth.getSession();
     const accessToken = sessionData.session?.access_token;
-
     if (!accessToken) {
       options.setMessage('[error] Sign in required');
       options.setBusy(false);
       return;
     }
 
-    // Create order
-    const result = await ipc.billingCreateNativeTierCheckout(tier, paymentOptions, undefined, accessToken);
-
+    const checkoutOptions = {
+      ...(tier === 'proMax' && paymentOptions?.proMaxVariant ? { proMaxVariant: paymentOptions.proMaxVariant } : {}),
+      ...(tier === 'pro' ? { proBillingFrequency: paymentOptions?.proBillingFrequency === 'yearly' ? 'yearly' : 'monthly' } : {}),
+    };
+    const result = await ipc.billingCreateNativeSubscriptionCheckout(tier, checkoutOptions, accessToken);
     if (!result.ok) {
       options.setMessage(`[error] ${result.reason}`);
       options.setBusy(false);
       return;
     }
 
-    // Load Razorpay and open checkout
-    loadRazorpayAndPay(result, options, tier);
+    loadRazorpayAndPay(result, options, tier, accessToken);
   } catch (error) {
     options.setMessage(`[error] ${error instanceof Error ? error.message : 'Payment failed'}`);
     options.setBusy(false);
   }
 }
 
-function loadRazorpayAndPay(result: any, options: TierPaymentHandler, tier: SubscriptionTierId) {
+function loadRazorpayAndPay(result: any, options: TierPaymentHandler, tier: SubscriptionTierId, accessToken: string) {
   if (!window.Razorpay) {
     const script = document.createElement('script');
     script.src = RAZORPAY_SCRIPT_URL;
     script.async = true;
-    script.onload = () => openRazorpayCheckout(result, options, tier);
+    script.onload = () => openRazorpayCheckout(result, options, tier, accessToken);
     script.onerror = () => {
       options.setMessage('[error] Failed to load payment');
       options.setBusy(false);
     };
     document.body.appendChild(script);
   } else {
-    openRazorpayCheckout(result, options, tier);
+    openRazorpayCheckout(result, options, tier, accessToken);
   }
 }
 
-function openRazorpayCheckout(result: any, options: TierPaymentHandler, tier: SubscriptionTierId) {
+function openRazorpayCheckout(result: any, options: TierPaymentHandler, tier: SubscriptionTierId, accessToken: string) {
   const razorpayOptions = {
     key: result.keyId,
-    order_id: result.orderId,
-    amount: result.amountPaise,
-    currency: 'INR',
+    // A subscription (not an order): Razorpay charges the plan's own price and sets up renewal.
+    subscription_id: result.subscriptionId,
     name: 'PawOS',
-    description: `PawOS ${tier} plan upgrade`,
+    description: `PawOS ${tier === 'proMax' ? 'Pro Max' : 'Pro'} subscription`,
     prefill: {
       email: options.userEmail,
     },
     handler: async (response: any) => {
-      await handlePaymentSuccess(response, result, options, tier);
+      await handlePaymentSuccess(response, result, options, accessToken);
     },
     modal: {
       ondismiss: () => {
@@ -103,21 +112,22 @@ function openRazorpayCheckout(result: any, options: TierPaymentHandler, tier: Su
   }
 }
 
-async function handlePaymentSuccess(response: any, result: any, options: TierPaymentHandler, tier: SubscriptionTierId) {
+async function handlePaymentSuccess(response: any, result: any, options: TierPaymentHandler, accessToken: string) {
   try {
-    const verifyResult = await ipc.billingVerifyNativeTierPayment({
-      tier,
-      orderId: result.orderId,
-      paymentId: response.razorpay_payment_id,
-      signature: response.razorpay_signature,
-    });
-
-    if (verifyResult.ok) {
-      options.setMessage('✅ Payment successful! Plan upgraded.');
-      setTimeout(() => options.refresh(), 2000);
-    } else {
-      options.setMessage(`[error] Verification failed: ${verifyResult.reason}`);
+    const verified = await ipc.billingConfirmNativeSubscriptionPayment(
+      response.razorpay_payment_id,
+      response.razorpay_subscription_id ?? result.subscriptionId,
+      response.razorpay_signature,
+      accessToken
+    );
+    if (!verified.ok) {
+      options.setMessage(`[error] Verification failed: ${verified.reason}. If you were charged, contact support — your payment is safe.`);
+      return;
     }
+    // The plan is saved against the account server-side; re-sync so every screen shows it now.
+    await ipc.billingSyncBuildAccess(accessToken).catch(() => undefined);
+    options.setMessage('✅ Payment successful! Your plan is active.');
+    setTimeout(() => options.refresh(), 1500);
   } catch (error) {
     options.setMessage(`[error] Error: ${error}`);
   } finally {

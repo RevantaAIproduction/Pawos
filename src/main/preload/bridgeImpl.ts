@@ -247,6 +247,8 @@ export function contextBridge() {
     careerImportResume: () => ipcRenderer.invoke("career:importResume") as Promise<CareerImportResult>,
     careerExportPdf: (doc: BuildPdfDocument, suggestedName: string) =>
       ipcRenderer.invoke("career:exportPdf", doc, suggestedName) as Promise<CareerPdfExportResult>,
+    careerExportDocx: (doc: BuildPdfDocument, suggestedName: string) =>
+      ipcRenderer.invoke("career:exportDocx", doc, suggestedName) as Promise<CareerPdfExportResult>,
     careerRevealFile: (filePath: string) => ipcRenderer.invoke("career:revealFile", filePath) as Promise<void>,
     /** Fires when the effective entitlement changes out-of-band (Build synced/cleared/expired). Returns an unsubscribe. */
     onEntitlementChanged: (cb: () => void) => {

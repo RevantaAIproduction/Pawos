@@ -368,6 +368,8 @@ export type EntitlementSnapshot = {
   buildFinalWeek?: boolean;
   /** Only set when tier === 'proMax'. */
   proMaxVariant?: ProMaxVariant;
+  /** Only set when tier === 'pro' — Pro monthly vs Pro yearly. */
+  proBillingFrequency?: 'monthly' | 'yearly';
 
   // Go Refreshes
   goRefreshesRemaining?: number;

@@ -10,7 +10,7 @@ import {
   type SubscriptionTierId,
 } from '../../../../shared/billing/BillingTypes';
 import { useEntitlementSnapshot } from '../../../billing/useEntitlementSnapshot';
-import { describeBuildAccess, formatDate, formatTierLabel } from '../../../billing/EntitlementDisplay';
+import { describeBuildAccess, formatDate, formatPlanName, formatTierLabel } from '../../../billing/EntitlementDisplay';
 
 const TIER_LABELS: Record<SubscriptionTierId, string> = {
   go: 'Go',
@@ -84,7 +84,11 @@ export function SubscriptionSection({
         <div>
           <div style={{ fontSize: "0.85em", color: "rgba(255, 255, 255, 0.5)", marginBottom: 4 }}>Current Plan</div>
           <div style={{ fontSize: "1.2em", fontWeight: 600 }} data-testid="current-plan-label">
-            {isBuild ? formatTierLabel('build') : TIER_LABELS[currentTier]}
+            {isBuild
+              ? formatTierLabel('build')
+              : currentTier === 'pro' || currentTier === 'proMax'
+                ? formatPlanName({ tier: currentTier, proMaxVariant: subscription?.proMaxVariant, proBillingFrequency: subscription?.proBillingFrequency })
+                : TIER_LABELS[currentTier]}
           </div>
           {buildAccess.kind === 'active' && (
             <div style={{ fontSize: "0.85em", marginTop: 6, color: "rgba(255, 255, 255, 0.7)", lineHeight: 1.5 }} data-testid="build-access-details">

@@ -10,6 +10,9 @@ import crypto from "crypto";
  */
 export type SubscriptionTierId = "go" | "pro" | "proMax" | "team" | "enterprise";
 export type ProMaxVariant = "5x" | "20x";
+/** Pro is sold monthly or yearly (two Razorpay plans); every other plan is monthly. */
+export type BillingFrequency = "monthly" | "yearly";
+
 
 /** Only meaningful for Team — Standard/Premium seat rate. Enterprise seats are uniform. */
 export type SeatTier = "standard" | "premium";
@@ -18,19 +21,32 @@ export type PaymentMethodId = "upi" | "card" | "netbanking" | "wallet";
 
 const VALID_PAYMENT_METHODS: readonly PaymentMethodId[] = ["upi", "card", "netbanking", "wallet"];
 
-const FLAT_PLAN_ENV_VAR: Record<"pro" | "proMax", string> = {
-  pro: "RAZORPAY_PLAN_ID_PRO",
-  proMax: "RAZORPAY_PLAN_ID_PROMAX",
+/**
+ * The env var names each Razorpay plan id may be stored under — the first one that is set wins.
+ * Both naming styles are accepted: RAZORPAY_PLAN_ID_* (.env.example) and the RAZORPAY_*_ID names
+ * the live PawOS environment already uses (RAZORPAY_PRO_ID, Razorpay_Pro_Yearly_ID, …).
+ * Team can mix seat tiers across members, so each seat rate has its own plan. Enterprise's only
+ * Razorpay-billed component is the seat base fee (its variable cost is billed separately).
+ */
+type PlanKey = "proMonthly" | "proYearly" | "proMax5x" | "proMax20x" | "teamStandard" | "teamPremium" | "enterpriseBase";
+const PLAN_ENV_NAMES: Record<PlanKey, readonly string[]> = {
+  proMonthly: ["RAZORPAY_PLAN_ID_PRO", "RAZORPAY_PRO_ID", "RAZORPAY_PRO_MONTHLY_ID"],
+  proYearly: ["RAZORPAY_PLAN_ID_PRO_YEARLY", "RAZORPAY_PRO_YEARLY_ID", "Razorpay_Pro_Yearly_ID"],
+  proMax5x: ["RAZORPAY_PLAN_ID_PROMAX_5X", "RAZORPAY_PRO_MAX_5X_ID", "RAZORPAY_PRO_MAX_ID", "RAZORPAY_PLAN_ID_PROMAX"],
+  proMax20x: ["RAZORPAY_PLAN_ID_PROMAX_20X", "RAZORPAY_PRO_MAX_20X_ID"],
+  teamStandard: ["RAZORPAY_PLAN_ID_TEAM_STANDARD", "RAZORPAY_TEAM_STANDARD_ID"],
+  teamPremium: ["RAZORPAY_PLAN_ID_TEAM_PREMIUM", "RAZORPAY_TEAM_PREMIUM_ID"],
+  enterpriseBase: ["RAZORPAY_PLAN_ID_ENTERPRISE_BASE", "RAZORPAY_ENTERPRISE_BASE_ID"],
 };
 
-/** Team can mix seat tiers across members, so each rate needs its own Razorpay plan (and, at checkout time, its own subscription — a single Razorpay subscription can't mix per-unit prices). */
-const TEAM_SEAT_PLAN_ENV_VAR: Record<SeatTier, string> = {
-  standard: "RAZORPAY_PLAN_ID_TEAM_STANDARD",
-  premium: "RAZORPAY_PLAN_ID_TEAM_PREMIUM",
-};
-
-/** Enterprise's only Razorpay-billed component is the seat base fee — its variable cost (Autonomous Engineering Task usage) is billed separately through the existing success-gated usage system, not through a Razorpay plan. */
-const ENTERPRISE_BASE_PLAN_ENV_VAR = "RAZORPAY_PLAN_ID_ENTERPRISE_BASE";
+/** The configured Razorpay plan id for one plan (quotes and whitespace trimmed), or null. */
+function planIdFor(key: PlanKey): string | null {
+  for (const name of PLAN_ENV_NAMES[key]) {
+    const value = process.env[name]?.trim().replace(/^["']|["']$/g, "");
+    if (value) return value;
+  }
+  return null;
+}
 
 export function getRazorpayCredentials(): { keyId: string; keySecret: string } | null {
   let keyId = process.env.RAZORPAY_KEY_ID?.trim();
@@ -56,20 +72,19 @@ export function getConfiguredPaymentMethods(): PaymentMethodId[] {
     .filter((method, index, list): method is PaymentMethodId => valid.has(method) && list.indexOf(method) === index);
 }
 
-/** `seatTier` is required for tier === "team" (no ambiguous default plan); `proMaxVariant` required for tier === "proMax" */
-export function getRazorpayPlanId(tier: SubscriptionTierId, seatTier?: SeatTier, proMaxVariant?: ProMaxVariant): string | null {
+/** `seatTier` is required for tier === "team" (no ambiguous default plan); `proMaxVariant` required for tier === "proMax"; `billingFrequency` only matters for Pro. */
+export function getRazorpayPlanId(tier: SubscriptionTierId, seatTier?: SeatTier, proMaxVariant?: ProMaxVariant, billingFrequency: BillingFrequency = "monthly"): string | null {
   if (tier === "go") return null; // Paw Go is free — never goes through checkout.
-  if (tier === "pro") return process.env[FLAT_PLAN_ENV_VAR.pro] ?? null;
+  if (tier === "pro") return planIdFor(billingFrequency === "yearly" ? "proYearly" : "proMonthly");
   if (tier === "proMax") {
     if (!proMaxVariant) return null; // proMaxVariant is required for Pro Max
-    const variantPlanEnv = proMaxVariant === "5x" ? "RAZORPAY_PLAN_ID_PROMAX_5X" : "RAZORPAY_PLAN_ID_PROMAX_20X";
-    return process.env[variantPlanEnv] ?? null;
+    return planIdFor(proMaxVariant === "20x" ? "proMax20x" : "proMax5x");
   }
   if (tier === "team") {
     if (!seatTier) return null;
-    return process.env[TEAM_SEAT_PLAN_ENV_VAR[seatTier]] ?? null;
+    return planIdFor(seatTier === "premium" ? "teamPremium" : "teamStandard");
   }
-  return process.env[ENTERPRISE_BASE_PLAN_ENV_VAR] ?? null;
+  return planIdFor("enterpriseBase");
 }
 
 /**
@@ -419,13 +434,14 @@ export async function listRazorpaySubscriptions(
 }
 
 /** Reverses getRazorpayPlanId() — given a real plan_id read back from Razorpay, finds which (tier, seatTier, proMaxVariant) it actually corresponds to. Returns null for a plan_id that matches no configured plan (never guesses). */
-export function resolveTierFromRazorpayPlanId(planId: string): { tier: SubscriptionTierId; seatTier?: SeatTier; proMaxVariant?: ProMaxVariant } | null {
-  if (process.env[FLAT_PLAN_ENV_VAR.pro] === planId) return { tier: "pro" };
-  if (process.env["RAZORPAY_PLAN_ID_PROMAX_5X"] === planId) return { tier: "proMax", proMaxVariant: "5x" };
-  if (process.env["RAZORPAY_PLAN_ID_PROMAX_20X"] === planId) return { tier: "proMax", proMaxVariant: "20x" };
-  for (const seatTier of ["standard", "premium"] as const) {
-    if (process.env[TEAM_SEAT_PLAN_ENV_VAR[seatTier]] === planId) return { tier: "team", seatTier };
-  }
-  if (process.env[ENTERPRISE_BASE_PLAN_ENV_VAR] === planId) return { tier: "enterprise" };
+export function resolveTierFromRazorpayPlanId(planId: string): { tier: SubscriptionTierId; seatTier?: SeatTier; proMaxVariant?: ProMaxVariant; billingFrequency?: BillingFrequency } | null {
+  if (!planId) return null;
+  if (planIdFor("proMonthly") === planId) return { tier: "pro", billingFrequency: "monthly" };
+  if (planIdFor("proYearly") === planId) return { tier: "pro", billingFrequency: "yearly" };
+  if (planIdFor("proMax5x") === planId) return { tier: "proMax", proMaxVariant: "5x", billingFrequency: "monthly" };
+  if (planIdFor("proMax20x") === planId) return { tier: "proMax", proMaxVariant: "20x", billingFrequency: "monthly" };
+  if (planIdFor("teamStandard") === planId) return { tier: "team", seatTier: "standard" };
+  if (planIdFor("teamPremium") === planId) return { tier: "team", seatTier: "premium" };
+  if (planIdFor("enterpriseBase") === planId) return { tier: "enterprise" };
   return null;
 }

@@ -8,6 +8,8 @@ export type SubscriptionRecord = {
   user_id: string;
   tier: "pro" | "proMax";
   pro_max_variant: "5x" | "20x" | null;
+  /** Pro monthly vs Pro yearly (separate Razorpay plans) — Pro Max is always monthly. */
+  billing_frequency: "monthly" | "yearly";
   status: string;
   current_period_end: string;
   source: string;
@@ -34,11 +36,13 @@ export function toSubscriptionRecord(
   if (!resolved) return { record: null, reason: `unknown plan ${subscription.plan_id}` };
   if (resolved.tier !== "pro" && resolved.tier !== "proMax") return { record: null, reason: `${resolved.tier} is organization-based` };
 
+  const billingFrequency = resolved.billingFrequency === "yearly" ? "yearly" : "monthly";
+
   // Paid through the end of the current cycle. Right after checkout Razorpay may not have set
-  // current_end yet ("authenticated"); the next charge date — or one month — covers that gap until
-  // the subscription.charged webhook brings the real value.
+  // current_end yet ("authenticated"); the next charge date — or one cycle (a month, or a year for
+  // Pro yearly) — covers that gap until the subscription.charged webhook brings the real value.
   const endSeconds = subscription.current_end ?? subscription.charge_at ?? null;
-  const periodEndMs = endSeconds ? endSeconds * 1000 : now + 31 * DAY_MS;
+  const periodEndMs = endSeconds ? endSeconds * 1000 : now + (billingFrequency === "yearly" ? 366 : 31) * DAY_MS;
 
   return {
     record: {
@@ -46,6 +50,7 @@ export function toSubscriptionRecord(
       user_id: userId,
       tier: resolved.tier,
       pro_max_variant: resolved.tier === "proMax" ? resolved.proMaxVariant ?? "5x" : null,
+      billing_frequency: billingFrequency,
       status: subscription.status,
       current_period_end: new Date(periodEndMs).toISOString(),
       source,

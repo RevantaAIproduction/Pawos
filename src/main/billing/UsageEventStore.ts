@@ -182,12 +182,15 @@ class UsageEventStore {
    * Records one counted code-file change in the active ledger (device for Go, account for paid).
    * Every call is one unit toward the weekly cap — a second qualifying edit to the same file counts again.
    */
-  recordFileWrite(filePath: string, detail: { kind: 'create' | 'edit'; lines: number }, at = Date.now()): void {
+  /** Returns the write's stable id — also the idempotency key when an over-cap file is charged. */
+  recordFileWrite(filePath: string, detail: { kind: 'create' | 'edit'; lines: number }, at = Date.now()): string {
     const writes = (this.state.fileWrites ??= []);
     const key = normalizeFilePathKey(filePath);
-    writes.push({ id: fileWriteId({ path: key, at }), path: key, at, kind: detail.kind, lines: detail.lines });
+    const id = fileWriteId({ path: key, at });
+    writes.push({ id, path: key, at, kind: detail.kind, lines: detail.lines });
     if (writes.length > MAX_FILE_WRITES) writes.splice(0, writes.length - MAX_FILE_WRITES);
     this.save();
+    return id;
   }
 
   /** Counted code-file changes since `cutoff` in the active ledger. */

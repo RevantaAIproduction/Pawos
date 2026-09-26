@@ -334,6 +334,8 @@ export default function CompanionExperience() {
               streamingPawCompute={conversation.streamingPawCompute}
               streamingElapsedSeconds={conversation.streamingElapsedSeconds}
               onCancel={() => conversation.cancel()}
+              projectFolder={conversation.projectFolder}
+              onSetProjectFolder={(folder) => conversation.setProjectFolder(folder)}
             />
           </div>
         </WindowContextProvider>

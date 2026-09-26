@@ -32,6 +32,7 @@ import { autonomousTaskBillingService } from '../../organization/AutonomousTaskB
 import { ipc as ipcBridge } from '../../services/ipc/ipcBridgeImplementation';
 import { useEntitlementSnapshot } from '../../billing/useEntitlementSnapshot';
 import { BuildAccessBanner } from '../billing/BuildAccessBanner';
+import { formatPlanName } from '../../billing/EntitlementDisplay';
 
 const TIER_LABELS: Record<EffectiveTierId, string> = {
   build: 'PawOS Build',
@@ -97,7 +98,14 @@ export function Dashboard({
   const isAdmin = useIsBuildAdmin(user);
   // Effective tier (PawOS Build while active), never the raw subscription tier. Guests have no real
   // subscription, so a guest session never displays a tier it never actually purchased.
-  const tierLabel = user.isGuest ? 'Guest Preview' : entitlement ? TIER_LABELS[entitlement.tier] : 'Go';
+  // The exact plan: "Pro · Yearly", "Pro Max 20x" … (profile menu / account chip).
+  const tierLabel = user.isGuest
+    ? 'Guest Preview'
+    : entitlement
+      ? entitlement.tier === 'pro' || entitlement.tier === 'proMax'
+        ? formatPlanName(entitlement).replace(/^Paw /, '')
+        : TIER_LABELS[entitlement.tier]
+      : 'Go';
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('Home');
   const [helpWidgetOpen, setHelpWidgetOpen] = useState(false);
   const [helpWidgetInitialTab, setHelpWidgetInitialTab] = useState<'home' | 'messages' | 'help'>('home');

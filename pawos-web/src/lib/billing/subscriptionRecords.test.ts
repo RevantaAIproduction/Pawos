@@ -41,6 +41,21 @@ describe("toSubscriptionRecord", () => {
     expect(Date.parse(bare.record!.current_period_end) - NOW).toBe(31 * 24 * 60 * 60 * 1000);
   });
 
+  it("records monthly vs yearly Pro from the plan itself; Pro Max is monthly", () => {
+    process.env.RAZORPAY_PLAN_ID_PRO_YEARLY = "plan_pro_y";
+    expect(toSubscriptionRecord({ id: "s", plan_id: "plan_pro", status: "active", current_end: 1, notes: { userId: "u" } }, "x", NOW).record).toMatchObject({ tier: "pro", billing_frequency: "monthly" });
+    expect(toSubscriptionRecord({ id: "s", plan_id: "plan_pro_y", status: "active", current_end: 1, notes: { userId: "u" } }, "x", NOW).record).toMatchObject({ tier: "pro", billing_frequency: "yearly" });
+    expect(toSubscriptionRecord({ id: "s", plan_id: "plan_pm20", status: "active", current_end: 1, notes: { userId: "u" } }, "x", NOW).record).toMatchObject({ tier: "proMax", pro_max_variant: "20x", billing_frequency: "monthly" });
+    // A client can't claim yearly: the frequency comes from Razorpay's plan id, never from notes.
+    expect(toSubscriptionRecord({ id: "s", plan_id: "plan_pro", status: "active", current_end: 1, notes: { userId: "u", billingFrequency: "yearly" } }, "x", NOW).record).toMatchObject({ billing_frequency: "monthly" });
+  });
+
+  it("Pro yearly before its first charge falls back to one year, not one month", () => {
+    process.env.RAZORPAY_PLAN_ID_PRO_YEARLY = "plan_pro_y";
+    const bare = toSubscriptionRecord({ id: "s", plan_id: "plan_pro_y", status: "authenticated", notes: { userId: "u" } }, "x", NOW);
+    expect(Date.parse(bare.record!.current_period_end) - NOW).toBe(366 * 24 * 60 * 60 * 1000);
+  });
+
   it("never stores a plan without a userId, an unknown plan, or an organization plan", () => {
     expect(toSubscriptionRecord({ id: "s", plan_id: "plan_pro", status: "active" }, "x", NOW).record).toBeNull();
     expect(toSubscriptionRecord({ id: "s", plan_id: "plan_other", status: "active", notes: { userId: "u" } }, "x", NOW).record).toBeNull();
