@@ -2405,6 +2405,7 @@ export class ConversationRuntime {
       model: this.args.reasoningRuntime.getProvider().id,
       voice: this.args.speechSynthesis.name,
       endedReason: null,
+      ...(this.projectFolder ? { projectFolder: this.projectFolder } : {}),
     };
   }
 

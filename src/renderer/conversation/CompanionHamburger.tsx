@@ -1,14 +1,23 @@
 import React, { useState, useRef, useEffect } from 'react';
 import styles from './companionHamburger.module.css';
 import type { EntitlementSnapshot } from '../../shared/billing/BillingTypes';
+import { ChatsPanel } from './ChatsPanel';
 
 interface CompanionHamburgerProps {
   onOpenSettings?: () => void;
   userEmail?: string;
   entitlement?: EntitlementSnapshot | null;
+  /** The saved chat on screen (null for a new, unsaved one). */
+  activeChatId?: string | null;
+  /** The project open now. */
+  openProject?: string | null;
+  /** Reopens a past chat (and its project). */
+  onOpenChat?: (id: string, projectFolder: string | null) => void;
+  /** Starts a new chat — in a project, or a plain chat (resume, questions) for null. */
+  onNewChat?: (projectFolder: string | null) => void;
 }
 
-export function CompanionHamburger({ onOpenSettings, userEmail = '', entitlement }: CompanionHamburgerProps) {
+export function CompanionHamburger({ onOpenSettings, userEmail = '', entitlement, activeChatId = null, openProject = null, onOpenChat, onNewChat }: CompanionHamburgerProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
@@ -57,7 +66,14 @@ export function CompanionHamburger({ onOpenSettings, userEmail = '', entitlement
         <div className={styles.menu}>
           {/* Top Actions */}
           <div className={styles.section}>
-            <button className={styles.newButton}>
+            <button
+              type="button"
+              className={styles.newButton}
+              onClick={() => {
+                onNewChat?.(null); // a plain chat — no project
+                setMenuOpen(false);
+              }}
+            >
               <span className={styles.newIcon}>+</span> New
             </button>
           </div>
@@ -74,14 +90,18 @@ export function CompanionHamburger({ onOpenSettings, userEmail = '', entitlement
             <div className={styles.projectsHeader}>Projects & Sessions</div>
             <div className={styles.projectsList}>
               {/* Placeholder - would be populated with real data */}
-              <div className={styles.projectGroup}>
-                <div className={styles.groupLabel}>Projects</div>
-                <div className={styles.emptyState}>No projects yet</div>
-              </div>
-              <div className={styles.projectGroup}>
-                <div className={styles.groupLabel}>Recent Sessions</div>
-                <div className={styles.emptyState}>No recent sessions</div>
-              </div>
+              <ChatsPanel
+                activeChatId={activeChatId}
+                openProject={openProject}
+                onOpenChat={(id, folder) => {
+                  onOpenChat?.(id, folder);
+                  setMenuOpen(false);
+                }}
+                onNewChat={(folder) => {
+                  onNewChat?.(folder);
+                  setMenuOpen(false);
+                }}
+              />
             </div>
           </div>
 

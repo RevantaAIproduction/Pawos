@@ -1,39 +1,45 @@
 import { describe, expect, it } from 'vitest';
-import { chatTitle, groupChats } from './chatsPanelModel';
+import { chatTitle, folderName, groupChatsByProject } from './chatsPanelModel';
 import type { ConversationSessionSummary } from '../../shared/conversation/ConversationSessionTypes';
 
-const now = new Date(2026, 8, 26, 15, 0).getTime();
-const HOUR = 60 * 60 * 1000;
-const chat = (id: string, hoursAgo: number, extra: Partial<ConversationSessionSummary> = {}): ConversationSessionSummary => ({
-  id, title: id, createdAt: now - hoursAgo * HOUR, updatedAt: now - hoursAgo * HOUR, pinned: false, archived: false, turnCount: 1, durationMs: 0, lastMessage: '', ...extra,
+const chat = (id: string, updatedAt: number, extra: Partial<ConversationSessionSummary> = {}): ConversationSessionSummary => ({
+  id, title: id, createdAt: updatedAt, updatedAt, pinned: false, archived: false, turnCount: 1, durationMs: 0, lastMessage: '', ...extra,
 });
 
-describe('Chats panel list', () => {
-  it('pinned first, then Today / Yesterday / Previous 7 days / Older, newest first; archived hidden', () => {
-    const groups = groupChats([
-      chat('old', 24 * 30),
-      chat('today-early', 10),
-      chat('today-late', 1),
-      chat('yesterday', 20),
-      chat('last-week', 24 * 4),
-      chat('pinned-old', 24 * 60, { pinned: true }),
-      chat('archived', 2, { archived: true }),
-    ], now);
-    expect(groups.map((g) => [g.label, g.chats.map((c) => c.id)])).toEqual([
-      ['Pinned', ['pinned-old']],
-      ['Today', ['today-late', 'today-early']],
-      ['Yesterday', ['yesterday']],
-      ['Previous 7 days', ['last-week']],
-      ['Older', ['old']],
+describe('Chat list grouped by project', () => {
+  it('plain chats first, then projects by latest activity; pinned first inside a group; archived hidden', () => {
+    const groups = groupChatsByProject([
+      chat('resume', 50),
+      chat('question', 90),
+      chat('pawos-old', 10, { projectFolder: 'C:\\code\\PawOS' }),
+      chat('pawos-pinned', 5, { projectFolder: 'c:/code/pawos/', pinned: true }), // same folder, other spelling
+      chat('agro', 80, { projectFolder: 'C:\\code\\Godavari-Agro' }),
+      chat('gone', 99, { archived: true }),
+    ]);
+    expect(groups.map((g) => [g.name, g.chats.map((c) => c.id)])).toEqual([
+      ['Chats', ['question', 'resume']],
+      ['Godavari-Agro', ['agro']],
+      ['PawOS', ['pawos-pinned', 'pawos-old']],
+    ]);
+    expect(groups[0]!.folder).toBeNull();
+  });
+
+  it('the open project gets a section even before it has chats (to start one there)', () => {
+    const groups = groupChatsByProject([], 'C:\\code\\new-app');
+    expect(groups.map((g) => [g.name, g.folder, g.chats.length])).toEqual([
+      ['Chats', null, 0],
+      ['new-app', 'C:\\code\\new-app', 0],
     ]);
   });
 
-  it('no chats → no groups', () => {
-    expect(groupChats([], now)).toEqual([]);
+  it('while searching, only sections with matches show', () => {
+    const groups = groupChatsByProject([chat('agro', 1, { projectFolder: 'C:\\x\\agro' })], 'C:\\code\\new-app', true);
+    expect(groups.map((g) => g.name)).toEqual(['agro']);
   });
 
-  it('title falls back to the last message, then "Untitled chat"', () => {
-    expect(chatTitle({ title: 'Fix login bug', lastMessage: 'x' })).toBe('Fix login bug');
+  it('folder names and titles', () => {
+    expect(folderName('C:\\code\\my-app\\')).toBe('my-app');
+    expect(folderName('/home/me/site')).toBe('site');
     expect(chatTitle({ title: ' ', lastMessage: 'chart my sales' })).toBe('chart my sales');
     expect(chatTitle({ title: '', lastMessage: '' })).toBe('Untitled chat');
   });

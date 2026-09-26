@@ -339,7 +339,7 @@ export default function CompanionExperience() {
               onSetProjectFolder={(folder) => conversation.setProjectFolder(folder)}
               activeChatId={conversation.currentSessionId}
               onOpenChat={(id) => void conversation.openSession(id)}
-              onNewChat={() => conversation.handleNewChat()}
+              onNewChat={(folder) => conversation.startNewChat(folder)}
             />
           </div>
         </WindowContextProvider>

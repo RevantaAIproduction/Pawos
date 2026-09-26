@@ -6,6 +6,8 @@ import { createSttProvider, createTtsProvider, type TtsProviderConfig } from './
 import { ReasoningRuntime } from '../reasoning/ReasoningRuntime';
 import type { ReasoningProvider } from '../reasoning/ReasoningProvider';
 import { aiRouter } from '../ai/AIRouter';
+import { nameSession } from '../ai/SessionNamer';
+import { SESSION_PROMPT_LIMIT } from './SessionLimitModal';
 import { aiProviderConfigStore } from '../ai/AIProviderConfigStore';
 import { getDefaultModelForTier } from '../ai/ModelSelectionByTier';
 import { useIpcBridge } from '../services/ipc/useIpcBridge';
@@ -240,7 +242,7 @@ export function useConversationController(args?: {
 
   const dismissCreditsNotice = useCallback(() => setCreditsNoticeTier(null), []);
 
-  // Check if current session has reached 80-prompt limit
+  // Check if current session has reached its prompt limit (SESSION_PROMPT_LIMIT)
   const checkSessionLimit = useCallback(async (): Promise<boolean> => {
     if (!currentSessionId) return false;
     try {
@@ -249,7 +251,7 @@ export function useConversationController(args?: {
       // Count only user prompts (turns with non-empty transcript)
       const promptCount = session.turns.filter(t => t.transcript.trim()).length;
       setCurrentSessionPromptCount(promptCount);
-      return promptCount >= 80;
+      return promptCount >= SESSION_PROMPT_LIMIT;
     } catch {
       return false;
     }
@@ -275,9 +277,16 @@ export function useConversationController(args?: {
     setPreservedPrompt(null);
     chatGenerationRef.current += 1;
     runtimeRef.current?.openConversation(session);
+    setProjectFolder(session.projectFolder ?? null); // a project's chat opens its project; a plain chat closes it
     setCurrentSessionId(session.id);
     setCurrentSessionPromptCount(session.turns.filter((t) => t.transcript.trim()).length);
-  }, [ipc]);
+  }, [ipc, setProjectFolder]);
+
+  // "+" in the chat list: a new chat in that project, or a plain chat (resume, questions) for null.
+  const startNewChat = useCallback((folder: string | null) => {
+    setProjectFolder(folder);
+    handleNewChat();
+  }, [setProjectFolder, handleNewChat]);
 
   // Handle Continue as New Session - creates new session with preserved prompt
   const handleContinueAsNewSession = useCallback(() => {
@@ -288,6 +297,9 @@ export function useConversationController(args?: {
     setSessionLimitModalOpen(false);
     setCurrentSessionId(null);
     setCurrentSessionPromptCount(0);
+    // A fresh session (same project, if one is open) — not the full one.
+    chatGenerationRef.current += 1;
+    runtimeRef.current?.openConversation(null);
     // Submit the preserved prompt to the new session
     const { text, context } = preservedPrompt;
     setPreservedPrompt(null);
@@ -471,6 +483,18 @@ export function useConversationController(args?: {
           // Count user prompts in the session
           const promptCount = session.turns.filter(t => t.transcript.trim()).length;
           setCurrentSessionPromptCount(promptCount);
+          // A brand-new session gets a short topic name ("PawOS build warnings") after its first reply.
+          if (session.turns.length === 1 && turn.transcript.trim() && turn.assistantResponse.trim()) {
+            const apiKey = aiProviderConfigStore.getApiKey('gemini');
+            if (apiKey) {
+              void nameSession({ apiKey, transcript: turn.transcript, reply: turn.assistantResponse }).then(async ({ name, usage }) => {
+                if (usage) ipc.billingReportUsageEvent(usage, 'backgroundTask', { sessionId: session.id, runId: null }).catch(() => {});
+                if (!name) return;
+                await ipc.renameSession(session.id, name).catch(() => undefined);
+                if (generation === chatGenerationRef.current) setActiveSessionName(name);
+              });
+            }
+          }
           return session;
         });
       },
@@ -479,7 +503,7 @@ export function useConversationController(args?: {
         try {
           const summaries = await ipc.listSessions();
           const candidates = summaries
-            .filter((s) => !s.archived)
+            .filter((s) => !s.archived && (s.projectFolder ?? null) === (projectFolderRef.current ?? null)) // never across projects
             .slice(0, 8)
             .map((s) => ({ id: s.id, title: s.title, lastMessage: s.lastMessage }));
           if (candidates.length === 0) return { type: 'auto' as const };
@@ -785,6 +809,7 @@ export function useConversationController(args?: {
     preservedPrompt,
     handleNewChat,
     openSession,
+    startNewChat,
     handleContinueAsNewSession,
     checkSessionLimit,
     activeSessionName,

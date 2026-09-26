@@ -166,6 +166,8 @@ export type ConversationTurnRecord = {
   endedReason: 'completed' | 'interrupted' | 'error' | null;
   /** Visuals PawOS drew this turn (show_widget), saved with the chat and restored before the reply. */
   widgets?: ChatWidgetData[];
+  /** The project folder open when this turn ran — which project's chats it belongs to. */
+  projectFolder?: string;
 };
 
 /** A single state transition or notable runtime event — structured, dev-console-only debugging, never rendered to the user. */

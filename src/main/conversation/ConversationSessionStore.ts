@@ -28,6 +28,12 @@ function titleFromTranscript(transcript: string): string {
   return trimmed.length > 48 ? `${trimmed.slice(0, 48)}…` : trimmed;
 }
 
+/** Same project folder (Windows paths compare case-insensitively, either slash); both empty = both plain chats. */
+export function sameProjectFolder(a: string | undefined, b: string | undefined): boolean {
+  const norm = (p: string | undefined) => (p ?? '').trim().replace(/[\\/]+$/, '').replace(/\//g, '\\').toLowerCase();
+  return norm(a) === norm(b);
+}
+
 /**
  * Electron's memory of every conversation — the one main-process store in
  * this app that's genuinely rooted at app.getPath('userData') and genuinely
@@ -73,6 +79,7 @@ class ConversationSessionStore {
       turnCount: session.turns.length,
       durationMs: first && last ? (last.endedAt ?? last.startedAt) - first.startedAt : 0,
       lastMessage: last?.assistantResponse || last?.transcript || '',
+      ...(session.projectFolder ? { projectFolder: session.projectFolder } : {}),
     };
   }
 
@@ -98,8 +105,11 @@ class ConversationSessionStore {
     });
   }
 
-  private findContinuableSession(): ConversationSession | undefined {
-    const candidate = [...this.sessions].filter((s) => !s.archived).sort((a, b) => b.updatedAt - a.updatedAt)[0];
+  private findContinuableSession(projectFolder: string | undefined): ConversationSession | undefined {
+    // Only a chat of the same project (or another plain chat) — a turn is never filed across projects.
+    const candidate = [...this.sessions]
+      .filter((s) => !s.archived && sameProjectFolder(s.projectFolder, projectFolder))
+      .sort((a, b) => b.updatedAt - a.updatedAt)[0];
     if (!candidate) return undefined;
     return Date.now() - candidate.updatedAt <= SESSION_CONTINUATION_WINDOW_MS ? candidate : undefined;
   }
@@ -126,7 +136,7 @@ class ConversationSessionStore {
   appendTurn(turn: ConversationSessionTurn, hint: SessionContinuationHint = { type: 'auto' }, projectId?: string): ConversationSession {
     let session: ConversationSession | undefined;
     if (hint.type === 'continue') session = this.get(hint.sessionId);
-    else if (hint.type === 'auto') session = this.findContinuableSession();
+    else if (hint.type === 'auto') session = this.findContinuableSession(turn.projectFolder);
     // hint.type === 'new' (or a 'continue' whose session vanished) leaves
     // session undefined, so a fresh one gets created below.
 
@@ -144,6 +154,7 @@ class ConversationSessionStore {
         filesCreated: files,
         applicationsOpened: apps,
         projectId,
+        ...(turn.projectFolder ? { projectFolder: turn.projectFolder } : {}),
       };
       this.sessions.push(session);
     } else {

@@ -25,6 +25,8 @@ export type ConversationSessionTurn = {
   endedReason: 'completed' | 'interrupted' | 'error' | null;
   /** Visuals drawn this turn (show_widget) — restored before the reply when the chat is reopened. */
   widgets?: { title: string; code: string; loadingMessages?: string[] }[];
+  /** The project folder open in PawOS when this turn ran — none for a plain chat (resume, questions). */
+  projectFolder?: string;
 };
 
 export type ConversationSession = {
@@ -39,6 +41,8 @@ export type ConversationSession = {
   applicationsOpened: string[];
   /** Project UUID (org_projects.id) this session is associated with, if any. */
   projectId?: string;
+  /** The local project folder this chat belongs to (set by its first turn) — none for a plain chat. */
+  projectFolder?: string;
 };
 
 /** List/search results omit full turn transcripts — the dashboard list view only needs this much. */
@@ -52,6 +56,8 @@ export type ConversationSessionSummary = {
   turnCount: number;
   durationMs: number;
   lastMessage: string;
+  /** See ConversationSession.projectFolder. */
+  projectFolder?: string;
 };
 
 /**

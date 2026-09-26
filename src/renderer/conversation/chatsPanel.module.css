@@ -38,10 +38,44 @@
   gap: 2px;
 }
 
+.groupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  padding-left: 8px;
+}
+
 .groupLabel {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.emptyGroup {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.45);
-  padding: 0 8px 4px;
+  color: rgba(255, 255, 255, 0.35);
+  padding: 4px 8px 6px;
+}
+
+/* Hollow dot before each chat, filled for the open one. */
+.open::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 8px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  vertical-align: middle;
+}
+
+.active .open::before {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(255, 255, 255, 0.7);
 }
 
 .row {

@@ -31,7 +31,6 @@ import { useActivityStream } from './ActivitySidebar/useActivityStream';
 import { LiveStatus } from './LiveStatus/LiveStatus';
 import { ExtensionRenderer, type ExtensionRendererProps } from './extensions/ExtensionRenderer';
 import { TasksPanel } from './TasksPanel';
-import { ChatsPanel } from './ChatsPanel';
 import { ChatWidget } from './ChatWidget';
 import { ChatResume } from './ChatResume';
 import { TerminalView } from './TerminalView';
@@ -88,7 +87,7 @@ const SUPPORTED_FILE_EXTENSIONS = ['.txt', '.csv', '.json', '.md', '.log'];
 /** Reference material for Reference/Image Intelligence (a screenshot, mockup, logo) â€” analyzed via analyze_reference_image, never read as text. */
 const SUPPORTED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
 const MAX_FILE_CHARS = 20_000;
-const WORKSPACE_PANEL_TABS = ['chats', 'tasks', 'terminal', 'browser', 'files', 'worktree'] as const;
+const WORKSPACE_PANEL_TABS = ['tasks', 'terminal', 'browser', 'files', 'worktree'] as const;
 type WorkspacePanelTab = (typeof WORKSPACE_PANEL_TABS)[number];
 const SIDE_PANEL_WIDTH_KEY = 'pawos:sidePanelWidth';
 const DEFAULT_SIDE_PANEL_WIDTH = 380;
@@ -98,13 +97,6 @@ const MIN_CHAT_WIDTH = 360;
 /** Header tabs are icons (label as tooltip / aria-label). Simple 24px line icons, currentColor. */
 const iconProps = { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': true };
 const WORKSPACE_PANEL_ICONS: Record<WorkspacePanelTab, React.ReactNode> = {
-  // clock with a back arrow — history
-  chats: (
-    <svg {...iconProps}>
-      <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
-      <path d="M3 3v5h5M12 7v5l3 2" />
-    </svg>
-  ),
   // checklist
   tasks: (
     <svg {...iconProps}>
@@ -148,7 +140,6 @@ const WORKSPACE_PANEL_ICONS: Record<WorkspacePanelTab, React.ReactNode> = {
 const CHAT_HIDDEN_EXTENSIONS = new Set(['task-progress', 'file-change', 'permission']);
 
 const WORKSPACE_PANEL_LABELS: Record<WorkspacePanelTab, string> = {
-  chats: 'Chats',
   tasks: 'Tasks',
   terminal: 'Terminal',
   browser: 'Browser',
@@ -486,10 +477,10 @@ export function ConversationPanel({
   sessionName?: string | null;
   /** The saved chat on screen (null for a new, unsaved one). */
   activeChatId?: string | null;
-  /** Opens a past chat from the Chats panel. */
-  onOpenChat?: (id: string) => void;
-  /** Clears the chat and starts a new one. */
-  onNewChat?: () => void;
+  /** Opens a past chat (and its project) from the menu's chat list. */
+  onOpenChat?: (id: string, projectFolder: string | null) => void;
+  /** Starts a new chat — in a project, or a plain chat for null. */
+  onNewChat?: (projectFolder: string | null) => void;
 }) {
   const windowCtx = useWindowContext();
   const isStreaming = snapshot.state === 'thinking' || snapshot.state === 'performingAction';
@@ -1443,7 +1434,7 @@ export function ConversationPanel({
   const selectWorkspaceTab = (tab: WorkspacePanelTab) => {
     setActiveWorkspacePanel((current) => (current === tab ? null : tab));
     if (tab !== 'files') setSelectedWorkspaceFile(null);
-    if (tab === 'tasks' || tab === 'chats') return;
+    if (tab === 'tasks') return;
     onOpenSidebar?.(tab === 'files' ? 'worktree' : tab);
   };
   const openEditedFile = (path: string) => {
@@ -1668,9 +1659,6 @@ export function ConversationPanel({
           </div>
         </div>
         <div className={activeWorkspacePanel === 'terminal' ? `${styles.panelContent} ${styles.panelContentFlush}` : styles.panelContent}>
-          {activeWorkspacePanel === 'chats' && (
-            <ChatsPanel activeChatId={activeChatId ?? null} onOpenChat={(id) => onOpenChat?.(id)} onNewChat={() => onNewChat?.()} />
-          )}
           {activeWorkspacePanel === 'tasks' && (
             <TasksPanel
               entries={taskPanelEntries}
@@ -1765,7 +1753,7 @@ export function ConversationPanel({
       {/* PREMIUM HEADER */}
       <div className={styles.premiumHeader}>
         <div className={styles.headerLeft}>
-          <CompanionHamburger userEmail={userEmail} entitlement={entitlement} />
+          <CompanionHamburger userEmail={userEmail} entitlement={entitlement} activeChatId={activeChatId ?? null} openProject={projectFolder ?? null} onOpenChat={(id, folder) => onOpenChat?.(id, folder)} onNewChat={(folder) => onNewChat?.(folder)} />
           <div className={styles.pawosLogo}>
             PawOS
           </div>

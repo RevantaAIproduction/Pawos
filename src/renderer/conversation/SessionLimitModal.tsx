@@ -1,6 +1,9 @@
 import React from 'react';
 import styles from './sessionLimitModal.module.css';
 
+/** Prompts one session holds; past it, the user continues in a new session. */
+export const SESSION_PROMPT_LIMIT = 40;
+
 interface SessionLimitModalProps {
   isOpen: boolean;
   onNewChat: () => void;
@@ -19,7 +22,7 @@ export function SessionLimitModal({ isOpen, onNewChat, onContinueAsNew }: Sessio
 
         <div className={styles.content}>
           <p className={styles.message}>
-            This session has reached the maximum of 80 prompts.
+            This session has reached the maximum of {SESSION_PROMPT_LIMIT} prompts.
           </p>
           <p className={styles.subtitle}>
             Choose how you want to continue.
