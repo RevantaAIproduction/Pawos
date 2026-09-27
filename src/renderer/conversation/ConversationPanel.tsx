@@ -1767,9 +1767,10 @@ export function ConversationPanel({
         </div>
 
         <div className={styles.headerCenter}>
-          {/* Session name, with the file PawOS is working on beside it. */}
+          {/* Session name (nothing until the chat has one), with the file PawOS is working on beside it.
+              New chats start from the ☰ menu. */}
           <div className={styles.sessionTitleRow}>
-            <span className={styles.sessionTitle} title={sessionName ?? 'New chat'}>{sessionName || 'New chat'}</span>
+            {sessionName && <span className={styles.sessionTitle} title={sessionName}>{sessionName}</span>}
             {(currentWorkingFile || activeFilePath) && (
               <span className={styles.sessionFileBadge} title={currentWorkingFile || activeFilePath}>
                 {getPathBasename(currentWorkingFile || activeFilePath || '')}
@@ -1777,7 +1778,8 @@ export function ConversationPanel({
             )}
           </div>
           <div className={styles.workspaceTopCards} aria-label="Workspace panels">
-            {WORKSPACE_PANEL_TABS.filter((tab) => hasProject || (tab !== 'files' && tab !== 'worktree')).map((tab) => (
+            {/* Tasks opens from the running-task chip above the message box, not from here. */}
+            {WORKSPACE_PANEL_TABS.filter((tab) => tab !== 'tasks' && (hasProject || (tab !== 'files' && tab !== 'worktree'))).map((tab) => (
               <button
                 key={tab}
                 type="button"

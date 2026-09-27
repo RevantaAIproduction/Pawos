@@ -14,12 +14,23 @@ import type { TicketPricingConfig } from '../../../shared/billing/BillingTypes';
 
 type WalletState = 'loading' | 'error' | 'normal' | 'low' | 'empty';
 
-function WalletMark() {
+/** Autonomous Work: a task (the diamond) inside a loop that runs on its own — thin muted line art. */
+function WalletMark({ size = 16 }: { size?: number }) {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M4 7.5h14.5A2.5 2.5 0 0 1 21 10v7a2.5 2.5 0 0 1-2.5 2.5h-14A2.5 2.5 0 0 1 2 17V6.5A2.5 2.5 0 0 1 4.5 4H17" />
-      <path d="M16 13h5" />
-      <path d="M17.5 13h.01" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+      <path d="M20 4v4h-4" />
+      <path d="M12 8.5l3.5 3.5-3.5 3.5L8.5 12z" />
+    </svg>
+  );
+}
+
+/** Tiny padlock pinned to the icon's corner — the locked state. */
+function LockPip() {
+  return (
+    <svg className={styles.walletLockPip} width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
     </svg>
   );
 }
@@ -155,9 +166,8 @@ export function TicketBalanceIndicator({
   if (eligible === null) {
     return (
       <div className={styles.walletPopoverWrapper} ref={wrapperRef}>
-        <div className={styles.walletIndicator} aria-label="Ticket Wallet loading">
-          <span className={styles.walletIndicatorIcon}><WalletMark /></span>
-          <span className={styles.walletAmountLoading}>…</span>
+        <div className={`${styles.walletIconBtn} ${styles.walletIconBtnLoading}`} aria-label="Ticket Wallet loading" title="Ticket Wallet — loading">
+          <WalletMark />
         </div>
       </div>
     );
@@ -170,16 +180,15 @@ export function TicketBalanceIndicator({
       <div className={styles.walletPopoverWrapper} ref={wrapperRef}>
         <button
           type="button"
-          className={styles.walletIndicatorLocked}
-          data-clickable="true"
+          className={`${styles.walletIconBtn} ${styles.walletIconBtnLocked}`}
           onClick={() => setEligibilityPopoverOpen((v) => !v)}
-          aria-label="Ticket Wallet — Autonomous Work requires Pro Max or higher"
+          title="Ticket Wallet — locked · Pro Max and higher"
+          aria-label="Ticket Wallet — locked. Autonomous Work requires Pro Max or higher"
           aria-expanded={eligibilityPopoverOpen}
           aria-haspopup="dialog"
         >
-          <span className={styles.walletIndicatorIcon}><WalletMark /></span>
-          <span>Ticket Wallet</span>
-          <span className={styles.walletLockBadge} aria-hidden>[lock] Pro Max+</span>
+          <WalletMark />
+          <LockPip />
         </button>
         {eligibilityPopoverOpen && (
           <div
@@ -211,19 +220,16 @@ export function TicketBalanceIndicator({
   const balanceUsd = balance?.balanceUsd ?? 0;
   const hasError = loadError || walletState === 'error';
 
-  function walletAmountClass() {
-    if (hasError) return styles.walletAmountError;
-    if (walletState === 'loading') return styles.walletAmountLoading;
-    if (walletState === 'empty') return styles.walletAmountEmpty;
-    if (walletState === 'low') return styles.walletAmountLow;
-    return styles.walletAmountNormal;
-  }
-
   function indicatorLabel() {
-    if (hasError) return 'Error';
-    if (walletState === 'loading') return '…';
+    if (hasError) return "couldn't load balance";
+    if (walletState === 'loading') return 'loading';
+    if (walletState === 'empty') return '$0.00 — add credits';
+    if (walletState === 'low') return `$${balanceUsd.toFixed(2)} — low`;
     return `$${balanceUsd.toFixed(2)}`;
   }
+
+  // Muted status dot on the icon: amber = low, red = empty or error; none when all is well.
+  const statusDot = hasError || walletState === 'empty' ? styles.walletDotEmpty : walletState === 'low' ? styles.walletDotLow : null;
 
   return (
     <>
@@ -231,16 +237,15 @@ export function TicketBalanceIndicator({
       {/* Wallet pill indicator */}
       <button
         type="button"
-        className={styles.walletIndicator}
+        className={styles.walletIconBtn}
         onClick={() => { setPopoverOpen((v) => !v); setEligibilityPopoverOpen(false); }}
+        title={`Ticket Wallet · ${indicatorLabel()}`}
         aria-label={`Ticket Wallet: ${indicatorLabel()}`}
         aria-expanded={popoverOpen}
         aria-haspopup="dialog"
       >
-        <span className={styles.walletIndicatorIcon}><WalletMark /></span>
-        <span className={walletAmountClass()}>{indicatorLabel()}</span>
-        {walletState === 'low' && <span className={styles.walletLowBadge} aria-label="Low balance">Low</span>}
-        {walletState === 'empty' && <span className={styles.walletEmptyCta} aria-label="Balance empty">Add Credits</span>}
+        <WalletMark />
+        {statusDot && <span className={`${styles.walletDot} ${statusDot}`} aria-hidden />}
       </button>
 
       {/* Full wallet popover */}
@@ -257,8 +262,11 @@ export function TicketBalanceIndicator({
               className={styles.walletPopoverClose}
               onClick={closeAll}
               aria-label="Close wallet"
+              title="Close"
             >
-              [x]
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
             </button>
           </div>
 

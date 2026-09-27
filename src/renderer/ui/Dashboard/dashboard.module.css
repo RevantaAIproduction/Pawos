@@ -677,6 +677,64 @@ div.workRecordList {
   font-size: 13px;
 }
 
+/* ── Wallet icon button (icon only; details on hover) ─────────────────── */
+
+.walletIconBtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid rgba(var(--pawos-overlay-rgb), 0.1);
+  background: rgba(var(--pawos-overlay-rgb), 0.04);
+  color: rgba(var(--pawos-overlay-rgb), 0.62);
+  cursor: pointer;
+}
+.walletIconBtn:hover {
+  background: rgba(var(--pawos-overlay-rgb), 0.09);
+  color: rgba(var(--pawos-overlay-rgb), 0.85);
+}
+.walletIconBtn:focus-visible {
+  outline: 2px solid rgba(124, 156, 255, 0.6);
+  outline-offset: 1px;
+}
+.walletIconBtnLoading {
+  cursor: default;
+  opacity: 0.45;
+}
+.walletIconBtnLocked {
+  color: rgba(var(--pawos-overlay-rgb), 0.35);
+}
+.walletIconBtnLocked:hover {
+  color: rgba(var(--pawos-overlay-rgb), 0.55);
+}
+.walletLockPip {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  padding: 1px;
+  border-radius: 3px;
+  background: rgba(20, 20, 26, 0.95);
+  color: rgba(var(--pawos-overlay-rgb), 0.6);
+}
+.walletDot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.walletDotLow {
+  background: rgb(201, 162, 94);
+}
+.walletDotEmpty {
+  background: rgb(196, 110, 110);
+}
+
 /* ── Wallet indicator states ──────────────────────────────────────────── */
 
 .walletIndicatorLocked {

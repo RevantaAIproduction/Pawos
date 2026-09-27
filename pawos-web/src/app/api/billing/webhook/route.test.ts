@@ -9,6 +9,11 @@ const mocks = vi.hoisted(() => ({
   fetchRazorpaySubscription: vi.fn(),
   getRazorpayCredentials: vi.fn(() => ({ keyId: "rzp_key", keySecret: "rzp_secret" })),
   recordRazorpaySubscription: vi.fn(async () => "recorded"),
+  creditPaidInvoice: vi.fn(),
+}));
+
+vi.mock("@/lib/billing/invoiceCrediting", () => ({
+  creditPaidInvoice: mocks.creditPaidInvoice,
 }));
 
 vi.mock("@/lib/billing/razorpay", async (importOriginal) => ({
@@ -242,6 +247,28 @@ describe("Razorpay billing webhook", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.creditVerifiedTicketBalancePayment).toHaveBeenCalledTimes(1);
+    expect(mocks.creditVerifiedUsageCreditsPayment).not.toHaveBeenCalled();
+  });
+
+  it("invoice.paid (above the ₹50,000 order limit) credits the invoice automatically", async () => {
+    mocks.creditPaidInvoice.mockResolvedValueOnce({ ok: true, amountUsd: 600, productType: "ticket_balance" });
+    const body = JSON.stringify({ event: "invoice.paid", payload: { invoice: { entity: { id: "inv_1" } } } });
+    const response = await POST(requestFor(body, signatureFor(body)));
+    expect(response.status).toBe(200);
+    expect(mocks.creditPaidInvoice).toHaveBeenCalledWith("inv_1");
+  });
+
+  it("invoice.paid that couldn't be credited for a server reason asks Razorpay to retry", async () => {
+    mocks.creditPaidInvoice.mockResolvedValueOnce({ ok: false, status: 502, reason: "Razorpay down" });
+    const body = JSON.stringify({ event: "invoice.paid", payload: { invoice: { entity: { id: "inv_1" } } } });
+    expect((await POST(requestFor(body, signatureFor(body)))).status).toBe(500);
+  });
+
+  it("the payment.captured for an invoice payment is left to invoice.paid (never credited twice)", async () => {
+    const body = JSON.stringify({ event: "payment.captured", payload: { payment: { entity: { id: "pay_9", order_id: "order_9", invoice_id: "inv_1" } } } });
+    const response = await POST(requestFor(body, signatureFor(body)));
+    expect(response.status).toBe(200);
+    expect(mocks.creditVerifiedTicketBalancePayment).not.toHaveBeenCalled();
     expect(mocks.creditVerifiedUsageCreditsPayment).not.toHaveBeenCalled();
   });
 });

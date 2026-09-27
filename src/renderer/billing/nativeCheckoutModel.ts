@@ -39,6 +39,8 @@ const TEAM_SEAT_USD_PRICES: Record<SeatTier, number> = {
 };
 
 export const TICKET_BALANCE_USD_INR_RATE = 95.65;
+/** Razorpay's one-time order cap — purchases above it are paid by invoice (≤ ₹5,00,000 each). */
+export const ONE_TIME_ORDER_LIMIT_INR = 50_000;
 
 export function subscriptionAmountInr(tier: SubscriptionTierId, seatTier?: SeatTier, seatCount = 1, proMaxVariant?: ProMaxVariant): number | null {
   const rate = TICKET_BALANCE_USD_INR_RATE;

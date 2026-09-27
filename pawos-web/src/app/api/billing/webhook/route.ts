@@ -11,6 +11,7 @@ import { creditVerifiedTicketBalancePayment } from "@/lib/billing/ticketBalanceC
 import { creditVerifiedUsageCreditsPayment } from "@/lib/billing/usageCreditsCrediting";
 
 import { createServiceClient } from "@/lib/supabase/serviceClient";
+import { creditPaidInvoice } from "@/lib/billing/invoiceCrediting";
 
 type RazorpayWebhookEvent = {
   event: string;
@@ -183,10 +184,15 @@ async function handleTierPurchaseWebhookAsync(
 /** Returns false when crediting failed on OUR side (server/database) and Razorpay should retry. */
 async function applyPaymentCapturedEvent(event: RazorpayWebhookEvent): Promise<boolean> {
   const paymentEntity = event.payload.payment?.entity as
-    | { id?: string; order_id?: string | null; notes?: Record<string, string> }
+    | { id?: string; order_id?: string | null; invoice_id?: string | null; notes?: Record<string, string> }
     | undefined;
   const paymentId = paymentEntity?.id;
   const orderId = paymentEntity?.order_id;
+  // A high-value invoice payment is credited once, from its "invoice.paid" event (applyInvoicePaidEvent).
+  if (paymentEntity?.invoice_id) {
+    console.log(`[razorpay-webhook] payment.captured ${paymentId} belongs to invoice ${paymentEntity.invoice_id} — credited via invoice.paid.`);
+    return true;
+  }
   if (!paymentId || !orderId) {
     console.warn("[razorpay-webhook] payment.captured event missing payment id or order id — skipping.");
     return true;
@@ -236,6 +242,30 @@ async function applyPaymentCapturedEvent(event: RazorpayWebhookEvent): Promise<b
   return true;
 }
 
+/**
+ * A high-value invoice (above the ₹50,000 one-time order limit) was paid: credit the buyer's wallet
+ * automatically. The invoice is re-fetched and verified in creditPaidInvoice; crediting is idempotent.
+ * Returns false when it should be retried (Razorpay retries non-2xx deliveries).
+ */
+async function applyInvoicePaidEvent(event: RazorpayWebhookEvent): Promise<boolean> {
+  const invoiceId = (event.payload.invoice?.entity as { id?: string } | undefined)?.id;
+  if (!invoiceId) {
+    console.warn('[razorpay-webhook] invoice.paid event has no invoice id — skipping.');
+    return true;
+  }
+  const result = await creditPaidInvoice(invoiceId).catch((error) => ({
+    ok: false as const,
+    status: 500,
+    reason: error instanceof Error ? error.message : String(error),
+  }));
+  if (!result.ok) {
+    console.log(`[razorpay-webhook] invoice.paid ${invoiceId} not credited: ${result.reason}`);
+    return !((result.status ?? 0) >= 500);
+  }
+  console.log(`[razorpay-webhook] invoice.paid ${invoiceId} credited $${result.amountUsd} (${result.productType}).`);
+  return true;
+}
+
 const SUBSCRIPTION_EVENTS = new Set([
   "subscription.activated",
   "subscription.charged",
@@ -272,6 +302,10 @@ export async function POST(request: Request) {
   if (event.event === "payment.captured") {
     if (!(await applyPaymentCapturedEvent(event))) {
       return NextResponse.json({ ok: false, reason: "Payment could not be credited yet." }, { status: 500 });
+    }
+  } else if (event.event === "invoice.paid") {
+    if (!(await applyInvoicePaidEvent(event))) {
+      return NextResponse.json({ ok: false, reason: "Invoice could not be credited yet." }, { status: 500 });
     }
   } else if (SUBSCRIPTION_EVENTS.has(event.event)) {
     if (!(await applySubscriptionEvent(event))) {

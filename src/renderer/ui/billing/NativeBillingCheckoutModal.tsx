@@ -19,6 +19,8 @@ import {
   AUTONOMOUS_WORK_CREDITS_PRESETS_USD,
   AUTONOMOUS_WORK_CREDITS_MIN_USD,
   AUTONOMOUS_WORK_CREDITS_MAX_USD,
+  TICKET_BALANCE_USD_INR_RATE,
+  ONE_TIME_ORDER_LIMIT_INR,
   type NativePaymentMethod,
 } from '../../billing/nativeCheckoutModel';
 
@@ -911,21 +913,19 @@ export function NativeBillingCheckoutModal({
     }
   }, [intent]);
 
-  // High-value Team/Enterprise order handling (>₹40,000 / $500 USD)
+  // Razorpay takes one-time orders up to ₹50,000 — anything above is paid by invoice (≤ ₹5,00,000
+  // each, split server-side), for everyone: personal or organization, credits or Team/Enterprise.
   const isHighValue = useMemo(() => {
-    // Team/Enterprise tier purchases ≥$500 → Invoice required
+    const aboveOrderLimit = (usd: number) => usd * TICKET_BALANCE_USD_INR_RATE > ONE_TIME_ORDER_LIMIT_INR;
     if (isSubscription) {
       const intentTier = intent as Extract<typeof intent, { kind: 'tierPurchase' }>;
       if (intentTier.tier === 'team' || intentTier.tier === 'enterprise') {
         const basePriceUsd = intentTier.tier === 'team' && intentTier.seatTier === 'premium' ? 100 : 20;
-        const totalUsd = basePriceUsd * effectiveSeatCount;
-        return totalUsd >= 500;
+        return aboveOrderLimit(basePriceUsd * effectiveSeatCount);
       }
     }
-    // Credit purchases (autonomous/usage) ≥$500 USD
     if (!isSubscription && (intent.kind === 'autonomousWorkCredits' || intent.kind === 'usageCredits')) {
-      const selectedUsd = selectedAmountUsd ?? 0;
-      return selectedUsd >= 500;
+      return aboveOrderLimit(selectedAmountUsd ?? 0);
     }
     return false;
   }, [isSubscription, intent, effectiveSeatCount, selectedAmountUsd]);
@@ -1543,7 +1543,7 @@ export function NativeBillingCheckoutModal({
         throw new Error('Invalid intent');
       }
 
-      const totalInr = Math.round(totalUsd * 80);
+      const totalInr = Math.round(totalUsd * TICKET_BALANCE_USD_INR_RATE); // same ₹95.65/USD as every other checkout
 
       // Step 1: Create billing case with persona assignment
       const casePayload: Record<string, unknown> = {
@@ -1601,10 +1601,12 @@ export function NativeBillingCheckoutModal({
 
       const invoiceResponse = await billingWebPost('/api/billing/create-high-value-invoice', {
         accessToken,
-        organizationId,
+        organizationId: organizationId || undefined,
         billingEmail: formData.billingEmail,
         organizationName: formData.organizationName,
-        amountInr: totalInr,
+        // The server derives every rupee amount (and the split) from this at the standard rate.
+        amountUsd: totalUsd,
+        productType: isSubscription ? 'tier_purchase' : intent.kind === 'usageCredits' ? 'usage_credits' : 'ticket_balance',
         description: invoiceDescription,
         gstPercent: formData.hasGst ? formData.gstPercent : undefined,
         billingCaseId: caseData.caseId,
