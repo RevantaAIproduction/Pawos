@@ -36,6 +36,8 @@ nsis:
   deleteAppDataOnUninstall: false
   installerIcon: build/icon.ico
   uninstallerIcon: build/icon.ico
+  # Add/Remove Programs entry name (Microsoft Store policy 10.2.7). Publisher comes from package.json "author".
+  uninstallDisplayName: "${productName}"
   installerLanguages:
     - en_US
 

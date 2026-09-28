@@ -246,6 +246,7 @@ function createMainWindow() {
   mainWindow.on('closed', () => {
     console.error("[PAWOS WINDOW] closed event fired");
     mainWindow = null;
+    quitIfNothingVisible();
   });
 
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
@@ -639,9 +640,25 @@ app.whenReady().then(async () => {
 
 console.error("[PAWOS START] window-all-closed handler set up");
 
+/**
+ * Quits once nothing user-visible is left: the dashboard is closed and the
+ * companion isn't on screen. A visible companion keeps PawOS running (exit
+ * via the tray). Otherwise closing the window must close the app — staying
+ * resident with no window left an invisible background process that the
+ * uninstaller correctly reported as "PawOS is running".
+ */
+function quitIfNothingVisible() {
+  if (process.platform === 'darwin') return;
+  const companionVisible = !!overlayWindow && !overlayWindow.isDestroyed() && overlayWindow.isVisible();
+  if (!mainWindow && !companionVisible) {
+    console.error("[PAWOS WINDOW] no visible windows left — quitting");
+    app.quit();
+  }
+}
+
 app.on('window-all-closed', () => {
   console.error("[PAWOS WINDOW] window-all-closed event fired");
-  // keep running background via tray
+  quitIfNothingVisible();
 });
 
 // Global shortcuts are handled in renderer via input hooks (per requirements), but we keep an escape hatch here.
