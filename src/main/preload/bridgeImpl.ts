@@ -205,6 +205,7 @@ export function contextBridge() {
 
     systemGetForegroundWindowInfo: () => ipcRenderer.invoke("system:getForegroundWindowInfo") as Promise<ForegroundWindowInfo>,
     systemGetAppVersion: () => ipcRenderer.invoke("system:getAppVersion") as Promise<string>,
+    systemGetDistribution: () => ipcRenderer.invoke("system:getDistribution") as Promise<"store" | "direct">,
     systemSetContentProtection: (enabled: boolean) => ipcRenderer.invoke("system:setContentProtection", enabled) as Promise<boolean>,
 
     authIsGoogleSignInConfigured: () => ipcRenderer.invoke("auth:isGoogleSignInConfigured") as Promise<boolean>,

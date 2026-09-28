@@ -195,6 +195,7 @@ export function contextBridge() {
 
     systemGetForegroundWindowInfo: async (): Promise<ForegroundWindowInfo> => ipcApi.invoke('system:getForegroundWindowInfo'),
     systemGetAppVersion: async (): Promise<string> => ipcApi.invoke('system:getAppVersion'),
+    systemGetDistribution: async (): Promise<'store' | 'direct'> => ipcApi.invoke('system:getDistribution'),
     systemSetContentProtection: async (enabled: boolean): Promise<boolean> => ipcApi.invoke('system:setContentProtection', enabled),
 
     authIsGoogleSignInConfigured: async (): Promise<boolean> => ipcApi.invoke('auth:isGoogleSignInConfigured'),

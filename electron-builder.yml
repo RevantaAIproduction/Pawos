@@ -41,6 +41,33 @@ nsis:
   installerLanguages:
     - en_US
 
+# Microsoft Store (MSIX) package — built only on request with `electron-builder --win appx`;
+# `win.target` above stays NSIS-only, so the direct-download build is unaffected.
+# Identity values are from Partner Center > Product identity (Store ID 9P6732L7486C,
+# PFN PawosAI.PawOS_y5w6824kw3wcj) and must match it exactly.
+# The pawos:// protocol is declared automatically from `protocols` above.
+appx:
+  identityName: "PawosAI.PawOS"
+  publisher: "CN=3749BDE7-E3A7-4F62-A2E7-33B2A93F803E"
+  publisherDisplayName: "PawosAI"
+  applicationId: "PawOS"
+  displayName: "PawOS"
+  backgroundColor: "#040f25"
+  # 10.0.17763 (Windows 10 1809): the StartupTask extension needs a newer baseline than
+  # electron-builder's default (10.0.14316); tested against the local Windows SDK 10.0.22621.
+  minVersion: "10.0.17763.0"
+  maxVersionTested: "10.0.22621.0"
+  languages:
+    - en-US
+  # Windows package version = package.json version as major.minor.patch.0 (the Store requires the
+  # last part to be 0), never a CI build number.
+  setBuildNumber: false
+  # Start with Windows: PawOS's own StartupTask (the built-in addAutoLaunchExtension hardcodes
+  # TaskId "SlackStartup" and Enabled="true").
+  addAutoLaunchExtension: false
+  customExtensionsPath: build/msix/extensions.xml
+  artifactName: "${productName}-${version}-${arch}.msix"
+
 electronVersion: "35.0.0"
 
 extraResources:

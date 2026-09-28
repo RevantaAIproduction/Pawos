@@ -1,5 +1,5 @@
 import { autoUpdater } from 'electron-updater';
-import { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, screen, session } from 'electron';
+import { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, screen, session, shell } from 'electron';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
 import { createTray } from './tray/trayManager';
@@ -70,6 +70,11 @@ import { railwayConnectorSDK } from './connectivity/connectors/RailwayConnectorS
 import { slackConnectorSDK } from './connectivity/connectors/SlackConnectorSDK';
 import { microsoftConnectorSDK } from './connectivity/connectors/MicrosoftConnectorSDK';
 import { startRatingPromptScheduler } from './feedback/RatingPromptScheduler';
+import { isStoreRuntime } from './platform/storeRuntime';
+import { registerUpdater } from './platform/updaterSetup';
+import { registerPawosProtocolClient } from './platform/protocolRegistration';
+import { applyStartWithWindows } from './platform/startWithWindows';
+import { storeStartupTask } from './platform/storeStartupTask';
 
 console.error("[PAWOS START] main.ts loaded");
 
@@ -108,17 +113,15 @@ installPlatformCrashGuard();
 // browser to pawos://google-auth-callback / pawos://github-auth-callback
 // rather than relaying to a local port, since a remote server can't reach
 // one on this machine. Registering as the pawos:// handler must happen
-// before app.whenReady(). The unpackaged (`electron .`) form needs the exe
-// path + script arg explicitly â€” Windows can't otherwise reconstruct how to
-// relaunch a dev build from a protocol click.
-if (process.defaultApp) {
-  const scriptArg = process.argv[1];
-  if (scriptArg) {
-    app.setAsDefaultProtocolClient('pawos', process.execPath, [path.resolve(scriptArg)]);
-  }
-} else {
-  app.setAsDefaultProtocolClient('pawos');
-}
+// before app.whenReady(). The Microsoft Store (MSIX) build declares it in the
+// package manifest instead — see protocolRegistration.ts.
+registerPawosProtocolClient({
+  isStore: isStoreRuntime(),
+  defaultApp: process.defaultApp,
+  argv: process.argv,
+  execPath: process.execPath,
+  setAsDefaultProtocolClient: (protocol, exePath, args) => app.setAsDefaultProtocolClient(protocol, exePath, args),
+});
 
 console.error("[PAWOS START] before app.whenReady");
 
@@ -593,42 +596,21 @@ app.whenReady().then(async () => {
 
   // ------------------- Updater IPC & Event Forwarding -------------------
   // Handles renderer requests to check for updates and to quit & install.
+  // Direct download (NSIS): electron-updater. Microsoft Store (MSIX): the Store
+  // updates PawOS and electron-updater is never constructed — see updaterSetup.ts.
   const { ipcMain } = require('electron');
-  ipcMain.handle('updater:check', async () => {
-    try {
-      await autoUpdater.checkForUpdates();
-      return true;
-    } catch (e) {
-      console.error('[UPDATER] check error', e);
-      return false;
-    }
-  });
-
-  ipcMain.handle('updater:quitAndInstall', async () => {
-    try {
-      autoUpdater.quitAndInstall();
-      return true;
-    } catch (e) {
-      console.error('[UPDATER] quitAndInstall error', e);
-      return false;
-    }
-  });
-
-  // Forward autoUpdater lifecycle events to the renderer via the "updater:state" channel.
-  const sendUpdaterState = (state: string) => {
-    if (mainWindow && mainWindow.webContents) {
-      mainWindow.webContents.send('updater:state', state);
-    }
-  };
-
-  autoUpdater.on('checking-for-update', () => sendUpdaterState('checking-for-update'));
-  autoUpdater.on('update-available', () => sendUpdaterState('update-available'));
-  autoUpdater.on('download-progress', () => sendUpdaterState('download-progress'));
-  autoUpdater.on('update-downloaded', () => sendUpdaterState('update-downloaded'));
-  autoUpdater.on('update-not-available', () => sendUpdaterState('update-not-available'));
-  autoUpdater.on('error', (err) => {
-    console.error('[UPDATER] error event', err);
-    sendUpdaterState('error');
+  registerUpdater({
+    ipcMain,
+    isStore: isStoreRuntime(),
+    // Accessing electron-updater's `autoUpdater` getter is what constructs the NsisUpdater.
+    loadAutoUpdater: () => autoUpdater,
+    // Forward autoUpdater lifecycle events to the renderer via the "updater:state" channel.
+    sendState: (state: string) => {
+      if (mainWindow && mainWindow.webContents) {
+        mainWindow.webContents.send('updater:state', state);
+      }
+    },
+    openExternal: (url: string) => shell.openExternal(url),
   });
 
   app.on('activate', () => {
@@ -669,9 +651,17 @@ app.on('will-quit', () => {
 
 // Auto start with Windows â€” reflects the persisted Settings > General toggle
 // (GeneralSection.tsx's startWithWindows), not a hardcoded always-on default.
-// electron-builder.yml config uses nsis; also set in main for immediate behavior.
-app.setLoginItemSettings({
-  openAtLogin: SettingsStore.getState().startWithWindows,
-  path: app.getPath('exe'),
-});
+// Direct download (NSIS): HKCU Run key. Microsoft Store (MSIX): the package's
+// StartupTask — see startWithWindows.ts.
+void applyStartWithWindows(
+  SettingsStore.getState().startWithWindows,
+  {
+    isStore: isStoreRuntime(),
+    setLoginItemSettings: (settings) => app.setLoginItemSettings(settings),
+    exePath: app.getPath('exe'),
+    storeTask: storeStartupTask,
+    openExternal: (url) => shell.openExternal(url),
+  },
+  { userInitiated: false }
+);
 

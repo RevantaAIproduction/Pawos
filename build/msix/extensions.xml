@@ -1,0 +1,7 @@
+        <!-- Appended to <Extensions> in the MSIX manifest by electron-builder (appx.customExtensionsPath).
+             Start with Windows for the Microsoft Store build. TaskId must match STORE_STARTUP_TASK_ID in
+             src/main/platform/storeRuntime.ts. Enabled="false": PawOS turns it on from the user's
+             Settings > General "Start with Windows" preference (src/main/platform/startWithWindows.ts). -->
+        <desktop:Extension Category="windows.startupTask" Executable="app\PawOS.exe" EntryPoint="Windows.FullTrustApplication">
+          <desktop:StartupTask TaskId="PawOSStartup" Enabled="false" DisplayName="PawOS" />
+        </desktop:Extension>

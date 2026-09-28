@@ -238,6 +238,10 @@ export const ipc = {
   async systemGetAppVersion(): Promise<string> {
     return getBridge().systemGetAppVersion();
   },
+  /** 'store' when running as the Microsoft Store (MSIX) package, 'direct' for the NSIS download. */
+  async systemGetDistribution(): Promise<'store' | 'direct'> {
+    return getBridge().systemGetDistribution();
+  },
   /** Excludes this window from screenshots / recordings / screen sharing while true (admin console privacy). */
   async systemSetContentProtection(enabled: boolean): Promise<boolean> {
     return getBridge().systemSetContentProtection(enabled);
