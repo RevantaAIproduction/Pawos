@@ -125,7 +125,8 @@ export async function POST(request: Request) {
       global: { headers: { Authorization: `Bearer ${accessToken}` } },
     });
 
-    const { data: entitlements, error: entError } = await dbClient
+    // No entitlements row is expected for free users — fall back to "go".
+    const { data: entitlements } = await dbClient
       .from("user_entitlements")
       .select("tier")
       .eq("user_id", targetUserId)

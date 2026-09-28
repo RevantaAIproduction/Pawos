@@ -5,9 +5,6 @@ import { Nav } from "../components/layout/Nav";
 import { Footer } from "../components/layout/Footer";
 import { Analytics } from "../components/analytics/Analytics";
 import { CookieConsent } from "../components/analytics/CookieConsent";
-import { SiteCompanion } from "../components/site-companion/SiteCompanion";
-import { ServiceWorkerRegistration } from "../components/pwa/ServiceWorkerRegistration";
-import { InstallPrompt } from "../components/pwa/InstallPrompt";
 import { createClient } from "../lib/supabase/server";
 
 const geistSans = Geist({

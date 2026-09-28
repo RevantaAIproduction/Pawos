@@ -34,7 +34,7 @@ export function ConnectionsWorkflow() {
       currentX += (targetX - currentX) * 0.1;
       currentY += (targetY - currentY) * 0.1;
       
-      cardsRef.current.forEach((card, index) => {
+      cardsRef.current.forEach((card) => {
         if (!card) return;
         
         if (!isActive) {
