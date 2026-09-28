@@ -11,6 +11,11 @@ const VARIANT_CLASSES: Record<Variant, string> = {
   ghost: "text-neutral-300 hover:text-white focus-visible:ring-neutral-500",
 };
 
+/** The class string <Button> uses — for elements that need Button styling but aren't links. */
+export function buttonClasses(variant: Variant = "primary", className = "") {
+  return `inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950 ${VARIANT_CLASSES[variant]} ${className}`;
+}
+
 export function Button({
   href,
   children,
@@ -24,7 +29,7 @@ export function Button({
   className?: string;
   external?: boolean;
 }) {
-  const classes = `inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950 ${VARIANT_CLASSES[variant]} ${className}`;
+  const classes = buttonClasses(variant, className);
 
   if (external) {
     return (

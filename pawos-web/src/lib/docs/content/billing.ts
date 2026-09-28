@@ -47,9 +47,8 @@ export const billingPages: DocPage[] = [
       {
         type: 'list',
         items: [
-          'Fresh input, cached input, output, and thinking tokens are normalized server-side into Paw Compute.',
-          'The renderer submits provider-reported usage; the main process and billing engine compute the charge.',
-          'Usage events are append-only and use run/session identifiers where the implementation supplies them.',
+          'Every AI request is converted into Paw Compute by PawOS’s servers, never estimated by the app.',
+          'Usage records can’t be edited after the fact.',
           'Rolling windows restore capacity naturally as older usage ages out; there is no midnight reset button.',
         ],
       },
@@ -98,7 +97,7 @@ export const billingPages: DocPage[] = [
     title: 'Payments',
     description: 'How PawOS processes payments.',
     blocks: [
-      { type: 'paragraph', text: 'Subscription and Autonomous Work Credit top-ups are processed through Razorpay. Checkout happens on PawOS\'s web backend, never inside the desktop app directly handling card details.' },
+      { type: 'paragraph', text: 'Subscriptions and Ticket Wallet top-ups are paid through secure checkout — the PawOS desktop app never handles your card details.' },
     ],
     related: ['billing/subscriptions'],
   },
@@ -167,7 +166,7 @@ export const billingPages: DocPage[] = [
       },
       {
         type: 'paragraph',
-        text: 'The free tier is perfect for learning, experimentation, and small projects. Get full access to Claude AI assistance with local desktop application.',
+        text: 'The free tier is perfect for learning, experimentation and small projects, with PawOS’s AI assistance in the desktop app.',
       },
       {
         type: 'list',

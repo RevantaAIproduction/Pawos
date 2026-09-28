@@ -46,8 +46,8 @@ export default async function CompanionPage() {
         <p className="mt-2 text-sm text-neutral-400">
           You&apos;ve installed PawOS on this device. To pair it, open Trusted Devices on your desktop
           app and scan the QR code it generates — once paired, this device stays visible to your
-          desktop in real time and shows a live preview of your conversation. Replying from here is
-          arriving in an upcoming update.
+          desktop in real time, shows a live preview of your conversation, and lets you answer
+          approval requests.
         </p>
       </div>
 

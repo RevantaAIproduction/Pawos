@@ -25,7 +25,7 @@ export const LEGACY_DOC_REDIRECTS: Record<string, string> = {
   'security-architecture': '/docs/security/permissions',
   'privacy-and-data': '/docs/security/credentials',
   'troubleshooting': '/docs/troubleshooting/wont-start',
-  'api-reference': '/docs/reference/api-reference',
+  'api-reference': '/docs/reference/architecture',
   'keyboard-shortcuts': '/docs/getting-started/quickstart',
   'faq': '/docs/troubleshooting/wont-start',
   'glossary': '/docs/concepts/workspaces',
@@ -41,4 +41,17 @@ export const LEGACY_DOC_REDIRECTS: Record<string, string> = {
   'runtimes/companion-runtime': '/docs/companion/overview',
   'runtimes/governance-runtime': '/docs/security/permissions',
   'autonomous-ticket-resolution': '/docs/autonomous-work/overview',
+};
+
+/** Reference pages that were folded into other pages — /docs/<section>/<slug> -> new home. */
+export const MOVED_DOC_PAGES: Record<string, string> = {
+  'reference/electron-architecture': '/docs/reference/architecture',
+  'reference/main-preload-renderer': '/docs/reference/architecture',
+  'reference/ipc': '/docs/reference/architecture',
+  'reference/coding-runtime': '/docs/coding/overview',
+  'reference/entitlements': '/docs/concepts/entitlements',
+  'reference/billing-architecture': '/docs/billing/paw-compute',
+  'reference/connector-architecture': '/docs/connectors/overview',
+  'reference/api-reference': '/docs/reference/architecture',
+  'reference/sdk-and-integrations': '/docs/connectors/overview',
 };

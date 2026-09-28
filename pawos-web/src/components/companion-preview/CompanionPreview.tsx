@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { NARRATION_LINES } from "../../lib/companion-preview/script";
+import { DownloadWindowsButton } from "../DownloadWindowsButton";
 
 type Phase = "gate" | "loading" | "greeting" | "narrating" | "done" | "error";
 
@@ -208,12 +209,12 @@ export function CompanionPreview() {
             >
               Ask a question
             </button>
-            <Link
-              href="/download"
+            <DownloadWindowsButton
+              source="companion-preview"
               className="rounded-full bg-gradient-to-r from-indigo-500 to-blue-400 px-4 py-2 text-sm font-semibold text-black hover:opacity-90"
             >
               Download PawOS
-            </Link>
+            </DownloadWindowsButton>
             <Link href="/pricing" className="rounded-full border border-neutral-700 px-4 py-2 text-sm font-semibold text-neutral-200 hover:bg-neutral-800">
               Compare plans
             </Link>

@@ -326,8 +326,8 @@ class DevBrowserManager {
    * localhost/deployment-only boundary, which stays untouched for the
    * Development Browser use case.
    */
-  async navigateUnrestricted(sessionId: string, url: string): Promise<{ ok: true } | { ok: false; message: string }> {
-    const session = this.getOrCreate(sessionId);
+  async navigateUnrestricted(sessionId: string, url: string, opts: DevBrowserOpenOptions = {}): Promise<{ ok: true } | { ok: false; message: string }> {
+    const session = this.getOrCreate(sessionId, opts);
     try {
       await session.window.loadURL(url);
       return { ok: true };

@@ -130,6 +130,7 @@ export function contextBridge() {
       ipcApi.invoke('process:writeStdin', processId, data),
     terminalStartUserShell: async (cwd?: string): Promise<{ ok: true; info: { id: string; pid: number | null } } | { ok: false; message: string }> =>
       ipcApi.invoke('terminal:startUserShell', cwd),
+    evidenceReadImage: async (evidenceId: string): Promise<{ base64: string } | null> => ipcApi.invoke('evidence:readImage', evidenceId),
     systemGetHomeDir: async (): Promise<string> => ipcApi.invoke('system:getHomeDir'),
     remoteAssistanceStartSharedTerminal: async (
       cwd: string,

@@ -15,7 +15,7 @@ export default function ContactPage() {
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(30,40,90,0.15),transparent_50%)] pointer-events-none" />
         <div className="max-w-4xl mx-auto relative z-10 text-center">
           <h1 className="text-5xl md:text-7xl font-medium tracking-tight text-white mb-8">
-            Let's talk about what you're building.
+            Let&apos;s talk about what you&apos;re building.
           </h1>
           <p className="text-2xl text-neutral-400 font-light leading-relaxed max-w-3xl mx-auto">
             Reach the Revanta AI team about PawOS, technical questions, enterprise deployments, or general inquiries.

@@ -120,10 +120,14 @@ export class ReasoningRuntime {
    * afterward to let the model actually react to it; this method only
    * records the result, it doesn't invoke the provider itself.
    */
-  provideToolResult(result: { toolCallId: string; name: string; content: string }) {
+  provideToolResult(result: { toolCallId: string; name: string; content: string; images?: ReasoningMessage['images'] }) {
     this.history = [
       ...this.history,
-      createMessage('tool', result.content, 'final', { toolCallId: result.toolCallId, name: result.name }),
+      createMessage('tool', result.content, 'final', {
+        toolCallId: result.toolCallId,
+        name: result.name,
+        ...(result.images && result.images.length > 0 ? { images: result.images } : {}),
+      }),
     ];
   }
 

@@ -50,7 +50,7 @@ const INDIVIDUAL_PLANS: Plan[] = [
     period: "month",
     features: [
       "Everything in Paw Go",
-      "Full AI models: Paw Flash, Swift, Core, Creative, Vision & Voice",
+      "Full AI models: Paw Flash, Swift, Core, Vision & Voice",
       "Eligible to purchase/select production-ready runtime entitlements",
       "Coding Runtime can be added explicitly for terminal, file, git, build, and validation execution",
       "Paw remembers context across your workspace and conversation history",
@@ -63,7 +63,7 @@ const INDIVIDUAL_PLANS: Plan[] = [
     period: "month",
     features: [
       "Everything in Paw Pro",
-      "20x the usage headroom of Paw Pro",
+      "5x the usage of Paw Pro — or 20x on Pro Max 20x ($250/mo)",
       "Runtime purchases remain cumulative across Pro and Pro Max",
       "Priority access to new Paw models",
     ],
@@ -94,7 +94,6 @@ const TEAM_ENTERPRISE_PLANS: Plan[] = [
       "Remote Assistance (Screen Share & Control)",
       "CRM Projection",
       "Credential Vault, Approval Queue & Audit Log",
-      "SSO Configuration (Policy-Level)",
     ],
   },
   {
@@ -105,10 +104,6 @@ const TEAM_ENTERPRISE_PLANS: Plan[] = [
     period: "month",
     seatBased: true,
     minSeats: 20,
-    usageBilling: {
-      label: "Coming Soon",
-      description: "Self-serve — no sales call required, same as Team.",
-    },
     features: [
       "Everything in Paw Team",
       "Uniform $20/seat base rate — no Standard/Premium split",
@@ -119,12 +114,11 @@ const TEAM_ENTERPRISE_PLANS: Plan[] = [
 ];
 
 function formatPrice(plan: Plan): string {
-  if (plan.id === 'team' || plan.id === 'enterprise') return 'Coming Soon';
   if (plan.seatBased) {
     const range = plan.maxSeats ? `${plan.minSeats}–${plan.maxSeats} members` : `${plan.minSeats}+ users`;
     return plan.priceCents === null ? `Custom pricing — ${range}` : `$${(plan.priceCents / 100).toFixed(2)}/seat/mo — ${range}`;
   }
-  if (plan.priceCents === null) return "Pricing coming soon";
+  if (plan.priceCents === null) return "Contact sales";
   if (plan.priceCents === 0) return "Free";
   return `$${(plan.priceCents / 100).toFixed(2)}/mo`;
 }
@@ -141,7 +135,7 @@ function PlanCard({ plan }: { plan: Plan }) {
             <div key={seat.seatTier} className="rounded-xl border border-neutral-800 p-4">
               <div className="flex items-baseline justify-between">
                 <span className="text-sm font-semibold text-neutral-200">{seat.label}</span>
-                <span className="text-lg font-bold">Coming Soon</span>
+                <span className="text-lg font-bold">${(seat.priceCents / 100).toFixed(0)}<span className="text-sm font-normal text-neutral-500">/seat/mo</span></span>
               </div>
               <p className="mt-1 text-xs text-neutral-500">{seat.description}</p>
             </div>

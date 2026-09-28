@@ -16,7 +16,8 @@ export type GeminiReasoningConfig = {
 type GeminiPart =
   | { text: string }
   | { functionCall: { name: string; args: unknown }; thoughtSignature?: string }
-  | { functionResponse: { name: string; response: Record<string, unknown> } };
+  | { functionResponse: { name: string; response: Record<string, unknown> } }
+  | { inlineData: { mimeType: string; data: string } };
 type GeminiContent = { role: 'user' | 'model'; parts: GeminiPart[] };
 
 /**
@@ -50,8 +51,13 @@ function mergeAdjacentSameRole(contents: GeminiContent[]): GeminiContent[] {
  * continueTurn) — a plain chat history never produces them, so this stays
  * a no-op extension of the original user/assistant-only serialization.
  */
+/** Only the newest tool results keep their images in each request — an older screenshot is replaced by a note, so evidence doesn't re-send every image on every turn. */
+const MAX_TOOL_RESULTS_WITH_IMAGES = 2;
+
 function toGeminiContents(request: ReasoningProviderRequest): GeminiContent[] {
   const contents: GeminiContent[] = [];
+  const imageBearing = request.history.filter((m) => m.role === 'tool' && (m.images?.length ?? 0) > 0);
+  const keepImagesFor = new Set(imageBearing.slice(-MAX_TOOL_RESULTS_WITH_IMAGES).map((m) => m.id));
   for (const m of request.history) {
     if (m.role === 'user') {
       contents.push({ role: 'user', parts: [{ text: m.content }] });
@@ -66,9 +72,16 @@ function toGeminiContents(request: ReasoningProviderRequest): GeminiContent[] {
       }
       if (parts.length > 0) contents.push({ role: 'model', parts });
     } else if (m.role === 'tool') {
+      const images = m.images ?? [];
+      const sendImages = images.length > 0 && keepImagesFor.has(m.id);
+      const note = images.length > 0 && !sendImages ? ' (The image from this earlier result is no longer attached — inspect it again if you need it.)' : '';
       contents.push({
         role: 'user',
-        parts: [{ functionResponse: { name: m.name ?? 'unknown_tool', response: { result: m.content } } }],
+        parts: [
+          { functionResponse: { name: m.name ?? 'unknown_tool', response: { result: m.content + note } } },
+          // The image itself, beside the function response in the same turn — what makes a vision model actually see it.
+          ...(sendImages ? images.map((image) => ({ inlineData: { mimeType: image.mimeType, data: image.data } })) : []),
+        ],
       });
     }
   }

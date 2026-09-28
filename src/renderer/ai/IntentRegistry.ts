@@ -1021,6 +1021,59 @@ export const ACTION_TOOL_DEFINITIONS: ReasoningToolDefinition[] = [
     },
   },
   {
+    name: 'check_evidence_capture',
+    description:
+      'Before capturing ticket evidence: what kind of app the project is (web / desktop / android / ios / backend) and which capture providers work on this machine right now (web page, app window, Android device, iOS Simulator, command/API output). Read-only.',
+    parameters: {
+      type: 'object',
+      properties: { projectFolder: { type: 'string', description: 'The project folder, to detect the app kind.' } },
+      required: [],
+    },
+  },
+  {
+    // Renderer-only (ConversationRuntime.inspectEvidence) — the captured image is attached to the tool result for vision.
+    name: 'inspect_evidence',
+    description:
+      'Look at a screenshot PawOS captured with capture_evidence (you do not see it otherwise): the actual image is returned to you. Use it on a "before" to find what is visibly wrong when the code alone does not show it, and on an "after" to confirm the fix. For output evidence it returns the text. Pass the evidenceId from capture_evidence, or phase to take the latest before/after.',
+    parameters: {
+      type: 'object',
+      properties: {
+        evidenceId: { type: 'string', description: 'The evidenceId capture_evidence returned.' },
+        phase: { type: 'string', enum: ['before', 'after'], description: 'Instead of evidenceId: the latest capture of this phase.' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'capture_evidence',
+    description: [
+      'Capture optional before/after evidence of a ticket fix — shown to the user in chat and saved with the ticket.',
+      'WHEN: only when it genuinely helps — (a) layout or visual bugs (broken/overlapping sections, whole-page or responsive layout changes, a screen that looks wrong), or (b) you cannot locate the fix from the code alone and need to see the actual failure. NEVER for small or non-visual changes: button text, colours, adding a button, OAuth/sign-in/sign-up fixes, config, copy edits.',
+      'FLOW: phase "before" after investigating (the real error on screen, or the failing output) — call inspect_evidence to actually look at a screenshot — then fix, verify locally, then phase "after" of the SAME target showing it fixed (inspect it to confirm). Tell the user in one sentence what the evidence shows.',
+      'PROVIDERS: "web" (url — a local dev server or deployed page), "desktopWindow" (processId of the app you started with start_process; windowTitle if it has several windows — only that app\'s window is captured), "android" (emulator/USB device via adb; serial if several), "iosSimulator" (macOS only; udid if several), "output" (a command\'s output, e.g. the failing test, or a local API: httpUrl) — output is text evidence, never call it a screenshot.',
+      'Evidence is optional: if the result says unavailable, continue the ticket without it and say it could not be captured. It never decides success or billing.',
+    ].join(' '),
+    parameters: {
+      type: 'object',
+      properties: {
+        phase: { type: 'string', enum: ['before', 'after'] },
+        label: { type: 'string', description: 'Short description of what is shown, e.g. "Checkout layout breaks on mobile".' },
+        provider: { type: 'string', enum: ['web', 'desktopWindow', 'android', 'iosSimulator', 'output'] },
+        url: { type: 'string', description: 'web: full http(s) URL of the page.' },
+        processId: { type: 'string', description: 'desktopWindow: the process id start_process returned for the app.' },
+        windowTitle: { type: 'string', description: 'desktopWindow: part of the window title, when the app has several windows.' },
+        serial: { type: 'string', description: 'android: device serial, when several are connected.' },
+        udid: { type: 'string', description: 'iosSimulator: simulator udid, when several are booted.' },
+        command: { type: 'string', description: 'output: the command whose output is the evidence (e.g. the failing test).' },
+        cwd: { type: 'string', description: 'output: folder to run the command in.' },
+        httpUrl: { type: 'string', description: 'output: a local API URL (localhost) whose response is the evidence.' },
+        method: { type: 'string', enum: ['GET', 'POST'] },
+        body: { type: 'string', description: 'output: JSON body for a POST.' },
+      },
+      required: ['phase', 'label', 'provider'],
+    },
+  },
+  {
     name: 'dev_browser_preview',
     description:
       "\"Browser Preview\" + \"Browser Console\" for the Coding Canvas — a real screenshot plus real console log entries from an open Development Browser session (opened via open_dev_browser). Paw Pro only. Distinct from capture_browser_screenshot/read_browser_console, which only work on general Browser Runtime sessions, not Development Browser ones.",
@@ -2849,6 +2902,34 @@ export function toolCallToActionRequest(toolCall: ReasoningToolCall): ActionRequ
     case 'read_browser_network_errors':
       return typeof args.sessionId === 'string' ? { type: 'readBrowserNetworkErrors', sessionId: args.sessionId } : null;
 
+    case 'check_evidence_capture':
+      return { type: 'checkEvidenceCapture', ...(typeof args.projectFolder === 'string' && args.projectFolder ? { projectFolder: args.projectFolder } : {}) };
+    case 'capture_evidence': {
+      const phase = args.phase === 'before' || args.phase === 'after' ? args.phase : null;
+      const label = typeof args.label === 'string' ? args.label : '';
+      const str = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : undefined);
+      if (!phase) return null;
+      switch (args.provider) {
+        case 'web':
+          return str(args.url) ? { type: 'captureEvidence', phase, label, target: { provider: 'web', url: str(args.url)! } } : null;
+        case 'desktopWindow':
+          return str(args.processId)
+            ? { type: 'captureEvidence', phase, label, target: { provider: 'desktopWindow', processId: str(args.processId)!, ...(str(args.windowTitle) ? { windowTitle: str(args.windowTitle) } : {}) } }
+            : null;
+        case 'android':
+          return { type: 'captureEvidence', phase, label, target: { provider: 'android', ...(str(args.serial) ? { serial: str(args.serial) } : {}) } };
+        case 'iosSimulator':
+          return { type: 'captureEvidence', phase, label, target: { provider: 'iosSimulator', ...(str(args.udid) ? { udid: str(args.udid) } : {}) } };
+        case 'output':
+          if (str(args.httpUrl)) {
+            const method = args.method === 'POST' ? 'POST' : 'GET';
+            return { type: 'captureEvidence', phase, label, target: { provider: 'output', httpUrl: str(args.httpUrl)!, method, ...(str(args.body) ? { body: str(args.body) } : {}) } };
+          }
+          return str(args.command) && str(args.cwd) ? { type: 'captureEvidence', phase, label, target: { provider: 'output', command: str(args.command)!, cwd: str(args.cwd)! } } : null;
+        default:
+          return null;
+      }
+    }
     case 'capture_browser_screenshot':
       return typeof args.sessionId === 'string' ? { type: 'captureBrowserScreenshot', sessionId: args.sessionId } : null;
 

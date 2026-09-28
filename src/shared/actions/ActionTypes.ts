@@ -3,6 +3,7 @@ import type { ConnectivityScope } from '../connectivity/ConnectivityTypes';
 import type { CapabilityConfirmation, Requirement } from '../runtime/RequirementTypes';
 import type { IntelligenceReport } from '../intelligence/IntelligenceReportTypes';
 import type { CodingRuntimeSession } from './CodingRuntimeSessionTypes';
+import type { EvidencePhase, EvidenceTarget } from '../evidence/EvidenceTypes';
 
 /** Kept as a plain string union here (not imported from src/main/execution/browser/) so this shared file never depends on main-process-only code — the real BrowserAdapter/BrowserId types there are the source of truth for values, this is just the wire shape. */
 export type BrowserId = 'chrome' | 'edge' | 'brave' | 'firefox' | 'electron';
@@ -334,6 +335,11 @@ export type ActionRequest = {
   | { type: 'readBrowserConsole'; sessionId: string; maxEntries?: number }
   | { type: 'readBrowserNetworkErrors'; sessionId: string }
   | { type: 'captureBrowserScreenshot'; sessionId: string }
+  // Ticket evidence (src/main/evidence) — optional before/after proof: a web page, an app's own window,
+  // an Android/iOS screen, or command/API output. Captured only when it helps; never required to finish
+  // or bill a ticket. checkEvidenceCapture reports which providers work on this machine.
+  | { type: 'captureEvidence'; phase: EvidencePhase; label: string; target: EvidenceTarget }
+  | { type: 'checkEvidenceCapture'; projectFolder?: string }
   | { type: 'fillDevForm'; sessionId: string; fields: { selector: string; value: string }[]; submitSelector?: string; confirmed?: boolean }
   | { type: 'downloadProjectFile'; sessionId: string; url: string; savePath: string }
   | { type: 'uploadProjectFile'; sessionId: string; selector: string; filePath: string }

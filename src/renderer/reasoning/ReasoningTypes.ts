@@ -13,6 +13,11 @@ export type ReasoningMessage = {
   name?: string;
   /** Set on an 'assistant' message that made tool calls — replayed into the next provider request so the model's own prior function call is present before the matching function-response message. */
   toolCalls?: ReasoningToolCall[];
+  /**
+   * Images returned with a 'tool' result (e.g. inspect_evidence) so a vision-capable model actually
+   * sees them — raw base64, never a file path. Providers that can't take images ignore these.
+   */
+  images?: { mimeType: 'image/png' | 'image/jpeg'; data: string }[];
 };
 
 export type ReasoningToolDefinition = {

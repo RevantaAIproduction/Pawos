@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound, redirect } from 'next/navigation';
 import { ALL_DOC_PAGES, getDocPage, sectionTitle } from '../../../lib/docs/registry';
-import { LEGACY_DOC_REDIRECTS } from '../../../lib/docs/legacyRedirects';
+import { LEGACY_DOC_REDIRECTS, MOVED_DOC_PAGES } from '../../../lib/docs/legacyRedirects';
 import { findNavSection } from '../../../lib/docs/navigation';
 import { DocsBreadcrumbs } from '../../../components/docs/DocsBreadcrumbs';
 import { DocArticle } from '../../../components/docs/DocArticle';
@@ -35,6 +35,7 @@ export default async function DocPageRoute({ params }: { params: Promise<{ slug:
     if (legacyKey && LEGACY_DOC_REDIRECTS[legacyKey]) redirect(LEGACY_DOC_REDIRECTS[legacyKey]);
   }
 
+  if (section && pageSlug && rest.length === 0 && MOVED_DOC_PAGES[`${section}/${pageSlug}`]) redirect(MOVED_DOC_PAGES[`${section}/${pageSlug}`]);
   if (!section || !pageSlug || rest.length > 0) notFound();
 
   const page = getDocPage(section, pageSlug);

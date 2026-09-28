@@ -114,8 +114,8 @@ export function CheckoutClient() {
     <div className="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-8 text-center">
       <h1 className="text-2xl font-bold">Upgrade to {TIER_LABELS[plan] ?? plan}</h1>
       <p className="mt-3 text-neutral-400">
-        Payment is handled securely by Razorpay. After payment, your PawOS desktop app will refresh
-        automatically — no need to enter anything back into Electron.
+        Payment is handled securely. After payment, your PawOS desktop app will refresh
+        automatically — no need to enter anything back into the app.
       </p>
       {plan === "team" && (
         <div className="mt-6 text-left">

@@ -12,7 +12,7 @@ export const SECURITY_ARTICLES: HelpArticle[] = [
       'file protection, system protection, and AI safety.',
     features: [
       'Permissions — every potentially destructive action (deleting a file, running a terminal command, git commit, overwriting a file) requires explicit confirmation before it executes',
-      'Authentication — Google OAuth, email/password with real hashing, Supabase-backed sessions, and OTP-based password reset',
+      'Authentication — Google sign-in, email/password with hashed passwords, secure sessions, and one-time-code password reset',
       'Companion Permissions — the companion can only act through the same gated execution engine, never bypassing it',
       'Safe Commands — an allowlisted set of terminal commands (npm, git, node, python, and similar known-safe tools); arbitrary or unknown commands are not silently permitted',
       'File Protection — overwriting an existing file always requires explicit confirmation first',
@@ -28,7 +28,7 @@ export const SECURITY_ARTICLES: HelpArticle[] = [
     troubleshooting: ['If an action seems stuck, check for a pending confirmation prompt rather than assuming it failed or crashed'],
     requirements: [],
     permissions: ['Confirmation is required before any destructive or consequential action'],
-    administration: 'On Team/Enterprise, a securityAdministrator/itAdministrator role exists conceptually for organization-level security oversight — deeper organization-wide security policy enforcement beyond individual confirmation gates is a roadmap item, not built yet.',
+    administration: 'On Team/Enterprise, organizations can assign Security Administrator and IT Administrator roles, and use approval policies, the credential vault and the audit log on top of individual confirmations.',
     faq: [
       { question: 'Can the AI commit code or delete files without asking?', answer: 'No — commit, checkout, delete, and overwrite always require your explicit confirmation first.' },
       { question: 'What commands can PawOS run in a terminal?', answer: 'Only an allowlisted set of known-safe tools (npm, git, node, python, and similar) — arbitrary commands are not silently permitted.' },

@@ -1,3 +1,5 @@
+import type { ConversationEvidenceRef } from '../../shared/conversation/ConversationSessionTypes';
+
 export type ConversationState =
   | 'idle'
   | 'listening'
@@ -71,7 +73,26 @@ export type ConversationMessage = {
   widget?: ChatWidgetData;
   /** A resume/CV PawOS wrote (present_resume) — shown in chat with a Download button, never saved on its own. */
   resume?: ChatResumeData;
+  /** Ticket evidence image (capture_evidence) — an "after" carries its "before" to show side by side. See ChatEvidence.tsx. */
+  evidence?: ChatEvidenceData;
 };
+
+/** One captured screen shown in chat. Output/log evidence is not this — it's shown as a normal message with a code block. */
+export type ChatEvidenceImage = {
+  /** Evidence id — lets a reopened chat load the image (local cache, else the run's durable copy). */
+  evidenceId: string;
+  runId?: string;
+  phase: 'before' | 'after';
+  label: string;
+  /** web / desktopWindow / android / iosSimulator. */
+  provider: string;
+  targetDescription: string;
+  filePath: string;
+  /** '' until loaded (a reopened chat fetches it on demand). */
+  imageDataUrl: string;
+  pageSignals?: { title: string; consoleErrors: string[]; failedRequests: string[] };
+};
+export type ChatEvidenceData = ChatEvidenceImage & { before?: ChatEvidenceImage };
 
 export type ChatResumeData = { title: string; sections: { heading?: string; paragraphs: string[] }[] };
 
@@ -166,6 +187,8 @@ export type ConversationTurnRecord = {
   endedReason: 'completed' | 'interrupted' | 'error' | null;
   /** Visuals PawOS drew this turn (show_widget), saved with the chat and restored before the reply. */
   widgets?: ChatWidgetData[];
+  /** Ticket evidence captured this turn (references only) — see ConversationEvidenceRef. */
+  evidence?: ConversationEvidenceRef[];
   /** The project folder open when this turn ran — which project's chats it belongs to. */
   projectFolder?: string;
 };

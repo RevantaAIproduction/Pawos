@@ -120,7 +120,7 @@ export default function CareersPage() {
         <section className="bg-neutral-900/30 border border-neutral-800 rounded-2xl p-10 md:p-16 text-center">
           <h2 className="text-3xl font-medium text-white mb-6 tracking-tight">Current Openings</h2>
           <p className="text-xl text-neutral-400 font-light leading-relaxed max-w-2xl mx-auto mb-12">
-            We don't have a public list of open roles right now. We're building carefully, and the right opportunity may not always fit a predefined job description.
+            We don&apos;t have a public list of open roles right now. We&apos;re building carefully, and the right opportunity may not always fit a predefined job description.
           </p>
           
           <div className="border-t border-neutral-800 pt-12">

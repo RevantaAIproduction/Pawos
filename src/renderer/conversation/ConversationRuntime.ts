@@ -13,6 +13,7 @@ import type {
   ConversationTaskRecord,
   ConversationTurnRecord,
   SubmittedInputContext,
+  ChatEvidenceImage,
 } from './ConversationTypes';
 import type {
   SpeechRecognitionProvider,
@@ -31,6 +32,8 @@ import type { ActionRequest, ActionRequirement, ActionResult } from '../../share
 import { DEFAULT_EXECUTION_MODE, shouldAutoConfirmAction, type ConversationExecutionMode } from '../../shared/actions/ExecutionModeTypes';
 import type { ConversationSession, SessionContinuationHint } from '../../shared/conversation/ConversationSessionTypes';
 import { restoreConversationSnapshot } from './RestoreConversationAdapter';
+import type { EvidenceCaptureData, EvidenceItem, EvidenceTarget } from '../../shared/evidence/EvidenceTypes';
+import { outputEvidenceMessage } from './evidenceMessages';
 import type { ProcessOutputEvent, ProcessExitEvent } from '../../shared/actions/ProcessTypes';
 import type { WorkspaceObservationEvent } from '../../shared/actions/ExecutionLifecycle';
 import type { CommunicationRuntimeEvent } from '../../shared/communication/CommunicationTypes';
@@ -74,6 +77,22 @@ const MAX_WIDGET_CODE_CHARS = 200_000;
  * response has finished streaming and each call has its result — then runs once.
  */
 type ToolCallBatch = { open: Set<string>; streamDone: boolean; continueWanted: boolean; flushed: boolean };
+/** Same target = same page / window / device / command, so an "after" finds its "before". */
+function evidenceTargetKey(target: EvidenceTarget): string {
+  switch (target.provider) {
+    case 'web':
+      return `web:${target.url.replace(/[?#].*$/, '').replace(/\/$/, '')}`;
+    case 'desktopWindow':
+      return `desktop:${target.processId}:${target.windowTitle ?? ''}`;
+    case 'android':
+      return `android:${target.serial ?? ''}`;
+    case 'iosSimulator':
+      return `ios:${target.udid ?? ''}`;
+    case 'output':
+      return 'httpUrl' in target ? `http:${target.httpUrl}` : `cmd:${target.cwd}:${target.command}`;
+  }
+}
+
 /** How many earlier turns of a reopened chat the AI gets back as memory (older ones stay on screen only). */
 const REOPENED_CHAT_MEMORY_TURNS = 30;
 /** Distinct visuals one answer may draw (e.g. a chart plus a diagram) — more is a redraw loop. */
@@ -258,6 +277,10 @@ export class ConversationRuntime {
   private pendingActionPromises: Promise<void>[] = [];
   /** Which model response each in-flight tool call came from — see ToolCallBatch. */
   private toolBatchByCallId = new Map<string, ToolCallBatch>();
+  /** The last "before" capture per target this chat, so its "after" can show both side by side. */
+  private beforeEvidenceByTarget = new Map<string, ChatEvidenceImage>();
+  /** Evidence captured (or restored) in this chat, by id: what inspect_evidence looks up. */
+  private evidenceById = new Map<string, { kind: 'image' | 'output'; phase: 'before' | 'after'; label: string; imageBase64?: string; output?: { source: string; status: number | null; text: string }; runId?: string }>();
   /** An action that came back needing confirmation — the next plain reply is checked against this before anything else, rather than trusting the model to remember and re-invoke the tool itself. */
   /** The project folder opened from the header (folder or cloned repo) — told to the model on every turn. */
   private projectFolder: string | null = null;
@@ -475,6 +498,10 @@ export class ConversationRuntime {
        * disables history (turns still live in-memory via getConversationLog()).
        */
       persistTurn?: (turn: ConversationTurnRecord, hint: SessionContinuationHint) => Promise<{ id: string } | void>;
+      /** A ticket run saves each capture to its run record (best-effort; see TicketEvidenceService). */
+      onEvidenceCaptured?: (evidence: EvidenceItem, imageBase64?: string) => unknown;
+      /** Loads an evidence image not in memory (a reopened chat): local cache, else the run's durable copy. */
+      loadEvidenceImage?: (ref: { evidenceId: string; runId?: string }) => Promise<string | null>;
       /**
        * Persists one finished ExecutionRecord (Work History) into the main
        * process, built by the internal ExecutionSupervisor as each user
@@ -860,6 +887,13 @@ export class ConversationRuntime {
     this.startNewSession = !session;
     this.currentTurnAssistantMessageId = null;
     this.toolBatchByCallId.clear();
+    this.beforeEvidenceByTarget.clear();
+    this.evidenceById.clear();
+    for (const turn of session?.turns ?? []) {
+      for (const ref of turn.evidence ?? []) {
+        this.evidenceById.set(ref.id, { kind: ref.kind, phase: ref.phase, label: ref.label, ...(ref.output ? { output: ref.output } : {}), ...(ref.runId ? { runId: ref.runId } : {}) });
+      }
+    }
     this.updateSnapshot({ messages: restoreConversationSnapshot(session)?.messages ?? [], taskHistory: [] });
   }
 
@@ -1522,6 +1556,11 @@ export class ConversationRuntime {
     if (!executeAction) return;
 
     // A visual drawn inline in the chat — nothing runs on the computer, so no permission question.
+    // The AI looks at captured evidence: the image itself goes into the tool result (vision), never a path.
+    if (toolCall.name === 'inspect_evidence') {
+      await this.inspectEvidence(toolCall, currentTurn, ctx);
+      return;
+    }
     if (toolCall.name === 'show_widget') {
       await this.showWidget(toolCall, currentTurn, ctx);
       return;
@@ -1678,6 +1717,7 @@ export class ConversationRuntime {
     this.activeActionIdByType.delete(request.type);
 
     await this.maybeStartRealCommunicationCapture(request, result);
+    result = this.presentEvidence(request, result);
 
     if (this.currentTurnRecord) {
       this.currentTurnRecord.actionsExecuted.push({ type: request.type, ok: result.ok, label: toolCall.name });
@@ -1995,6 +2035,7 @@ export class ConversationRuntime {
     // initial handleToolCall pass — is where real capture actually needs
     // to start.
     await this.maybeStartRealCommunicationCapture(confirmedRequest, result);
+    result = this.presentEvidence(confirmedRequest, result);
 
     if (this.currentTurnRecord) {
       this.currentTurnRecord.actionsExecuted.push({ type: request.type, ok: result.ok, label: request.type });
@@ -2370,6 +2411,143 @@ export class ConversationRuntime {
    * record, so a failure to create it never leaves a dangling live stream
    * with nowhere to save to.
    */
+  /**
+   * capture_evidence: shows the capture in chat (an image — an "after" beside its "before" — or output as a
+   * labelled code block, never passed off as a screenshot) and hands the model only a description: the
+   * image bytes never go into the conversation's text context.
+   */
+  private presentEvidence(request: ActionRequest, result: ActionResult): ActionResult {
+    if (request.type !== 'captureEvidence' || !result.ok) return result;
+    const data = result.data as (EvidenceCaptureData & { unavailable?: boolean }) | undefined;
+    if (!data?.evidence) return result;
+    const evidence = data.evidence;
+    const key = evidenceTargetKey(request.target);
+
+    const runId = this.args.autonomousRunId;
+    const before = evidence.phase === 'after' ? this.beforeEvidenceByTarget.get(key) : undefined;
+    this.evidenceById.set(evidence.id, {
+      kind: evidence.kind,
+      phase: evidence.phase,
+      label: evidence.label,
+      ...(data.imageBase64 ? { imageBase64: data.imageBase64 } : {}),
+      ...(evidence.output ? { output: evidence.output } : {}),
+      ...(runId ? { runId } : {}),
+    });
+
+    if (evidence.kind === 'image' && data.imageBase64) {
+      const shown: ChatEvidenceImage = {
+        evidenceId: evidence.id,
+        ...(runId ? { runId } : {}),
+        phase: evidence.phase,
+        label: evidence.label,
+        provider: evidence.provider,
+        targetDescription: evidence.targetDescription,
+        filePath: evidence.filePath,
+        imageDataUrl: `data:image/png;base64,${data.imageBase64}`,
+        ...(evidence.pageSignals ? { pageSignals: evidence.pageSignals } : {}),
+      };
+      if (evidence.phase === 'before') this.beforeEvidenceByTarget.set(key, shown);
+      this.upsertMessage({
+        id: `evidence-${evidence.id}`,
+        role: 'assistant',
+        content: '',
+        createdAt: Date.now(),
+        status: 'final',
+        evidence: before ? { ...shown, before } : shown,
+      });
+    } else if (evidence.output) {
+      this.upsertMessage({
+        id: `evidence-${evidence.id}`,
+        role: 'assistant',
+        content: outputEvidenceMessage(evidence.phase, evidence.output),
+        createdAt: Date.now(),
+        status: 'final',
+      });
+    }
+
+    // Saved with the chat (references only) so a reopened chat shows it again.
+    if (this.currentTurnRecord) {
+      this.currentTurnRecord.evidence = [
+        ...(this.currentTurnRecord.evidence ?? []),
+        {
+          id: evidence.id,
+          phase: evidence.phase,
+          kind: evidence.kind,
+          provider: evidence.provider,
+          label: evidence.label,
+          targetDescription: evidence.targetDescription,
+          ...(runId ? { runId } : {}),
+          ...(before ? { beforeId: before.evidenceId } : {}),
+          ...(evidence.output ? { output: evidence.output } : {}),
+          ...(evidence.pageSignals ? { pageSignals: evidence.pageSignals } : {}),
+        },
+      ];
+    }
+    // Durable copy on the ticket run (best-effort: evidence never affects the run's outcome or charge).
+    if (this.args.onEvidenceCaptured) {
+      void Promise.resolve(this.args.onEvidenceCaptured(evidence, data.imageBase64)).catch(() => undefined);
+    }
+
+    const { filePath, output, pageSignals, targetDescription, phase, provider, kind } = evidence;
+    return {
+      ok: true,
+      data: {
+        shownInChat: true,
+        evidence: { evidenceId: evidence.id, phase, provider, kind, targetDescription, filePath, ...(output ? { output } : {}), ...(pageSignals ? { pageSignals } : {}) },
+        note:
+          kind === 'image'
+            ? `The ${phase} screenshot is on screen for the user. You have NOT seen it yet: to look at it (e.g. to find what is visibly wrong, or to confirm the fix), call inspect_evidence with evidenceId "${evidence.id}". Then tell the user in one short sentence what it shows.`
+            : `The ${phase} output evidence is on screen. Tell the user in one short sentence what it shows; do not repeat its contents.`,
+      },
+    };
+  }
+
+  /**
+   * inspect_evidence: hands the model the actual captured image as an image part of the tool result
+   * (see GeminiReasoningProvider) so it can see what's on screen. Output evidence comes back as its text.
+   * Reading PawOS's own capture needs no permission question: nothing on the computer changes.
+   */
+  private async inspectEvidence(toolCall: ReasoningToolCall, currentTurn: number, ctx: TurnContext): Promise<void> {
+    const args = (toolCall.arguments ?? {}) as Record<string, unknown>;
+    const wantedId = typeof args.evidenceId === 'string' ? args.evidenceId.trim() : '';
+    const wantedPhase = args.phase === 'before' || args.phase === 'after' ? args.phase : null;
+    let id = wantedId;
+    if (!id && wantedPhase) id = [...this.evidenceById.entries()].reverse().find(([, e]) => e.phase === wantedPhase)?.[0] ?? '';
+    const entry = id ? this.evidenceById.get(id) : undefined;
+
+    let images: { mimeType: 'image/png'; data: string }[] | undefined;
+    let result: ActionResult;
+    if (!entry) {
+      result = { ok: false, reason: 'failed', message: 'No captured evidence with that id in this chat. Capture it with capture_evidence first.' };
+    } else if (entry.kind === 'output') {
+      result = { ok: true, data: { evidenceId: id, phase: entry.phase, kind: 'output', output: entry.output } };
+    } else {
+      let base64 = entry.imageBase64 ?? null;
+      if (!base64 && this.args.loadEvidenceImage) {
+        base64 = await this.args.loadEvidenceImage({ evidenceId: id, ...(entry.runId ? { runId: entry.runId } : {}) }).catch(() => null);
+        if (base64) entry.imageBase64 = base64;
+      }
+      if (base64) {
+        images = [{ mimeType: 'image/png', data: base64 }];
+        result = { ok: true, data: { evidenceId: id, phase: entry.phase, kind: 'image', label: entry.label, note: 'The screenshot is attached to this result as an image. Look at it directly.' } };
+      } else {
+        result = { ok: false, reason: 'failed', message: 'That screenshot is no longer available on this computer or in storage.' };
+      }
+    }
+    this.log('evidence-inspected', { id, ok: result.ok, image: Boolean(images) });
+
+    this.args.reasoningRuntime.provideToolResult({ toolCallId: toolCall.id, name: toolCall.name, content: JSON.stringify(result), ...(images ? { images } : {}) });
+    const shouldContinue = this.recordToolOutcomeAndCheckBudget({ type: 'inspectEvidence' } as unknown as ActionRequest, result);
+    this.resumeAfterAction(currentTurn);
+    const batch = this.settleToolCall(toolCall.id);
+    if (batch) {
+      if (shouldContinue) batch.continueWanted = true;
+      await this.flushToolBatch(batch, currentTurn, ctx);
+      return;
+    }
+    if (shouldContinue && !this.closed && currentTurn === this.turnId) await this.continueReasoningTurn(currentTurn, ctx);
+  }
+
   private async maybeStartRealCommunicationCapture(request: ActionRequest, result: ActionResult): Promise<void> {
     if (request.type !== 'startCommunicationCapture' || !result.ok) return;
     const communicationId = (result.data as { communicationId?: string } | undefined)?.communicationId;

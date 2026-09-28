@@ -6,14 +6,13 @@ export const metadata: Metadata = { title: "Status", description: "PawOS system 
 
 const COMPONENTS = [
   { name: "pawos.app (this website)", status: "Operational" as const },
-  { name: "Desktop application", status: "Not yet publicly released" as const },
-  { name: "Checkout & billing (Razorpay)", status: "Configured, pending public launch" as const },
+  { name: "Desktop app (Windows)", status: "Early access" as const },
+  { name: "Checkout & billing", status: "Operational" as const },
 ];
 
 const STATUS_TONE: Record<string, "green" | "amber" | "neutral"> = {
   Operational: "green",
-  "Not yet publicly released": "amber",
-  "Configured, pending public launch": "amber",
+  "Early access": "amber",
 };
 
 export default function StatusPage() {
@@ -28,8 +27,7 @@ export default function StatusPage() {
         ))}
       </div>
       <p className="mx-auto mt-8 max-w-xl text-center text-sm text-neutral-500">
-        Once PawOS ships a hosted component with a real uptime commitment, this page will report real, measured
-        status rather than a static list.
+        PawOS runs on your computer, so most of it keeps working independently of these services.
       </p>
     </Section>
   );

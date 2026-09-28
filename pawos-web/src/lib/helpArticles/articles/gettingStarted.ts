@@ -8,7 +8,7 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
     summary: 'An overview of what PawOS is, what it does today, and how the pieces fit together.',
 
     overview:
-      'PawOS is a desktop AI-companion application from Revanta AI, built on Electron for Windows. ' +
+      'PawOS is a desktop AI-companion application for Windows from Revanta AI. ' +
       'At its core, PawOS pairs a real 3D animated companion — Paw — with a set of practical tools for ' +
       'working with your own projects: opening and analyzing local folders, tracking git repositories, ' +
       'running coding tasks through a live Coding Canvas, and keeping an honest history of what happened. ' +
@@ -35,7 +35,7 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
       'Enable the companion only when you want it visible; it stays off by default so it never surprises you',
       'Open your real project folders through Import rather than expecting PawOS to invent projects for you',
       'Review the Work History page periodically — it is the ground truth for what PawOS has actually done',
-      'Set up an AI provider/API key in Settings early, since both voice conversations and coding tasks depend on it',
+      'Stay online while you work with Paw — voice conversations and coding tasks need a connection',
     ],
     examples: [
       {
@@ -52,12 +52,12 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
     troubleshooting: [
       'If the app feels empty on first launch, that is expected — Projects and History start blank until you import a folder or run a task',
       'If the companion is not visible, confirm it was explicitly enabled from Home; it is off by default',
-      'If voice or AI features do not respond, check that an AI provider/API key is configured in Settings',
+      'If voice or AI features do not respond, check your internet connection and your usage in Settings → Usage',
     ],
     requirements: [
-      'Windows desktop (PawOS is distributed as a Windows Electron app via electron-builder)',
-      'An internet connection for Google/Email sign-in, voice features, and AI provider calls',
-      'A configured AI provider/API key in Settings for companion conversations and coding tasks',
+      'A Windows computer',
+      'An internet connection for sign-in, voice features and AI assistance',
+      'A PawOS account (Paw Go is free)',
     ],
     permissions: [
       'No permissions are required just to browse the Dashboard',
@@ -77,12 +77,12 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
       },
       {
         question: 'What platforms does PawOS run on?',
-        answer: 'PawOS is currently built and distributed as a Windows desktop application using Electron and electron-builder.',
+        answer: 'PawOS is a Windows desktop app.',
       },
       {
         question: 'Does PawOS work offline?',
         answer:
-          'Local project data stays on your machine, but voice conversations, AI-driven coding tasks, and sign-in require an internet connection to reach the configured AI provider or Supabase.',
+          'Local project data stays on your machine, but voice conversations, AI-driven coding tasks and sign-in need an internet connection.',
       },
       {
         question: 'Where do I see everything PawOS has done for me?',
@@ -97,7 +97,7 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
     relatedArticleIds: ['installing-pawos', 'first-launch', 'account-required', 'navigation', 'meet-paw'],
     relatedSettings: ['Account', 'General'],
     relatedApps: ['home'],
-    keywords: ['pawos', 'overview', 'introduction', 'what is pawos', 'revanta ai', 'electron desktop app'],
+    keywords: ['pawos', 'overview', 'introduction', 'what is pawos', 'revanta ai', 'desktop app'],
     aliases: ['Welcome', 'Getting Started', 'About PawOS', 'What is PawOS'],
     pawosVersion: '0.1.0',
     updated: '2026-07-20',
@@ -112,19 +112,18 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
     summary: 'How to download, install, and update the PawOS Windows desktop app.',
 
     overview:
-      'PawOS ships as a native Windows desktop application, packaged with electron-builder. Installing it is a ' +
-      'standard Windows installer flow: download the installer, run it, and launch PawOS from the Start menu ' +
+      'PawOS is a native Windows desktop app. Installing it is a standard Windows installer flow: join early ' +
+      'access with Download for Windows, run the installer from the link we email you, and launch PawOS from the Start menu ' +
       'or desktop shortcut like any other application. There is no separate account required to install — ' +
       'sign-in is handled inside the app after installation.',
     features: [
-      'A standard Windows installer built with electron-builder',
+      'A standard Windows installer',
       'Desktop and Start-menu shortcuts created automatically on install',
       'No separate runtime dependencies to install manually',
       'App data kept in your local user profile, separate from the installation directory',
     ],
     howItWorks:
-      'The electron-builder packaging step produces a Windows installer (and the underlying app resources) that ' +
-      'installs PawOS like any desktop application: it copies the app into your Windows user or Program Files ' +
+      'The PawOS installer sets the app up like any desktop application: it copies the app into your Windows user or Program Files ' +
       'location, registers a Start menu entry, and creates a desktop shortcut. On first run after install, PawOS ' +
       'shows a splash screen and then takes you to the authentication screen.',
     bestPractices: [
@@ -137,7 +136,7 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
       {
         title: 'Installing PawOS for the first time',
         steps: [
-          'Download the PawOS Windows installer from the official source',
+          'Choose Download for Windows on the PawOS website and join early access; we email you the installer link',
           'Run the installer and follow the on-screen prompts',
           'Launch PawOS from the Start menu or the new desktop shortcut',
           'Wait for the splash screen, then sign in with Email, Google, or GitHub on the auth screen',
@@ -161,8 +160,8 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
     ],
     faq: [
       {
-        question: 'Is PawOS available for macOS or Linux?',
-        answer: 'PawOS is currently packaged and distributed for Windows only, via electron-builder.',
+        question: 'Which operating system does PawOS run on?',
+        answer: 'Windows — PawOS is a Windows desktop app.',
       },
       {
         question: 'Do I need to create an account to install PawOS?',
@@ -184,7 +183,7 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
     relatedArticleIds: ['welcome-to-pawos', 'first-launch', 'account-required'],
     relatedSettings: ['General', 'Updates'],
     relatedApps: ['home', 'settings'],
-    keywords: ['install', 'installer', 'download', 'setup', 'electron-builder', 'windows app', 'update'],
+    keywords: ['install', 'installer', 'download', 'setup', 'windows app', 'update'],
     aliases: ['Download PawOS', 'Setup', 'Install', 'Windows installer'],
     pawosVersion: '0.1.0',
     updated: '2026-07-20',
@@ -218,7 +217,6 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
     bestPractices: [
       'Use Paw Go first if you are exploring before upgrading to paid runtime execution',
       'Have your Google account or email ready if you want your data tied to an account from the start',
-      'Visit Settings early to add an AI provider/API key so voice and coding features work right away',
       'Take a moment on Home to look at the sidebar before diving into a specific section',
     ],
     examples: [
@@ -265,8 +263,8 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
         answer: 'No, the companion is disabled by default and only appears after you explicitly enable it from Home.',
       },
       {
-        question: 'Is there a tutorial that runs on first launch?',
-        answer: 'Not currently. PawOS takes you directly to the Dashboard, and this Help Center is the place to learn what each section does.',
+        question: 'Where can I learn what each section does?',
+        answer: 'Here in the Help Center — PawOS takes you straight to the Dashboard after sign-in.',
       },
     ],
     relatedArticleIds: ['welcome-to-pawos', 'account-required', 'google-sign-in', 'navigation'],
@@ -365,19 +363,19 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
     summary: 'Signing in to PawOS with Google, and how it compares to Email sign-in.',
 
     overview:
-      'Google Sign-In gives you a full PawOS account backed by real OAuth, handled through Supabase. Signing in ' +
+      'Google Sign-In gives you a full PawOS account using your Google identity. Signing in ' +
       'with Google links your PawOS data to your Google identity. When you link Google Sign-In, PawOS sends ' +
       'a confirmation email to the associated address as part of completing the link.',
     features: [
-      'Real Google OAuth sign-in, not a mock or placeholder flow',
-      'Backed by Supabase Auth for account and session management',
+      'Secure sign-in with your Google account',
+      'Your PawOS session is kept securely on your device',
       'A confirmation email sent when a Google account is linked',
       'Works as an account sign-in path',
     ],
     howItWorks:
       'Choosing "Continue with Google" on the authentication screen opens the standard Google OAuth consent ' +
-      'flow. After you approve access, Google redirects back to PawOS with your identity, and Supabase Auth ' +
-      'establishes your PawOS session. If this Google account is being linked for the first time, PawOS sends ' +
+      'flow. After you approve access, Google returns you to PawOS signed in. ' +
+      'If this Google account is being linked for the first time, PawOS sends ' +
       'a confirmation email so you have a record that the link was made.',
     bestPractices: [
       'Use the Google account you want your PawOS data permanently associated with',
@@ -414,8 +412,8 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
     ],
     faq: [
       {
-        question: 'Is Google Sign-In a real OAuth integration?',
-        answer: 'Yes, it uses genuine Google OAuth handled through Supabase Auth, not a simulated login.',
+        question: 'Is Google Sign-In secure?',
+        answer: 'Yes — it uses Google’s own sign-in screen; PawOS never sees your Google password.',
       },
       {
         question: 'Will I get an email when I sign in with Google?',
@@ -431,13 +429,13 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
       },
       {
         question: 'Is Email sign-in different from Google Sign-In?',
-        answer: 'Yes, Email sign-in uses Supabase Auth with OTP (one-time code) verification instead of Google OAuth, and includes its own Forgot Password flow.',
+        answer: 'Yes — Email sign-in verifies you with a one-time code sent to your inbox instead of your Google account, and has its own Forgot Password flow.',
       },
     ],
     relatedArticleIds: ['first-launch', 'account-required', 'welcome-to-pawos'],
     relatedSettings: ['Account'],
     relatedApps: ['home', 'settings'],
-    keywords: ['google sign in', 'oauth', 'supabase auth', 'continue with google', 'link account'],
+    keywords: ['google sign in', 'oauth', 'continue with google', 'link account'],
     aliases: ['Continue with Google', 'Sign in with Google', 'Google OAuth'],
     pawosVersion: '0.1.0',
     updated: '2026-07-20',
@@ -512,8 +510,8 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
         answer: 'The core sidebar layout is the same for all signed-in accounts; account-specific options like Upgrade appear in the profile menu.',
       },
       {
-        question: 'Can I rearrange the sidebar?',
-        answer: 'Not currently — the sidebar order is fixed to keep navigation predictable across sessions.',
+        question: 'Why is the sidebar always in the same order?',
+        answer: 'The sidebar order is fixed so navigation stays predictable across sessions.',
       },
     ],
     relatedArticleIds: ['welcome-to-pawos', 'keyboard-shortcuts', 'first-launch'],
@@ -548,8 +546,7 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
       'While in a voice conversation with your companion (Talk with Paw), holding down the push-to-talk key ' +
       'activates your microphone and streams your speech to speech-to-text. Releasing the key stops capturing ' +
       'your voice and lets the companion process what you said, respond, and speak back with synced ' +
-      'text-to-speech and viseme (mouth-shape) animation. Outside of this push-to-talk interaction, PawOS does ' +
-      'not currently bind other actions to keyboard shortcuts.',
+      'speech and lip-synced animation.',
     bestPractices: [
       'Hold the push-to-talk key for your entire sentence and release only when you are done speaking',
       'Speak clearly and at a normal pace while holding the key for the most accurate speech-to-text results',
@@ -569,15 +566,14 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
     ],
     troubleshooting: [
       'If holding the key does not capture audio, check microphone permission for PawOS in Settings',
-      'If nothing happens when you release the key, confirm an AI provider/API key is configured, since responses depend on it',
-      'If you are looking for a shortcut that is not push-to-talk, it likely does not exist yet in this version',
+      'If nothing happens when you release the key, check your internet connection, since responses depend on it',
     ],
-    requirements: ['A working microphone', 'Microphone permission granted to PawOS', 'An AI provider/API key configured for the companion to respond'],
+    requirements: ['A working microphone', 'Microphone permission granted to PawOS', 'An internet connection'],
     permissions: ['Microphone access is required for push-to-talk to capture your voice'],
     faq: [
       {
-        question: 'Is there a command palette or global hotkey system in PawOS?',
-        answer: 'Not yet. The only real shortcut-driven interaction today is push-to-talk during voice conversations.',
+        question: 'Which keyboard shortcut does PawOS use?',
+        answer: 'Push-to-talk, during voice conversations with your companion.',
       },
       {
         question: 'What key is used for push-to-talk?',

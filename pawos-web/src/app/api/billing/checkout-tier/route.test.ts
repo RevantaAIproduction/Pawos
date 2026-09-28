@@ -20,7 +20,7 @@ describe('Checkout Tier Route - Commercial Availability Gate', () => {
     vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'anon_key');
   });
 
-  const makeRequest = async (tier: string, overrides: any = {}) => {
+  const makeRequest = async (tier: string, overrides: Record<string, unknown> = {}) => {
     const req = new Request('http://localhost:3000/api/billing/checkout-tier', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -51,7 +51,7 @@ describe('Checkout Tier Route - Commercial Availability Gate', () => {
     ['proMax', { options: { proMaxVariant: '5x' } }],
     ['proMax', { options: { proMaxVariant: '20x' } }],
   ])('refuses a one-time order for %s — plans are subscriptions (never charges without activating)', async (tier, overrides) => {
-    global.fetch = vi.fn() as any;
+    global.fetch = vi.fn() as unknown as typeof fetch;
     const response = await makeRequest(tier, overrides);
     expect(response.status).toBe(400);
     const data = await response.json();

@@ -7,6 +7,7 @@ import type { ActionRequest, ActionResult } from '../../shared/actions/ActionTyp
 import { desktopExecutionEngine } from '../execution/DesktopExecutionEngine';
 import { platformEventBus } from '../platform/events/PlatformEventBus';
 import { processManager } from '../execution/ProcessManager';
+import { evidenceCaptureService } from '../evidence/EvidenceCaptureService';
 import { fileWatcherManager } from '../execution/FileWatcher';
 import { workspaceMemoryStore } from '../execution/WorkspaceMemoryStore';
 import { getAnimationsDir, getCharactersDir, getPetsDir } from '../assets/AssetPathResolver';
@@ -205,6 +206,9 @@ export function registerIpc(opts: {
     const startIn = typeof cwd === 'string' && cwd && fs.existsSync(cwd) ? cwd : app.getPath('home');
     return processManager.startInteractiveShell(startIn, 'PawOS terminal');
   });
+
+  // Ticket evidence image from the local cache, by evidence id only (never a path) — see EvidenceCaptureService.readImage.
+  ipcMain.handle('evidence:readImage', (_evt, evidenceId: string) => (typeof evidenceId === 'string' ? evidenceCaptureService.readImage(evidenceId) : null));
 
   // Phase 5 shared terminal: the host's own home directory as the default
   // starting cwd for a remote-assistance shared shell (the renderer has no
@@ -1243,7 +1247,7 @@ export function registerIpc(opts: {
         form.append('accessToken', upload.accessToken);
         form.append('billingCaseId', upload.billingCaseId);
         form.append('invoiceId', upload.invoiceId);
-        form.append('file', new Blob([upload.bytes], { type: upload.fileType || 'application/octet-stream' }), upload.fileName);
+        form.append('file', new Blob([Uint8Array.from(upload.bytes).buffer], { type: upload.fileType || 'application/octet-stream' }), upload.fileName);
         const response = await fetch(`${PAWOS_BILLING_API_BASE_URL}/api/billing/upload-payment-evidence`, { method: 'POST', body: form });
         return { status: response.status, body: await response.json().catch(() => null) };
       } catch (error) {

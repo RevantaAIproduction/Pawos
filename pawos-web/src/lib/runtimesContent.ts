@@ -42,7 +42,7 @@ export const RUNTIMES: RuntimeDoc[] = [
     useCases: ["Local development environment setup", "Everyday file organization", "Running and monitoring long-lived dev servers"],
     limitations: ["Command execution is allowlisted by design", "No remote execution — actions run on the local machine only"],
     bestPractices: ["Let Paw narrate destructive actions before confirming", "Use named projects so Paw can resolve \"my project\" reliably"],
-    futureImprovements: ["Broader allowlisted command coverage", "Cross-device execution for paired machines"],
+    futureImprovements: [],
   },
   {
     slug: "browser-runtime",
@@ -54,9 +54,9 @@ export const RUNTIMES: RuntimeDoc[] = [
       "Multi-tab session management and generic script evaluation",
       "A deterministic comparison workflow for evaluating multiple sources",
     ],
-    providers: ["Chromium via CDP (Chrome DevTools Protocol)", "Configurable fallback browser order (e.g. Edge)"],
+    providers: ["Your installed Chrome or Edge browser", "Configurable browser preference order"],
     architecture:
-      "A BrowserRuntime facade sits over swappable browser adapters (currently a Chromium CDP adapter), so the same plugin surface works regardless of which local browser is actually driven.",
+      "The Browser engine works with the browser already on your computer, so the same browsing abilities work whichever supported browser you use.",
     executionFlow: [
       { step: "Session start", detail: "A real browser session is opened or reused." },
       { step: "Navigate & read", detail: "Pages are loaded and their content read or extracted per the request." },
@@ -71,7 +71,7 @@ export const RUNTIMES: RuntimeDoc[] = [
     useCases: ["Multi-source research", "Repetitive form filling", "Structured data extraction from web pages"],
     limitations: ["Desktop-scoped — drives one local browser session, not a headless fleet", "Sites with aggressive bot detection may still block automation", "Not currently sold as a separate purchasable runtime entitlement"],
     bestPractices: ["Be specific about what data you want extracted, not just \"look at this page\"", "Use the comparison workflow for structured side-by-side evaluation"],
-    futureImprovements: ["Additional browser adapters", "Session persistence across restarts"],
+    futureImprovements: [],
   },
   {
     slug: "infrastructure-runtime",
@@ -85,10 +85,9 @@ export const RUNTIMES: RuntimeDoc[] = [
     ],
     providers: [
       "Currently configured local connector implementations",
-      "Future SSH, Docker, CI/CD, and cloud-provider adapters are extension points, not launched capabilities",
     ],
     architecture:
-      "Provider connectors implement the existing hosting and infrastructure interfaces and rely on already-authenticated local tools or configured APIs. Remote execution adapters such as SSH, Docker, CI/CD, and cloud-provider execution remain future work.",
+      "Each provider connection works through that provider's own tools and your existing sign-in.",
     executionFlow: [
       { step: "Classify the request", detail: "Paw determines the right provider and whether this is a first deploy or a redeploy." },
       { step: "Safety gate", detail: "Production-impacting deploys go through an approval gate." },
@@ -103,7 +102,7 @@ export const RUNTIMES: RuntimeDoc[] = [
     useCases: ["Shipping side projects without learning every provider's CLI", "Standardizing deploys across a team using different providers", "Root-cause investigation of production issues"],
     limitations: ["Every provider requires its own already-authenticated CLI/API session on your machine", "Providers with no real staging/rollback concept honestly report that limitation", "Not currently marketed as broad SSH, Docker, CI/CD, or cloud execution"],
     bestPractices: ["Authenticate each provider's CLI once, outside of PawOS, before your first deploy", "Use approval policies for any provider your organization treats as production"],
-    futureImprovements: ["More PaaS adapters as they're requested", "Deeper cost visibility across providers"],
+    futureImprovements: [],
   },
   {
     slug: "communication-runtime",
@@ -128,7 +127,7 @@ export const RUNTIMES: RuntimeDoc[] = [
     useCases: ["Never losing meeting action items", "Building relationship history automatically"],
     limitations: ["Requires explicit consent before any recording starts", "Transcription accuracy depends on audio quality", "Not currently sold as a separate purchasable runtime entitlement"],
     bestPractices: ["Get verbal consent from other participants before recording a call", "Review drafted follow-ups before sending — PawOS never sends on your behalf"],
-    futureImprovements: ["Broader meeting platform coverage", "Mobile companion phone-call capture"],
+    futureImprovements: [],
   },
   {
     slug: "companion-runtime",
@@ -140,7 +139,7 @@ export const RUNTIMES: RuntimeDoc[] = [
       "Live facial expression and mouth-shape sync during speech",
       "Export/import as a portable .paw companion package",
     ],
-    providers: ["Local three.js rendering", "Configurable TTS provider for voice"],
+    providers: ["Real-time 3D rendering on your computer", "Configurable voice for spoken replies"],
     architecture:
       "An AssetManager/AnimationLibrary loads and rigs 3D models; an AnimationStateMachine handles crossfade/queue/loop/interrupt between clips; a ProceduralMotion layer adds continuous idle motion on top; a DynamicFaceTexture compositor renders live facial expression, driven by the same conversation state that drives speech.",
     executionFlow: [
@@ -150,9 +149,9 @@ export const RUNTIMES: RuntimeDoc[] = [
     ],
     examples: ["Uploading a custom VRM model as your companion", "Switching personality presets", "Exporting a companion package to share"],
     useCases: ["A distinctive, personal desktop presence", "Sharing a companion configuration with teammates"],
-    limitations: ["AI-generated avatar creation from a photo isn't available yet"],
+    limitations: ["Custom models work best as rigged GLB or VRM files"],
     bestPractices: ["Use a rigged GLB/VRM for the most reliable animation results", "Keep custom models within reasonable polygon budgets for smooth animation"],
-    futureImprovements: ["AI avatar generation", "A companion marketplace/gallery"],
+    futureImprovements: [],
   },
   {
     slug: "governance-runtime",
@@ -164,9 +163,9 @@ export const RUNTIMES: RuntimeDoc[] = [
       "An encrypted credential vault for organization-shared secrets",
       "A full, exportable audit log for compliance evidence",
     ],
-    providers: ["Supabase (organization data, RLS-enforced)", "Local confirmation gating for individual use"],
+    providers: ["Organization data isolated per organization", "Local confirmation gating for individual use"],
     architecture:
-      "Individual-use gating (confirm-then-retry) is local and always on. Organization-scoped governance layers on top: a credential vault encrypts secrets at rest, governance policies can require approval before specific action types run, and every infrastructure-affecting action can be recorded to an audit log — all enforced through Supabase row-level security scoped to the organization.",
+      "Individual-use gating (confirm-then-retry) is local and always on. Organization-scoped governance layers on top: a credential vault encrypts secrets at rest, governance policies can require approval before specific action types run, and every infrastructure-affecting action can be recorded to an audit log — all isolated so each organization only ever sees its own data.",
     executionFlow: [
       { step: "Classify risk", detail: "An action is classified as routine, destructive, or production-impacting." },
       { step: "Gate", detail: "Routine actions proceed; risky ones require explicit confirmation or an org approval." },
@@ -176,7 +175,7 @@ export const RUNTIMES: RuntimeDoc[] = [
     useCases: ["Meeting basic compliance evidence requirements", "Preventing accidental production incidents"],
     limitations: ["Reduces risk; doesn't replace good judgment about what to automate", "SSO enablement is in progress — see the security page for current status"],
     bestPractices: ["Scope approval policies to genuinely risky action types, not everything, to avoid approval fatigue"],
-    futureImprovements: ["Full SSO", "Finer-grained per-action audit filtering"],
+    futureImprovements: [],
   },
 ];
 

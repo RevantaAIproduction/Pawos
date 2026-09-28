@@ -413,6 +413,182 @@ describe('ConversationRuntime execution modes — confirmation wiring', () => {
     expect(hints[1]).toEqual({ type: 'new' }); // never filed into an old chat
   }, 10000);
 
+  it('capture_evidence: before/after screenshots shown in chat side by side, output as a labelled code block; the model never gets image bytes', async () => {
+    const { ConversationRuntime } = await import('./ConversationRuntime');
+    const IMG = 'iVBORw0KGgoAAAANSUhEUg==';
+    const calls = [
+      { name: 'capture_evidence', arguments: { phase: 'before', label: 'Cart overflows on mobile', provider: 'web', url: 'http://localhost:5173/cart' } },
+      { name: 'capture_evidence', arguments: { phase: 'after', label: 'Cart fits on mobile', provider: 'web', url: 'http://localhost:5173/cart/' } },
+      { name: 'capture_evidence', arguments: { phase: 'before', label: 'Price test fails', provider: 'output', command: 'npm test', cwd: 'C:\\code\\shop' } },
+      { name: 'capture_evidence', arguments: { phase: 'before', label: 'Android', provider: 'android' } },
+    ];
+    const requests: string[] = [];
+    let n = 0;
+    const provider: ReasoningProvider = {
+      id: 'test-reasoning',
+      label: 'Test Reasoning',
+      isSupported: () => true,
+      streamResponse(request, callbacks) {
+        requests.push(JSON.stringify(request));
+        const call = calls[n];
+        n += 1;
+        if (call) {
+          callbacks.onToolCall?.({ id: `e-${n}`, ...call });
+          callbacks.onComplete('');
+        } else {
+          callbacks.onDelta('Fixed.');
+          callbacks.onComplete('Fixed.');
+        }
+        return { cancel: () => {} };
+      },
+    };
+    let id = 0;
+    const executeAction = vi.fn(async (request: ActionRequest): Promise<ActionResult> => {
+      if (request.type !== 'captureEvidence') return { ok: true };
+      id += 1;
+      if (request.target.provider === 'android') return { ok: true, data: { unavailable: true, message: 'adb is not installed. Evidence is optional.' } };
+      if (request.target.provider === 'output') {
+        return { ok: true, data: { evidence: { id: `ev${id}`, phase: 'before', label: request.label, provider: 'output', kind: 'output', capturedAt: 1, filePath: 'C:\\e\\o.txt', targetDescription: 'npm test', output: { source: 'npm test', status: 1, text: 'Expected 30, got NaN' } } } };
+      }
+      return {
+        ok: true,
+        data: {
+          evidence: { id: `ev${id}`, phase: request.phase, label: request.label, provider: 'web', kind: 'image', capturedAt: 1, filePath: `C:\\e\\${request.phase}.png`, targetDescription: request.target.provider === 'web' ? request.target.url : '' },
+          imageBase64: IMG,
+        },
+      };
+    });
+    const runtime = new ConversationRuntime({
+      speechRecognition: createSpeechRecognitionProvider(),
+      speechSynthesis: createSpeechSynthesisProvider(),
+      reasoningRuntime: new ReasoningRuntime(provider),
+      executeAction,
+      getExecutionMode: () => 'manual',
+      isBypassPermissionsEnabled: () => false,
+      autonomousRunId: 'run-1', // a headless ticket run — no permission questions
+    });
+
+    runtime.submitTranscript('fix ticket SHOP-12');
+    for (let i = 0; i < 400 && !runtime.getSnapshot().messages.some((m) => m.content === 'Fixed.'); i += 1) await Promise.resolve();
+
+    const shown = runtime.getSnapshot().messages.filter((m) => m.evidence);
+    expect(shown.map((m) => [m.evidence!.phase, m.evidence!.label, Boolean(m.evidence!.before)])).toEqual([
+      ['before', 'Cart overflows on mobile', false],
+      ['after', 'Cart fits on mobile', true], // same page (trailing slash ignored) → shown beside its before
+    ]);
+    expect(shown[1]!.evidence!.imageDataUrl).toBe(`data:image/png;base64,${IMG}`);
+    const output = runtime.getSnapshot().messages.find((m) => m.content.startsWith('Output evidence'));
+    expect(output?.content).toContain('Output evidence — before · `npm test` · exit code 1');
+    expect(output?.content).toContain('```text\nExpected 30, got NaN\n```');
+    expect(output?.evidence).toBeUndefined(); // text evidence is never shown as a screenshot
+    expect(runtime.getSnapshot().messages.filter((m) => m.id.startsWith('evidence-'))).toHaveLength(3); // unavailable Android: nothing shown
+    expect(requests.join('')).not.toContain(IMG);
+    expect(requests.join('')).toContain('shownInChat');
+  }, 10000);
+
+  it('evidence Phase 2: saved to the run, inspect_evidence gives the model the actual image, turn keeps references only, reopened chat restores it', async () => {
+    const { ConversationRuntime } = await import('./ConversationRuntime');
+    const { restoreConversationSnapshot } = await import('./RestoreConversationAdapter');
+    const IMG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB';
+    const seen: { history: { role: string; images?: unknown[]; content: string }[] }[] = [];
+    const script = [
+      { name: 'capture_evidence', arguments: { phase: 'before', label: 'Checkout overflows', provider: 'web', url: 'http://localhost:5173/checkout' } },
+      { name: 'inspect_evidence', arguments: { phase: 'before' } },
+    ];
+    let n = 0;
+    const provider: ReasoningProvider = {
+      id: 'test-reasoning',
+      label: 'Test Reasoning',
+      isSupported: () => true,
+      streamResponse(request, callbacks) {
+        seen.push(request as never);
+        const call = script[n];
+        n += 1;
+        if (call) {
+          callbacks.onToolCall?.({ id: `c-${n}`, ...call });
+          callbacks.onComplete('');
+        } else {
+          callbacks.onDelta('The banner is wider than the page.');
+          callbacks.onComplete('The banner is wider than the page.');
+        }
+        return { cancel: () => {} };
+      },
+    };
+    const saved: { runId: string | undefined; id: string; image: string | undefined }[] = [];
+    const turns: ConversationTurnRecord[] = [];
+    const runtime = new ConversationRuntime({
+      speechRecognition: createSpeechRecognitionProvider(),
+      speechSynthesis: createSpeechSynthesisProvider(),
+      reasoningRuntime: new ReasoningRuntime(provider),
+      executeAction: vi.fn(async (request: ActionRequest): Promise<ActionResult> => {
+        if (request.type !== 'captureEvidence') return { ok: true };
+        return {
+          ok: true,
+          data: {
+            evidence: { id: 'ev-1', phase: 'before', label: request.label, provider: 'web', kind: 'image', capturedAt: 1, filePath: 'C:\\e\\ev-1-before.png', targetDescription: 'http://localhost:5173/checkout' },
+            imageBase64: IMG,
+          },
+        };
+      }),
+      getExecutionMode: () => 'manual',
+      isBypassPermissionsEnabled: () => false,
+      autonomousRunId: 'run-9',
+      onEvidenceCaptured: (evidence, image) => saved.push({ runId: 'run-9', id: evidence.id, image }),
+      persistTurn: async (turn) => {
+        turns.push(JSON.parse(JSON.stringify(turn)));
+        return { id: 'session-9' };
+      },
+    });
+
+    runtime.submitTranscript('fix ticket SHOP-12');
+    for (let i = 0; i < 400 && turns.length === 0; i += 1) await Promise.resolve();
+
+    expect(saved).toEqual([{ runId: 'run-9', id: 'ev-1', image: IMG }]); // durable copy handed to the run
+    const inspectResult = seen[2]!.history.find((m) => m.role === 'tool' && m.content.includes('attached to this result as an image'));
+    expect(inspectResult?.images).toEqual([{ mimeType: 'image/png', data: IMG }]); // the model actually gets the image
+    expect(JSON.stringify(turns[0]!.evidence)).not.toContain(IMG); // chat history keeps references only
+    expect(turns[0]!.evidence).toEqual([expect.objectContaining({ id: 'ev-1', phase: 'before', kind: 'image', runId: 'run-9' })]);
+
+    // Reopen: the evidence message comes back (image loads on demand) and inspect_evidence still works via the loader.
+    const session = { id: 'session-9', title: 'x', createdAt: 1, updatedAt: 1, pinned: false, archived: false, turns, filesCreated: [], applicationsOpened: [] };
+    const restored = restoreConversationSnapshot(session as never)!;
+    expect(restored.messages.find((m) => m.evidence)?.evidence).toMatchObject({ evidenceId: 'ev-1', runId: 'run-9', imageDataUrl: '' });
+
+    const loader = vi.fn(async () => IMG);
+    const reopenedSeen: { history: { role: string; images?: unknown[] }[] }[] = [];
+    let m = 0;
+    const reopened = new ConversationRuntime({
+      speechRecognition: createSpeechRecognitionProvider(),
+      speechSynthesis: createSpeechSynthesisProvider(),
+      reasoningRuntime: new ReasoningRuntime({
+        id: 'test-reasoning',
+        label: 'Test Reasoning',
+        isSupported: () => true,
+        streamResponse(request, callbacks) {
+          reopenedSeen.push(request as never);
+          m += 1;
+          if (m === 1) {
+            callbacks.onToolCall?.({ id: 'r-1', name: 'inspect_evidence', arguments: { evidenceId: 'ev-1' } });
+            callbacks.onComplete('');
+          } else {
+            callbacks.onDelta('Seen.');
+            callbacks.onComplete('Seen.');
+          }
+          return { cancel: () => {} };
+        },
+      }),
+      executeAction: vi.fn(async (): Promise<ActionResult> => ({ ok: true })),
+      getExecutionMode: () => 'manual',
+      isBypassPermissionsEnabled: () => false,
+      loadEvidenceImage: loader,
+    });
+    reopened.openConversation(session as never);
+    reopened.submitTranscript('look at the before screenshot again');
+    for (let i = 0; i < 400 && !reopened.getSnapshot().messages.some((x) => x.content === 'Seen.'); i += 1) await Promise.resolve();
+    expect(loader).toHaveBeenCalledWith({ evidenceId: 'ev-1', runId: 'run-9' });
+    expect(reopenedSeen[1]!.history.find((x) => x.role === 'tool')?.images).toEqual([{ mimeType: 'image/png', data: IMG }]);
+  }, 10000);
+
   it('present_resume shows the resume in chat for download — nothing is saved, no permission question', async () => {
     const { ConversationRuntime } = await import('./ConversationRuntime');
     let calls = 0;

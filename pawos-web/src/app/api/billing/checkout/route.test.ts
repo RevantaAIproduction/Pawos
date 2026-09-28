@@ -21,7 +21,7 @@ describe('Checkout Route - Commercial Availability Gate', () => {
     vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'anon_key');
   });
 
-  const makeRequest = async (plan: string, overrides: any = {}) => {
+  const makeRequest = async (plan: string, overrides: Record<string, unknown> = {}) => {
     const req = new Request('http://localhost:3000/api/billing/checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -58,7 +58,7 @@ describe('Checkout Route - Commercial Availability Gate', () => {
     global.fetch = vi.fn(() => Promise.resolve({
       ok: true,
       json: () => Promise.resolve({ id: 'sub_123' }),
-    })) as any;
+    })) as unknown as typeof fetch;
 
     const response = await makeRequest('pro');
     expect(response.status).toBe(200);
@@ -71,7 +71,7 @@ describe('Checkout Route - Commercial Availability Gate', () => {
     global.fetch = vi.fn(() => Promise.resolve({
       ok: true,
       json: () => Promise.resolve({ id: 'sub_123' }),
-    })) as any;
+    })) as unknown as typeof fetch;
 
     const response = await makeRequest('proMax', { proMaxVariant: '5x' });
     expect(response.status).toBe(200);
@@ -83,7 +83,7 @@ describe('Checkout Route - Commercial Availability Gate', () => {
   it('Pro yearly uses the yearly plan, 10 yearly cycles, and records the frequency in the subscription notes', async () => {
     const { getRazorpayPlanId } = await import('@/lib/billing/razorpay');
     const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'sub_y' }) }));
-    global.fetch = fetchMock as any;
+    global.fetch = fetchMock as unknown as typeof fetch;
 
     const response = await makeRequest('pro', { proBillingFrequency: 'yearly' });
     expect(response.status).toBe(200);
@@ -95,7 +95,7 @@ describe('Checkout Route - Commercial Availability Gate', () => {
   it('Pro monthly (default) uses 100 monthly cycles; Pro Max never becomes yearly', async () => {
     const { getRazorpayPlanId } = await import('@/lib/billing/razorpay');
     const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ id: 'sub_m' }) }));
-    global.fetch = fetchMock as any;
+    global.fetch = fetchMock as unknown as typeof fetch;
 
     await makeRequest('pro');
     expect(getRazorpayPlanId).toHaveBeenLastCalledWith('pro', undefined, undefined, 'monthly');

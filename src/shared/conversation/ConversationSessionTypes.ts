@@ -27,6 +27,24 @@ export type ConversationSessionTurn = {
   widgets?: { title: string; code: string; loadingMessages?: string[] }[];
   /** The project folder open in PawOS when this turn ran — none for a plain chat (resume, questions). */
   projectFolder?: string;
+  /** Ticket evidence captured this turn — references only (no image bytes). Images reload from the local
+   *  evidence cache, else from the run's durable storage (autonomous_run_evidence). */
+  evidence?: ConversationEvidenceRef[];
+};
+
+export type ConversationEvidenceRef = {
+  id: string;
+  phase: 'before' | 'after';
+  kind: 'image' | 'output';
+  provider: string;
+  label: string;
+  targetDescription: string;
+  /** The ticket run it was saved to (durable copy), when captured during one. */
+  runId?: string;
+  /** For an "after": the "before" of the same target, shown beside it. */
+  beforeId?: string;
+  output?: { source: string; status: number | null; text: string; timedOut?: boolean };
+  pageSignals?: { title: string; consoleErrors: string[]; failedRequests: string[] };
 };
 
 export type ConversationSession = {

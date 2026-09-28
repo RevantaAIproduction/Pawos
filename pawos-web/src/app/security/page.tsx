@@ -8,8 +8,8 @@ export const metadata: Metadata = {
 };
 
 const TOPICS: { title: string; body: string }[] = [
-  { title: "Encryption", body: "Organization-shared infrastructure credentials are stored in an encrypted vault, never in plain text. Data in transit to Supabase and third-party AI providers uses standard TLS encryption." },
-  { title: "Authentication", body: "Individual accounts use Supabase Auth (email or Google OAuth). Organization membership is verified against a shared email domain before access is granted." },
+  { title: "Encryption", body: "Organization-shared infrastructure credentials are stored in an encrypted vault, never in plain text. All data PawOS sends over the network is encrypted in transit with standard TLS." },
+  { title: "Authentication", body: "Individual accounts sign in with email or Google. Organization membership is verified against a shared email domain before access is granted." },
   { title: "Permissions", body: "Access within an Organization Workspace is role-based, with temporary elevated permissions scoped to a specific task rather than permanent role changes." },
   { title: "Runtime isolation", body: "Each runtime (Universal Execution, Browser, Infrastructure, Communication, Companion, Governance) operates through its own plugin contract, limiting how far a failure or misuse in one area can reach into another." },
   { title: "Secrets & credential storage", body: "Individual-use infrastructure connectors rely on your own already-authenticated CLI/API sessions rather than PawOS storing your cloud credentials. Organization-shared secrets go through the encrypted credential vault." },

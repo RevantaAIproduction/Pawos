@@ -5,6 +5,7 @@ import { Button } from "../components/ui/Button";
 import { ConnectionsWorkflow } from "../components/ConnectionsWorkflow";
 import { HeroAnimation } from '../components/HeroAnimation';
 import { ParticleField } from '../components/ParticleField';
+import { DownloadWindowsButton } from '../components/DownloadWindowsButton';
 
 
 
@@ -23,9 +24,9 @@ export default function Home() {
           The AI companion that gets work done.
         </p>
         <div className="flex justify-center">
-          <button onClick={() => alert("PawOS for Windows is coming soon! Please check back later to be notified.")} className="px-8 py-4 text-base font-medium bg-white text-black rounded-full hover:bg-neutral-200 transition">
+          <DownloadWindowsButton source="home-hero" className="px-8 py-4 text-base font-medium bg-white text-black rounded-full hover:bg-neutral-200 transition">
             Download for Windows &rarr;
-          </button>
+          </DownloadWindowsButton>
         </div>
         </div>
       </section>
@@ -34,7 +35,7 @@ export default function Home() {
       <section className="py-32 px-6 bg-black relative z-10">
         <div className="mx-auto max-w-4xl text-center">
           <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-8">
-            The work is fragmented. The system shouldn't be.
+            The work is fragmented. The system shouldn&apos;t be.
           </h2>
           <p className="text-xl text-neutral-400 leading-relaxed max-w-3xl mx-auto">
             PawOS brings the work around your computer together. It acts as an execution layer between you and your tasks—bridging your files, projects, code, terminal, Git, and connected services into one cohesive environment.
@@ -54,7 +55,7 @@ export default function Home() {
                 Start with what you need.
               </h2>
               <p className="text-lg text-neutral-400 leading-relaxed">
-                PawOS sits on your desktop, ready to understand what you want to accomplish. Rather than forcing you to translate your goals into ten different tools, you tell PawOS what you're working on. It gathers the surrounding context and prepares to act.
+                PawOS sits on your desktop, ready to understand what you want to accomplish. Rather than forcing you to translate your goals into ten different tools, you tell PawOS what you&apos;re working on. It gathers the surrounding context and prepares to act.
               </p>
             </div>
           </div>
@@ -138,7 +139,7 @@ export default function Home() {
                 From a ticket to a resolution.
               </h2>
               <p className="text-lg text-neutral-400 leading-relaxed">
-                Hand PawOS a Jira ticket. It reads the requirements, gathers context from your repository, makes the necessary code changes, verifies them locally, and updates the ticket's state—connecting the external tracker directly to your local execution environment.
+                Hand PawOS a Jira ticket. It reads the requirements, gathers context from your repository, makes the necessary code changes, verifies them locally, and updates the ticket&apos;s state—connecting the external tracker directly to your local execution environment.
               </p>
             </div>
           </div>
@@ -149,7 +150,7 @@ export default function Home() {
       <section className="py-32 px-6 bg-black relative z-10 border-t border-neutral-900">
         <div className="mx-auto max-w-5xl text-center mb-16 relative z-10">
           <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-6">
-            Work doesn't live in one place.
+            Work doesn&apos;t live in one place.
           </h2>
           <p className="text-xl text-neutral-400 max-w-3xl mx-auto leading-relaxed">
             Your project may begin in a folder, continue in code, depend on a terminal command, pass through Git, and end with a ticket or message. PawOS is built to carry the context across those boundaries.
@@ -170,10 +171,10 @@ export default function Home() {
         <div className="mx-auto max-w-7xl">
           <div className="text-center mb-24">
             <h2 className="text-4xl md:text-6xl font-medium tracking-tight text-white mb-6">
-              Where PawOS is today — and where we're taking it.
+              Where PawOS is today — and where we&apos;re taking it.
             </h2>
             <p className="text-xl text-neutral-400 max-w-3xl mx-auto leading-relaxed">
-              PawOS already works across your desktop and engineering workflow. We're expanding the same execution layer to connect more of the work around it.
+              PawOS already works across your desktop and engineering workflow. We&apos;re expanding the same execution layer to connect more of the work around it.
             </p>
           </div>
 
@@ -223,7 +224,7 @@ export default function Home() {
               <div>
                 <h3 className="text-3xl font-medium text-white mb-4">Expanding across connections.</h3>
                 <p className="text-lg text-neutral-400 mb-6 leading-relaxed">
-                  Work doesn't live in one place. A task may begin in a local project, require code changes, need terminal work, interact with Git, require ticket investigation, and eventually require updating connected systems. PawOS is the execution layer moving through that work.
+                  Work doesn&apos;t live in one place. A task may begin in a local project, require code changes, need terminal work, interact with Git, require ticket investigation, and eventually require updating connected systems. PawOS is the execution layer moving through that work.
                 </p>
               </div>
             </div>
@@ -294,18 +295,18 @@ export default function Home() {
         <div className="mx-auto max-w-4xl">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-6">
-              Why we're building PawOS.
+              Why we&apos;re building PawOS.
             </h2>
           </div>
           <div className="prose prose-invert prose-lg mx-auto text-neutral-400 leading-relaxed mb-12">
             <p className="mb-6">
-              We started building PawOS because we realized that giving an AI conversational access to a codebase isn't the same thing as giving an AI the ability to do the work.
+              We started building PawOS because we realized that giving an AI conversational access to a codebase isn&apos;t the same thing as giving an AI the ability to do the work.
             </p>
             <p className="mb-6">
-              When a developer sits down at a computer, they don't just read code. They install dependencies, they navigate the file system, they run commands in the terminal, they debug failing builds, and they track their work in Jira. The work is connected.
+              When a developer sits down at a computer, they don&apos;t just read code. They install dependencies, they navigate the file system, they run commands in the terminal, they debug failing builds, and they track their work in Jira. The work is connected.
             </p>
             <p>
-              We are researching and building an execution platform that doesn't just chat, but actively bridges these fragmented systems—because the future of engineering isn't just an assistant that tells you what to type. It's a companion that understands your computer and acts as an autonomous extension of your environment.
+              We are researching and building an execution platform that doesn&apos;t just chat, but actively bridges these fragmented systems—because the future of engineering isn&apos;t just an assistant that tells you what to type. It&apos;s a companion that understands your computer and acts as an autonomous extension of your environment.
             </p>
           </div>
           <div className="text-center">
@@ -322,9 +323,9 @@ export default function Home() {
           Your next task starts here.
         </h2>
         <div className="flex flex-col sm:flex-row justify-center gap-4">
-          <button onClick={() => alert("PawOS for Windows is coming soon! Please check back later to be notified.")} className="px-8 py-4 text-base font-medium bg-white text-black hover:bg-neutral-200">
+          <DownloadWindowsButton source="home-final-cta" className="px-8 py-4 text-base font-medium bg-white text-black hover:bg-neutral-200">
             Download for Windows &rarr;
-          </button>
+          </DownloadWindowsButton>
           <Button href="/docs" variant="secondary" className="px-8 py-4 text-base font-medium bg-transparent text-white border border-neutral-700 hover:bg-neutral-900">
             Read Documentation
           </Button>

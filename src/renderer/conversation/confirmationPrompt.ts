@@ -45,6 +45,25 @@ export function describePlannedAction(request: ActionRequest): string {
       return `copy ${field(request, 'from')} to ${field(request, 'to')}`;
     case 'browseWeb':
       return `open ${field(request, 'url')} in the browser`;
+    case 'checkEvidenceCapture':
+      return 'check which screenshots and output I can capture on this computer';
+    case 'captureEvidence': {
+      const target = request.target;
+      const when = request.phase === 'before' ? 'a "before"' : 'an "after"';
+      switch (target.provider) {
+        case 'web':
+          return `take ${when} screenshot of ${target.url}`;
+        case 'desktopWindow':
+          return `take ${when} screenshot of the app's own window${target.windowTitle ? ` ("${target.windowTitle}")` : ''}`;
+        case 'android':
+          return `take ${when} screenshot of the Android ${target.serial ? `device ${target.serial}` : 'emulator/device'}`;
+        case 'iosSimulator':
+          return `take ${when} screenshot of the iOS Simulator`;
+        case 'output':
+          return 'httpUrl' in target ? `call ${target.httpUrl} and keep the response as ${when} output evidence` : `run \`${target.command}\` in ${target.cwd} and keep its output as ${when} evidence`;
+      }
+      return `capture ${when} evidence`;
+    }
     case 'startProcess':
       return `start \`${command ?? ''}\`${inFolder}`;
     case 'runCommand':

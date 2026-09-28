@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import styles from "./desktop-success.module.css";
 
@@ -19,29 +19,28 @@ function DesktopSuccessPageContent() {
   const code = searchParams.get("code");
   const error = searchParams.get("error");
 
-  const [deepLink, setDeepLink] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (error) return;
-    if (!provider) return;
+  const deepLink = useMemo(() => {
+    if (error) return null;
+    if (!provider) return null;
 
     // Validate provider to prevent arbitrary protocol host injection
     const allowedProviders = ["google", "github", "microsoft"];
-    if (!allowedProviders.includes(provider)) return;
+    if (!allowedProviders.includes(provider)) return null;
 
     // Construct deep link explicitly based on the allowed providers
     const url = new URL(`pawos://${provider}-auth-callback`);
     if (ref) url.searchParams.set("ref", ref);
     if (code) url.searchParams.set("code", code);
-    
-    const link = url.toString();
-    setDeepLink(link);
+    return url.toString();
+  }, [provider, ref, code, error]);
 
+  useEffect(() => {
+    if (!deepLink) return;
     // Attempt automatic handoff
     // This may be silently blocked by Chromium's external app throttle, 
     // which is why the fallback button is prominently displayed.
-    window.location.href = link;
-  }, [provider, ref, code, error]);
+    window.location.href = deepLink;
+  }, [deepLink]);
 
   return (
     <div className={styles.container}>
@@ -56,11 +55,11 @@ function DesktopSuccessPageContent() {
         <div className={styles.body}>
           {error ? (
             <p className={styles.errorText}>
-              We couldn't sign you in: <strong>{error}</strong>
+              We couldn&apos;t sign you in: <strong>{error}</strong>
             </p>
           ) : (
             <>
-              <p className={styles.successText}>You're securely signed in.</p>
+              <p className={styles.successText}>You&apos;re securely signed in.</p>
               <p className={styles.hintText}>Returning you to PawOS...</p>
             </>
           )}
@@ -78,7 +77,7 @@ function DesktopSuccessPageContent() {
           )}
           {!error && deepLink && (
             <p className={styles.footnote}>
-              Click the button above if you aren't redirected automatically.
+              Click the button above if you aren&apos;t redirected automatically.
             </p>
           )}
         </div>

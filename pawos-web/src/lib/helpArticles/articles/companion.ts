@@ -7,13 +7,13 @@ export const COMPANION_ARTICLES: HelpArticle[] = [
     title: 'Meet Paw',
     summary: 'What your companion is, how it looks and moves, and how to turn it on.',
     overview:
-      'Paw is a rigged 3D companion rendered with three.js. It runs procedural motion (breathing, ' +
+      'Paw is a rigged, real-time 3D companion. It runs procedural motion (breathing, ' +
       'gentle sway, and head-look toward what you’re doing), a dynamic canvas-composited face that ' +
       'draws real eye and mouth expressions live, and a full emotion engine that decides how it reacts ' +
       'to what’s happening in the app. Paw is off by default — it never appears until you explicitly ' +
       'enable it from Home.',
     features: [
-      'A textured, rigged 3D avatar rendered with three.js',
+      'A textured, rigged 3D avatar rendered in real time',
       'Procedural motion: breathing, sway, and head-look, layered on top of any animation',
       'A dynamic face texture compositor that draws live eye and mouth expressions',
       'A full emotion engine that reacts to conversation state and idle time',
@@ -44,7 +44,7 @@ export const COMPANION_ARTICLES: HelpArticle[] = [
     ],
     troubleshooting: [
       'If Paw never appears, confirm you clicked "Enable companion" on Home — it is off by default',
-      'If Paw appears frozen, check that an AI provider/API key is configured, since emotion/reaction updates depend on it',
+      'If Paw appears frozen, check your internet connection, since emotion/reaction updates depend on it',
       'If the overlay window is not visible, it may be behind another always-on-top window — try minimizing other apps',
     ],
     requirements: ['A companion must be created or the default one available before enabling'],
@@ -72,7 +72,7 @@ export const COMPANION_ARTICLES: HelpArticle[] = [
     summary: 'Talking to Paw with push-to-talk, real speech-to-text and text-to-speech.',
     overview:
       'Talk with Paw is a push-to-talk voice conversation experience: hold the talk control, speak, and ' +
-      'release. Your speech is transcribed in real time, sent to the configured AI provider, and the ' +
+      'release. Your speech is transcribed in real time, sent to Paw, and the ' +
       'response is streamed back sentence-by-sentence as speech, with mouth-shape (viseme) timing synced ' +
       'to what Paw is saying so its face moves in time with the audio.',
     features: [
@@ -90,7 +90,7 @@ export const COMPANION_ARTICLES: HelpArticle[] = [
     bestPractices: [
       'Speak naturally — you do not need to pause between sentences, since replies stream as they are generated',
       'Make sure a working microphone is selected at the OS level before your first conversation',
-      'Configure an AI provider/API key in Settings first — voice conversations will not work without one',
+      'Make sure you’re online — voice conversations need an internet connection',
     ],
     examples: [
       {
@@ -117,7 +117,7 @@ export const COMPANION_ARTICLES: HelpArticle[] = [
     faq: [
       { question: 'Can I type instead of speaking?', answer: 'Talk with Paw is built around push-to-talk voice; text-based interaction happens through the Help Center’s Messages, not this feature.' },
       { question: 'Why does the reply start speaking before it finishes generating?', answer: 'Responses are streamed and spoken sentence-by-sentence to feel instant rather than waiting for the entire reply.' },
-      { question: 'Is my voice sent anywhere besides the configured AI provider?', answer: 'No — speech is transcribed and sent only to whichever AI provider you have configured in Settings.' },
+      { question: 'Where does my voice go?', answer: 'Your speech is transcribed and sent securely to Paw to generate the reply — nowhere else.' },
     ],
     keywords: ['voice', 'talk with paw', 'push to talk', 'text to speech', 'speech to text', 'viseme'],
     aliases: ['Talk with Paw', 'Push-to-talk', 'Voice chat'],
@@ -332,21 +332,19 @@ export const COMPANION_ARTICLES: HelpArticle[] = [
     id: 'shared-companion',
     category: 'companion',
     title: 'Shared Companion',
-    summary: 'Managing multiple local companions today, and what cloud sharing looks like in the future.',
+    summary: 'Managing your companions and sharing them as .paw packages.',
     overview:
-      'PawOS has a real, local Companion Gallery for browsing and managing multiple companions you’ve ' +
-      'created on this device. There is no cloud marketplace or cross-user sharing feature yet — that is a ' +
-      'roadmap item, not something available today.',
+      'The Companion Gallery lets you browse and manage every companion you’ve created on this device, and ' +
+      'you can share any companion as a .paw package.',
     features: [
-      'A local Companion Gallery listing every companion you’ve created or uploaded on this device',
-      'Export/import via .paw packages as the current way to move a companion between your own installs',
+      'A Companion Gallery listing every companion you’ve created or uploaded on this device',
+      'Export and import companions as .paw packages',
     ],
     howItWorks:
       'Companions you create appear in the Gallery inside Companion Studio. To move a companion to another ' +
-      'install of PawOS you own, export it as a .paw package and import it there.',
+      'computer — or share it with someone — export it as a .paw package and import it there.',
     bestPractices: [
-      'Use .paw export/import as your current method of moving a companion between your own devices',
-      'Do not expect other users to be able to browse or install your companions yet — that capability is not built',
+      'Export a companion as a .paw package to back it up or move it to another computer',
     ],
     examples: [],
     troubleshooting: [],
@@ -356,10 +354,9 @@ export const COMPANION_ARTICLES: HelpArticle[] = [
     relatedSettings: ['Companion'],
     relatedApps: ['companionLab'],
     faq: [
-      { question: 'Can I share a companion with another PawOS user?', answer: 'Not yet — there is no cloud marketplace or user-to-user sharing today. A .paw file can be manually shared as a file, but there is no in-app discovery or marketplace.' },
-      { question: 'Is a companion marketplace planned?', answer: 'A cloud-based Companion Gallery/marketplace is a roadmap idea, not a shipped feature.' },
+      { question: 'Can I share a companion with another PawOS user?', answer: 'Yes — export it as a .paw package and send them the file; they import it in Companion Studio.' },
     ],
-    keywords: ['shared companion', 'companion gallery', 'marketplace', 'sharing'],
+    keywords: ['shared companion', 'companion gallery', 'sharing', 'export', 'import'],
     aliases: ['Companion Gallery', 'Share companion'],
     pawosVersion: '0.1.0',
     updated: '2026-07-20',
@@ -409,21 +406,21 @@ export const COMPANION_ARTICLES: HelpArticle[] = [
     category: 'companion',
     title: 'Troubleshooting',
     summary: 'Fixes for the most common companion problems.',
-    overview: 'Most companion problems trace back to one of three things: the companion isn’t enabled, an AI provider isn’t configured, or microphone/notification permissions weren’t granted.',
+    overview: 'Most companion problems trace back to one of three things: the companion isn’t enabled, there’s no internet connection, or microphone/notification permissions weren’t granted.',
     features: [],
     howItWorks:
-      'Work through the checklist in order: is the companion enabled on Home, is an AI provider/API key set in ' +
-      'Settings, and does the OS have the right microphone/notification permission granted.',
+      'Work through the checklist in order: is the companion enabled on Home, are you online, ' +
+      'and does the OS have the right microphone/notification permission granted.',
     bestPractices: [
       'Check Home first — the single most common issue is simply that the companion was never enabled',
-      'Check Settings for a configured AI provider before assuming voice or reasoning is broken',
+      'Check your internet connection before assuming voice or reasoning is broken',
     ],
     examples: [],
     troubleshooting: [
       'Companion not visible: confirm "Enable companion" was clicked on Home',
-      'Companion not responding to voice: check microphone OS permission and that a provider/API key is configured',
-      'No spoken reply: check speaker output and the configured voice provider',
-      'Companion looks frozen: an emotion/reaction update depends on a configured AI provider — verify Settings',
+      'Companion not responding to voice: check microphone OS permission and your internet connection',
+      'No spoken reply: check your speaker output and volume',
+      'Companion looks frozen: emotion/reaction updates need an internet connection — check you’re online',
       'No reaction to a finished background task: check that desktop notifications are enabled',
     ],
     requirements: [],

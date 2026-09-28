@@ -25,7 +25,7 @@ export const SUBSCRIPTION_ARTICLES: HelpArticle[] = [
     requirements: [],
     permissions: [],
     administration: 'Go has no organization/seat concept — it is an individual, single-account tier.',
-    billing: 'Free — $0. No payment method required. AI usage on Go draws from a capped monthly credit allowance (exact limit still being finalized).',
+    billing: 'Free — $0. No payment method required. AI usage on Go draws from a free usage allowance.',
     faq: [
       { question: 'Is Paw Go a trial?', answer: 'No — it is a genuinely free, ongoing tier with real AI for planning and analysis by design, not a time-limited trial.' },
       { question: 'Who is Paw Go for?', answer: 'Anyone who wants the companion, project/git tooling, and AI-assisted planning/analysis without needing Paw to execute changes on their behalf.' },
@@ -47,21 +47,21 @@ export const SUBSCRIPTION_ARTICLES: HelpArticle[] = [
     title: 'Paw Pro',
     summary: 'Full AI models and advanced runtimes for individual use.',
     overview:
-      'Paw Pro unlocks the full real AI model roster (paw-flash, paw-swift, paw-core, paw-fable, paw-vision, ' +
-      'paw-voice, paw-memory) and advanced runtimes — AI voice conversation, AI coding assistance ' +
-      'in Paw Pro coding mode, and everything included in Go.',
+      'Paw Pro unlocks the full AI model roster (Paw Flash, Swift, Core, Vision, Voice and Memory — plus Paw Fable ' +
+      'with purchased usage credits) and advanced runtimes: voice conversations, AI coding that makes real ' +
+      'changes, and everything included in Go.',
     features: ['Everything in Paw Go', 'Full AI model access', 'Advanced runtimes (AI coding, voice conversations)'],
-    howItWorks: 'Upgrading to Pro immediately unlocks AI models and advanced runtimes through the EntitlementService — no separate configuration is needed beyond having an AI provider set up.',
-    bestPractices: ['Set up an AI provider/API key in Settings right after upgrading to start using AI features immediately'],
+    howItWorks: 'Upgrading to Pro immediately unlocks the AI models and advanced runtimes — nothing else to set up.',
+    bestPractices: ['Watch your Paw Compute usage in Settings → Usage to see how much of your allowance you have left'],
     examples: [],
     troubleshooting: [],
-    requirements: ['A configured AI provider/API key to actually use unlocked AI features'],
+    requirements: ['A PawOS account on Paw Pro'],
     permissions: [],
     administration: 'Individual tier — no organization/seat concept.',
-    billing: 'Currently uncapped monthly AI credit limit (pricing/limits marked "Business Configuration Required" until finalized).',
+    billing: '$20/month. AI usage is measured in Paw Compute within rolling usage windows.',
     faq: [
-      { question: 'What AI models does Pro unlock?', answer: 'The full roster: paw-flash, paw-swift, paw-core, paw-fable, paw-vision, paw-voice, and paw-memory.' },
-      { question: 'Is there a credit limit on Pro?', answer: 'Pro is currently uncapped while specific limits are being finalized.' },
+      { question: 'What AI models does Pro unlock?', answer: 'Paw Flash, Swift, Core, Vision, Voice and Memory — plus Paw Fable with purchased usage credits.' },
+      { question: 'Is there a usage limit on Pro?', answer: 'Yes — Paw Compute limits that refresh over rolling windows. Pro Max gives 5x or 20x more.' },
     ],
     relatedArticleIds: ['paw-go', 'paw-pro-max', 'analytics-ai-usage'],
     relatedSettings: ['Billing', 'Usage'],
@@ -78,20 +78,20 @@ export const SUBSCRIPTION_ARTICLES: HelpArticle[] = [
     id: 'paw-pro-max',
     category: 'subscription',
     title: 'Paw Pro Max',
-    summary: 'Pro’s full feature set for individuals who want the highest tier without an organization.',
+    summary: 'Everything in Pro with 5x or 20x the usage, for individuals.',
     overview:
-      'Paw Pro Max includes everything in Pro. It is the individual tier positioned above Pro for users who ' +
-      'want the strongest available individual plan, without needing Team/Enterprise organization features.',
-    features: ['Everything in Paw Pro', 'The individual tier positioned closest to Team/Enterprise capability without organization features'],
-    howItWorks: 'Pro Max shares the same full AI model roster and advanced runtimes as Pro — the distinction today is pricing tier positioning, since organization features only begin at Team.',
+      'Paw Pro Max includes everything in Pro with much more usage: Pro Max 5x gives 5x the usage of Pro for ' +
+      '$100/month, and Pro Max 20x gives 20x for $250/month.',
+    features: ['Everything in Paw Pro', '5x the usage of Pro ($100/month) or 20x ($250/month)', 'Priority access to new Paw models'],
+    howItWorks: 'Pro Max has the same AI models and runtimes as Pro, with a much larger Paw Compute allowance. Organization features begin at Team.',
     bestPractices: ['Choose Pro Max over Pro if you specifically want the higher individual tier; choose Team/Enterprise instead if you need multiple people in one organization'],
     examples: [],
     troubleshooting: [],
-    requirements: ['A configured AI provider/API key'],
+    requirements: ['A PawOS account on Paw Pro Max'],
     permissions: [],
     administration: 'Individual tier — no organization/seat concept.',
-    billing: 'Currently uncapped monthly AI credit limit (pricing marked "Business Configuration Required" until finalized).',
-    faq: [{ question: 'What’s different between Pro and Pro Max?', answer: 'They share the same model roster and features today; Pro Max is the higher individual pricing tier. Organization capability begins at Team, not Pro Max.' }],
+    billing: '$100/month for Pro Max 5x, or $250/month for Pro Max 20x.',
+    faq: [{ question: 'What’s different between Pro and Pro Max?', answer: 'The same models and features, with 5x or 20x the usage. Organization features begin at Team.' }],
     relatedArticleIds: ['paw-pro', 'team'],
     relatedSettings: ['Billing'],
     relatedApps: ['upgrade', 'settings'],
@@ -107,24 +107,21 @@ export const SUBSCRIPTION_ARTICLES: HelpArticle[] = [
     id: 'team',
     category: 'subscription',
     title: 'Paw Team',
-    summary: 'Real, seat-based organizations for small teams — shared workspace, roles, and billing.',
+    summary: 'Seat-based organizations for small teams — shared workspaces, roles and billing.',
     overview:
-      'Paw Team is for small teams who want to share workspace context under one organization. Every Team ' +
-      'account can create a real Organization — a Supabase-backed record with a human-readable ID like ' +
-      '`ORG-RVT-001` — and invite members with specific roles. Team is billed per seat.',
+      'Paw Team is for teams who work together under one organization. Create an organization with a ' +
+      'readable ID like `ORG-RVT-001`, invite members with specific roles, and share workspaces, companions ' +
+      'and credits. Team is billed per seat: Standard $20/seat/month or Premium $100/seat/month.',
     features: [
-      'Create a real Organization with a human-readable ID',
-      'Invite members by email with a role',
-      'Shared organization visibility for billing and members',
-      'Seat-based billing (roughly 2–150 seats)',
-      'Full AI model roster for every member',
+      'An organization with a readable ID, members and roles',
+      'Shared workspaces, shared companions and a shared credit pool',
+      'Task management, AI-assisted PR review and remote assistance',
+      'Credential vault, approval queue and audit log',
+      '2–150 members; mix Standard and Premium seats freely',
     ],
     howItWorks:
-      'Once on Team, open Settings → Organization to create your organization. Invite teammates by email, ' +
-      'assigning each a role. Today, General (org name/ID/tier) and Members (invite/change role/remove) are ' +
-      'fully working; Roles, Billing, Workspace, Security, Audit, and Integrations sub-areas are visibly ' +
-      'reserved with a "coming with full workspace rollout" state — present in the UI so it’s clear where the ' +
-      'product is headed, but not yet fully built out.',
+      'Once on Team, open Settings → Organization to create your organization. Invite teammates by email and ' +
+      'choose each member’s role and seat type when you invite them.',
     bestPractices: [
       'Assign a billing administrator early so billing responsibilities aren’t left solely with the org owner',
       'Invite members with the least-privileged role that fits their actual responsibilities',
@@ -141,10 +138,10 @@ export const SUBSCRIPTION_ARTICLES: HelpArticle[] = [
       'workspaceAdministrator (manages workspaces/projects), and member (standard access). A Team owner can ' +
       'invite/remove their own employees and manage their own org’s billing, but cannot see other organizations ' +
       'or access PawOS’s internal platform administration.',
-    billing: 'Seat-based, roughly 2–150 seats. Per-seat pricing is currently "Business Configuration Required" (not yet finalized).',
+    billing: 'Per seat: Standard $20/seat/month, Premium $100/seat/month, for 2–150 members.',
     faq: [
       { question: 'Who can invite new members?', answer: 'The organization owner and, depending on the action, a billing or workspace administrator.' },
-      { question: 'Is Team roles/billing/security fully built?', answer: 'General and Members are real and working today; Roles, Billing, Workspace, Security, Audit, and Integrations are visibly reserved for a future full workspace rollout.' },
+      { question: 'What’s the difference between Standard and Premium seats?', answer: 'Both get every Team feature; Premium seats have Pro Max-level usage.' },
       { question: 'Can a Team organization see other organizations?', answer: 'No — organization data is protected so only your own organization’s members can see it.' },
     ],
     relatedArticleIds: ['paw-pro-max', 'enterprise', 'account-usage'],
@@ -162,41 +159,34 @@ export const SUBSCRIPTION_ARTICLES: HelpArticle[] = [
     id: 'enterprise',
     category: 'subscription',
     title: 'Paw Enterprise',
-    summary: 'The same real organization system as Team, extended with more granular enterprise roles.',
+    summary: 'Everything in Team for larger organizations, with more administrator roles.',
     overview:
-      'Paw Enterprise builds on the same real Organization/Membership system as Team, with a broader set of ' +
-      'roles suited to larger organizations. It is billed per seat with a higher starting seat count and no ' +
-      'upper bound. Enterprise roles are customer organization roles — entirely separate from PawOS’s own ' +
-      'internal platform administrators (the small number of Revanta AI staff who operate PawOS itself).',
+      'Paw Enterprise includes everything in Team, with a broader set of roles for larger organizations. It is ' +
+      'billed at a uniform $20/seat/month from 20 seats with no upper bound. Enterprise roles are your ' +
+      'organization’s own administrators — entirely separate from Revanta AI staff.',
     features: [
-      'The same real Organization/Membership system as Team, with more roles',
-      'Seat-based billing starting around 20 seats with no upper bound',
-      'Full AI model roster for every member',
+      'Everything in Paw Team',
+      'IT Administrator, Security Administrator and Department Manager roles',
+      'Uniform $20/seat/month, from 20 seats',
+      'Autonomous Work billed at pass-through rates',
     ],
     howItWorks:
-      'Enterprise accounts create an organization the same way Team does (Settings → Organization), but choose ' +
-      'from a broader role set. As with Team, General and Members are fully working today; deeper enterprise ' +
-      'concepts described below — multiple departments, organization-wide policies, centralized security/' +
-      'privacy administration, dedicated deployment/migration support — are clearly future roadmap items, not ' +
-      'available yet, and are not presented as active features.',
-    bestPractices: ['Assign IT and Security administrator roles separately from the org owner as your organization grows', 'Treat department-level structure as a roadmap item, not something to depend on today'],
+      'Enterprise accounts create an organization the same way Team does (Settings → Organization) and choose ' +
+      'from a broader role set when inviting members.',
+    bestPractices: ['Assign IT and Security administrator roles separately from the org owner as your organization grows'],
     examples: [
       { title: 'Setting up an Enterprise organization', steps: ['Upgrade to Paw Enterprise', 'Open Settings → Organization', 'Create your organization', 'Invite an organization administrator and a billing administrator', 'Invite remaining members with appropriate roles'] },
     ],
-    troubleshooting: ['If department-based management is missing, that is expected — it is a roadmap item, not a current feature'],
+    troubleshooting: ['If the Organization tab is missing, confirm your account is on Enterprise'],
     requirements: ['A PawOS account on the Enterprise tier'],
     permissions: ['Role-gated management, same mechanism as Team but with a broader role set'],
     administration:
       'Enterprise roles are customer organization roles (separate from PawOS platform administrators): ' +
       'organizationOwner, organizationAdministrator, itAdministrator, securityAdministrator, ' +
-      'billingAdministrator, departmentManager, and member. These map to real, working General/Members ' +
-      'organization functionality today. Multiple departments/workspaces, organization-wide policies, ' +
-      'centralized security/privacy/analytics administration, and dedicated deployment/migration support are ' +
-      'explicitly roadmap items — not yet built — and are marked as such rather than presented as available.',
-    billing: 'Seat-based, starting around 20 seats with no upper bound. Centralized invoicing and per-seat pricing are currently "Business Configuration Required" (not yet finalized).',
+      'billingAdministrator, departmentManager, and member.',
+    billing: 'Uniform $20/seat/month, from 20 seats with no upper bound. Purchases above ₹50,000 are invoiced.',
     faq: [
-      { question: 'Does Enterprise support multiple departments today?', answer: 'Not yet — department structure and organization-wide policy management are roadmap items, not current features.' },
-      { question: 'Is Enterprise the same underlying system as Team?', answer: 'Yes — the same real Organization/Membership/Role system, extended with a broader enterprise role set.' },
+      { question: 'How is Enterprise different from Team?', answer: 'Everything in Team, plus more administrator roles, a uniform $20 seat price and pass-through Autonomous Work billing.' },
       { question: 'Are Enterprise administrators the same as PawOS’s own admins?', answer: 'No — Enterprise roles are your own organization’s customer administrators, entirely separate from PawOS’s internal platform administrators.' },
     ],
     relatedArticleIds: ['team', 'security', 'privacy'],

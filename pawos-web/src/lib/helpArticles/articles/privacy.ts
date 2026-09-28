@@ -12,7 +12,7 @@ export const PRIVACY_ARTICLES: HelpArticle[] = [
       'delete your account.',
     features: [
       'Local Data — settings, conversation history, companion memory, execution/work history, and error memory are all stored as local files on your own device, never uploaded',
-      'Cloud Data — only your Supabase authentication session and, for Team/Enterprise accounts, your organization/membership data live in the cloud',
+      'Cloud Data — only your account session and, for Team/Enterprise accounts, your organization/membership data live in the cloud',
       'Encryption — passwords are hashed, never stored in plaintext; cloud data transport uses standard TLS',
       'Data Retention — local data persists on your device until you delete it or reset the app; there is no automatic cloud retention timer for local-only data since it never leaves your device',
       'Account Deletion — a real, working flow that removes your account and sends a confirmation email',
@@ -21,7 +21,7 @@ export const PRIVACY_ARTICLES: HelpArticle[] = [
     howItWorks:
       'Local features (companion, projects, git, history) write to files under your OS’s app-data directory and ' +
       'never leave your device. Cloud features (authentication, and Team/Enterprise organization data) are ' +
-      'stored in Supabase, protected by row-level security so only you (or your own organization’s members) can ' +
+      'stored securely and isolated so only you (or your own organization’s members) can ' +
       'read that data.',
     bestPractices: ['Review what’s genuinely local vs. cloud before assuming any feature syncs data you didn’t expect', 'Use account deletion if you want your cloud-side account data removed entirely'],
     examples: [{ title: 'Deleting your account', steps: ['Open Settings → Account', 'Choose to delete your account', 'Confirm the deletion', 'Receive a confirmation email once it’s complete'] }],

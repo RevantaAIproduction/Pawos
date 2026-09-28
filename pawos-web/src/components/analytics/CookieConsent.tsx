@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useSyncExternalStore } from "react";
 
 const STORAGE_KEY = "pawos-cookie-consent";
 export type ConsentChoice = "accepted" | "declined";
@@ -12,19 +12,25 @@ export function getStoredConsent(): ConsentChoice | null {
   return v === "accepted" || v === "declined" ? v as ConsentChoice : null;
 }
 
-export function CookieConsent() {
-  const [visible, setVisible] = useState(false);
+function subscribeToConsent(onChange: () => void) {
+  window.addEventListener("pawos-consent-changed", onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener("pawos-consent-changed", onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
 
-  useEffect(() => {
-    const v = window.localStorage.getItem(STORAGE_KEY);
-    if (v !== "accepted" && v !== "declined") {
-      setVisible(true);
-    }
-  }, []);
+export function CookieConsent() {
+  // Hidden during server render; shown on the client only when no choice is stored.
+  const visible = useSyncExternalStore(
+    subscribeToConsent,
+    () => getStoredConsent() === null,
+    () => false
+  );
 
   function choose(next: ConsentChoice) {
     window.localStorage.setItem(STORAGE_KEY, next);
-    setVisible(false);
     window.dispatchEvent(new Event("pawos-consent-changed"));
   }
 

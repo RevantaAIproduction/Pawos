@@ -13,8 +13,8 @@ const ENTRIES: Entry[] = [
   {
     date: "2026-07-23",
     tag: "Feature",
-    title: "Infrastructure connector foundation",
-    body: "The Infrastructure Runtime now has the provider-aware connector foundation for deployment and production investigation. Broad SSH, Docker, CI/CD, and cloud execution adapters remain future work rather than launched purchasable capability.",
+    title: "Deployment and production investigation",
+    body: "Paw can now deploy and investigate production issues across supported hosting providers, using each provider's own tools and your existing sign-in.",
   },
   {
     date: "2026-07-23",
@@ -31,8 +31,8 @@ const ENTRIES: Entry[] = [
   {
     date: "2026-07-18",
     tag: "Feature",
-    title: "Communication Runtime frozen for Phase 1",
-    body: "Desktop-first meeting/call capture, transcription, and follow-up drafting reached a stable baseline; further work is bug-fixes only until the next planned phase.",
+    title: "Meeting capture, transcription and follow-ups",
+    body: "Desktop meeting and call capture, transcription, and follow-up drafting reached a stable release.",
   },
   {
     date: "2026-07-16",

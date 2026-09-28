@@ -78,7 +78,7 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
       .eq('organization_id', orgId);
 
     const userIds = (memberData || []).map((m) => m.user_id);
-    let usersMap: Record<string, any> = {};
+    let usersMap: Record<string, { id: string; email: string | null }> = {};
 
     if (userIds.length > 0) {
       const { data: users } = await dbClient

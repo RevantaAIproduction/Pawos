@@ -39,7 +39,6 @@ const GROUPS = [
       
       { href: "/faq", label: "FAQ" },
       { href: "/changelog", label: "Changelog" },
-      { href: "/roadmap", label: "Roadmap" },
       { href: "/support", label: "Support" },
     ],
   },

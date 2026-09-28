@@ -63,7 +63,6 @@ export const DEVELOPMENT_ARTICLES: HelpArticle[] = [
     requirements: [
       'A project opened in PawOS (Projects section)',
       'Paw Pro capability mode enabled for any action that writes files, runs commands, or builds/tests',
-      'A configured AI provider for reasoning about code',
     ],
     permissions: [
       'File system read/write access scoped to the active project (Paw Pro only)',

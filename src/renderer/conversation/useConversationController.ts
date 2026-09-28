@@ -7,6 +7,7 @@ import { ReasoningRuntime } from '../reasoning/ReasoningRuntime';
 import type { ReasoningProvider } from '../reasoning/ReasoningProvider';
 import { aiRouter } from '../ai/AIRouter';
 import { nameSession } from '../ai/SessionNamer';
+import { loadEvidenceImage } from './evidenceImageLoader';
 import { SESSION_PROMPT_LIMIT } from './SessionLimitModal';
 import { aiProviderConfigStore } from '../ai/AIProviderConfigStore';
 import { getDefaultModelForTier } from '../ai/ModelSelectionByTier';
@@ -499,6 +500,7 @@ export function useConversationController(args?: {
         });
       },
       persistExecution: (record) => ipc.recordExecution(record),
+      loadEvidenceImage,
       resolveSession: async (transcript) => {
         try {
           const summaries = await ipc.listSessions();

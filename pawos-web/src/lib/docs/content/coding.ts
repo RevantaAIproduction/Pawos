@@ -42,7 +42,7 @@ export const codingPages: DocPage[] = [
         items: [
           { title: 'Request', detail: 'You describe the outcome. PawOS decides which project facts, files, tools, and validation steps are relevant.' },
           { title: 'Understand', detail: 'The runtime inspects the workspace, project structure, dependency graph, feature map, domain concepts, and likely affected files where supported.' },
-          { title: 'Plan', detail: 'For multi-file edits, proposeCodeEditPlan returns a structured ExecutionPlan with one planned applyCodeEdit step per affected file.' },
+          { title: 'Plan', detail: 'For multi-file edits, PawOS prepares a plan with one step per affected file.' },
           { title: 'Review', detail: 'The Plan Review card shows files affected, estimated line scope, per-file rationale, affected area, and proposed hunk diff where available.' },
           { title: 'Authorize', detail: 'Plan approval records intent. Actual edits and commands remain governed by the existing confirmation mechanism.' },
           { title: 'Edit', detail: 'Edits are applied as context-anchored hunks against current on-disk content, not blind whole-file rewrites.' },
@@ -282,7 +282,7 @@ Estimated scope:
       { type: 'heading', level: 2, id: 'user-directed-vs-autonomous', text: 'User-directed vs. Autonomous environment setup' },
       {
         type: 'warning',
-        text: 'This distinction matters and is easy to assume incorrectly: a Pro user manually asking PawOS to "install Node.js" is not the same situation as an unattended Autonomous Work run encountering a missing dependency.',
+        text: 'Asking PawOS in chat to install a tool is different from an unattended Autonomous Work run that finds a missing tool.',
       },
       {
         type: 'table',
@@ -295,13 +295,13 @@ Estimated scope:
       },
       {
         type: 'note',
-        text: 'Autonomous Work’s execution mode auto-confirms only file edits (writeFile/applyCodeEdit) — every other destructive action, including software installation and PATH changes, still requires a real confirmation nobody is present to give. See Autonomous Work → Permissions.',
+        text: 'Autonomous Work confirms file edits automatically; every other change — including software installs and PATH changes — waits for a person to confirm. See Autonomous Work → Permissions.',
       },
       { type: 'heading', level: 2, id: 'entitlement', text: 'Which tier can install software?' },
       {
         type: 'status',
         status: 'implemented',
-        text: 'Software installation and PATH repair are currently available on every subscription tier, including Paw Go — gated only by the one-time confirmation, not by a subscription check. This is a deliberate finding from a direct implementation audit, not an assumption: unlike writeFile or runCommand (which require Pro’s execution entitlement), install/PATH actions are not currently included in that same gate.',
+        text: 'Software installation and PATH repair are available on every plan, including Paw Go — each one asks for your confirmation first.',
       },
     ],
     related: ['coding/path-and-environment-repair', 'autonomous-work/permissions', 'troubleshooting/software-installation-problems'],

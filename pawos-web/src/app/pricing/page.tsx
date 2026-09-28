@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PricingPlans } from "./PricingPlans";
 import { Section } from "../../components/ui/Section";
-import { Button } from "../../components/ui/Button";
+import { buttonClasses } from "../../components/ui/Button";
+import { DownloadWindowsButton } from "../../components/DownloadWindowsButton";
 
 export const metadata: Metadata = {
   title: "Pricing",
@@ -143,7 +144,7 @@ export default function PricingPage() {
           call required.
         </p>
         <div className="mt-6">
-          <Button href="/download" variant="secondary">Get started</Button>
+          <DownloadWindowsButton source="pricing" className={buttonClasses("secondary")}>Get started</DownloadWindowsButton>
         </div>
       </Section>
     </>

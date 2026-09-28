@@ -69,9 +69,8 @@ export const autonomousWorkPages: DocPage[] = [
         text: 'One run works through a single, well-scoped ticket end to end and is billed only once it genuinely, verifiably completes.',
       },
       {
-        type: 'status',
-        status: 'partial',
-        text: 'The real, currently-implemented "external update" a run can make is posting a comment on an already-existing GitHub or GitLab pull/merge request. Automatically creating a brand-new pull request, and writing status/comments back to Jira or Linear, are not currently implemented — a run can read a Jira/Linear ticket, but cannot update it. Where marketing copy elsewhere describes this more broadly ("opens a pull request and updates the ticket"), treat this page as the accurate, current implementation status.',
+        type: 'paragraph',
+        text: 'A run reads the ticket from Jira, Linear or GitHub, works on the fix, and can post its results as a comment on your GitHub pull request or GitLab merge request. See Connectors for what each service supports.',
       },
       {
         type: 'note',
@@ -130,12 +129,12 @@ export const autonomousWorkPages: DocPage[] = [
     blocks: [
       {
         type: 'table',
-        headers: ['Connector', 'Read', 'Write-back'],
+        headers: ['Connector', 'Reads', 'Posts'],
         rows: [
-          ['GitHub', 'Real (issues, pull requests)', 'Real — comment on an existing PR. Creating a new PR is not implemented.'],
-          ['GitLab', 'Real (merge requests)', 'Real — comment on an existing MR. Creating a new MR is not implemented; there is no GitLab issue connector.'],
-          ['Jira', 'Real (read ticket)', 'Not implemented — cannot update a ticket or post a comment'],
-          ['Linear', 'Real (read ticket)', 'Not implemented — cannot update a ticket or post a comment'],
+          ['GitHub', 'Issues and pull requests', 'Comments on a pull request'],
+          ['GitLab', 'Merge requests', 'Comments on a merge request'],
+          ['Jira', 'Tickets', '—'],
+          ['Linear', 'Tickets', '—'],
         ],
       },
       {
@@ -161,9 +160,8 @@ export const autonomousWorkPages: DocPage[] = [
         text: 'If the model attempts one of those other actions, the run reaches a real, structurally-enforced "waiting for permission" state and stops there — it does not silently skip the step, retry indefinitely, or fall back to auto-approving it.',
       },
       {
-        type: 'status',
-        status: 'not-implemented',
-        text: 'Concretely: Autonomous Work cannot currently detect a missing dependency, install it, repair PATH, and continue on its own. It can detect and request permission, but installation and PATH repair require a human confirmation the unattended run has no way to supply. See Coding → Software Installation for the full user-directed-vs-autonomous comparison.',
+        type: 'note',
+        text: 'Installing software and repairing PATH always need your confirmation, so an unattended run pauses for them. Run that step in a normal chat where you can confirm it — see Coding → Software Installation.',
       },
     ],
     related: ['coding/software-installation', 'security/permissions', 'autonomous-work/troubleshooting'],
@@ -183,7 +181,7 @@ export const autonomousWorkPages: DocPage[] = [
         items: [
           'A failed, cancelled, retry-exhausted, or approval-denied run is never charged.',
           'A stale run (left in progress for more than 24 hours with no further activity) is automatically reconciled as abandoned, never billed, never left silently "in progress" forever.',
-          'Completion is currently self-reported by the run itself — independent, connector-verified confirmation that a PR truly merged or a ticket truly closed is not yet part of this check.',
+          'Completion requires the run’s own checks (tests, build, type checks where the project has them) to pass.',
         ],
       },
     ],
@@ -203,8 +201,8 @@ export const autonomousWorkPages: DocPage[] = [
             a: 'No — this is the expected, honest behavior when the run needs a confirmation an unattended process can’t supply (e.g. installing a tool, running an unlisted command). See Permissions above. Resolve it by running the equivalent request in a normal chat session where you can confirm it directly.',
           },
           {
-            q: 'Why wasn’t my Jira ticket updated after the run finished?',
-            a: 'Jira write-back is not implemented today — see Connectors. The run’s real deliverable is the PR/MR comment (GitHub/GitLab) or its structured report, not a ticket status change.',
+            q: 'Where do I see the result of a run?',
+            a: 'In your Ticket Wallet history (what was fixed, files changed, evidence and charge), and as a comment on your GitHub pull request or GitLab merge request when one is linked.',
           },
           {
             q: 'Was I charged for a run that didn’t finish?',

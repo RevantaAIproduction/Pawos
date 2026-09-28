@@ -1,341 +1,292 @@
 import type { DocBlock, DocPage, DocSectionId } from './types';
 
-type SectionDisclosure = {
+type SectionNotes = {
   userSees: string[];
   systemDoes: string[];
   boundaries: string[];
   evidence: string[];
-  limitations: string[];
+  goodToKnow: string[];
 };
 
-const SECTION_DISCLOSURES: Record<DocSectionId, SectionDisclosure> = {
+const SECTION_NOTES: Record<DocSectionId, SectionNotes> = {
   'getting-started': {
     userSees: [
-      'The desktop application, companion surface, task card, workspace picker, account and billing surfaces, confirmation prompts, and Working History.',
-      'Documentation pages explain the product path, but the operational product is the local Electron app running on the user machine.',
-      'A new user normally sees sign-in, workspace selection, model/provider configuration where needed, and permission prompts only when a requested action needs them.',
+      'The PawOS desktop app: your companion, the conversation panel, task progress, workspace selection, account and billing screens, and permission questions when an action needs them.',
+      'After signing in you choose a workspace folder, and PawOS asks before it does anything that changes your machine.',
     ],
     systemDoes: [
-      'PawOS turns a user request into a task, records the task timeline, and routes read-only analysis separately from execution-class actions.',
-      'When the task is about files or code, PawOS uses the selected workspace folder as the normal project boundary.',
-      'For coding tasks, PawOS can inspect project structure, plan work, request approval, apply patches, run commands, validate results, and report evidence.',
+      'PawOS turns each request into a task and keeps a record of what happens.',
+      'For files and code, the workspace folder you picked is the project boundary.',
+      'For coding work, PawOS can inspect your project, plan changes, apply them, run commands and tests, and report the results.',
     ],
     boundaries: [
-      'Starting PawOS, signing in, or reading documentation does not grant blanket permission to edit files, run commands, install tools, change PATH, use connectors, or deploy software.',
-      'Plan approval and action authorization are separate events. A plan can be accepted while later destructive actions still require their own confirmation.',
-      'Subscription entitlements determine whether a request can move from read-only analysis into execution.',
+      'Signing in does not give PawOS blanket permission: editing files, running commands, installing tools, connecting accounts or deploying each ask for approval.',
+      'Approving a plan and approving an action are separate — a plan can be approved while later actions still ask first.',
+      'Your plan determines which kinds of work PawOS can carry out.',
     ],
     evidence: [
-      'A completed task should leave a Work Record containing the real actions that ran, outputs, files changed, validation results, failures, and skipped steps.',
-      'If an action was not run or could not be verified, the docs and Work Record should describe that limitation instead of implying success.',
+      'Every completed task leaves a Work Record: the actions that ran, their output, files changed, and test results.',
     ],
-    limitations: [
-      'Public installer and update availability may vary by platform and release channel; use the Download page as the source of current distribution status.',
-      'Some advanced project-understanding features are strongest for TypeScript and JavaScript projects and may be thinner for other languages.',
-      'Local machine permissions, missing dependencies, organization policy, connector scopes, or subscription tier can prevent an otherwise valid request from executing.',
+    goodToKnow: [
+      'Project analysis is deepest for TypeScript and JavaScript projects; other languages are fully editable.',
+      'Local permissions, missing dependencies, organization policy or your plan can stop a request from running — PawOS tells you which.',
     ],
   },
   concepts: {
     userSees: [
-      'Concepts appear in the product as workspaces, tasks, task cards, plan review cards, confirmation prompts, Work Records, usage meters, and connector status.',
-      'Users interact with concepts through normal requests rather than through an abstract configuration console.',
-      'The same vocabulary appears in documentation, billing, security, and troubleshooting so a user can trace what happened after a task finishes.',
+      'Workspaces, tasks, plans, permission questions, Work Records, usage meters and connection status.',
+      'You use these through normal requests — there is no separate configuration console.',
     ],
     systemDoes: [
-      'A workspace scopes file and command work; a task groups one user request; a plan proposes future work; an action performs one concrete operation; evidence records what actually happened.',
-      'The renderer displays task state, while the main process owns execution and security-sensitive checks.',
-      'Execution records are assembled from real action request/result data rather than a free-form after-the-fact summary alone.',
+      'A workspace scopes file and command work; a task groups one request; a plan proposes work; an action performs one concrete step; a Work Record captures what happened.',
+      'Work Records are built from the real results of each action, not written up afterwards.',
     ],
     boundaries: [
-      'Concept names are not permissions. Calling something a workspace, plan, or task does not remove confirmation gates.',
-      'PawOS can reason about a requested outcome, but the model does not directly mutate the user machine; deterministic action handlers do.',
-      'Entitlement gates and confirmation gates are separate protections and may both apply to the same request.',
+      'Naming something a workspace, plan or task never skips a permission question.',
+      'PawOS decides what to do, but every change to your machine goes through a dedicated, checked action.',
+      'Plan limits and permission questions are separate protections and can both apply.',
     ],
     evidence: [
-      'Evidence should identify the command, file, connector, validation step, screenshot, or result that supports a claim.',
-      'A Work Record can honestly show partial success, skipped validation, a rejected plan, a failed command, or a blocked permission request.',
+      'Each claim in a Work Record points to the command, file, check, screenshot or result behind it.',
+      'A Work Record shows partial success, skipped checks, rejected plans and failures just as clearly as successes.',
     ],
-    limitations: [
-      'Not every runtime emits the same richness of structured evidence yet; generic timelines remain the fallback where specialized evidence is not implemented.',
-      'Plan state after approval depends on the existing conversation and execution handoff and should not be interpreted as a full lifecycle engine unless step transitions are recorded.',
+    goodToKnow: [
+      'Work Records always show the timeline of what ran; many action types add detailed evidence on top.',
     ],
   },
   coding: {
     userSees: [
-      'The Coding Workspace, Task Card, Plan Review card, affected files, status pills, proposed changes, permission summary, command output, diff surfaces, validation results, preview state, and final Work Record.',
-      'For multi-file work, users should see the plan title, scope summary, per-step rationale, affected area, proposed diff when hunk data exists, and Approve, Reject, and Revise controls.',
-      'During execution, users may also see terminal output, running processes, build/test evidence, browser preview state, screenshots, and real file-change summaries.',
+      'Your task progress, plan review with affected files and proposed changes, permission questions, command output, diffs, test results, previews and the final Work Record.',
+      'For multi-file work you see the plan, why each step is needed, and Approve, Reject and Revise controls.',
+      'While work runs you can follow terminal output, running processes, build and test results, and preview screenshots.',
     ],
     systemDoes: [
-      'PawOS may inspect project structure, dependencies, import graphs, feature groupings, domain concepts, affected files, and coding memory before proposing work.',
-      'Code edits use structured action requests such as applyCodeEdit and writeFile; applyCodeEdit uses context-anchored hunks against current on-disk content.',
-      'Validation can include syntax checks, import checks, typecheck, lint, build, tests, process health, browser console/network checks, and visual evidence when those tools are available.',
+      'PawOS reads your project structure, dependencies and related files before proposing changes.',
+      'Edits are applied precisely against the current file contents.',
+      'Checks can include syntax, imports, type checking, linting, builds, tests, running-app health and visual checks, depending on your project.',
     ],
     boundaries: [
-      'Plan approval records intent only. It does not bypass applyCodeEdit confirmation, writeFile overwrite checks, command confirmation, git write confirmation, install confirmation, PATH/system confirmation, connector authorization, or deploy authorization.',
-      'Commands are governed by allowlists and execution rules; PawOS is not a raw arbitrary shell.',
-      'A generated diff is only authoritative when it comes from actual hunk data or a real git/file diff. The UI must not invent a diff for a step that has no patch.',
+      'Approving a plan records your intent; each edit, overwrite, command, git change, install, system change, connection or deploy still asks for approval.',
+      'Commands run under clear rules — PawOS is not an unrestricted shell.',
+      'Diffs you see come from the real changes, never an illustration.',
     ],
     evidence: [
-      'A real coding completion should show file paths, changed content or diff stats, commands executed, exit codes, relevant output, validation results, and any screenshots or browser evidence used to confirm UI behavior.',
-      'If validation was skipped because a script or config was absent, that skipped state should be disclosed.',
-      'If a plan was rejected, there should be no planned mutation from that rejected plan.',
+      'Finished coding work shows the files changed, commands run, their results and output, test results, and screenshots when the change is visual.',
+      'If a check was skipped (for example, the project has no test script), the Work Record says so.',
+      'A rejected plan makes no changes.',
     ],
-    limitations: [
-      'Live Plan Review visual QA, real Pro/Pro Max account execution, and plan-to-execution lifecycle visualization may require an eligible running app/account environment.',
-      'Some non-TypeScript projects remain editable but may not receive the same deep structural analysis as TypeScript/JavaScript projects.',
-      'Whole-file writes can describe intended content, while fine-grained View Changes requires concrete patch hunk data or an actual diff source.',
+    goodToKnow: [
+      'Deep project analysis is strongest for TypeScript and JavaScript; every language can be edited.',
     ],
   },
   'autonomous-work': {
     userSees: [
-      'Autonomous Work appears as an unattended ticket-oriented run with investigation, plan, implementation, validation, completion, and charging state.',
-      'Users should see eligibility, connector status, credit balance, ticket context, execution evidence, and final completion/charging result.',
-      'When a connector cannot write back to the tracker, the user should see a structured report or supported PR/MR comment path rather than a claimed ticket update.',
+      'An unattended run for a ticket: investigation, plan, implementation, checks, completion and charge.',
+      'Eligibility, connection status, your Ticket Wallet balance, ticket details, evidence and the final result.',
+      'Before/after evidence and a summary of what was fixed, in your Ticket Wallet history.',
     ],
     systemDoes: [
-      'PawOS investigates the ticket and repository, creates isolated work where supported, applies changes through the same coding mechanisms, validates the result, and records evidence.',
-      'Autonomous Work Credits are separate from Paw Compute and fund ticket completions only when completion criteria are satisfied.',
-      'Billing logic is intended to be success-gated and protected against duplicate completion charges.',
+      'PawOS investigates the ticket and repository, works in an isolated copy, applies and checks the fix, and records evidence.',
+      'Ticket Wallet credits are separate from Paw Compute and are charged only when a ticket is successfully completed.',
+      'Each ticket is charged at most once.',
     ],
     boundaries: [
-      'Autonomous Work does not grant permission to install software, repair PATH, change system settings, or bypass user/organization confirmation gates.',
-      'Connector capabilities differ by provider. Reading a ticket, commenting on a PR, creating a PR, and changing ticket status are separate capabilities.',
-      'A run that is blocked, failed, or not verified should not be described as completed.',
+      'Autonomous Work never installs software, changes system settings or skips your organization’s approval rules.',
+      'Each connected service offers specific actions — see Connectors for what each one supports.',
+      'A blocked, failed or unverified run is never reported as completed.',
     ],
     evidence: [
-      'Completion should be supported by repository state, validation output, changed files, connector evidence where available, and billing/completion records.',
-      'If independent connector verification is absent for a specific close/merge state, that limitation must remain disclosed.',
+      'Completion is backed by the repository state, check results, changed files and the charge record.',
     ],
-    limitations: [
-      'Jira and Linear write-back from Autonomous Work is not implemented in the current docs.',
-      'Automatic new PR/MR creation is not documented as implemented; supported connector actions should be described provider by provider.',
-      'Eligible account, connector, repository, and credit conditions are required before an actual run can be validated.',
+    goodToKnow: [
+      'You need an eligible plan, a connected account, a repository and Ticket Wallet credits to start a run.',
     ],
   },
   connectors: {
     userSees: [
-      'Connector setup, connected/disconnected state, scope prompts, provider-specific authorization pages, restore behavior, entitlement blocks, and action-level confirmation prompts.',
-      'Users may see different capabilities per connector: ticket read, repository read, PR/MR listing, comments, deployment actions, OAuth restore, or status checks.',
-      'A connector page should state whether the connector can read, write, comment, deploy, restore, or only authenticate.',
+      'Connection setup, connected/disconnected status, permission screens from each service, and approval questions for actions.',
+      'Each connector page lists exactly what that connection can do.',
     ],
     systemDoes: [
-      'PawOS uses connector SDK implementations and stored credentials to call external provider APIs only for supported actions.',
-      'OAuth and token flows are scoped by connector and may request incremental authorization for additional capabilities.',
-      'Connector entitlement gates prevent unavailable-tier users from activating or restoring blocked connectors.',
+      'PawOS uses your connected account only for the actions that connector supports.',
+      'Sign-in is handled securely, and PawOS asks for extra access only when a feature needs it.',
+      'Connectors that need a higher plan stay locked until your plan includes them.',
     ],
     boundaries: [
-      'Connecting an account does not authorize every future action. Posting comments, deploying, rollback, promotion, or other side-effecting actions still require the relevant confirmation and policy checks.',
-      'A provider integration can be real while a specific action for that provider remains not implemented.',
-      'If credentials are missing, expired, out of scope, or blocked by tier, PawOS must report that condition rather than silently continuing.',
+      'Connecting an account does not approve future actions — comments, deploys, rollbacks and other changes still ask first.',
+      'If a connection is missing, expired or lacks access, PawOS tells you instead of continuing.',
     ],
     evidence: [
-      'Connector evidence should include provider identity, action result, target object where safe to show, and any failure returned by the provider.',
-      'For PR/MR or deployment claims, the docs should distinguish local self-report from provider-confirmed state.',
+      'Connector actions record the service, the result, and any error the service returned.',
     ],
-    limitations: [
-      'Connector APIs vary by provider and organization settings; the same request can succeed for one connected account and fail for another.',
-      'Some connector pages document authentication and read capability while write-back remains explicitly not implemented.',
+    goodToKnow: [
+      'Service settings and permissions vary, so the same request can behave differently for different accounts.',
     ],
   },
   companion: {
     userSees: [
-      'The companion appears as a desktop presence with voice/text input, optional speech output, avatar/profile settings, and task/task-card integration.',
-      'Users can configure personality, voice behavior, companion package data, and in supported paths upload a model asset rather than generate one.',
-      'The companion should make active listening, draft review, speech output, and task execution state understandable.',
+      'A desktop companion you talk to by voice or text, with optional spoken replies, personality and appearance settings, and live task progress.',
+      'You can customise personality, voice and appearance, including uploading your own compatible 3D model.',
     ],
     systemDoes: [
-      'The companion is a renderer-side experience that submits user requests into the same task/action pipeline as typed input.',
-      'Speech recognition keeps recognized text reviewable before send; speech output should read user-facing summaries rather than raw command logs.',
-      'Profile/package data can describe the companion appearance and behavior, but execution remains governed by the same runtime and permission model.',
+      'Requests you make to the companion go through the same task and permission flow as typed ones.',
+      'Your speech is shown as text so you can review it before sending; spoken replies read summaries, not raw logs.',
     ],
     boundaries: [
-      'The companion is not a separate permission system and cannot bypass action authorization.',
-      'A custom avatar or personality does not change billing, connector, filesystem, command, or security behavior.',
-      'Wake-word and ambient behavior must be documented according to what is actually implemented, not implied by branding.',
+      'The companion follows the same permissions as everything else — it cannot skip an approval.',
+      'Appearance and personality never change billing, connections, files, commands or security.',
     ],
     evidence: [
-      'Tasks started through the companion should leave the same Work Records as tasks started through typing.',
-      'If a voice or avatar capability is not implemented or not verified, the docs should say so directly.',
+      'Tasks started through the companion leave the same Work Records as typed tasks.',
     ],
-    limitations: [
-      'AI-generated avatars from a photo are not implemented; uploading an existing compatible model is the documented working path.',
-      'Push-to-talk/review-before-send is the reliable input model unless a specific wake-word implementation is verified.',
+    goodToKnow: [
+      'Push-to-talk with review-before-send is the input model.',
     ],
   },
   mobile: {
     userSees: [
-      'Mobile documentation describes pairing, trusted-device state, presence, notifications, approval-center style interactions, and supported remote task visibility.',
-      'Users should see whether a mobile feature is active, paired, waiting for approval, disconnected, or unsupported.',
-      'Mobile pages must distinguish mobile presence and approval assistance from full desktop execution.',
+      'Pairing, trusted devices, presence, notifications and approvals on your phone.',
+      'Clear status: active, paired, waiting for approval or disconnected.',
     ],
     systemDoes: [
-      'Mobile pairing establishes a trusted relationship with the desktop app and may sync state or events supported by the current implementation.',
-      'The desktop remains the execution authority for local files, commands, installs, PATH changes, and app/browser operations.',
-      'Mobile approval surfaces should reflect real pending confirmations rather than parse free-form message text.',
+      'Pairing creates a trusted link between your phone and your desktop.',
+      'Your desktop stays in charge of files, commands, installs and apps.',
+      'Approvals on your phone respond to real pending requests from your desktop.',
     ],
     boundaries: [
-      'Pairing a mobile device does not transfer local filesystem, terminal, connector, or deployment authority to the phone.',
-      'Remote approval must still correspond to a real pending action and must not bypass main-process authorization rules.',
-      'Unsupported mobile actions should be documented as unsupported rather than implied by general mobile availability.',
+      'Pairing a phone never gives it direct access to your files, terminal, connections or deployments.',
+      'An approval from your phone still goes through the desktop’s own checks.',
     ],
     evidence: [
-      'Presence and approval events should be traceable to actual task state or pending confirmation state.',
-      'If a mobile action cannot be verified end to end, the documentation should retain a not-verified or limitation statement.',
+      'Presence and approvals are tied to real task and approval state on your desktop.',
     ],
-    limitations: [
-      'Mobile is an extension of the desktop workflow, not a full standalone replacement for the Electron app.',
-      'Network conditions, device trust state, and desktop availability determine whether mobile presence or approval surfaces can function.',
+    goodToKnow: [
+      'Mobile works alongside the desktop app; your desktop needs to be online.',
     ],
   },
   billing: {
     userSees: [
-      'Users see subscription plan, tier entitlement, Paw Compute usage, rolling limits, Autonomous Work Credit balance, checkout/payment status, and blocked-state messages when a request exceeds entitlement or balance.',
-      'Billing docs should distinguish subscription usage from ticket-completion credits and should identify which runtime or action class consumes which meter.',
-      'Upgrade, payment, and limit pages should describe what changes immediately in the app and what remains subject to confirmation or connector setup.',
+      'Your plan, Paw Compute usage and limits, Ticket Wallet balance, payment status, and a clear message when a limit or balance stops a request.',
+      'Which activity uses Paw Compute and which uses the Ticket Wallet.',
     ],
     systemDoes: [
-      'Paw Compute meters ordinary runtime usage according to the configured plan and rolling-window limits.',
-      'Autonomous Work Credits are a separate dollar-denominated wallet used for eligible autonomous ticket completions.',
-      'Entitlement checks run before execution-class work and before connector activation/restore where a connector is tier-gated.',
+      'Paw Compute measures everyday usage against your plan’s limits.',
+      'The Ticket Wallet is a separate balance used for completed autonomous tickets.',
+      'Plan checks happen before work runs and before plan-restricted connectors are enabled.',
     ],
     boundaries: [
-      'Buying credits does not upgrade subscription entitlements, and upgrading a subscription does not add Autonomous Work Credits unless a separate credit purchase or included allowance says so.',
-      'Billing permission does not equal action permission. A paid tier can still be blocked by confirmation, connector scope, local system permission, or organization policy.',
-      'Failed, blocked, or unverified autonomous work should not be charged as completed work.',
+      'Buying Ticket Wallet credits does not change your plan, and changing your plan does not add Ticket Wallet credits.',
+      'A paid plan still asks for approval before actions that change your machine.',
+      'Failed, blocked or unverified autonomous work is never charged.',
     ],
     evidence: [
-      'Usage and charge records should identify source, amount, period/window, balance where applicable, and whether the event came from subscription usage or autonomous ticket completion.',
-      'A billing block should explain whether the block is entitlement-restricted, usage-restricted, balance-restricted, or connector-restricted.',
+      'Usage and charges show the source, amount, period and remaining balance.',
+      'When something is blocked, PawOS says whether it’s your plan, your usage, your balance or a connection.',
     ],
-    limitations: [
-      'Exact plan limits and payment availability depend on current pricing configuration and payment-provider setup.',
-      'Refunds, invoices, taxes, failed payments, and subscription cancellation are governed by the live billing provider flow and any applicable legal policy pages.',
+    goodToKnow: [
+      'Refunds, invoices, taxes and cancellations follow the billing and legal policy pages.',
     ],
   },
   security: {
     userSees: [
-      'Users see confirmation gates, permission prompts, connector authorization screens, blocked-command messages, filesystem boundaries, credential status, and system-action warnings.',
-      'Security documentation should explain which process enforces the rule and what the user should expect on screen.',
-      'When an action is blocked, users should see an explanation rather than a silent no-op.',
+      'Permission questions, connection approval screens, blocked-action messages, workspace boundaries and system-change warnings.',
+      'When something is blocked, you see why.',
     ],
     systemDoes: [
-      'The main process owns execution of security-sensitive actions; the renderer requests actions through typed IPC and preload boundaries.',
-      'Command execution uses allowlisted command structures and avoids raw shell-injection paths for supported command runners.',
-      'Credentials are handled through connector-specific storage and authorization flows rather than being pasted into arbitrary prompts.',
+      'Security-sensitive actions are carried out by protected parts of the app that the interface cannot bypass.',
+      'Commands follow strict rules that prevent injected or chained commands.',
+      'Credentials stay in each connection’s secure storage — you never paste them into chat.',
     ],
     boundaries: [
-      'Plan approval, model confidence, companion personality, or task urgency cannot bypass confirmation gates.',
-      'Actions that affect files, commands, git state, installs, system PATH, deployments, connectors, or external services require the relevant authorization path.',
-      'The docs must not imply that PawOS can safely perform arbitrary destructive work without user or organization approval.',
+      'No plan approval, companion setting or urgency can skip a permission question.',
+      'Changes to files, commands, git, installs, system settings, deployments and connected services always need approval.',
     ],
     evidence: [
-      'Security-sensitive actions should leave evidence of the request, confirmation requirement, result, and failure reason when blocked.',
-      'Credential and connector claims should be limited to configured providers and scopes that actually exist.',
+      'Security-sensitive actions record the request, the approval, the result, and why anything was blocked.',
     ],
-    limitations: [
-      'No local security design removes the user responsibility to review proposed plans, confirmations, diffs, commands, deployments, and connector side effects.',
-      'External provider security, account policy, and operating-system permission prompts remain outside PawOS control.',
+    goodToKnow: [
+      'Review plans, diffs, commands and deployments before approving them.',
+      'Your operating system and connected services have their own permission prompts and policies.',
     ],
   },
   troubleshooting: {
     userSees: [
-      'Troubleshooting pages should describe symptoms visible in the app: launch failure, sign-in loop, provider missing, command refused, install failure, PATH mismatch, connector disconnected, usage block, payment problem, or preview/build failure.',
-      'A good troubleshooting page should state what the user can check, what PawOS checks automatically, and what evidence to gather before retrying.',
-      'Users should be told when a condition is a limitation rather than something they can fix locally.',
+      'What to check for common situations: sign-in, commands, installs, PATH, connections, usage limits, payments, previews and builds.',
+      'What PawOS already checks for you, and what to gather before trying again.',
     ],
     systemDoes: [
-      'PawOS reports failures through task cards, Work Records, action results, connector status, usage gates, and validation evidence.',
-      'For commands, installs, PATH repair, builds, and tests, real stdout/stderr or structured validation output should be used when available.',
-      'For connector and billing failures, provider responses or entitlement/balance classifications should guide the message.',
+      'PawOS reports problems in the task view, Work Records, connection status and check results.',
+      'For commands, installs, builds and tests it shows the real output.',
     ],
     boundaries: [
-      'Troubleshooting should not recommend bypassing confirmation gates, running unsafe shell pipelines, deleting project files, or changing system settings without understanding the impact.',
-      'If a user lacks tier entitlement, connector scope, local permission, or admin elevation, retrying the same request may not help until that condition changes.',
-      'Support instructions should preserve honest limitations and avoid claiming a feature is live when it is not implemented.',
+      'Never bypass permission questions or run unsafe commands to get past a problem.',
+      'If a plan, connection permission, local permission or administrator approval is missing, retrying won’t help until that changes.',
     ],
     evidence: [
-      'Useful evidence includes task id, action type, command text when safe, exit code, file path, validation report, connector id, entitlement reason, payment status, and screenshot if UI layout is relevant.',
-      'If a fix is attempted, the Work Record should show the before/after check or explicitly say that verification was not completed.',
+      'Useful details: the task, what it was doing, the command and its result, file paths, check results, and a screenshot if something looks wrong.',
     ],
-    limitations: [
-      'Some failures require provider dashboards, operating-system settings, administrator prompts, or account/billing support outside PawOS.',
-      'A failure that cannot be reproduced in the current environment should remain documented as not verified rather than closed as fixed.',
+    goodToKnow: [
+      'Some fixes happen outside PawOS — in a service’s dashboard, your system settings or your account.',
     ],
   },
   reference: {
     userSees: [
-      'Reference docs are intended for engineers and administrators who need to understand process boundaries, IPC, runtime action types, evidence records, entitlements, billing isolation, connector architecture, and current API/SDK status.',
-      'Users should expect architectural disclosure, not marketing copy.',
-      'Reference pages should identify which contracts are public, internal, implemented, partial, or reserved extension points.',
+      'An overview of how PawOS is organised and how its records work, for engineers and administrators.',
     ],
     systemDoes: [
-      'PawOS is an Electron application with main, preload, and renderer responsibilities separated by typed bridges and IPC.',
-      'Runtime actions use shared request/result types, with main-process plugins performing the actual side effects.',
-      'Evidence, billing, connector, and entitlement systems are intended to be separable so one subsystem cannot silently stand in for another.',
+      'Specialised engines handle coding, browsing, infrastructure, communication and the companion.',
+      'Every change goes through a checked action, and every action is recorded.',
     ],
     boundaries: [
-      'Internal TypeScript types are not automatically public API guarantees.',
-      'A documented extension point is not the same as a shipped external SDK or supported third-party plugin API.',
-      'Architecture docs should not imply a provider, connector, payment path, or runtime exists unless it is actually wired.',
+      'All actions follow the same permission and plan rules described in Security.',
     ],
     evidence: [
-      'Reference claims should be traceable to implemented modules, tests, build outputs, or explicit limitation statements.',
-      'For compliance-style use, Work Records and connector/billing records matter more than natural-language claims.',
+      'Work Records and billing records are the source of truth for what happened.',
     ],
-    limitations: [
-      'Public API and SDK surfaces remain limited unless a page explicitly documents a supported external contract.',
-      'Architecture may evolve; changelog and release notes should identify user-visible behavior changes, not only implementation details.',
+    goodToKnow: [
+      'See the Changelog for what has changed between versions.',
     ],
   },
 };
 
-function pageStatus(page: DocPage): DocBlock {
-  const text =
-    page.section === 'reference'
-      ? `This reference page describes the current PawOS implementation surface for ${page.title}. Internal details are disclosed for clarity but are not a promise that every internal type is a public API.`
-      : `This page documents the current PawOS behavior for ${page.title}. It is intended to disclose what users can see and use, what permissions are required, what evidence is recorded, and what limitations remain.`;
-  return { type: 'status', status: 'implemented', text };
-}
-
-function pageSpecificDisclosure(page: DocPage): DocBlock[] {
+function pageSpecificNotes(page: DocPage): DocBlock[] {
   const path = `${page.section}/${page.slug}`;
   const common: Record<string, DocBlock[]> = {
     'coding/planning-and-review': [
-      { type: 'heading', level: 3, id: 'plan-review-disclosure', text: 'Plan Review disclosure' },
+      { type: 'heading', level: 3, id: 'plan-review-controls', text: 'Plan review controls' },
       {
         type: 'table',
-        headers: ['Surface', 'What it means', 'What it does not mean'],
+        headers: ['Control', 'What it does', 'What it does not do'],
         rows: [
-          ['Approve Plan', 'Records that the user approves the displayed plan id and allows PawOS to continue through the normal conversation handoff.', 'Does not authorize edits, commands, git writes, installs, PATH/system changes, connectors, or deploys by itself.'],
-          ['Reject Plan', 'Records rejection of the displayed plan and tells PawOS not to apply those planned mutations.', 'Does not delete the conversation, hide the plan, or authorize a different plan silently.'],
-          ['View Changes', 'Shows concrete patch hunk data when an applyCodeEdit step contains real hunks.', 'Must not invent a diff for writeFile, command, or any step that has no patch data.'],
-          ['Scope summary', 'Shows counts derived from the ExecutionPlan action requests, such as affected files and authoritative hunk line counts where present.', 'Is not a billing estimate, elapsed-time estimate, or promise that validation will pass.'],
+          ['Approve Plan', 'Approves the plan shown and lets PawOS continue.', 'Does not approve edits, commands, git changes, installs, system changes, connections or deploys on its own.'],
+          ['Reject Plan', 'Rejects the plan; none of its changes are made.', 'Does not delete the conversation or switch to a different plan.'],
+          ['View Changes', 'Shows the exact changes for each edit.', 'Never shows an illustrated diff for a step without real changes.'],
+          ['Scope summary', 'Shows affected files and changed lines.', 'Is not a cost or time estimate, and doesn’t promise checks will pass.'],
         ],
       },
     ],
     'billing/limits': [
-      { type: 'heading', level: 3, id: 'limit-outcomes', text: 'Limit outcomes' },
+      { type: 'heading', level: 3, id: 'limit-outcomes', text: 'When a limit is reached' },
       {
         type: 'list',
         items: [
-          'If a request is entitlement-restricted, upgrading the tier may be required before the action can run.',
-          'If a request is usage-restricted, the user may need to wait for the rolling window to recover or upgrade if the product supports that path.',
-          'If a request is balance-restricted for Autonomous Work, adding subscription compute alone does not fund ticket completions.',
-          'If a request is connector-restricted, billing changes do not replace provider authorization or organization policy.',
+          'Plan limit: upgrade to unlock the action.',
+          'Usage limit: wait for your usage window to reset, or upgrade.',
+          'Ticket Wallet balance: add credits — Paw Compute doesn’t fund tickets.',
+          'Connection permission: reconnect or ask your organization admin — billing changes don’t replace access.',
         ],
       },
     ],
     'security/permissions': [
-      { type: 'heading', level: 3, id: 'permission-boundaries', text: 'Permission boundaries' },
+      { type: 'heading', level: 3, id: 'permission-types', text: 'Types of approval' },
       {
         type: 'table',
-        headers: ['Approval type', 'Scope', 'Examples'],
+        headers: ['Approval', 'Covers', 'Examples'],
         rows: [
-          ['Plan approval', 'Approves a proposed plan as an intent signal.', 'Approve a multi-file coding plan.'],
-          ['Action authorization', 'Authorizes a concrete side effect.', 'Apply a code edit, overwrite a file, run a command, install a tool.'],
-          ['Connector authorization', 'Authorizes provider API access or a provider side effect.', 'Connect GitHub, comment on a PR, deploy through a hosting provider.'],
-          ['System authorization', 'Authorizes OS-level change or elevated action.', 'Repair Machine PATH, install software, change environment variables.'],
+          ['Plan approval', 'Agreeing with a proposed plan.', 'Approve a multi-file coding plan.'],
+          ['Action approval', 'One concrete change.', 'Apply an edit, overwrite a file, run a command, install a tool.'],
+          ['Connection approval', 'Access to, or an action in, a connected service.', 'Connect GitHub, comment on a pull request, deploy.'],
+          ['System approval', 'A change to your operating system.', 'Repair PATH, install software, change environment variables.'],
         ],
       },
     ],
@@ -344,29 +295,20 @@ function pageSpecificDisclosure(page: DocPage): DocBlock[] {
 }
 
 export function addDisclosureBlocks(page: DocPage): DocPage {
-  const disclosure = SECTION_DISCLOSURES[page.section];
+  const notes = SECTION_NOTES[page.section];
   const appendix: DocBlock[] = [
-    { type: 'heading', level: 2, id: 'product-disclosure', text: 'Product disclosure' },
-    pageStatus(page),
-    {
-      type: 'lead',
-      text: `This disclosure is part of the PawOS documentation for ${page.title}. It is written to make the product behavior understandable before a user relies on it, pays for it, connects an account, approves a plan, or authorizes a machine-affecting action.`,
-    },
-    { type: 'heading', level: 3, id: 'what-users-see', text: 'What users see' },
-    { type: 'list', items: disclosure.userSees },
+    { type: 'heading', level: 2, id: 'how-it-works', text: 'How it works' },
+    { type: 'heading', level: 3, id: 'what-you-see', text: 'What you see' },
+    { type: 'list', items: notes.userSees },
     { type: 'heading', level: 3, id: 'what-pawos-does', text: 'What PawOS does' },
-    { type: 'list', items: disclosure.systemDoes },
-    { type: 'heading', level: 3, id: 'permissions-and-boundaries', text: 'Permissions and boundaries' },
-    { type: 'list', items: disclosure.boundaries },
-    { type: 'heading', level: 3, id: 'evidence-and-records', text: 'Evidence and records' },
-    { type: 'list', items: disclosure.evidence },
-    { type: 'heading', level: 3, id: 'limitations-and-user-responsibility', text: 'Limitations and user responsibility' },
-    { type: 'list', items: disclosure.limitations },
-    ...pageSpecificDisclosure(page),
-    {
-      type: 'warning',
-      text: 'PawOS can assist with planning, coding, automation, connectors, billing flows, and system operations, but the user remains responsible for reviewing plans, confirmations, diffs, command effects, connector side effects, billing actions, and final outputs before relying on them.',
-    },
+    { type: 'list', items: notes.systemDoes },
+    { type: 'heading', level: 3, id: 'permissions', text: 'Permissions' },
+    { type: 'list', items: notes.boundaries },
+    { type: 'heading', level: 3, id: 'records', text: 'Records' },
+    { type: 'list', items: notes.evidence },
+    { type: 'heading', level: 3, id: 'good-to-know', text: 'Good to know' },
+    { type: 'list', items: notes.goodToKnow },
+    ...pageSpecificNotes(page),
   ];
 
   return { ...page, blocks: [...page.blocks, ...appendix] };

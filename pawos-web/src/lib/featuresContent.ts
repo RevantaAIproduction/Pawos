@@ -19,7 +19,7 @@ export const FEATURES: FeatureContent[] = [
     summary:
       "PawOS runs as a native desktop app. Your companion sees your active window, understands what you're working on, and can act on your machine directly — opening apps, running commands, editing files — instead of being confined to a chat window.",
     capabilities: [
-      "Runs locally as an Electron desktop application",
+      "Runs locally as a native desktop application",
       "Foreground-window awareness so Paw knows what you're looking at",
       "A persistent, animated companion presence alongside your work",
       "Streaming responses with sentence-chunked speech for natural conversation",
@@ -346,7 +346,7 @@ export const FEATURES: FeatureContent[] = [
     tagline: "A model router tuned per tier, never exposed as a raw API choice.",
     category: "Platform",
     summary:
-      "PawOS routes every request through an internal AI Provider Router. You interact with named Paw models (Flash, Swift, Core, Creative, Vision, Voice) matched to your tier — the underlying provider is an implementation detail, not something you have to manage.",
+      "You work with named Paw models (Flash, Swift, Core, Vision, Voice and Memory) matched to your tier — nothing to set up or manage.",
     capabilities: [
       "Function-calling wired directly into the desktop action engine",
       "Vision capability for image and reference analysis",
@@ -416,7 +416,7 @@ export const FEATURES: FeatureContent[] = [
       "Sharing a distinctive companion package with teammates",
     ],
     limitations: [
-      "AI-generated avatar creation from a photo isn't available yet — upload-your-own-model is the current path for a fully custom look",
+      "For a fully custom look, upload your own rigged GLB or VRM model",
     ],
   },
   {

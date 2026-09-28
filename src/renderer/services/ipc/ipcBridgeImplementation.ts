@@ -103,6 +103,9 @@ export const ipc = {
   async terminalStartUserShell(cwd?: string): Promise<{ ok: true; info: { id: string; pid: number | null } } | { ok: false; message: string }> {
     return getBridge().terminalStartUserShell(cwd);
   },
+  async evidenceReadImage(evidenceId: string): Promise<{ base64: string } | null> {
+    return getBridge().evidenceReadImage(evidenceId);
+  },
   async systemGetHomeDir(): Promise<string> {
     return getBridge().systemGetHomeDir();
   },

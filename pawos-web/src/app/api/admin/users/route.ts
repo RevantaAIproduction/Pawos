@@ -96,7 +96,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       ok: true,
       data: {
-        items: (data || []).map((u: any) => ({
+        items: (data || []).map((u) => ({
           id: u.id,
           email: u.email,
           created_at: u.created_at,

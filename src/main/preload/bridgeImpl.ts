@@ -123,6 +123,7 @@ export function contextBridge() {
       ipcRenderer.invoke("process:writeStdin", processId, data) as Promise<{ ok: true } | { ok: false; message: string }>,
     terminalStartUserShell: (cwd?: string) =>
       ipcRenderer.invoke("terminal:startUserShell", cwd) as Promise<{ ok: true; info: { id: string; pid: number | null } } | { ok: false; message: string }>,
+    evidenceReadImage: (evidenceId: string) => ipcRenderer.invoke("evidence:readImage", evidenceId) as Promise<{ base64: string } | null>,
     systemGetHomeDir: () => ipcRenderer.invoke("system:getHomeDir") as Promise<string>,
     remoteAssistanceStartSharedTerminal: (cwd: string, label: string) =>
       ipcRenderer.invoke("remoteAssistance:startSharedTerminal", cwd, label) as Promise<

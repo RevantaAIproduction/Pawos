@@ -38,9 +38,9 @@ const NAV_INTENTS: NavIntent[] = [
   {
     id: "download",
     keywords: ["download", "install pawos", "get pawos", "installer", "how do i install", "where can i download"],
-    text: "PawOS runs on Windows, macOS, and Linux. Take a look at the Download page for current build availability per platform.",
-    href: "/download",
-    linkLabel: "Go to Download",
+    text: "PawOS for Windows is available through early access — click Download for Windows at the top of the page and we'll email your installer link. The install guide walks through setup.",
+    href: "/docs/getting-started/installation",
+    linkLabel: "Read the install guide",
   },
   {
     id: "pricing",
@@ -123,8 +123,8 @@ const NAV_INTENTS: NavIntent[] = [
   },
   {
     id: "changelog",
-    keywords: ["changelog", "what's new", "whats new", "latest update", "release notes"],
-    text: "The Changelog lists real, dated milestones — no invented version history.",
+    keywords: ["changelog", "what's new", "whats new", "latest update", "release notes", "roadmap"],
+    text: "The Changelog lists what's new in PawOS, release by release.",
     href: "/changelog",
     linkLabel: "View Changelog",
   },
@@ -148,13 +148,6 @@ const NAV_INTENTS: NavIntent[] = [
     text: "The FAQ is searchable and covers installation, billing, privacy, security, and more.",
     href: "/faq",
     linkLabel: "Open the FAQ",
-  },
-  {
-    id: "roadmap",
-    keywords: ["roadmap", "coming soon", "future plans", "what's next"],
-    text: "The Roadmap page lists what's shipped, what's next, and what's further out — honestly, without overpromising dates.",
-    href: "/roadmap",
-    linkLabel: "View Roadmap",
   },
 ];
 

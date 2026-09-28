@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Section } from "../../components/ui/Section";
-import { Button } from "../../components/ui/Button";
+import { Button, buttonClasses } from "../../components/ui/Button";
+import { DownloadWindowsButton } from "../../components/DownloadWindowsButton";
 import { Badge } from "../../components/ui/Badge";
 
 export const metadata: Metadata = {
@@ -41,7 +42,7 @@ export default function EnterprisePage() {
             architecture, with governance and collaboration layered on top.
           </p>
           <div className="mt-8 flex justify-center gap-4">
-            <Button href="/download">Get started</Button>
+            <DownloadWindowsButton source="enterprise-hero" className={buttonClasses()}>Get started</DownloadWindowsButton>
             <Button href="/pricing" variant="secondary">See pricing</Button>
           </div>
         </div>
@@ -97,7 +98,7 @@ export default function EnterprisePage() {
           Set up Team or Enterprise directly from the app — 20+ seats, self-serve, no sales call required.
         </p>
         <div className="mt-6">
-          <Button href="/download">Get started</Button>
+          <DownloadWindowsButton source="enterprise-footer" className={buttonClasses()}>Get started</DownloadWindowsButton>
         </div>
       </Section>
     </>

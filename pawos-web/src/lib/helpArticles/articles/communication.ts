@@ -42,15 +42,14 @@ export const COMMUNICATION_ARTICLES: HelpArticle[] = [
   {
     id: 'communication-calendar',
     category: 'communication',
-    title: 'Calendar',
-    summary: 'The current state of calendar support — and why meetings are detected differently.',
+    title: 'Meeting detection',
+    summary: 'How PawOS notices your meetings and offers to record them.',
     overview:
-      'PawOS does not have real calendar sync today — there is no Google Calendar (or other) API connector ' +
-      'built yet; that is a deferred roadmap item. Instead, meetings are detected at the desktop level (noticing ' +
-      'that a meeting app like Zoom, Meet, Teams, or Webex is running), not by reading your calendar.',
-    features: ['Desktop-level meeting detection (not calendar-based)'],
+      'PawOS notices when a meeting app like Zoom, Google Meet, Microsoft Teams or Webex is running on your ' +
+      'computer and offers to record the meeting — no calendar connection needed.',
+    features: ['Automatic meeting detection for Zoom, Google Meet, Microsoft Teams and Webex'],
     howItWorks: 'A meeting-detection watcher notices when a recognized meeting application is active and proactively offers to record it, rather than relying on calendar events.',
-    bestPractices: ['Do not rely on PawOS for calendar reminders today — use your existing calendar app for that'],
+    bestPractices: ['Keep your meeting app open in its own window so PawOS can detect it', 'Accept the recording offer when it appears, or ignore it to skip'],
     examples: [],
     troubleshooting: [],
     requirements: [],
@@ -58,8 +57,8 @@ export const COMMUNICATION_ARTICLES: HelpArticle[] = [
     relatedArticleIds: ['meetings', 'communication-email'],
     relatedSettings: [],
     relatedApps: ['communicationDrafts'],
-    faq: [{ question: 'Does PawOS sync with Google Calendar?', answer: 'Not today — real calendar sync is a deferred roadmap item, not a current feature.' }],
-    keywords: ['calendar', 'calendar sync', 'meeting detection'],
+    faq: [{ question: 'Which meeting apps does PawOS detect?', answer: 'Zoom, Google Meet, Microsoft Teams and Webex.' }],
+    keywords: ['calendar', 'meeting detection', 'record meeting'],
     aliases: ['Calendar', 'Calendar sync'],
     pawosVersion: '0.1.0',
     updated: '2026-07-20',

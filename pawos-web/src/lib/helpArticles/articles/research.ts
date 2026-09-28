@@ -17,8 +17,8 @@ export const RESEARCH_ARTICLES: HelpArticle[] = [
       'Manage multiple browser tabs/sessions',
     ],
     howItWorks:
-      'A browsing action first asks for your permission to navigate, then uses a real browser session (via ' +
-      'CDP) to perform the requested step. Every result — page text, extracted data, screenshots — reflects ' +
+      'A browsing action first asks for your permission to navigate, then uses a real browser session ' +
+      'to perform the requested step. Every result — page text, extracted data, screenshots — reflects ' +
       'what the page actually returned.',
     bestPractices: ['Grant navigation permission only for tasks you actually want PawOS browsing on your behalf for', 'Use "extract page data" for structured content instead of asking for a full page dump when you only need specific fields'],
     examples: [

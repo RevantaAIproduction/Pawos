@@ -102,7 +102,7 @@ export async function GET(request: Request) {
         .select('organization_id');
 
       if (!countError && memberCounts) {
-        memberCountsMap = memberCounts.reduce((acc: Record<string, number>, m: any) => {
+        memberCountsMap = memberCounts.reduce((acc: Record<string, number>, m) => {
           acc[m.organization_id] = (acc[m.organization_id] || 0) + 1;
           return acc;
         }, {});
@@ -112,7 +112,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       ok: true,
       data: {
-        items: (data || []).map((o: any) => ({
+        items: (data || []).map((o) => ({
           id: o.id,
           name: o.name,
           slug: o.slug,

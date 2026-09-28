@@ -9,7 +9,7 @@ export const companionPages: DocPage[] = [
     blocks: [
       {
         type: 'lead',
-        text: 'The companion is a live, real-time 3D character (rendered with three.js) that reflects PawOS’s emotional state and speaks with lip-synced viseme animation while it talks.',
+        text: 'The companion is a live, real-time 3D character that reflects PawOS’s mood and speaks with lip-synced animation while it talks.',
       },
       {
         type: 'paragraph',
@@ -33,9 +33,8 @@ export const companionPages: DocPage[] = [
         ],
       },
       {
-        type: 'status',
-        status: 'not-implemented',
-        text: 'AI-generated avatars (e.g. from a photo) are not implemented — the avatar-generation provider interface exists as a reserved extension point, but no provider is wired up. Uploading your own model is the real, working path today.',
+        type: 'note',
+        text: 'For a fully custom look, upload your own compatible 3D model.',
       },
     ],
     related: ['companion/3d-model-requirements'],

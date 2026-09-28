@@ -3,6 +3,7 @@ import styles from './dashboard.module.css';
 import { ipc } from '../../services/ipc/ipcBridgeImplementation';
 import { autonomousTaskBillingService } from '../../organization/AutonomousTaskBillingService';
 import { NativeBillingCheckoutModal, type NativeBillingCheckoutIntent } from '../billing/NativeBillingCheckoutModal';
+import { TicketHistory } from './TicketHistory';
 import {
   MIN_TICKET_BALANCE_TOPUP_USD,
   MAX_TICKET_BALANCE_TOPUP_USD,
@@ -372,6 +373,12 @@ export function TicketBalanceIndicator({
                     </button>
                   </div>
                 )}
+
+                {/* Ticket history — from the run records, with before/after evidence */}
+                <div>
+                  <div className={styles.walletSectionLabel}>Ticket history</div>
+                  <TicketHistory />
+                </div>
 
                 {/* Paw Compute separation reminder */}
                 <div className={styles.walletComputeNote}>

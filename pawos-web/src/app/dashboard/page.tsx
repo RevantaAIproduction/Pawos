@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import Image from "next/image";
 import { createClient } from "../../lib/supabase/server";
 import { SignOutButton } from "./SignOutButton";
-import { Button } from "../../components/ui/Button";
+import { Button, buttonClasses } from "../../components/ui/Button";
+import { DownloadWindowsButton } from "../../components/DownloadWindowsButton";
 
 export const dynamic = "force-dynamic";
 
@@ -125,9 +126,9 @@ export default async function DashboardPage() {
             your account and task credits.
           </p>
         </div>
-        <Button href="/download" variant="secondary">
+        <DownloadWindowsButton source="dashboard" className={buttonClasses("secondary")}>
           Download PawOS
-        </Button>
+        </DownloadWindowsButton>
         <Button href="/pricing" variant="primary">
           View plans
         </Button>

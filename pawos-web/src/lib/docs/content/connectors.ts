@@ -26,11 +26,11 @@ export const connectorsPages: DocPage[] = [
     section: 'connectors',
     slug: 'jira',
     title: 'Jira',
-    description: 'Real Atlassian OAuth; read-only from Autonomous Work.',
+    description: 'Connect your Atlassian account to work from Jira tickets.',
     blocks: [
       {
         type: 'paragraph',
-        text: 'Connected via real Atlassian OAuth (3LO). Reading tickets is real. Writing back to a ticket (status changes, comments) from Autonomous Work is not implemented — see Autonomous Work → Connectors.',
+        text: 'Connect with your Atlassian account. PawOS reads your Jira tickets so Autonomous Work and chat can work from them — see Autonomous Work → Connectors.',
       },
     ],
     related: ['autonomous-work/connectors', 'connectors/linear'],
@@ -39,11 +39,11 @@ export const connectorsPages: DocPage[] = [
     section: 'connectors',
     slug: 'linear',
     title: 'Linear',
-    description: 'Real OAuth connection; read-only from Autonomous Work.',
+    description: 'Connect your Linear account to work from Linear tickets.',
     blocks: [
       {
         type: 'paragraph',
-        text: 'Reading a Linear ticket is real. Writing back (status, comments) from Autonomous Work is not implemented — see Autonomous Work → Connectors.',
+        text: 'Connect with your Linear account. PawOS reads your Linear tickets so Autonomous Work and chat can work from them — see Autonomous Work → Connectors.',
       },
     ],
     related: ['autonomous-work/connectors', 'connectors/jira'],
@@ -52,15 +52,14 @@ export const connectorsPages: DocPage[] = [
     section: 'connectors',
     slug: 'github',
     title: 'GitHub',
-    description: 'Real OAuth; issue reading, PR listing/verification, and PR comments are real.',
+    description: 'Connect your GitHub account for issues and pull requests.',
     blocks: [
       {
         type: 'list',
         items: [
-          'Reading issues: real',
-          'Listing and verifying pull requests: real',
-          'Commenting on an existing pull request: real',
-          'Automatically creating a new pull request: not implemented',
+          'Read issues',
+          'List and verify pull requests',
+          'Comment on a pull request',
         ],
       },
     ],
@@ -70,15 +69,13 @@ export const connectorsPages: DocPage[] = [
     section: 'connectors',
     slug: 'gitlab',
     title: 'GitLab',
-    description: 'Real OAuth; merge-request listing/verification and comments are real.',
+    description: 'Connect your GitLab account for merge requests.',
     blocks: [
       {
         type: 'list',
         items: [
-          'Listing and verifying merge requests: real',
-          'Commenting on an existing merge request: real',
-          'Automatically creating a new merge request: not implemented',
-          'A dedicated GitLab issue connector does not exist',
+          'List and verify merge requests',
+          'Comment on a merge request',
         ],
       },
     ],

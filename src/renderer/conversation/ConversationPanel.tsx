@@ -31,6 +31,7 @@ import { useActivityStream } from './ActivitySidebar/useActivityStream';
 import { LiveStatus } from './LiveStatus/LiveStatus';
 import { ExtensionRenderer, type ExtensionRendererProps } from './extensions/ExtensionRenderer';
 import { TasksPanel } from './TasksPanel';
+import { ChatEvidence } from './ChatEvidence';
 import { ChatWidget } from './ChatWidget';
 import { ChatResume } from './ChatResume';
 import { TerminalView } from './TerminalView';
@@ -1868,6 +1869,13 @@ export function ConversationPanel({
                             return format === 'pdf' ? ipcBridge.careerExportPdf(doc, resume.title) : ipcBridge.careerExportDocx(doc, resume.title);
                           }}
                         />
+                      </div>
+                    );
+                  }
+                  if (message.evidence) {
+                    return (
+                      <div key={message.id} style={{ marginBottom: '12px', width: '100%' }}>
+                        <ChatEvidence evidence={message.evidence} onOpenFile={(path) => onOpenPath?.(path, 'file')} />
                       </div>
                     );
                   }

@@ -61,12 +61,11 @@ export const conceptsPages: DocPage[] = [
       },
       {
         type: 'paragraph',
-        text: 'It’s derived from an internal ExecutionRecord, which accumulates real evidence as actions run: command text, exit codes, real stdout/stderr, file operations, and structured validation results (typecheck/build/test/lint). Sections with no real evidence render an honest empty state — never a fabricated summary.',
+        text: 'It builds up as actions run: commands with their exit codes and output, file changes, and check results (type check, build, tests, lint). A section with nothing to show stays empty — PawOS never fills it with a made-up summary.',
       },
       {
-        type: 'status',
-        status: 'partial',
-        text: 'Software installation and PATH-repair actions currently only appear in a Work Record’s generic timeline (what ran, in what order) — their richer detail (package manager used, before/after PATH state, retry attempts) is not yet captured as structured evidence the way command and file evidence are.',
+        type: 'note',
+        text: 'Software installs and PATH repairs appear in the Work Record timeline, showing what ran and in what order.',
       },
     ],
     related: ['concepts/evidence', 'coding/software-installation', 'coding/work-records'],
@@ -86,9 +85,8 @@ export const conceptsPages: DocPage[] = [
         text: 'A plan is a real, structured list of steps (one per affected file), not free text. Structured plans render in the Task Card as a visual Plan Review surface with approve/reject controls and expandable per-file details.',
       },
       {
-        type: 'status',
-        status: 'partial',
-        text: 'Visual Plan Review is implemented at plan level. Approval/rejection is submitted back into the normal conversation, and actual code edits still require the existing applyCodeEdit/writeFile confirmation. Hunk-level approval is not implemented.',
+        type: 'note',
+        text: 'You approve or reject the plan as a whole, right in the conversation. Each code edit still asks for its own confirmation when it runs.',
       },
       {
         type: 'table',
@@ -166,7 +164,7 @@ export const conceptsPages: DocPage[] = [
     blocks: [
       {
         type: 'lead',
-        text: 'An entitlement is a real, backend-enforced capability gate — checked by the main process before an action runs, not a UI-only restriction a client could bypass.',
+        text: 'An entitlement is a capability your plan includes. It is checked by PawOS itself before an action runs — not just hidden in the interface — so it can’t be bypassed.',
       },
       {
         type: 'paragraph',
@@ -188,6 +186,6 @@ export const conceptsPages: DocPage[] = [
         text: 'Pro and Pro Max share the same normal interactive execution runtime. Pro Max additionally unlocks Pro Max-gated autonomous-work and project-management capabilities such as autonomousTaskBilling, Jira, and Linear, plus a larger Paw Compute allotment.',
       },
     ],
-    related: ['billing/plans', 'reference/entitlements'],
+    related: ['billing/plans', 'security/permissions'],
   },
 ];

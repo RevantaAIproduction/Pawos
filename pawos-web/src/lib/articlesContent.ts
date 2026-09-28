@@ -74,7 +74,7 @@ export const ARTICLES: Article[] = [
     excerpt: "What stays on your device, and what doesn't.",
     body: [
       "Most of what PawOS learns about you — your projects, your companion's memory, your workspace context — stays local on your device by default. It only leaves your machine when you explicitly share it into a Team or Enterprise Organization Workspace.",
-      "Reasoning still routes through cloud AI providers, because running frontier models locally isn't yet practical for most hardware — that's a real tradeoff, not something we pretend doesn't exist. What we control is everything around that: memory, credentials, and file access stay local-first, and organization data is scoped with row-level security so one workspace can never see another's.",
+      "Paw's reasoning runs in the cloud, because frontier-scale models need more than most computers can offer — that's a real tradeoff, and we say so. Everything around it is ours to protect: memory, credentials, and file access stay local-first, and organization data is isolated so one workspace can never see another's.",
       "We'd rather state these tradeoffs plainly than claim an unqualified \"100% private\" that doesn't survive scrutiny. See our Privacy Policy and Security documentation for the full detail.",
     ],
   },
@@ -148,13 +148,13 @@ export const ARTICLES: Article[] = [
   },
   {
     slug: "choosing-ai-providers",
-    title: "Choosing AI Providers",
+    title: "Why Paw Models",
     category: "Engineering",
-    excerpt: "Why PawOS abstracts the provider choice instead of exposing it.",
+    excerpt: "Why you pick a Paw model instead of managing AI vendors yourself.",
     body: [
       "Most AI products that let you \"bring your own model\" push a decision onto you that you're rarely equipped to make well: which provider is actually best for this specific task, today, at this price point.",
-      "PawOS routes internally instead — named Paw models (Flash, Swift, Core, Creative, Vision, Voice) map to the right underlying capability for the task and your tier, and that routing can improve over time without you having to re-choose anything.",
-      "This isn't a permanent lock-out of provider choice as a concept — it's a bet that most users want good results more than they want to manage a model marketplace themselves. Infrastructure and integration connectors work the opposite way, deliberately: you choose your own real hosting provider, ticket tracker, and source control system, because those are decisions with real, provider-specific consequences that shouldn't be abstracted away.",
+      "PawOS gives you named Paw models instead — Flash, Swift, Core, Vision, Voice and Memory — each tuned for a kind of work and matched to your tier, and they keep improving without you having to re-choose anything.",
+      "It's a bet that most people want good results more than they want to manage a model marketplace themselves. Infrastructure and integration connectors work the opposite way, deliberately: you choose your own real hosting provider, ticket tracker, and source control system, because those are decisions with real, provider-specific consequences that shouldn't be abstracted away.",
     ],
   },
   {
@@ -191,13 +191,12 @@ export const ARTICLES: Article[] = [
   },
   {
     slug: "roadmap-update-deployment-providers",
-    title: "Roadmap Update: 20+ real deployment providers",
-    category: "Roadmap",
+    title: "Product Update: 20+ deployment providers",
+    category: "Product",
     excerpt: "The Infrastructure Runtime now spans a genuinely provider-agnostic set of real integrations.",
     body: [
-      "The Infrastructure Runtime's connector interface now backs provider-aware deployment and production investigation paths. Broad SSH, Docker, CI/CD, and cloud execution adapters remain future work, not launched purchasable capability.",
-      "Every one of these shells to that provider's own official, already-authenticated CLI or API — none of them are simulated or partially implemented. Where a provider genuinely has no staging/rollback concept, the connector reports that honestly instead of fabricating one.",
-      "See the full Roadmap page for what's coming next.",
+      "PawOS now supports provider-aware deployments and production investigation across more than 20 hosting providers.",
+      "Each one works through that provider's own official tooling and your existing sign-in. Where a provider has no staging or rollback concept, PawOS tells you so plainly.",
     ],
   },
   {

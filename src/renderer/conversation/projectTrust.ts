@@ -11,11 +11,12 @@ const READ_ONLY_ACTIONS = new Set([
   'readFile', 'listDirectory', 'searchFiles', 'findFileSemantic', 'analyzeProject', 'analyzeProjectStructure',
   'analyzeFolder', 'findDuplicateFiles', 'getWorkspaceBundle', 'explainClassification',
   'gitStatus', 'gitDiff', 'gitDiffStat', 'gitLog', 'gitBranch', 'gitShow',
+  'checkEvidenceCapture',
 ]);
 
 function locationsOf(request: ActionRequest): string[] {
   const r = request as unknown as Record<string, unknown>;
-  return ['path', 'rootPath', 'cwd']
+  return ['path', 'rootPath', 'cwd', 'projectFolder']
     .map((key) => r[key])
     .filter((value): value is string => typeof value === 'string' && value.length > 0);
 }

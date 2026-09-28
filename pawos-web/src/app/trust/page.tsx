@@ -45,8 +45,7 @@ export default function TrustPage() {
       <Section className="border-t border-neutral-900 text-center">
         <p className="text-sm text-neutral-500">
           For the operational side of transparency, see{" "}
-          <Link href="/status" className="text-blue-400 hover:underline">Status</Link>,{" "}
-          <Link href="/roadmap" className="text-blue-400 hover:underline">Roadmap</Link>, and the{" "}
+          <Link href="/status" className="text-blue-400 hover:underline">Status</Link> and the{" "}
           <Link href="/changelog" className="text-blue-400 hover:underline">Changelog</Link>.
         </p>
       </Section>

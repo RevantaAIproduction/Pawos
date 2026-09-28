@@ -29,7 +29,7 @@ export const MOBILE_ARTICLES: HelpArticle[] = [
     permissions: [],
     faq: [
       { question: 'Is there a PawOS mobile app to download?', answer: 'No — mobile works through your phone\'s browser at pawos.app. You can add it to your home screen for an app-like experience, but there is nothing to install from an app store.' },
-      { question: 'Can I reply to Paw from my phone?', answer: 'Not yet — your phone shows a live preview of the desktop conversation, but replying from the phone is arriving in an upcoming update.' },
+      { question: 'What can I see from my phone?', answer: 'A live preview of your desktop conversation, notifications, and approvals for pending requests.' },
       { question: 'Can a Paw Go account pair a phone?', answer: 'No — mobile pairing requires Paw Pro or higher.' },
     ],
     relatedArticleIds: ['devices'],

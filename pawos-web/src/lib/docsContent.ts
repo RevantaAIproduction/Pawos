@@ -51,8 +51,8 @@ export const DOCS: DocPage[] = [
     body: [
       {
         paragraphs: [
-          "PawOS installers are not yet publicly published — see the Download page for current status per platform. Once available, installation follows the standard pattern for each OS: run the installer on Windows, mount and drag to Applications on macOS, or run the AppImage/install the package on Linux.",
-          "No separate runtime (like Node.js or Python) needs to be installed first — PawOS ships as a self-contained Electron application.",
+          "PawOS for Windows is released through early access: choose Download for Windows on this site to join, and we email you the installer link when your access opens. Run the installer and sign in when the app opens.",
+          "Nothing else needs to be installed first — PawOS is a self-contained desktop app.",
         ],
       },
     ],
@@ -65,12 +65,12 @@ export const DOCS: DocPage[] = [
     summary: "Minimum and recommended specs per platform.",
     body: [
       {
-        paragraphs: ["PawOS is an Electron application with a real-time 3D companion renderer, so requirements are modest but not trivial."],
+        paragraphs: ["PawOS is a desktop app with a real-time 3D companion, so requirements are modest but not trivial."],
         list: [
           "Windows: Windows 10 (64-bit) or later, 4 GB RAM minimum (8 GB recommended)",
           "macOS: macOS 12 Monterey or later, Apple Silicon or Intel",
           "Linux: a modern glibc-based distribution (Ubuntu 22.04+ or equivalent), 4 GB RAM minimum",
-          "A GPU capable of basic WebGL is recommended for smooth companion animation",
+          "A graphics card with 3D acceleration is recommended for smooth companion animation",
         ],
       },
     ],
@@ -145,7 +145,7 @@ export const DOCS: DocPage[] = [
     body: [
       {
         paragraphs: [
-          "You never pick a raw AI provider in PawOS — you pick a Paw model. Behind the scenes, each one routes to a real underlying provider (matched to your subscription tier and the task at hand), but that routing is an internal detail; the identity you see and configure is always one of the models below.",
+          "In PawOS you pick a Paw model, matched to your subscription tier and the task at hand. There is nothing else to configure — no accounts or keys to set up.",
         ],
       },
       {
@@ -175,16 +175,6 @@ export const DOCS: DocPage[] = [
         heading: "Paw Memory",
         paragraphs: [
           "Long-term recall across your conversations, projects, and work — this is what lets PawOS reference something from a past session or a different project without you having to re-explain it. It draws on the same Memory Graph that powers Project Understanding in the Coding Canvas.",
-        ],
-      },
-      {
-        heading: "Reserved for a future release — Creative and Motion",
-        paragraphs: [
-          "Two models are named in the catalog but not available yet — PawOS shows them as \"coming soon\" rather than quietly hiding them, so the roadmap is visible:",
-        ],
-        list: [
-          "Paw Creative — reserved for image, UI, and logo generation, concept art, and design assistance. Not available yet.",
-          "Paw Motion — reserved for companion motion generation. Not available yet.",
         ],
       },
     ],
@@ -337,7 +327,7 @@ export const DOCS: DocPage[] = [
     body: [
       {
         paragraphs: [
-          "See the Infrastructure Runtime documentation for the full architecture. In practice: tell Paw to deploy through an already-supported connector, and it uses that connector's existing local CLI/API path and verifies health afterward. SSH, Docker, CI/CD, and broad cloud execution adapters are future work.",
+          "See the Infrastructure Runtime documentation for the full architecture. In practice: tell Paw to deploy through a supported provider, and it uses that provider's own tools with your existing sign-in, then verifies health afterward.",
         ],
       },
     ],
@@ -408,21 +398,6 @@ export const DOCS: DocPage[] = [
     related: ["faq"],
   },
   {
-    slug: "api-reference",
-    title: "API Reference",
-    category: "Reference",
-    summary: "The current state of PawOS's programmatic interfaces.",
-    body: [
-      {
-        paragraphs: [
-          "PawOS does not currently expose a public, stable REST or GraphQL API for third-party integration. Internally, the desktop app communicates between its main and renderer processes over a typed IPC contract, and Team/Enterprise features are backed by Supabase with row-level security.",
-          "A public API is not on the current roadmap as a committed feature — if that changes, this page will document real endpoints, not a speculative draft.",
-        ],
-      },
-    ],
-    related: ["developer-documentation"],
-  },
-  {
     slug: "keyboard-shortcuts",
     title: "Keyboard Shortcuts",
     category: "Reference",
@@ -471,21 +446,10 @@ export const DOCS: DocPage[] = [
     summary: "How PawOS releases are versioned.",
     body: [
       {
-        paragraphs: ["PawOS follows semantic versioning (major.minor.patch) once public releases begin. See the Changelog for what's shipped in development so far."],
+        paragraphs: ["PawOS follows semantic versioning (major.minor.patch). See the Changelog for what has shipped."],
       },
     ],
     related: ["release-notes"],
-  },
-  {
-    slug: "migration-guides",
-    title: "Migration Guides",
-    category: "Reference",
-    summary: "Guidance for upgrading between PawOS versions.",
-    body: [
-      {
-        paragraphs: ["No breaking migrations exist yet — PawOS has not published a versioned release. Once one ships, any migration steps required between versions will be documented here in full, not summarized."],
-      },
-    ],
   },
   {
     slug: "release-notes",
@@ -507,8 +471,8 @@ export const DOCS: DocPage[] = [
     body: [
       {
         paragraphs: [
-          "PawOS is an Electron desktop application. The main process owns system-level integration (file system, processes, IPC, native windows); the renderer process owns UI and the 3D companion. A router directs conversational requests to the right internal runtime (Universal Execution, Browser, Infrastructure, Communication, Companion, Governance), each independently real rather than one monolithic prompt.",
-          "Team and Enterprise features are backed by Supabase, with row-level security scoping every table to the requesting organization.",
+          "PawOS is a desktop app that works directly with your files, terminal, browser and connected accounts. Each request is routed to the engine built for it — Universal Execution, Browser, Infrastructure, Communication, Companion or Governance.",
+          "Team and Enterprise data is isolated per organization, so members only ever see their own organization's data.",
         ],
         list: [],
       },
@@ -527,7 +491,7 @@ export const DOCS: DocPage[] = [
         ],
       },
     ],
-    related: ["architecture-overview", "api-reference"],
+    related: ["architecture-overview"],
   },
 ];
 

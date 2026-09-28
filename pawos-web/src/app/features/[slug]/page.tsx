@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Section } from "../../../components/ui/Section";
 import { Container } from "../../../components/ui/Container";
-import { Button } from "../../../components/ui/Button";
+import { buttonClasses } from "../../../components/ui/Button";
+import { DownloadWindowsButton } from "../../../components/DownloadWindowsButton";
 import { Badge } from "../../../components/ui/Badge";
 import { Breadcrumbs } from "../../../components/ui/Breadcrumbs";
 import { FEATURES, getFeatureBySlug } from "../../../lib/featuresContent";
@@ -89,9 +90,9 @@ export default async function FeatureDetailPage({ params }: { params: Promise<{ 
               </ul>
             </div>
             <div className="rounded-xl border border-neutral-800 p-6">
-              <Button href="/download" className="w-full">
+              <DownloadWindowsButton source="feature-page" className={buttonClasses("primary", "w-full")}>
                 Try it in PawOS
-              </Button>
+              </DownloadWindowsButton>
               <Link href="/features" className="mt-4 block text-center text-sm text-neutral-500 hover:text-neutral-300">
                 ← All features
               </Link>

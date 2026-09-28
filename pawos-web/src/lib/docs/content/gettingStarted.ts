@@ -10,7 +10,7 @@ export const gettingStartedPages: DocPage[] = [
     blocks: [
       {
         type: 'lead',
-        text: 'PawOS is a native Electron desktop application \u2014 an AI companion that runs on your machine and can take real, confirmed action on your files, terminal, browser, and connected services.',
+        text: 'PawOS is a native desktop app \u2014 an AI companion that runs on your machine and can take real, confirmed action on your files, terminal, browser, and connected services.',
       },
       {
         type: 'paragraph',
@@ -19,7 +19,7 @@ export const gettingStartedPages: DocPage[] = [
       { type: 'heading', level: 2, id: 'how-it-works', text: 'How it works, at a glance' },
       {
         type: 'paragraph',
-        text: 'A conversational runtime (main process: ConversationRuntime + ExecutionSupervisor) turns what you ask for into typed action requests, dispatches them through a plugin-based execution engine (DesktopExecutionEngine), and records what actually happened as structured evidence \u2014 not a summary the model wrote after the fact.',
+        text: 'PawOS turns what you ask for into concrete, checked actions, carries them out on your machine, and records what actually happened as evidence \u2014 not a summary written after the fact.',
       },
       {
         type: 'list',
@@ -54,7 +54,7 @@ export const gettingStartedPages: DocPage[] = [
       {
         type: 'steps',
         items: [
-          { title: 'Start with the desktop app', detail: 'PawOS is desktop-first. The website documents the product, but everyday work happens in the Electron app beside your files, browser, terminal, and companion overlay.' },
+          { title: 'Start with the desktop app', detail: 'PawOS is desktop-first. The website documents the product, but everyday work happens in the desktop app beside your files, browser, terminal, and companion.' },
           { title: 'Think in tasks', detail: 'Ask for outcomes: "explain this repo", "add dark mode", "run the tests", or "prepare this ticket." PawOS groups each request into a task with its own evidence.' },
           { title: 'Select a workspace', detail: 'For coding and file work, point PawOS at an explicit folder. That folder becomes the normal filesystem and command boundary for the task.' },
           { title: 'Use read-only questions first', detail: 'Ask what the project does, what framework it uses, or which files a feature might touch. Project understanding is available before execution.' },
@@ -83,28 +83,23 @@ export const gettingStartedPages: DocPage[] = [
     section: 'getting-started',
     slug: 'installation',
     title: 'Installation',
-    description: 'How to install PawOS once a build is available for your platform.',
+    description: 'How to install PawOS for Windows.',
     blocks: [
       {
         type: 'lead',
-        text: 'PawOS ships as a self-contained Electron application \u2014 no separate runtime like Node.js or Python needs to be installed first.',
-      },
-      {
-        type: 'status',
-        status: 'not-verified',
-        text: 'Public installers are not yet published for general download. Check the Download page for current per-platform availability before following the steps below.',
-      },
-      {
-        type: 'warning',
-        text: 'Do not follow unofficial installer links. If a public installer is not listed by PawOS, treat the platform as not generally available yet.',
+        text: 'PawOS is a self-contained Windows desktop app \u2014 nothing else needs to be installed first.',
       },
       {
         type: 'steps',
         items: [
-          { title: 'Windows', detail: 'Installer packaging is configured for Electron Builder, but public Windows installers are not generally published. When available, first launch signs in, then workspace and OS permissions are requested as needed.' },
-          { title: 'macOS', detail: 'A public macOS disk image is not currently verified as published. Do not assume notarization, auto-update, or distribution status until the Download page says so.' },
-          { title: 'Linux', detail: 'A public Linux AppImage/package is not currently verified as published. Treat Linux installation instructions as preparatory until a build is explicitly released.' },
+          { title: 'Get the installer', detail: 'Choose Download for Windows on this site and join early access. We email you the installer link when your access opens.' },
+          { title: 'Run the installer', detail: 'Open the installer from the email and follow the prompts.' },
+          { title: 'Sign in', detail: 'Open PawOS and sign in. Workspace and system permissions are requested only when a task needs them.' },
         ],
+      },
+      {
+        type: 'warning',
+        text: 'Only install PawOS from the link we email you.',
       },
       { type: 'heading', level: 2, id: 'first-launch', text: 'First launch' },
       {
@@ -114,9 +109,8 @@ export const gettingStartedPages: DocPage[] = [
       {
         type: 'faq',
         items: [
-          { q: 'What if launch fails?', a: 'Check whether the build is from an official source, whether the app has permission to run, and whether your OS blocked an unsigned or unverified package.' },
-          { q: 'Do I need Node.js first?', a: 'No for the packaged desktop app. Developer builds of this repository do require the project dependencies and build scripts.' },
-          { q: 'How do updates work?', a: 'General public update distribution is not verified in the current docs. Use only the official release/update path when one is published.' },
+          { q: 'What if launch fails?', a: 'Make sure you installed from the link we emailed you, that Windows allowed the app to run, and see Troubleshooting → PawOS won’t start.' },
+          { q: 'Do I need anything else installed first?', a: 'No — the PawOS installer includes everything the app needs.' },
         ],
       },
     ],
@@ -139,7 +133,7 @@ export const gettingStartedPages: DocPage[] = [
       },
       {
         type: 'note',
-        text: 'A GPU capable of basic WebGL is recommended for smooth companion rendering \u2014 PawOS still runs without one, with reduced animation quality.',
+        text: 'A graphics card with 3D acceleration is recommended for smooth companion animation \u2014 PawOS still runs without one, with reduced animation quality.',
       },
     ],
     related: ['getting-started/installation'],

@@ -13,28 +13,24 @@ export const DESKTOP_ARTICLES: HelpArticle[] = [
     features: [
       'Updates — a real Updates settings tab showing your current version and checking for updates',
       'Performance — a real Performance settings tab',
-      'GPU — the 3D companion is rendered with three.js/WebGL and uses your system GPU when available',
+      'Graphics — the 3D companion uses your graphics card when available',
       'Storage — local data lives under your OS’s app-data directory as small, separate JSON files per feature area',
       'Settings — the full categorized panel: General, Appearance, Companion, Voice, Notifications, Privacy, Performance, Updates, Advanced, plus Account, Billing, Usage, Devices',
-      'Logs — not yet available as a dedicated in-app viewer for end users',
-      'Reset PawOS — no one-click in-app reset exists today',
     ],
     howItWorks:
       'Most desktop settings are self-explanatory from their tab. For storage, each feature area (companion, ' +
       'billing, execution history, etc.) writes its own small JSON file rather than one large database, making ' +
       'individual data easy to reason about.',
-    bestPractices: ['Check the Updates tab periodically to stay current', 'If you need to fully reset local state today, close PawOS first before touching any files manually'],
+    bestPractices: ['Check the Updates tab periodically to stay current', 'To reset PawOS’s local data, close the app first, then clear its app-data folder'],
     examples: [],
     troubleshooting: [
-      'There is currently no dedicated in-app log viewer for end users — this is an honest gap, not a hidden feature',
-      'There is currently no one-click "Reset PawOS" button — the real way to reset local state today is to close the app and clear its local app-data folder manually',
+      'To reset PawOS’s local state, close the app and clear its app-data folder',
     ],
     requirements: [],
     permissions: [],
     faq: [
-      { question: 'Can I view app logs from inside PawOS?', answer: 'Not yet — there is no dedicated in-app log viewer for end users today.' },
-      { question: 'Is there a "Reset PawOS" button?', answer: 'Not yet — resetting today means manually clearing the app’s local app-data folder while PawOS is closed.' },
-      { question: 'Does the companion use my GPU?', answer: 'Yes — 3D rendering uses three.js/WebGL and takes advantage of your system GPU when available.' },
+      { question: 'How do I reset PawOS?', answer: 'Close PawOS, then clear its app-data folder. Your account isn’t affected — just sign in again.' },
+      { question: 'Does the companion use my graphics card?', answer: 'Yes — 3D rendering uses your graphics card when available.' },
     ],
     relatedArticleIds: ['navigation', 'privacy', 'security'],
     relatedSettings: ['Updates', 'Performance', 'General', 'Advanced'],

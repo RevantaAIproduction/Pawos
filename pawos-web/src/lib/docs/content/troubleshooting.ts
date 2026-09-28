@@ -11,7 +11,7 @@ export const troubleshootingPages: DocPage[] = [
         type: 'list',
         items: [
           'Confirm your OS meets the minimum requirements — see Getting Started → System Requirements.',
-          'Restart your machine — Electron apps occasionally fail to acquire a GPU/display lock after a long uptime.',
+          'Restart your computer — after a long uptime the app can occasionally fail to access the graphics card or display.',
           'Reinstall using the latest installer for your platform.',
         ],
       },
@@ -37,14 +37,17 @@ export const troubleshootingPages: DocPage[] = [
   {
     section: 'troubleshooting',
     slug: 'ai-provider-problems',
-    title: 'AI provider problems',
+    title: 'AI response problems',
     description: 'When PawOS doesn’t respond, or tools don’t work.',
     blocks: [
       {
-        type: 'warning',
-        text: 'Tool-calling (the mechanism behind every real action PawOS takes — file edits, commands, installs) requires an action-capable PawOS reasoning configuration. If you switch to a provider mode that only supports conversation, PawOS can still answer questions, but action requests will not be reachable the same way.',
+        type: 'list',
+        items: [
+          'Check your internet connection — Paw’s reasoning needs to be online.',
+          'Check Settings → Usage — if you’ve reached your plan’s usage limit, responses pause until it refreshes or you upgrade.',
+          'If Paw answers questions but won’t take actions, confirm you’re on Paw Pro or higher — actions such as file edits, commands and installs need Pro.',
+        ],
       },
-      { type: 'paragraph', text: 'If actions are not running at all, check Settings → AI Model and confirm the active model/provider is action-capable for your tier.' },
     ],
     related: ['troubleshooting/tool-execution-problems'],
   },
@@ -57,7 +60,7 @@ export const troubleshootingPages: DocPage[] = [
       {
         type: 'list',
         items: [
-          'Confirm you’re on Paw Pro or higher — execution requires the advancedRuntimes entitlement; Paw Go is read-only. See Core Concepts → Entitlements.',
+          'Confirm you’re on Paw Pro or higher — taking actions requires Pro; Paw Go is read-only. See Billing → Plans.',
           'Check whether a confirmation is pending — a destructive action waits for your explicit yes before it runs.',
           'Check the request’s Work Record for the real, specific failure reason rather than assuming.',
         ],
@@ -144,7 +147,7 @@ export const troubleshootingPages: DocPage[] = [
       {
         type: 'list',
         items: [
-          'Payments are processed through Razorpay — a declined payment is reported by your bank/card issuer, not PawOS.',
+          'A declined payment is reported by your bank or card issuer, not PawOS — check with them, or try another payment method.',
           'Autonomous Work Credits and your subscription are separate balances — check you’re looking at the right one in Account → Billing.',
         ],
       },

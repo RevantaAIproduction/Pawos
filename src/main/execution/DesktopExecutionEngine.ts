@@ -94,6 +94,7 @@ import { refreshDevBrowserPlugin } from './plugins/RefreshDevBrowserPlugin';
 import { readBrowserConsolePlugin } from './plugins/ReadBrowserConsolePlugin';
 import { readBrowserNetworkPlugin } from './plugins/ReadBrowserNetworkPlugin';
 import { captureBrowserScreenshotPlugin } from './plugins/CaptureBrowserScreenshotPlugin';
+import { captureEvidencePlugin } from './plugins/CaptureEvidencePlugin';
 import { fillDevFormPlugin } from './plugins/FillDevFormPlugin';
 import { downloadProjectFilePlugin } from './plugins/DownloadProjectFilePlugin';
 import { uploadProjectFilePlugin } from './plugins/UploadProjectFilePlugin';
@@ -309,6 +310,7 @@ export class DesktopExecutionEngine extends EventEmitter {
     readBrowserConsolePlugin,
     readBrowserNetworkPlugin,
     captureBrowserScreenshotPlugin,
+    captureEvidencePlugin,
     fillDevFormPlugin,
     downloadProjectFilePlugin,
     uploadProjectFilePlugin,

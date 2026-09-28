@@ -11,6 +11,9 @@ import { CONNECTOR_ID_BY_TICKET_SOURCE, connectorDisplayName } from './Autonomou
 import { getSupabaseClient } from '../auth/supabaseClient';
 import { resolveCredentialsForOrganization } from './CredentialResolver';
 import type { ActionRequest, ActionResult } from '../../shared/actions/ActionTypes';
+import type { EvidenceItem } from '../../shared/evidence/EvidenceTypes';
+import { ticketEvidenceService } from './TicketEvidenceService';
+import { loadEvidenceImage } from '../conversation/evidenceImageLoader';
 import type { ExecutionRecord } from '../../shared/actions/ExecutionRecordTypes';
 import type {
   AutonomousEvidenceCheck,
@@ -79,6 +82,8 @@ export function buildAutonomousPrompt(ticket: AutonomousTicketContext, cwd: stri
     ticket.ticketDescription ? `Description: ${ticket.ticketDescription}` : null,
     `The repository is checked out locally at: ${cwd}`,
     'Investigate the ticket and this repository, form a plan for the smallest safe fix, apply it, and validate it (typecheck/lint/build/tests, as applicable to this project) before finishing.',
+    'Evidence is optional: only for a layout/visual bug, or when the code alone does not show where the problem is, call check_evidence_capture, then capture_evidence "before" (the actual failure on screen, or the failing output) and, once fixed and verified locally, "after" of the same target. Skip it for small changes (text, colours, a button, OAuth/sign-in fixes). If capture is unavailable, continue without it — it never decides whether the ticket succeeded.',
+    'End your final reply with one line: "Fix summary: <what you changed, in one sentence>".',
     'If you determine this genuinely cannot be resolved (e.g. insufficient information, the described behavior does not reproduce, or a required capability is unavailable), say so plainly and stop rather than making an unrelated change.',
   ].filter((line): line is string => Boolean(line));
   return lines.join('\n');
@@ -151,8 +156,28 @@ export function deriveOutcomeFromExecutionRecord(record: ExecutionRecord | null)
 // ---------------------------------------------------------------------------
 
 export type HeadlessTurnResult =
-  | { kind: 'finished'; executionRecord: ExecutionRecord | null }
-  | { kind: 'waitingForPermission'; executionRecord: ExecutionRecord | null };
+  | { kind: 'finished'; executionRecord: ExecutionRecord | null; finalResponse?: string }
+  | { kind: 'waitingForPermission'; executionRecord: ExecutionRecord | null; finalResponse?: string };
+
+/** "What was fixed" for the Ticket Wallet history: the model's "Fix summary:" line, else its reply's first sentence. */
+export function extractFixSummary(finalResponse: string | undefined): string | null {
+  const text = (finalResponse ?? '').trim();
+  if (!text) return null;
+  const tagged = text.match(/fix summary:\s*(.+)/i)?.[1]?.trim();
+  const summary = tagged || text.split(/(?<=[.!?])\s/)[0]!.trim();
+  return summary ? summary.slice(0, 1000) : null;
+}
+
+/** The last non-empty assistant reply of a headless turn. */
+function lastAssistantText(runtime: ConversationRuntime): string | undefined {
+  // Only for the history's "what was fixed" — must never be able to break a run.
+  try {
+    const messages = runtime.getSnapshot?.()?.messages ?? [];
+    return [...messages].reverse().find((m) => m.role === 'assistant' && m.content.trim() && !m.id.startsWith('evidence-'))?.content;
+  } catch {
+    return undefined;
+  }
+}
 
 export interface AutonomousTurnRunner {
   /** Starts a brand-new headless turn. Resolves once the turn either finishes (naturally or via
@@ -589,6 +614,11 @@ export class HeadlessTurnRunner implements AutonomousTurnRunner {
       getExecutionMode: () => executionMode,
       isBypassPermissionsEnabled: () => false,
       autonomousRunId: opts.autonomousRunId ?? undefined,
+      // Evidence is saved on the run record (best-effort — never affects the run's outcome or charge).
+      ...(opts.autonomousRunId
+        ? { onEvidenceCaptured: (evidence: EvidenceItem, imageBase64?: string) => ticketEvidenceService.persistEvidence(opts.autonomousRunId!, evidence, imageBase64) }
+        : {}),
+      loadEvidenceImage,
       onTurnUsage: async (submission) => {
         console.log('[AUTONOMOUS_RUN_USAGE_RECORD_START] runId:', opts.autonomousRunId);
         const recordPromise = bridge.billingRecordAutonomousTurnUsage?.(submission);
@@ -612,7 +642,9 @@ export class HeadlessTurnRunner implements AutonomousTurnRunner {
 
     const settlement = this.awaitSettlement(runtime, () => latestRecord);
     runtime.submitTranscript(prompt);
-    const result = await settlement;
+    const settled = await settlement;
+    const finalResponse = lastAssistantText(runtime);
+    const result: HeadlessTurnResult = finalResponse ? { ...settled, finalResponse } : settled;
 
     if (opts.autonomousRunId) {
       if (result.kind === 'finished') {
@@ -678,6 +710,9 @@ export interface AutonomousOrchestrationDeps {
   verifyPullRequestExists: (prUrl: string) => ReturnType<ReturnType<typeof getIpcBridge>['connectivityVerifyPullRequestExists']>;
   postCompletionComment: (runId: string, prUrl: string, body: string) => ReturnType<ReturnType<typeof getIpcBridge>['connectivityPostAutonomousCompletionComment']>;
   getCurrentUserId: () => Promise<string>;
+  /** Ticket title / what was fixed on the run record, for the Ticket Wallet history. Best-effort and
+   *  descriptive only: never billing, status or the run's outcome. Optional (tests may omit it). */
+  recordRunDetails?: (runId: string, details: { ticketTitle?: string | null; fixSummary?: string | null }) => Promise<void>;
   /** Real `git status --porcelain -b` against the SOURCE checkout (never the isolated worktree) —
    *  this is how "git state is known" before execution begins is actually satisfied, not asserted. */
   checkGitState: (cwd: string) => Promise<ActionResult>;
@@ -692,6 +727,7 @@ function defaultDeps(): AutonomousOrchestrationDeps {
     billingService: autonomousTaskBillingService,
     turnRunner: headlessTurnRunner,
     getConnectorStatus: (connectorId, scope) => bridge.connectivityGetStatus(connectorId, scope),
+    recordRunDetails: (runId, details) => ticketEvidenceService.recordRunDetails(runId, details),
     verifyPullRequestExists: (prUrl) => bridge.connectivityVerifyPullRequestExists(prUrl),
     postCompletionComment: (runId, prUrl, body) => bridge.connectivityPostAutonomousCompletionComment({ runId, prUrl, comment: body }),
     getCurrentUserId: async () => {
@@ -731,6 +767,7 @@ export interface AutonomousOrchestrationResult {
  */
 export async function orchestrateAutonomousRun(input: AutonomousOrchestrationInput, deps: AutonomousOrchestrationDeps = defaultDeps()): Promise<AutonomousOrchestrationResult> {
   console.log('[AUTONOMOUS_RUN_START] runId:', input.runId, 'ticketId:', input.ticketId, 'source:', input.ticketSource);
+  if (input.ticketTitle) void deps.recordRunDetails?.(input.runId, { ticketTitle: input.ticketTitle }).catch(() => undefined);
 
   // Capture wallet balance before execution
   const walletBefore = await deps.billingService.getTicketBalance(input.organizationId ?? null);
@@ -846,6 +883,8 @@ export async function orchestrateAutonomousRun(input: AutonomousOrchestrationInp
     };
   }
 
+  const fixSummary = extractFixSummary(turnResult.finalResponse);
+  if (fixSummary) void deps.recordRunDetails?.(input.runId, { fixSummary }).catch(() => undefined);
   return finishAutonomousRun(input, turnResult.executionRecord, deps, preflightChecks);
 }
 
