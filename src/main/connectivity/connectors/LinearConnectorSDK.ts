@@ -34,7 +34,10 @@ export class LinearConnectorSDK implements ConnectorSDK {
     oauth: {
       authorizationUrl: 'https://linear.app/oauth/authorize',
       tokenUrl: 'https://api.linear.app/oauth/token',
-      scopes: ['read'],
+      // write: Autonomous Work comments on the issue and updates its status (LinearWriteBackPlugin).
+      // Tokens granted before this was added need a reconnect.
+      scopes: ['read', 'write'],
+      scopeSeparator: ',' as const,
       clientIdEnvVar: 'LINEAR_CLIENT_ID',
       clientSecretEnvVar: 'LINEAR_CLIENT_SECRET',
       redirectUriEnvVar: 'LINEAR_REDIRECT_URL',

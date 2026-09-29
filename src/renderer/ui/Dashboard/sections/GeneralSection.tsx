@@ -45,16 +45,26 @@ function ThemeSwatchPreview({ mode }: { mode: ThemeMode }) {
 export function GeneralSection() {
   const [settings, setSettingsState] = useState<SettingsState | null>(null);
   const [version, setVersion] = useState('…');
+  // Microsoft Store build: Windows (Settings > Apps > Startup) decides whether PawOS starts, so the
+  // toggle shows that real state rather than only the saved preference.
+  const [startup, setStartup] = useState<{ managedByWindows: boolean; enabled: boolean | null }>({ managedByWindows: false, enabled: null });
 
   useEffect(() => {
     ipc.settingsGet().then(setSettingsState).catch(() => {});
     ipc.systemGetAppVersion().then(setVersion).catch(() => {});
+    const refreshStartup = () => ipc.systemGetStartWithWindowsStatus().then(setStartup).catch(() => {});
+    void refreshStartup();
+    // Picks up a change made in Windows Settings when the user comes back to PawOS.
+    window.addEventListener('focus', refreshStartup);
+    return () => window.removeEventListener('focus', refreshStartup);
   }, []);
 
   const toggleStartWithWindows = async (checked: boolean) => {
     setSettingsState((s) => (s ? { ...s, startWithWindows: checked } : s));
     await ipc.settingsSet({ startWithWindows: checked });
   };
+
+  const startWithWindowsChecked = startup.managedByWindows ? startup.enabled === true : settings?.startWithWindows ?? true;
 
   const setThemeMode = async (themeMode: ThemeMode) => {
     setSettingsState((s) => (s ? { ...s, themeMode } : s));
@@ -76,8 +86,13 @@ export function GeneralSection() {
         <h3 className={styles.cardTitle}>Startup</h3>
         <label className={styles.settingsToggleRow}>
           <span>Start PawOS when Windows starts</span>
-          <Toggle checked={settings?.startWithWindows ?? true} onChange={toggleStartWithWindows} />
+          <Toggle checked={startWithWindowsChecked} onChange={toggleStartWithWindows} />
         </label>
+        {startup.managedByWindows && (
+          <p className={styles.cardBody} style={{ marginTop: 8 }}>
+            Windows manages startup for Microsoft Store apps — changing this opens Windows Settings › Apps › Startup, where you can turn PawOS on or off.
+          </p>
+        )}
       </div>
 
       <div className={styles.card} style={{ marginTop: 14 }}>

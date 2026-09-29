@@ -23,7 +23,7 @@ export async function reconcileJiraComment(
   try {
     // Query issue comments, ordered by newest first
     const response = await fetch(
-      `${jiraUrl}/rest/api/3/issue/${issueKey}/comments?orderBy=-created&maxResults=50`,
+      `${jiraUrl}/rest/api/3/issue/${issueKey}/comment?orderBy=-created&maxResults=50`,
       {
         method: 'GET',
         headers: {

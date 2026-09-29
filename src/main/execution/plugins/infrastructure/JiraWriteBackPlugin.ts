@@ -49,7 +49,7 @@ export async function postJiraComment(input: JiraCommentInput): Promise<JiraWrit
   try {
     const authorization = buildJiraAuthorizationHeader(input.apiEmail, input.apiToken);
 
-    const response = await fetch(`${input.jiraUrl}/rest/api/3/issue/${input.issueKey}/comments`, {
+    const response = await fetch(`${input.jiraUrl}/rest/api/3/issue/${input.issueKey}/comment`, {
       method: "POST",
       headers: {
         Authorization: authorization,

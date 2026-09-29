@@ -1,63 +1,40 @@
 import { execFile } from 'child_process';
-import { STORE_STARTUP_TASK_ID } from './storeRuntime';
+import { STORE_PACKAGE_FAMILY_NAME, STORE_STARTUP_TASK_ID } from './storeRuntime';
 
-/** Windows.ApplicationModel.StartupTaskState names. */
+/** Windows.ApplicationModel.StartupTaskState, by value. */
 export type StartupTaskState = 'Disabled' | 'DisabledByUser' | 'Enabled' | 'DisabledByPolicy' | 'EnabledByPolicy';
+const STATE_BY_VALUE: readonly StartupTaskState[] = ['Disabled', 'DisabledByUser', 'Enabled', 'DisabledByPolicy', 'EnabledByPolicy'];
 
-const KNOWN_STATES: readonly StartupTaskState[] = ['Disabled', 'DisabledByUser', 'Enabled', 'DisabledByPolicy', 'EnabledByPolicy'];
-
-// Windows.ApplicationModel.StartupTask is a WinRT API with no Electron binding. A PowerShell
-// process launched by a packaged app runs with that package's identity, so it can resolve the
-// StartupTask declared in the package manifest (build/msix/extensions.xml). Only used when
-// running as the Microsoft Store (MSIX) build.
-const SCRIPT = `
-$ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName System.Runtime.WindowsRuntime
-$asTask = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
-  $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1'
-} | Select-Object -First 1
-function Await($op, [type]$resultType) {
-  $t = $asTask.MakeGenericMethod($resultType).Invoke($null, @($op))
-  $t.Wait(-1) | Out-Null
-  $t.Result
+export function isStartupTaskOn(state: StartupTaskState | null): boolean {
+  return state === 'Enabled' || state === 'EnabledByPolicy';
 }
-[Windows.ApplicationModel.StartupTask, Windows.ApplicationModel, ContentType = WindowsRuntime] | Out-Null
-$task = Await ([Windows.ApplicationModel.StartupTask]::GetAsync($env:PAWOS_STARTUP_TASK_ID)) ([Windows.ApplicationModel.StartupTask])
-switch ($env:PAWOS_STARTUP_ACTION) {
-  'enable'  { Write-Output (Await ($task.RequestEnableAsync()) ([Windows.ApplicationModel.StartupTaskState])) }
-  'disable' { $task.Disable(); Write-Output $task.State }
-  default   { Write-Output $task.State }
-}
-`;
 
-function runStartupTaskScript(action: 'get' | 'enable' | 'disable'): Promise<StartupTaskState> {
-  const encoded = Buffer.from(SCRIPT, 'utf16le').toString('base64');
-  return new Promise((resolve, reject) => {
-    execFile(
-      'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded],
-      {
-        windowsHide: true,
-        timeout: 15000,
-        env: { ...process.env, PAWOS_STARTUP_TASK_ID: STORE_STARTUP_TASK_ID, PAWOS_STARTUP_ACTION: action },
-      },
-      (err, stdout, stderr) => {
-        if (err) {
-          reject(new Error(`StartupTask ${action} failed: ${stderr?.toString().trim() || err.message}`));
-          return;
-        }
-        const state = stdout.toString().trim().split(/\r?\n/).pop()?.trim() as StartupTaskState | undefined;
-        if (state && KNOWN_STATES.includes(state)) resolve(state);
-        else reject(new Error(`StartupTask ${action} returned an unexpected state: ${JSON.stringify(stdout.toString().trim())}`));
+// Changing a StartupTask needs the WinRT API called with the package identity. Electron can't
+// call WinRT, and processes PawOS launches (e.g. PowerShell) do NOT carry the package identity —
+// StartupTask.GetAsync fails there with "Element not found" (0x80070490). So the Store build only
+// READS the state Windows keeps for the task (plain HKCU registry, no identity needed); the user
+// turns it on/off in Windows Settings > Apps > Startup.
+const TASK_KEY =
+  `HKCU\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\CurrentVersion\\AppModel\\SystemAppData\\` +
+  `${STORE_PACKAGE_FAMILY_NAME}\\${STORE_STARTUP_TASK_ID}`;
+
+/** The startup task's current state, or null if Windows hasn't registered it (or it can't be read). */
+export function readStartupTaskState(): Promise<StartupTaskState | null> {
+  return new Promise((resolve) => {
+    execFile('reg', ['query', TASK_KEY, '/v', 'State'], { windowsHide: true, timeout: 10_000 }, (err, stdout) => {
+      if (err) {
+        resolve(null);
+        return;
       }
-    );
+      const match = /State\s+REG_DWORD\s+0x([0-9a-f]+)/i.exec(stdout.toString());
+      const value = match?.[1] ? parseInt(match[1], 16) : NaN;
+      resolve(STATE_BY_VALUE[value] ?? null);
+    });
   });
 }
 
 export const storeStartupTask = {
-  getState: () => runStartupTaskScript('get'),
-  enable: () => runStartupTaskScript('enable'),
-  disable: () => runStartupTaskScript('disable'),
+  getState: readStartupTaskState,
 };
 
 export type StoreStartupTaskApi = typeof storeStartupTask;

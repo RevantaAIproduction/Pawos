@@ -51,11 +51,11 @@ export function getConnectivityOAuthProviderConfig(connectorId: string): Connect
     case 'googleWorkspace':
       return provider('GOOGLE_WORKSPACE_CLIENT_ID', 'GOOGLE_WORKSPACE_CLIENT_SECRET', 'https://oauth2.googleapis.com/token');
     case 'vercel':
-      return provider('CONNECTOR_VERCEL_CLIENT_ID', 'CONNECTOR_VERCEL_CLIENT_SECRET', 'https://api.vercel.com/v2/oauth/access_token');
+      return provider('CONNECTOR_VERCEL_CLIENT_ID', 'CONNECTOR_VERCEL_CLIENT_SECRET', 'https://api.vercel.com/login/oauth/token');
     case 'netlify':
       return provider('CONNECTOR_NETLIFY_CLIENT_ID', 'CONNECTOR_NETLIFY_CLIENT_SECRET', 'https://api.netlify.com/oauth/token');
     case 'railway':
-      return provider('CONNECTOR_RAILWAY_CLIENT_ID', 'CONNECTOR_RAILWAY_CLIENT_SECRET', 'https://backboard.railway.app/oauth/token');
+      return provider('CONNECTOR_RAILWAY_CLIENT_ID', 'CONNECTOR_RAILWAY_CLIENT_SECRET', 'https://backboard.railway.com/oauth/token');
     default:
       return null;
   }

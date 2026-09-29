@@ -2,6 +2,15 @@ import type { ConnectorResult, InfraTicket, ProjectManagementConnector } from '.
 
 const LINEAR_API = 'https://api.linear.app/graphql';
 
+/**
+ * Linear takes a personal API key (`lin_api_…`, e.g. LINEAR_API_KEY in .env) as the raw header value,
+ * but an OAuth access token (the Linear connector) only as `Bearer <token>`.
+ */
+export function linearAuthorization(token: string): string {
+  if (!token) return '';
+  return token.startsWith('lin_api_') ? token : `Bearer ${token}`;
+}
+
 type LinearIssueNode = {
   identifier: string;
   title: string;
@@ -57,7 +66,7 @@ export class LinearConnector implements ProjectManagementConnector {
     try {
       const res = await fetch(LINEAR_API, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: this.apiKey ?? '' },
+        headers: { 'Content-Type': 'application/json', Authorization: linearAuthorization(this.apiKey ?? '') },
         body: JSON.stringify({ query: gql, variables }),
       });
       if (!res.ok) return { ok: false, reason: `Linear API returned ${res.status}: ${(await res.text()).slice(0, 300)}` };

@@ -1,7 +1,7 @@
-import { app, BrowserWindow, ipcMain, dialog, Notification, shell } from 'electron';
-import { getDistribution, isStoreRuntime } from '../platform/storeRuntime';
-import { applyStartWithWindows } from '../platform/startWithWindows';
-import { storeStartupTask } from '../platform/storeStartupTask';
+import { app, BrowserWindow, ipcMain, dialog, Notification } from 'electron';
+import { getDistribution } from '../platform/storeRuntime';
+import { applyStartWithWindows, getStartWithWindowsStatus } from '../platform/startWithWindows';
+import { electronStartWithWindowsDeps } from '../platform/startWithWindowsDeps';
 import * as fs from 'fs';
 import { SettingsStore } from '../../shared/settings/SettingsStore';
 import { CompanionLoader } from '../../shared/CompanionLoader';
@@ -252,17 +252,7 @@ export function registerIpc(opts: {
     const state = SettingsStore.getState();
     if ('startWithWindows' in partial) {
       // NSIS: HKCU Run key (unchanged). Microsoft Store: the package StartupTask.
-      void applyStartWithWindows(
-        state.startWithWindows,
-        {
-          isStore: isStoreRuntime(),
-          setLoginItemSettings: (settings) => app.setLoginItemSettings(settings),
-          exePath: app.getPath('exe'),
-          storeTask: storeStartupTask,
-          openExternal: (url) => shell.openExternal(url),
-        },
-        { userInitiated: true }
-      );
+      void applyStartWithWindows(state.startWithWindows, electronStartWithWindowsDeps(), { userInitiated: true });
     }
     for (const win of BrowserWindow.getAllWindows()) win.webContents.send('settings:updated', state);
     return state;
@@ -402,6 +392,8 @@ export function registerIpc(opts: {
   ipcMain.handle('system:getAppVersion', () => app.getVersion());
   // 'store' when running as the Microsoft Store (MSIX) package, 'direct' for the NSIS download.
   ipcMain.handle('system:getDistribution', () => getDistribution());
+  // Start with Windows as Windows actually has it (Store build) — the toggle shows this, never just the saved preference.
+  ipcMain.handle('system:getStartWithWindowsStatus', () => getStartWithWindowsStatus(electronStartWithWindowsDeps()));
   // Admin console privacy: while enabled, the OS excludes this window from screenshots, screen
   // recordings and screen sharing (it captures as blank). Only affects the sender's own window.
   ipcMain.handle('system:setContentProtection', (evt, enabled: boolean) => {

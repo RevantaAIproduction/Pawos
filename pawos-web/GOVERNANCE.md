@@ -64,7 +64,7 @@ PawOS Card Form → createPayment() with card object
 
 **Governance:**
 - ✅ Desktop: `GOOGLE_PLACES_API_KEY` in `.env`
-- ✅ Web: `NEXT_PUBLIC_GOOGLE_PLACES_API_KEY` in `pawos-web/.env.local`
+- ✅ Web: `NEXT_PUBLIC_GOOGLE_PLACES_API_KEY` in `pawos-web/.env`
 - ✅ Address collected as structured fields (address1, address2, city, state, postalCode)
 - ✅ No hardcoded addresses
 - ✅ API key never logged or exposed
@@ -266,7 +266,7 @@ TeamCheckoutPage (Invoice Checkout)
 Desktop (.env):
 GOOGLE_PLACES_API_KEY=AIzaSyDHzp2u6H5VnEuVTGAkSC-LiJvr3huUFgY
 
-Web (pawos-web/.env.local):
+Web (pawos-web/.env):
 NEXT_PUBLIC_GOOGLE_PLACES_API_KEY=AIzaSyDHzp2u6H5VnEuVTGAkSC-LiJvr3huUFgY
 ```
 

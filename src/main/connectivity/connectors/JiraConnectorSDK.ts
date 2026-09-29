@@ -51,7 +51,9 @@ export class JiraConnectorSDK implements ConnectorSDK {
     oauth: {
       authorizationUrl: 'https://auth.atlassian.com/authorize',
       tokenUrl: 'https://auth.atlassian.com/oauth/token',
-      scopes: ['read:jira-work', 'read:jira-user', 'offline_access'],
+      // write:jira-work: Autonomous Work comments on the ticket and moves it to Done
+      // (JiraWriteBackPlugin). Tokens granted before this was added need a reconnect.
+      scopes: ['read:jira-work', 'write:jira-work', 'read:jira-user', 'offline_access'],
       clientIdEnvVar: 'CONNECTOR_JIRA_CLIENT_ID',
       clientSecretEnvVar: 'CONNECTOR_JIRA_CLIENT_SECRET',
       redirectUriEnvVar: 'CONNECTOR_JIRA_CALLBACK_URL',

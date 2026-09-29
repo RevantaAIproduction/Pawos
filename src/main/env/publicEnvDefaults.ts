@@ -27,21 +27,37 @@ export const PUBLIC_ENV_DEFAULTS: Record<string, string> = {
   SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_E3vh2q3V3Sj-h7TY341D6Q_EmEneDwQ',
   // Connectivity Runtime connector callback URLs — same non-secret nature as
   // GOOGLE_REDIRECT_URI/GITHUB_REDIRECT_URI above (each is a fixed,
-  // already-registered pawos-web route; only the per-connector *client ID*
-  // is developer-specific and left unset here). Without these, every OAuth2
+  // already-registered pawos-web route; the per-connector client IDs are
+  // below). Without these, every OAuth2
   // connector's "Connect" button fails immediately with
   // OAuthManager.ts's "Missing environment variable '..._CALLBACK_URL'"
   // error, regardless of whether the user has ever heard of these vars.
-  // GitLab is deliberately absent — no pawos-web callback route exists for
-  // it yet (see pawos-web/src/app/api/connectors/, which has no gitlab/
-  // directory), so defaulting GITLAB_REDIRECT_URL would just trade one
-  // failure for a 404 at that URL instead.
-  CONNECTOR_GITHUB_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectors/github/callback',
+  // GitLab's callback lives at /auth/gitlab/callback (same thin relay back to Electron).
+  // GitHub, Slack and Microsoft use the callback URLs their provider apps are registered with — the
+  // same values as the desktop .env (a mismatch here is what made them fail only in installed builds).
+  CONNECTOR_GITHUB_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectivity/oauth/callback/github',
   LINEAR_REDIRECT_URL: 'https://pawos.revantaai.com/api/connectors/linear/callback',
   CONNECTOR_JIRA_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectors/jira/callback',
-  CONNECTOR_SLACK_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectors/slack/callback',
-  CONNECTOR_MICROSOFT_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectors/microsoft/callback',
+  CONNECTOR_SLACK_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectivity/oauth/callback/slack',
+  // Unset in the desktop .env, so the connector has always used OAuthManager's default redirect.
+  CONNECTOR_MICROSOFT_CALLBACK_URL: 'pawos://connectivity-oauth-callback',
   CONNECTOR_VERCEL_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectors/vercel/callback',
   CONNECTOR_NETLIFY_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectors/netlify/callback',
   CONNECTOR_RAILWAY_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectors/railway/callback',
+  GITLAB_REDIRECT_URL: 'https://pawos.revantaai.com/auth/gitlab/callback',
+  // Connectivity Runtime connector OAuth client IDs. Public by OAuth design (every authorize URL
+  // shows them); the packaged app has no .env, so without these every connector's Connect fails
+  // with OAuthManager's "Missing environment variable '<X>_CLIENT_ID'". Each is that connector's
+  // own OAuth app and must match the client ID pawos-web uses for the same provider — the code
+  // exchange and refresh (which need the secret) run server-side (connectivityOAuthProviders.ts).
+  CONNECTOR_JIRA_CLIENT_ID: 'X2tQ5JISzvC5TdyInOP9eBYUwKwZg9iT', // Jira
+  LINEAR_CLIENT_ID: 'bf7fd5cc7daa1bd86c00e8bd3d2e3a70', // Linear
+  CONNECTOR_GITHUB_CLIENT_ID: 'Ov23li81wFouTZ29HntS', // GitHub (connector app, not GitHub sign-in)
+  SLACK_CLIENT_ID: '11673740826419.11683711445348', // Slack
+  MICROSOFT_CLIENT_ID: '44f5d09f-7f97-4f87-b977-ee1c2ef6e670', // Microsoft 365
+  GOOGLE_WORKSPACE_CLIENT_ID: '1047116528874-runsi8mp0hlrvoavj244d1fo7jvn07m3.apps.googleusercontent.com', // Google Workspace (separate app from Google sign-in / GOOGLE_CLIENT_ID)
+  CONNECTOR_VERCEL_CLIENT_ID: 'cl_JyLv2QB2x2AbQJh9fbTkutUCyx4Hge8f', // Vercel
+  CONNECTOR_NETLIFY_CLIENT_ID: '3AsHcLCw62TC5vq337oDTxdZWvn_caGBCfnO5cwsWvU', // Netlify
+  GITLAB_CLIENT_ID: '7102a7f9d63c71a57853092269aa8cfc312a664aded60ef056a39abb6eedc441', // GitLab
+  CONNECTOR_RAILWAY_CLIENT_ID: 'rlwy_oaci_jajrZyYQblhXonmgoAA2syFu', // Railway
 };

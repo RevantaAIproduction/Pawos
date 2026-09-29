@@ -242,6 +242,10 @@ export const ipc = {
   async systemGetDistribution(): Promise<'store' | 'direct'> {
     return getBridge().systemGetDistribution();
   },
+  /** Store build: whether Windows will start PawOS (Windows Settings > Apps > Startup controls it). */
+  async systemGetStartWithWindowsStatus(): Promise<{ managedByWindows: boolean; enabled: boolean | null }> {
+    return getBridge().systemGetStartWithWindowsStatus();
+  },
   /** Excludes this window from screenshots / recordings / screen sharing while true (admin console privacy). */
   async systemSetContentProtection(enabled: boolean): Promise<boolean> {
     return getBridge().systemSetContentProtection(enabled);

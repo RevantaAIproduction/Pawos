@@ -44,9 +44,13 @@ export class RailwayConnectorSDK implements ConnectorSDK {
     category: 'hosting' as const,
     authMethod: 'oauth2' as const,
     oauth: {
-      authorizationUrl: 'https://backboard.railway.app/oauth/authorize',
-      tokenUrl: 'https://backboard.railway.app/oauth/token',
-      scopes: [],
+      // Railway OAuth (https://backboard.railway.com/oauth/.well-known/openid-configuration): the
+      // authorize endpoint is /oauth/auth — /oauth/authorize returns "Not Found". Scopes: identity,
+      // refresh (offline_access) and access to the user's workspaces/projects for deploys.
+      authorizationUrl: 'https://backboard.railway.com/oauth/auth',
+      tokenUrl: 'https://backboard.railway.com/oauth/token',
+      scopes: ['openid', 'email', 'profile', 'offline_access', 'workspace:member', 'project:member'],
+      usePkce: true,
       clientIdEnvVar: 'CONNECTOR_RAILWAY_CLIENT_ID',
       clientSecretEnvVar: 'CONNECTOR_RAILWAY_CLIENT_SECRET',
       redirectUriEnvVar: 'CONNECTOR_RAILWAY_CALLBACK_URL',

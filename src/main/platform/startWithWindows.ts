@@ -1,5 +1,5 @@
 import { WINDOWS_STARTUP_SETTINGS_URI } from './storeRuntime';
-import type { StoreStartupTaskApi } from './storeStartupTask';
+import { isStartupTaskOn, type StoreStartupTaskApi } from './storeStartupTask';
 
 export interface StartWithWindowsDeps {
   isStore: boolean;
@@ -8,18 +8,26 @@ export interface StartWithWindowsDeps {
   exePath: string;
   storeTask: StoreStartupTaskApi;
   openExternal: (url: string) => Promise<void>;
+  /** Store build diagnostics (persisted, since a packaged app's console output is lost). */
+  log?: (line: string) => void;
+}
+
+/** What the Settings toggle should show. */
+export interface StartWithWindowsStatus {
+  /** true for the Microsoft Store build: Windows Settings > Apps > Startup controls it. */
+  managedByWindows: boolean;
+  /** Store build: whether Windows will start PawOS (null if unknown). Direct build: null (use the saved preference). */
+  enabled: boolean | null;
 }
 
 /**
- * Applies the Settings > General "Start with Windows" preference.
+ * Applies the Settings > Preferences > General "Start PawOS when Windows starts" preference.
  *
  * - Direct download (NSIS): HKCU Run key via app.setLoginItemSettings — unchanged.
- * - Microsoft Store (MSIX): packaged apps can't use the Run key; the package's
- *   StartupTask (TaskId PawOSStartup) is enabled/disabled instead. Windows never
- *   lets an app re-enable a task the user (or policy) turned off, so in that case a
- *   user-initiated toggle opens Settings > Apps > Startup instead of failing silently.
- *
- * The preference itself (SettingsStore.startWithWindows) keeps the same meaning in both builds.
+ * - Microsoft Store (MSIX): startup is the package's StartupTask (PawOSStartup), which only
+ *   Windows can switch for this app (see storeStartupTask.ts). Launching PawOS never changes it;
+ *   when the user changes the toggle and Windows' state differs, Windows Settings > Apps > Startup
+ *   opens so they can switch PawOS there.
  */
 export async function applyStartWithWindows(
   enabled: boolean,
@@ -30,28 +38,22 @@ export async function applyStartWithWindows(
     deps.setLoginItemSettings({ openAtLogin: enabled, path: deps.exePath });
     return;
   }
-
+  const log = deps.log ?? (() => undefined);
+  const source = opts.userInitiated ? 'toggle' : 'launch';
   try {
     const state = await deps.storeTask.getState();
-    if (enabled) {
-      if (state === 'Enabled' || state === 'EnabledByPolicy') return;
-      if (state === 'DisabledByUser' || state === 'DisabledByPolicy') {
-        if (opts.userInitiated) await deps.openExternal(WINDOWS_STARTUP_SETTINGS_URI);
-        return;
-      }
-      const result = await deps.storeTask.enable();
-      if (result === 'DisabledByUser' && opts.userInitiated) await deps.openExternal(WINDOWS_STARTUP_SETTINGS_URI);
-    } else if (state === 'Enabled') {
-      await deps.storeTask.disable();
-    }
+    log(`${source}: preference=${enabled ? 'on' : 'off'} windows=${state ?? 'unknown'}`);
+    if (!opts.userInitiated) return;
+    if (state !== null && isStartupTaskOn(state) === enabled) return;
+    log(`${source}: opening Windows Startup settings`);
+    await deps.openExternal(WINDOWS_STARTUP_SETTINGS_URI);
   } catch (e) {
-    console.error('[STARTUP] could not apply Start with Windows to the Store startup task', e);
-    if (opts.userInitiated) {
-      try {
-        await deps.openExternal(WINDOWS_STARTUP_SETTINGS_URI);
-      } catch {
-        // nothing further to do — the error above is already logged
-      }
-    }
+    log(`${source}: FAILED — ${e instanceof Error ? e.message : String(e)}`);
   }
+}
+
+export async function getStartWithWindowsStatus(deps: Pick<StartWithWindowsDeps, 'isStore' | 'storeTask'>): Promise<StartWithWindowsStatus> {
+  if (!deps.isStore) return { managedByWindows: false, enabled: null };
+  const state = await deps.storeTask.getState();
+  return { managedByWindows: true, enabled: state === null ? null : isStartupTaskOn(state) };
 }

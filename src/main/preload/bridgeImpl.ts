@@ -206,6 +206,8 @@ export function contextBridge() {
     systemGetForegroundWindowInfo: () => ipcRenderer.invoke("system:getForegroundWindowInfo") as Promise<ForegroundWindowInfo>,
     systemGetAppVersion: () => ipcRenderer.invoke("system:getAppVersion") as Promise<string>,
     systemGetDistribution: () => ipcRenderer.invoke("system:getDistribution") as Promise<"store" | "direct">,
+    systemGetStartWithWindowsStatus: () =>
+      ipcRenderer.invoke("system:getStartWithWindowsStatus") as Promise<{ managedByWindows: boolean; enabled: boolean | null }>,
     systemSetContentProtection: (enabled: boolean) => ipcRenderer.invoke("system:setContentProtection", enabled) as Promise<boolean>,
 
     authIsGoogleSignInConfigured: () => ipcRenderer.invoke("auth:isGoogleSignInConfigured") as Promise<boolean>,
@@ -476,6 +478,17 @@ export function contextBridge() {
       ipcRenderer.invoke("connectivity:transitionJiraIssue", input) as Promise<ConnectivityIpcResult<{ ok: boolean; reason?: string }>>,
     connectivityTransitionLinearIssue: (input: { linearApiKey: string; issueId: string; statusName: string }) =>
       ipcRenderer.invoke("connectivity:transitionLinearIssue", input) as Promise<ConnectivityIpcResult<{ ok: boolean; reason?: string }>>,
+    // Autonomous Work write-back + credential lookups (AutonomousOrchestrator / CredentialResolver).
+    connectivityPostJiraComment: (input: { runId: string; jiraUrl: string; apiEmail: string; apiToken: string; issueKey: string; comment: string }) =>
+      ipcRenderer.invoke("connectivity:postJiraComment", input) as Promise<ConnectivityIpcResult<{ ok: boolean; reason?: string; commentId?: string }>>,
+    connectivityPostLinearComment: (input: { runId: string; linearApiKey: string; issueId: string; comment: string }) =>
+      ipcRenderer.invoke("connectivity:postLinearComment", input) as Promise<ConnectivityIpcResult<{ ok: boolean; reason?: string; commentId?: string }>>,
+    connectivityGetStoredCredential: (connectorId: string, scope: ConnectivityScope) =>
+      ipcRenderer.invoke("connectivity:getStoredCredential", connectorId, scope) as Promise<ConnectivityIpcResult<{ secret: string; authMethod: string } | undefined>>,
+    connectivityGetJiraMetadata: (scope: ConnectivityScope) =>
+      ipcRenderer.invoke("connectivity:getJiraMetadata", scope) as Promise<ConnectivityIpcResult<{ cloudId: string; siteUrl: string; siteName: string } | undefined>>,
+    billingSettleAutonomousRun: (runId: string, organizationId: string | null) =>
+      ipcRenderer.invoke("billing:settleAutonomousRun", runId, organizationId) as Promise<any>,
     connectivitySlackPostMessage: (scope: ConnectivityScope, channel: string, text: string) =>
       ipcRenderer.invoke("connectivity:slack:postMessage", { scope, channel, text }) as Promise<ConnectivityIpcResult<{ ok: true } | { ok: false; reason: string }>>,
 

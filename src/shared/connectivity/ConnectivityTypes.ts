@@ -174,6 +174,9 @@ export interface OAuthConnectorConfig {
    *  every provider that needs nothing beyond the standard client_id/redirect_uri/scope/
    *  response_type set. */
   extraAuthParams?: Record<string, string>;
+  /** How `scopes` are joined in the authorize URL. OAuth's default is a space; Linear expects a
+   *  comma-separated list (`read,write`). */
+  scopeSeparator?: ' ' | ',';
   /** Env var naming this connector's own already-registered, pawos-web-hosted callback URL (e.g.
    *  CONNECTOR_VERCEL_CALLBACK_URL) — used instead of the generic CONNECTIVITY_OAUTH_REDIRECT_URI
    *  when the provider's OAuth app was registered with one specific callback URL rather than

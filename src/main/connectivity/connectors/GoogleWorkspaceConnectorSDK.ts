@@ -42,6 +42,16 @@ const CAPABILITY_TO_SCOPE: Record<string, string> = {
 
 const ALL_SCOPES = [GOOGLE_SCOPE.userinfoEmail, ...new Set(Object.values(CAPABILITY_TO_SCOPE))];
 
+/**
+ * Google RESTRICTED scopes. Until Google approves them for this project (verification + security
+ * assessment), requesting one blocks the whole consent screen for every account ("Access blocked:
+ * … has not completed the Google verification process"). So the first Connect leaves them out, and
+ * Gmail / full-Drive reading is requested on demand through the existing incremental flow
+ * (connect({ incrementalCapabilities })) when a feature first needs it.
+ */
+const RESTRICTED_SCOPES = new Set<string>([GOOGLE_SCOPE.gmailReadonly, GOOGLE_SCOPE.driveReadonly]);
+export const INITIAL_CONNECT_SCOPES = ALL_SCOPES.filter((s) => !RESTRICTED_SCOPES.has(s));
+
 interface GoogleWorkspaceCredential {
   accessToken: string;
   refreshToken?: string;
@@ -196,7 +206,7 @@ export class GoogleWorkspaceConnectorSDK implements ConnectorSDK {
       if (!this.credential) await this.authenticate(scope, existing);
       return this.toConnection(scope);
     } else {
-      scopesToRequest = ALL_SCOPES;
+      scopesToRequest = INITIAL_CONNECT_SCOPES;
     }
 
     this.currentStatus = { state: 'connecting', capabilities: this.capabilities() };

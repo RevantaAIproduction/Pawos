@@ -24,10 +24,30 @@ export type LinearWriteBackResult = {
 };
 
 /**
+ * Resolves Linear's own issue id from what PawOS stores as the ticket id (the ENG-123 style
+ * identifier) via `issue(id:)`, which accepts either form. Falls back to the given value.
+ */
+async function resolveLinearIssueId(linearApiKey: string, issueIdOrKey: string): Promise<string> {
+  try {
+    const res = await fetch("https://api.linear.app/graphql", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${linearApiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ query: "query ResolveIssue($id: String!) { issue(id: $id) { id } }", variables: { id: issueIdOrKey } }),
+    });
+    if (!res.ok) return issueIdOrKey;
+    const data = (await res.json()) as { data?: { issue?: { id?: string } } };
+    return data.data?.issue?.id ?? issueIdOrKey;
+  } catch {
+    return issueIdOrKey;
+  }
+}
+
+/**
  * Posts a comment to a Linear issue via GraphQL.
  */
 export async function postLinearComment(input: LinearCommentInput): Promise<LinearWriteBackResult> {
   try {
+    const issueId = await resolveLinearIssueId(input.linearApiKey, input.issueId);
     const query = `
       mutation CreateComment($issueId: String!, $body: String!) {
         commentCreate(input: {issueId: $issueId, body: $body}) {
@@ -48,7 +68,7 @@ export async function postLinearComment(input: LinearCommentInput): Promise<Line
       body: JSON.stringify({
         query,
         variables: {
-          issueId: input.issueId,
+          issueId,
           body: input.comment,
         },
       }),
@@ -98,8 +118,10 @@ export async function transitionLinearIssue(
           id
           team {
             states {
-              id
-              name
+              nodes {
+                id
+                name
+              }
             }
           }
         }
@@ -122,8 +144,10 @@ export async function transitionLinearIssue(
     const fetchData = (await fetchResponse.json()) as {
       data?: {
         issue?: {
+          id?: string;
           team?: {
-            states?: Array<{ id: string; name: string }>;
+            // Team.states is a connection — the items are under `nodes`.
+            states?: { nodes?: Array<{ id: string; name: string }> };
           };
         };
       };
@@ -135,7 +159,9 @@ export async function transitionLinearIssue(
       return { ok: false, reason: `GraphQL error: ${errorMsg}` };
     }
 
-    const states = fetchData.data?.issue?.team?.states || [];
+    const states = fetchData.data?.issue?.team?.states?.nodes || [];
+    // issueUpdate gets Linear's own issue id (resolved from the ENG-123 style key above).
+    const resolvedIssueId = fetchData.data?.issue?.id ?? issueId;
     const targetState = states.find((s) => s.name === statusName);
 
     if (!targetState) {
@@ -162,7 +188,7 @@ export async function transitionLinearIssue(
       },
       body: JSON.stringify({
         query: updateQuery,
-        variables: { id: issueId, stateId: targetState.id },
+        variables: { id: resolvedIssueId, stateId: targetState.id },
       }),
     });
 

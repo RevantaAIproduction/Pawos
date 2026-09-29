@@ -10,6 +10,7 @@ import { providerCostToWorkPc } from '../../shared/billing/AutonomousWorkPcComme
 import { CONNECTOR_ID_BY_TICKET_SOURCE, connectorDisplayName } from './AutonomousTaskBillingGate';
 import { getSupabaseClient } from '../auth/supabaseClient';
 import { resolveCredentialsForOrganization } from './CredentialResolver';
+import { getAutonomousIpc } from './autonomousIpc';
 import type { ActionRequest, ActionResult } from '../../shared/actions/ActionTypes';
 import type { EvidenceItem } from '../../shared/evidence/EvidenceTypes';
 import { ticketEvidenceService } from './TicketEvidenceService';
@@ -338,7 +339,7 @@ export class HeadlessTurnRunner implements AutonomousTurnRunner {
 
       // Step 3: Resolve actual model pricing from config
       // Fetch Gemini pricing config via IPC
-      const ipcRenderer = (window as any).electron?.ipcRenderer;
+      const ipcRenderer = getAutonomousIpc();
       if (!ipcRenderer) throw new Error('IPC unavailable');
       const pawComputeConfig = await ipcRenderer.invoke('billing:getPawComputeConfig');
       const pricing = pawComputeConfig.modelPricing[model] ?? pawComputeConfig.modelPricing.default;
@@ -963,7 +964,7 @@ export async function resumeAutonomousRun(input: AutonomousOrchestrationInput, g
     // Cancellation BEFORE provider work → settle 0 / release reservation
     let billingEventId: string | null = null;
     try {
-      const ipcRenderer = (window as any).electron?.ipcRenderer;
+      const ipcRenderer = getAutonomousIpc();
       if (ipcRenderer) {
         const settlementData = await ipcRenderer.invoke('billing:settleAutonomousRun', input.runId, input.organizationId ?? null);
         if (settlementData.actualPc !== null && settlementData.actualPc !== undefined) {
@@ -1066,7 +1067,7 @@ async function finishAutonomousRun(
   // Settlement RPC requires terminal status; now that status is set, we can settle
   // Billing boundary = actual provider work performed, not outcome status
   try {
-    const ipcRenderer = (window as any).electron?.ipcRenderer;
+    const ipcRenderer = getAutonomousIpc();
     if (!ipcRenderer) {
       throw new Error('IPC renderer not available — cannot settle autonomous run');
     }
@@ -1237,7 +1238,7 @@ async function attemptExternalUpdate(
       } else {
         const credentials = await resolveCredentialsForOrganization(input.organizationId);
         if (credentials.jira) {
-          const ipcRenderer = (window as any).electron?.ipcRenderer;
+          const ipcRenderer = getAutonomousIpc();
           if (!ipcRenderer) {
             updates.push(`Jira ${input.ticketId}: IPC renderer not available`);
           } else {
@@ -1298,7 +1299,7 @@ async function attemptExternalUpdate(
       } else {
         const credentials = await resolveCredentialsForOrganization(input.organizationId);
         if (credentials.linear) {
-          const ipcRenderer = (window as any).electron?.ipcRenderer;
+          const ipcRenderer = getAutonomousIpc();
           if (!ipcRenderer) {
             updates.push(`Linear ${input.ticketId}: IPC renderer not available`);
           } else {

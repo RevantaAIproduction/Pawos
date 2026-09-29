@@ -74,7 +74,7 @@ import { isStoreRuntime } from './platform/storeRuntime';
 import { registerUpdater } from './platform/updaterSetup';
 import { registerPawosProtocolClient } from './platform/protocolRegistration';
 import { applyStartWithWindows } from './platform/startWithWindows';
-import { storeStartupTask } from './platform/storeStartupTask';
+import { electronStartWithWindowsDeps } from './platform/startWithWindowsDeps';
 
 console.error("[PAWOS START] main.ts loaded");
 
@@ -131,6 +131,16 @@ console.error("[PAWOS START] before app.whenReady");
 // already running (and already holding the pending OAuth promise).
 // Request single-instance lock. On failure, we'll proceed anyway since this could be:
 app.setName('PawOS');
+
+// Settings must load from userData before anything reads them (the Start with Windows sync
+// below, IPC). userData is writable in every build; the working directory is not — for the
+// Microsoft Store (MSIX) build it's System32 or the read-only package folder. A settings file
+// older builds left in the install/working directory is carried over once.
+SettingsStore.init({
+  storageDir: app.getPath('userData'),
+  legacyDirs: [path.dirname(app.getPath('exe')), process.cwd()],
+});
+
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
 if (!gotSingleInstanceLock) {
@@ -397,12 +407,9 @@ app.whenReady().then(async () => {
   });
   session.defaultSession.setPermissionCheckHandler((_webContents, permission) => ALLOWED_PERMISSIONS.has(permission));
 
-  // Ensure settings store initialized (creates file on first run)
-  SettingsStore.init();
+  // (SettingsStore is initialized at module load, before app.whenReady — see above.)
 
-  // Electron's memory of every conversation â€” rooted at userData, unlike
-  // SettingsStore above (which writes to cwd, a pre-existing gap left as-is
-  // here since fixing it is unrelated to this feature).
+  // Electron's memory of every conversation — rooted at userData, like SettingsStore.
   conversationSessionStore.init();
   workspaceMemoryStore.init();
   dependencyGraphCache.init();
@@ -535,6 +542,13 @@ app.whenReady().then(async () => {
   console.error("[PAWOS START] before tray creation");
   createAppTray();
   console.error("[PAWOS START] tray creation complete");
+
+  // Start with Windows — applies the saved Settings > Preferences > General preference.
+  // Direct download (NSIS): HKCU Run key, right away. Microsoft Store (MSIX): Windows controls the
+  // package's StartupTask, so launch only records its state (never changes it). See startWithWindows.ts.
+  setTimeout(() => {
+    void applyStartWithWindows(SettingsStore.getState().startWithWindows, electronStartWithWindowsDeps(), { userInitiated: false });
+  }, isStoreRuntime() ? 5000 : 0);
   startForegroundWindowWatcher();
   startRatingPromptScheduler(() => mainWindow);
   registerIpc({
@@ -649,19 +663,4 @@ app.on('will-quit', () => {
   stopPlatformResourceSampler();
 });
 
-// Auto start with Windows â€” reflects the persisted Settings > General toggle
-// (GeneralSection.tsx's startWithWindows), not a hardcoded always-on default.
-// Direct download (NSIS): HKCU Run key. Microsoft Store (MSIX): the package's
-// StartupTask — see startWithWindows.ts.
-void applyStartWithWindows(
-  SettingsStore.getState().startWithWindows,
-  {
-    isStore: isStoreRuntime(),
-    setLoginItemSettings: (settings) => app.setLoginItemSettings(settings),
-    exePath: app.getPath('exe'),
-    storeTask: storeStartupTask,
-    openExternal: (url) => shell.openExternal(url),
-  },
-  { userInitiated: false }
-);
 

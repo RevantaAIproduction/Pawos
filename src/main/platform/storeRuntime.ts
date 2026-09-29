@@ -29,3 +29,9 @@ export const WINDOWS_STARTUP_SETTINGS_URI = 'ms-settings:startupapps';
 
 /** Must match the TaskId declared in build/msix/extensions.xml. */
 export const STORE_STARTUP_TASK_ID = 'PawOSStartup';
+
+/**
+ * Package family name for identity PawosAI.PawOS / CN=3749BDE7-E3A7-4F62-A2E7-33B2A93F803E
+ * (Partner Center > Product identity). Fixed for that identity; used to read the startup task state.
+ */
+export const STORE_PACKAGE_FAMILY_NAME = 'PawosAI.PawOS_y5w6824kw3wcj';

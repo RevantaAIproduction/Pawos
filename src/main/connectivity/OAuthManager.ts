@@ -225,7 +225,7 @@ class OAuthManager {
     const url = new URL(oauth.authorizationUrl);
     url.searchParams.set('client_id', clientId);
     url.searchParams.set('redirect_uri', opts?.redirectUri ?? CONNECTIVITY_OAUTH_REDIRECT_URI);
-    url.searchParams.set('scope', (opts?.scopesOverride ?? oauth.scopes).join(' '));
+    url.searchParams.set('scope', (opts?.scopesOverride ?? oauth.scopes).join(oauth.scopeSeparator ?? ' '));
     url.searchParams.set('response_type', 'code');
     if (oauth.supportsIncrementalAuth) {
       url.searchParams.set('include_granted_scopes', 'true');

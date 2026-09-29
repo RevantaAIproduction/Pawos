@@ -166,7 +166,7 @@ type AddressResult = {
 # Desktop (.env)
 GOOGLE_PLACES_API_KEY=AIzaSyDHzp2u6H5VnEuVTGAkSC-LiJvr3huUFgY
 
-# Web (pawos-web/.env.local)
+# Web (pawos-web/.env)
 NEXT_PUBLIC_GOOGLE_PLACES_API_KEY=AIzaSyDHzp2u6H5VnEuVTGAkSC-LiJvr3huUFgY
 ```
 
@@ -554,7 +554,7 @@ if (showCardForm && cardNumber && expiryDate && cvv) {
 # Desktop (.env)
 GOOGLE_PLACES_API_KEY=your_key_here
 
-# Web (pawos-web/.env.local)
+# Web (pawos-web/.env)
 NEXT_PUBLIC_GOOGLE_PLACES_API_KEY=your_key_here
 
 # Restart dev server to reload env

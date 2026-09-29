@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { getDistribution, isStoreRuntime, STORE_UPDATES_URI, WINDOWS_STARTUP_SETTINGS_URI } from './storeRuntime';
 import { registerUpdater } from './updaterSetup';
 import { registerPawosProtocolClient } from './protocolRegistration';
-import { applyStartWithWindows, type StartWithWindowsDeps } from './startWithWindows';
+import { applyStartWithWindows, getStartWithWindowsStatus, type StartWithWindowsDeps } from './startWithWindows';
 import type { StartupTaskState } from './storeStartupTask';
 
 describe('storeRuntime', () => {
@@ -84,17 +84,13 @@ describe('registerPawosProtocolClient', () => {
   });
 });
 
-function startupDeps(overrides: Partial<StartWithWindowsDeps> & { state?: StartupTaskState } = {}) {
-  const state = overrides.state ?? 'Disabled';
+function startupDeps(overrides: Partial<StartWithWindowsDeps> & { state?: StartupTaskState | null } = {}) {
+  const state = overrides.state === undefined ? 'Disabled' : overrides.state;
   const deps: StartWithWindowsDeps = {
     isStore: true,
     setLoginItemSettings: vi.fn(),
     exePath: 'C:\\PawOS\\PawOS.exe',
-    storeTask: {
-      getState: vi.fn().mockResolvedValue(state),
-      enable: vi.fn().mockResolvedValue('Enabled'),
-      disable: vi.fn().mockResolvedValue('Disabled'),
-    },
+    storeTask: { getState: vi.fn().mockResolvedValue(state) },
     openExternal: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
@@ -109,38 +105,56 @@ describe('applyStartWithWindows', () => {
     expect(deps.storeTask.getState).not.toHaveBeenCalled();
   });
 
-  it('Store build: never touches the Run key; enables the StartupTask when the preference is on', async () => {
-    const deps = startupDeps({ state: 'Disabled' });
-    await applyStartWithWindows(true, deps, { userInitiated: false });
-    expect(deps.setLoginItemSettings).not.toHaveBeenCalled();
-    expect(deps.storeTask.enable).toHaveBeenCalledTimes(1);
+  it('Store build: launching PawOS never changes Windows startup (no settings page, no Run key)', async () => {
+    for (const pref of [true, false]) {
+      const deps = startupDeps({ state: 'Disabled' });
+      await applyStartWithWindows(pref, deps, { userInitiated: false });
+      expect(deps.openExternal).not.toHaveBeenCalled();
+      expect(deps.setLoginItemSettings).not.toHaveBeenCalled();
+    }
   });
 
-  it('Store build: disables the StartupTask when the preference is off', async () => {
+  it('Store build: toggling ON while Windows has it off opens Windows Startup settings', async () => {
+    const deps = startupDeps({ state: 'Disabled' });
+    await applyStartWithWindows(true, deps, { userInitiated: true });
+    expect(deps.openExternal).toHaveBeenCalledWith(WINDOWS_STARTUP_SETTINGS_URI);
+    expect(deps.setLoginItemSettings).not.toHaveBeenCalled();
+  });
+
+  it('Store build: toggling OFF while Windows has it on opens Windows Startup settings', async () => {
     const deps = startupDeps({ state: 'Enabled' });
     await applyStartWithWindows(false, deps, { userInitiated: true });
-    expect(deps.storeTask.disable).toHaveBeenCalledTimes(1);
-    expect(deps.setLoginItemSettings).not.toHaveBeenCalled();
+    expect(deps.openExternal).toHaveBeenCalledWith(WINDOWS_STARTUP_SETTINGS_URI);
   });
 
-  it('Store build: respects a task the user disabled in Windows — no re-enable; the toggle opens Startup settings', async () => {
-    const atStartup = startupDeps({ state: 'DisabledByUser' });
-    await applyStartWithWindows(true, atStartup, { userInitiated: false });
-    expect(atStartup.storeTask.enable).not.toHaveBeenCalled();
-    expect(atStartup.openExternal).not.toHaveBeenCalled();
-
-    const fromToggle = startupDeps({ state: 'DisabledByUser' });
-    await applyStartWithWindows(true, fromToggle, { userInitiated: true });
-    expect(fromToggle.storeTask.enable).not.toHaveBeenCalled();
-    expect(fromToggle.openExternal).toHaveBeenCalledWith(WINDOWS_STARTUP_SETTINGS_URI);
+  it('Store build: no settings page when Windows already matches the toggle', async () => {
+    const on = startupDeps({ state: 'Enabled' });
+    await applyStartWithWindows(true, on, { userInitiated: true });
+    const off = startupDeps({ state: 'DisabledByUser' });
+    await applyStartWithWindows(false, off, { userInitiated: true });
+    expect(on.openExternal).not.toHaveBeenCalled();
+    expect(off.openExternal).not.toHaveBeenCalled();
   });
 
-  it('Store build: a StartupTask failure is logged, not thrown', async () => {
-    const deps = startupDeps();
-    (deps.storeTask.getState as any).mockRejectedValue(new Error('no package identity'));
-    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    await expect(applyStartWithWindows(true, deps, { userInitiated: false })).resolves.toBeUndefined();
-    expect(deps.openExternal).not.toHaveBeenCalled();
-    errSpy.mockRestore();
+  it('Store build: unknown Windows state still sends the user to Startup settings; errors are logged, not thrown', async () => {
+    const unknown = startupDeps({ state: null });
+    await applyStartWithWindows(true, unknown, { userInitiated: true });
+    expect(unknown.openExternal).toHaveBeenCalledWith(WINDOWS_STARTUP_SETTINGS_URI);
+
+    const log = vi.fn();
+    const failing = startupDeps({ log });
+    (failing.storeTask.getState as any).mockRejectedValue(new Error('boom'));
+    await expect(applyStartWithWindows(true, failing, { userInitiated: true })).resolves.toBeUndefined();
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('toggle: FAILED — boom'));
+  });
+});
+
+describe('getStartWithWindowsStatus', () => {
+  it('Store build reports what Windows will actually do; direct build defers to the saved preference', async () => {
+    await expect(getStartWithWindowsStatus(startupDeps({ state: 'Enabled' }))).resolves.toEqual({ managedByWindows: true, enabled: true });
+    await expect(getStartWithWindowsStatus(startupDeps({ state: 'EnabledByPolicy' }))).resolves.toEqual({ managedByWindows: true, enabled: true });
+    await expect(getStartWithWindowsStatus(startupDeps({ state: 'DisabledByUser' }))).resolves.toEqual({ managedByWindows: true, enabled: false });
+    await expect(getStartWithWindowsStatus(startupDeps({ state: null }))).resolves.toEqual({ managedByWindows: true, enabled: null });
+    await expect(getStartWithWindowsStatus(startupDeps({ isStore: false }))).resolves.toEqual({ managedByWindows: false, enabled: null });
   });
 });

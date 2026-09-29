@@ -30,9 +30,12 @@ export class VercelConnectorSDK implements ConnectorSDK {
     category: 'hosting' as const,
     authMethod: 'oauth2' as const,
     oauth: {
+      // "Sign in with Vercel" app (vercel.com/oauth/authorize): PKCE S256 is required and the code is
+      // exchanged at /login/oauth/token (the old /v2/oauth/access_token is for integrations and 400s).
       authorizationUrl: 'https://vercel.com/oauth/authorize',
-      tokenUrl: 'https://api.vercel.com/v2/oauth/access_token',
+      tokenUrl: 'https://api.vercel.com/login/oauth/token',
       scopes: [],
+      usePkce: true,
       clientIdEnvVar: 'CONNECTOR_VERCEL_CLIENT_ID',
       clientSecretEnvVar: 'CONNECTOR_VERCEL_CLIENT_SECRET',
       redirectUriEnvVar: 'CONNECTOR_VERCEL_CALLBACK_URL',
