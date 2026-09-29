@@ -60,7 +60,6 @@ import { supportConversationStore } from './help/SupportConversationStore';
 import { discoveryService } from './connectivity/DiscoveryService';
 import { connectorRegistry } from './connectivity/ConnectorRegistry';
 import { jiraConnectorSDK } from './connectivity/connectors/JiraConnectorSDK';
-import { googleWorkspaceConnectorSDK } from './connectivity/connectors/GoogleWorkspaceConnectorSDK';
 import { gitHubConnectorSDK } from './connectivity/connectors/GitHubConnectorSDK';
 import { gitLabConnectorSDK } from './connectivity/connectors/GitLabConnectorSDK';
 import { linearConnectorSDK } from './connectivity/connectors/LinearConnectorSDK';
@@ -68,7 +67,6 @@ import { vercelConnectorSDK } from './connectivity/connectors/VercelConnectorSDK
 import { netlifyConnectorSDK } from './connectivity/connectors/NetlifyConnectorSDK';
 import { railwayConnectorSDK } from './connectivity/connectors/RailwayConnectorSDK';
 import { slackConnectorSDK } from './connectivity/connectors/SlackConnectorSDK';
-import { microsoftConnectorSDK } from './connectivity/connectors/MicrosoftConnectorSDK';
 import { startRatingPromptScheduler } from './feedback/RatingPromptScheduler';
 import { isStoreRuntime } from './platform/storeRuntime';
 import { registerUpdater } from './platform/updaterSetup';
@@ -456,7 +454,10 @@ app.whenReady().then(async () => {
 
   // Connector #2: Google Workspace â€” first OAuth2/PKCE ConnectorSDK, bridging Drive/Gmail/
   // Calendar/Contacts into the pre-existing officeConnectorRegistry scaffold (OFF-1).
-  connectorRegistry.register(googleWorkspaceConnectorSDK);
+  // NOT registered in this release: Google has not verified the app's sensitive/restricted scopes yet,
+  // so connecting shows Google's "unverified app" warning. Re-enable once verification is approved by
+  // restoring:  import { googleWorkspaceConnectorSDK } from './connectivity/connectors/GoogleWorkspaceConnectorSDK';
+  //             connectorRegistry.register(googleWorkspaceConnectorSDK);
 
   // Connectors #3-#9: GitHub/GitLab/Linear/Vercel/Netlify/Railway/Slack â€” every remaining PawOS
   // v1 Connections provider. Signed-in credential persistence is restored by the renderer after
@@ -469,7 +470,9 @@ app.whenReady().then(async () => {
     netlifyConnectorSDK,
     railwayConnectorSDK,
     slackConnectorSDK,
-    microsoftConnectorSDK,
+    // microsoftConnectorSDK — Microsoft 365 is NOT registered in this release (its Azure app's redirect
+    // URI isn't set up yet). Re-enable later: import { microsoftConnectorSDK } from
+    // './connectivity/connectors/MicrosoftConnectorSDK' and add it back to this list.
   ] as const;
   for (const sdk of oauthConnectorSDKs) {
     connectorRegistry.register(sdk);

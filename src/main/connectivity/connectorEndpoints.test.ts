@@ -4,6 +4,21 @@ import * as path from 'path';
 
 const read = (rel: string) => fs.readFileSync(path.join(__dirname, '../../..', rel), 'utf8');
 
+describe('Google Workspace connector (disabled until Google verifies the app)', () => {
+  it('is not registered, so it is absent from Connections and cannot be connected', () => {
+    const main = read('src/main/main.ts');
+    expect(main).not.toMatch(/^\s*connectorRegistry\.register\(googleWorkspaceConnectorSDK\)/m);
+    expect(main).not.toMatch(/^import \{ googleWorkspaceConnectorSDK \}/m);
+    expect(read('src/renderer/ui/Dashboard/SettingsHome.tsx')).not.toContain('connectorId="googleWorkspace"');
+  });
+
+  it('Microsoft 365 connector is not registered either (added back in a later release)', () => {
+    const main = read('src/main/main.ts');
+    expect(main).not.toMatch(/^import \{ microsoftConnectorSDK \}/m);
+    expect(main).not.toMatch(/^\s*microsoftConnectorSDK,\s*$/m);
+  });
+});
+
 describe('connector OAuth endpoints match the providers\' current OAuth servers', () => {
   it('Vercel ("Sign in with Vercel"): PKCE on, code exchanged at /login/oauth/token (desktop + web)', () => {
     const def = read('src/main/connectivity/connectors/VercelConnectorSDK.ts');

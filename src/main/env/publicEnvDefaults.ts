@@ -58,6 +58,6 @@ export const PUBLIC_ENV_DEFAULTS: Record<string, string> = {
   GOOGLE_WORKSPACE_CLIENT_ID: '1047116528874-runsi8mp0hlrvoavj244d1fo7jvn07m3.apps.googleusercontent.com', // Google Workspace (separate app from Google sign-in / GOOGLE_CLIENT_ID)
   CONNECTOR_VERCEL_CLIENT_ID: 'cl_JyLv2QB2x2AbQJh9fbTkutUCyx4Hge8f', // Vercel
   CONNECTOR_NETLIFY_CLIENT_ID: '3AsHcLCw62TC5vq337oDTxdZWvn_caGBCfnO5cwsWvU', // Netlify
-  GITLAB_CLIENT_ID: '7102a7f9d63c71a57853092269aa8cfc312a664aded60ef056a39abb6eedc441', // GitLab
+  GITLAB_CLIENT_ID: 'd22722ceb493803c08bf8782c0505e24db8278744a75f2f6c18713cb204bcfb6', // GitLab (the pawos.revantaai.com app — not the localhost dev app)
   CONNECTOR_RAILWAY_CLIENT_ID: 'rlwy_oaci_jajrZyYQblhXonmgoAA2syFu', // Railway
 };

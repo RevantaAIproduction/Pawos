@@ -179,7 +179,9 @@ function makeFailingTurnRunner(): AutonomousTurnRunner {
 /** Actual Paw Compute the main process reports for the run at settlement (billing:settleAutonomousRun). */
 let settlementActualPc = 42;
 
-describe('Autonomous Work — local acceptance test (real git isolation, real evidence pipeline)', () => {
+// Real git worktrees + the real evidence pipeline: well above vitest's 5s default when the whole
+// suite runs in parallel (it timed out at ~8.8s under load while passing on its own).
+describe('Autonomous Work — local acceptance test (real git isolation, real evidence pipeline)', { timeout: 30_000 }, () => {
   let sourceRepo: string;
   let worktreePath: string;
 

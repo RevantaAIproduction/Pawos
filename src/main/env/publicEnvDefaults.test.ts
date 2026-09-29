@@ -35,6 +35,11 @@ describe('PUBLIC_ENV_DEFAULTS (the packaged app has no .env)', () => {
     expect(fs.readFileSync(route, 'utf8')).toContain('relayConnectivityToDesktop');
   });
 
+  it('GitLab uses the production app (callback https://pawos.revantaai.com/auth/gitlab/callback), not the localhost dev app', () => {
+    expect(PUBLIC_ENV_DEFAULTS.GITLAB_CLIENT_ID).toBe('d22722ceb493803c08bf8782c0505e24db8278744a75f2f6c18713cb204bcfb6');
+    expect(PUBLIC_ENV_DEFAULTS.GITLAB_REDIRECT_URL).toBe('https://pawos.revantaai.com/auth/gitlab/callback');
+  });
+
   it('never ships a client secret', () => {
     for (const secretVar of connectorEnvVars('clientSecretEnvVar')) expect(PUBLIC_ENV_DEFAULTS[secretVar]).toBeUndefined();
     expect(Object.keys(PUBLIC_ENV_DEFAULTS).filter((k) => /SECRET|PASSWORD|SERVICE_ROLE|API_KEY/.test(k))).toEqual([]);

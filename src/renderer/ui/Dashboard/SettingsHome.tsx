@@ -227,7 +227,7 @@ export function SettingsHome({
                     <span className={styles.settingsHomeTileLogos}>
                       <ConnectorLogo connectorId="github" displayName="GitHub" size={30} />
                       <ConnectorLogo connectorId="jira" displayName="Jira" size={30} />
-                      <ConnectorLogo connectorId="googleWorkspace" displayName="Google Workspace" size={30} />
+                      <ConnectorLogo connectorId="linear" displayName="Linear" size={30} />
                     </span>
                   ) : (
                     <span className={styles.settingsHomeTileIcon} style={{ background: `${c.color}26`, color: c.color }}>
