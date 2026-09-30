@@ -11,11 +11,18 @@ import nodemailer from "nodemailer";
 
 let cachedTransporter: ReturnType<typeof nodemailer.createTransport> | null = null;
 
+/** Env values set outside dotenv (pm2 ecosystem, systemd, a shell export) can keep literal
+ *  surrounding quotes or stray whitespace — either makes Gmail reject the login with EAUTH 535. */
+function cleanEnv(value: string | undefined): string | undefined {
+  const v = value?.trim().replace(/^(["'])(.*)\1$/, "$2").trim();
+  return v || undefined;
+}
+
 export function getTransporter() {
-  const host = process.env.SMTP_HOST;
-  const port = process.env.SMTP_PORT;
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
+  const host = cleanEnv(process.env.SMTP_HOST);
+  const port = cleanEnv(process.env.SMTP_PORT);
+  const user = cleanEnv(process.env.SMTP_USER);
+  const pass = cleanEnv(process.env.SMTP_PASS);
   if (!host || !port || !user || !pass) return null;
 
   if (!cachedTransporter) {
@@ -32,7 +39,7 @@ export function getTransporter() {
 }
 
 export function getFrom(): string {
-  return process.env.EMAIL_FROM ?? "PawOS <no-reply@revantaai.com>";
+  return cleanEnv(process.env.EMAIL_FROM) ?? "PawOS <no-reply@revantaai.com>";
 }
 
 export function wrapEmail(bodyHtml: string): string {
