@@ -75,7 +75,15 @@ export async function POST(request: Request) {
       text: `${lead}\n\nYour code: ${code}\n\nIt expires in ${minutes} minutes. If you didn't request this, ignore this email.`,
     });
     return Response.json({ ok: true });
-  } catch {
-    return Response.json({ ok: false, error: "We couldn't send the email. Please try again." }, { status: 502 });
+  } catch (e) {
+    // Only nodemailer's error code/SMTP status go back to the caller (e.g. EAUTH 535 = bad
+    // SMTP_USER/SMTP_PASS, ETIMEDOUT/ESOCKET = host or port unreachable) — never credentials.
+    const err = e as { code?: string; responseCode?: number; message?: string };
+    console.error("[send-verification-code] SMTP send failed:", err?.code, err?.responseCode, err?.message);
+    const detail = [err?.code, err?.responseCode].filter(Boolean).join(" ");
+    return Response.json(
+      { ok: false, error: "We couldn't send the email. Please try again.", ...(detail ? { smtpError: detail } : {}) },
+      { status: 502 }
+    );
   }
 }
