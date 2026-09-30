@@ -1,8 +1,9 @@
 import React from 'react';
 import { SubscriptionSection } from './SubscriptionSection';
-import { TaskCreditsSection } from './TaskCreditsSection';
 import type { AuthUser } from '../../../auth/AuthTypes';
 
+// Autonomous Work Credits are bought from SubscriptionSection's AutonomousCreditsPanel (and the
+// Ticket Wallet in the top bar) — there is no second personal-balance card here.
 export function BillingSettingsPage({
   user,
   onGoToAccount,
@@ -15,7 +16,6 @@ export function BillingSettingsPage({
   return (
     <div>
       <SubscriptionSection user={user} onGoToAccount={onGoToAccount} onUpgrade={onUpgrade} />
-      <TaskCreditsSection user={user} />
     </div>
   );
 }

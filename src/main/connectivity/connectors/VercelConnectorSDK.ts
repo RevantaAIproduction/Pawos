@@ -13,11 +13,13 @@ interface VercelCredential {
   email?: string;
 }
 
+// "Sign in with Vercel" tokens can read the OpenID user-info endpoint; REST API access (/v2/user,
+// deployments) is a private-beta permission, so identity must not depend on it.
 async function fetchIdentity(accessToken: string): Promise<{ username?: string; email?: string }> {
-  const res = await fetch('https://api.vercel.com/v2/user', { headers: { Authorization: `Bearer ${accessToken}` } });
-  if (!res.ok) throw new Error(`Vercel rejected the new access token (HTTP ${res.status}).`);
-  const json = (await res.json()) as { user?: { username?: string; email?: string } };
-  return { username: json.user?.username, email: json.user?.email };
+  const res = await fetch('https://api.vercel.com/login/oauth/userinfo', { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) throw new Error(`Vercel account check failed (HTTP ${res.status}).`);
+  const json = (await res.json()) as { preferred_username?: string; name?: string; email?: string };
+  return { username: json.preferred_username ?? json.name, email: json.email };
 }
 
 /** Free-tier connector: no FeatureId gate. Wraps the existing VercelConnector REST class (already
@@ -34,7 +36,8 @@ export class VercelConnectorSDK implements ConnectorSDK {
       // exchanged at /login/oauth/token (the old /v2/oauth/access_token is for integrations and 400s).
       authorizationUrl: 'https://vercel.com/oauth/authorize',
       tokenUrl: 'https://api.vercel.com/login/oauth/token',
-      scopes: [],
+      // openid is required; an empty `scope=` is not the same as omitting it.
+      scopes: ['openid', 'email', 'profile', 'offline_access'],
       usePkce: true,
       clientIdEnvVar: 'CONNECTOR_VERCEL_CLIENT_ID',
       clientSecretEnvVar: 'CONNECTOR_VERCEL_CLIENT_SECRET',
@@ -67,7 +70,9 @@ export class VercelConnectorSDK implements ConnectorSDK {
     try {
       const handle = await oauthManager.beginAuthorization(this.definition.id, scope);
       const { code, codeVerifier, redirectUri } = await handle.result;
-      const token = await oauthManager.exchangeCodeForToken(this.definition.id, code, codeVerifier, redirectUri);
+      const token = await oauthManager.exchangeCodeForToken(this.definition.id, code, codeVerifier, redirectUri).catch((error: unknown) => {
+        throw new Error(`Vercel token exchange: ${error instanceof Error ? error.message : String(error)}`);
+      });
       const identity = await fetchIdentity(token.accessToken);
       this.credential = { accessToken: token.accessToken, refreshToken: token.refreshToken, expiresAt: token.expiresAt, ...identity };
       await credentialVaultBridge.store(this.definition.id, scope, token.accessToken, 'oauth2', {

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import styles from './dashboard.module.css';
 import { ipc } from '../../services/ipc/ipcBridgeImplementation';
 import { autonomousTaskBillingService } from '../../organization/AutonomousTaskBillingService';
-import { NativeBillingCheckoutModal, type NativeBillingCheckoutIntent } from '../billing/NativeBillingCheckoutModal';
+import { initiateRazorpayCreditsPayment } from './sections/CreditsPaymentHandler';
 import { TicketHistory } from './TicketHistory';
 import {
   MIN_TICKET_BALANCE_TOPUP_USD,
@@ -95,7 +95,6 @@ export function TicketBalanceIndicator({
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [checkoutMessage, setCheckoutMessage] = useState<string | null>(null);
-  const [checkoutIntent, setCheckoutIntent] = useState<NativeBillingCheckoutIntent | null>(null);
   const [loadError, setLoadError] = useState(false);
 
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -156,8 +155,20 @@ export function TicketBalanceIndicator({
     }
     setCheckoutError(null);
     setCheckoutMessage(null);
-    setCheckoutBusy(false);
-    setCheckoutIntent({ kind: 'autonomousWorkCredits', amountUsd: parsed, title: 'Autonomous Work Credits' });
+    // One-time order, straight to Razorpay's own checkout page (no PawOS form in between).
+    await initiateRazorpayCreditsPayment(parsed, true, {
+      setBusy: setCheckoutBusy,
+      setMessage: (msg) => {
+        if (msg?.startsWith('[error]')) {
+          setCheckoutError(msg.replace(/^\[error\]\s*/, ''));
+          setCheckoutMessage(null);
+        } else {
+          setCheckoutMessage(msg);
+          if (msg) setCheckoutError(null);
+        }
+      },
+      refresh: loadBalance,
+    });
   }
 
   if (isGuest) return null;
@@ -390,17 +401,6 @@ export function TicketBalanceIndicator({
         </div>
       )}
     </div>
-    {checkoutIntent && (
-      <NativeBillingCheckoutModal
-        intent={checkoutIntent}
-        onClose={() => setCheckoutIntent(null)}
-        onSuccess={() => {
-          setCheckoutIntent(null);
-          setCheckoutMessage('Payment verified. Balance updated.');
-          loadBalance();
-        }}
-      />
-    )}
     </>
   );
 }

@@ -47,6 +47,21 @@ const CONNECTIVITY_OAUTH_BACKEND_BASE_URL = 'https://pawos.revantaai.com';
 
 const DEFAULT_TIMEOUT_MS = 120000;
 
+/** Where the browser lands after the relay listener has taken the code — a styled pawos-web page
+ *  (pawos-web/src/app/connectors/authorized/page.tsx). Only the connector id and an outcome go in
+ *  this URL, never the code or state. */
+export function buildConnectorAuthorizedPageUrl(connectorId: string | undefined, outcome: { error?: string; expired?: boolean }): string {
+  const url = new URL('/connectors/authorized', CONNECTIVITY_OAUTH_BACKEND_BASE_URL);
+  if (connectorId) url.searchParams.set('connector', connectorId);
+  if (outcome.error) {
+    url.searchParams.set('status', 'error');
+    url.searchParams.set('message', outcome.error.slice(0, 200));
+  } else {
+    url.searchParams.set('status', outcome.expired ? 'expired' : 'authorized');
+  }
+  return url.toString();
+}
+
 export interface OAuthAuthorizationResult {
   code: string;
   /** Present only for a PKCE connector (`oauth.usePkce`) — the verifier this same process
@@ -184,8 +199,18 @@ class OAuthManager {
     if (this.connectivityRelayServer) return;
     const server = http.createServer((req, res) => {
       const url = new URL(req.url ?? '/', `http://127.0.0.1:${CONNECTIVITY_LOCAL_RELAY_PORT}`);
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end('<html><body>You can close this window and return to PawOS.</body></html>');
+      if (url.pathname !== '/callback') {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+      // Read the pending entry before handleProtocolCallback consumes it, so the landing page can
+      // name the connector (and say "expired" for a stale or duplicate redirect).
+      const state = url.searchParams.get('state');
+      const entry = state ? this.pending.get(state) : undefined;
+      const error = url.searchParams.get('error_description') ?? url.searchParams.get('error') ?? undefined;
+      res.writeHead(302, { Location: buildConnectorAuthorizedPageUrl(entry?.connectorId, { error, expired: !entry }) });
+      res.end();
       this.handleProtocolCallback(url);
     });
     server.on('error', (err) => {

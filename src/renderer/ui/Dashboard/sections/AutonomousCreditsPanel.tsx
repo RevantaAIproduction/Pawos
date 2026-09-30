@@ -70,7 +70,7 @@ export function AutonomousCreditsPanel({ userEmail, onPaymentComplete, currentTi
 
   const handlePay = async () => {
     setBusy(true);
-    const options = { setMessage, setBusy, refresh: onPaymentComplete, userEmail };
+    const options = { setMessage, setBusy, refresh: () => { void fetchBalance(); onPaymentComplete(); }, userEmail };
     await initiateRazorpayCreditsPayment(amountUsd, true, options);
   };
 

@@ -28,6 +28,14 @@ describe('connector OAuth endpoints match the providers\' current OAuth servers'
     expect(read('pawos-web/src/lib/connectivityOAuthProviders.ts')).toContain("'https://api.vercel.com/login/oauth/token'");
   });
 
+  it('Vercel: requests openid scopes (never an empty scope=) and checks identity via userinfo, not the private-beta REST API', () => {
+    const def = read('src/main/connectivity/connectors/VercelConnectorSDK.ts');
+    expect(def).toContain("scopes: ['openid', 'email', 'profile', 'offline_access']");
+    expect(def).toContain("'https://api.vercel.com/login/oauth/userinfo'");
+    expect(def).not.toContain('api.vercel.com/v2/user');
+    expect(def).toContain('Vercel token exchange: ');
+  });
+
   it('Railway: backboard.railway.com /oauth/auth + /oauth/token, with scopes and PKCE (desktop + web)', () => {
     const def = read('src/main/connectivity/connectors/RailwayConnectorSDK.ts');
     expect(def).toContain("authorizationUrl: 'https://backboard.railway.com/oauth/auth'");
