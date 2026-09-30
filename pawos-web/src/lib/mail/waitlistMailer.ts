@@ -11,7 +11,7 @@ import nodemailer from "nodemailer";
 
 let cachedTransporter: ReturnType<typeof nodemailer.createTransport> | null = null;
 
-function getTransporter() {
+export function getTransporter() {
   const host = process.env.SMTP_HOST;
   const port = process.env.SMTP_PORT;
   const user = process.env.SMTP_USER;
@@ -31,11 +31,11 @@ function getTransporter() {
   return cachedTransporter;
 }
 
-function getFrom(): string {
+export function getFrom(): string {
   return process.env.EMAIL_FROM ?? "PawOS <no-reply@revantaai.com>";
 }
 
-function wrapEmail(bodyHtml: string): string {
+export function wrapEmail(bodyHtml: string): string {
   return `<!doctype html>
 <html>
   <body style="margin:0;padding:32px 16px;background:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">

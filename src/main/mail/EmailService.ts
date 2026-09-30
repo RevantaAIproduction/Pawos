@@ -69,6 +69,11 @@ export class EmailService {
     this.from = config.from;
   }
 
+  /** False in installed/Store builds, which carry no SMTP credentials. */
+  isConfigured(): boolean {
+    return this.transporter !== null;
+  }
+
   private branding() {
     return { logoFullSrc: `cid:${LOGO_FULL_CID}`, logoIconSrc: `cid:${LOGO_ICON_CID}` };
   }

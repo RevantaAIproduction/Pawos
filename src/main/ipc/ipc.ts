@@ -19,6 +19,7 @@ import type { GoogleSignInResult } from '../../shared/auth/AccountTypes';
 import { emailService } from '../mail/EmailService';
 import { listMailTemplates, renderMailPreview } from '../mail/preview';
 import { createOtp, verifyOtp } from '../mail/otp';
+import { deliverOtp } from '../mail/otpDelivery';
 import { createPasswordResetToken, verifyPasswordResetToken } from '../mail/passwordResetToken';
 import { deviceIdentityStore } from '../device/DeviceIdentityStore';
 import { pushNotificationService } from '../notifications/PushNotificationService';
@@ -416,7 +417,7 @@ export function registerIpc(opts: {
   // settings do for email confirmation (see EmailAuthProvider.ts).
   ipcMain.handle('auth:sendOtp', async (_evt, email: string) => {
     const { code, expiresInMinutes } = await createOtp(email);
-    await emailService.sendOTP(email, { code, expiresInMinutes });
+    await deliverOtp(email, { code, expiresInMinutes, purpose: 'signup' });
     return { expiresInMinutes };
   });
   ipcMain.handle('auth:verifyOtp', (_evt, email: string, code: string) => verifyOtp(email, code));
@@ -430,7 +431,7 @@ export function registerIpc(opts: {
   // can't be replayed to authorize an unrelated later action.
   ipcMain.handle('auth:sendPasswordResetOtp', async (_evt, email: string) => {
     const { code, expiresInMinutes } = await createOtp(email, 'password-reset');
-    await emailService.sendOTP(email, { code, expiresInMinutes });
+    await deliverOtp(email, { code, expiresInMinutes, purpose: 'password-reset' });
     return { expiresInMinutes };
   });
   ipcMain.handle('auth:verifyPasswordResetOtp', async (_evt, email: string, code: string) => {
