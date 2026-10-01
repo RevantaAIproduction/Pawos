@@ -12,8 +12,9 @@ export const metadata: Metadata = {
 
 const COMPARISON_ROWS: { feature: string; go: string; pro: string; proMax: string; team: string; enterprise: string }[] = [
   { feature: "Companion Studio & Desktop Companion", go: "✓", pro: "✓", proMax: "✓", team: "✓", enterprise: "✓" },
+  { feature: "Paw Compute (PC) included", go: "500 PC every 14 days", pro: "2,000 PC per billing period", proMax: "10,000 PC (5x) or 25,000 PC (20x) per billing period", team: "Shared organization pool", enterprise: "Shared organization pool" },
   { feature: "AI models & reasoning runtimes", go: "—", pro: "✓", proMax: "✓", team: "✓", enterprise: "✓" },
-  { feature: "Autonomous Ticket System billing", go: "—", pro: "Ticket Balance", proMax: "Ticket Balance", team: "Ticket Balance (shared)", enterprise: "Seat fee + usage at API rates" },
+  { feature: "Autonomous Ticket System billing", go: "—", pro: "—", proMax: "Ticket Balance", team: "Ticket Balance (shared)", enterprise: "Seat fee + usage at API rates" },
   { feature: "Shared Workspaces, Companions & Credit Pool", go: "—", pro: "—", proMax: "—", team: "✓", enterprise: "✓" },
   { feature: "Task Management & Git Collaboration (PR Review)", go: "—", pro: "—", proMax: "—", team: "✓", enterprise: "✓" },
   { feature: "Remote Assistance & CRM Projection", go: "—", pro: "—", proMax: "—", team: "✓", enterprise: "✓" },
@@ -26,6 +27,10 @@ const FAQS = [
   {
     q: "How does Autonomous Ticket System billing work?",
     a: "The Autonomous Ticket System is billed through a Ticket Balance — a prepaid dollar wallet, completely separate from your subscription. Add funds anytime from inside the app (any amount, $30 minimum). Each genuinely completed ticket deducts a real dollar amount from that balance — never for chat, tokens, or time, and never until a real pull request is opened and the ticket is updated. The rate per ticket is volume-tiered by your account's (or organization's) cumulative completed-ticket count: $5.00/ticket for your first 500, $4.50 for tickets 501–2,000, $4.00 for 2,001–10,000, $3.50 for 10,001–25,000, and $3.00/ticket beyond that — so the more you use it, the less each ticket costs. A ticket that fails, is cancelled, hits a retry limit, or is denied approval never deducts anything. Run low and PawOS simply prompts you to add funds before starting a new ticket.",
+  },
+  {
+    q: "How is usage measured?",
+    a: "Usage is measured in Paw Compute (PC). Pro includes 2,000 PC per billing period, Pro Max 5x includes 10,000 PC, and Pro Max 20x includes 25,000 PC. A weekly limit spreads that usage across the period — 1,000 PC per week on Pro, 5,000 PC on Pro Max 5x, and 12,500 PC on Pro Max 20x — and the rest of your plan stays available after each weekly reset. Included plan PC does not carry over to the next billing period. Paw Go includes 500 PC every 14 days. Need more? Credits are $1 for 100 PC and never expire.",
   },
   {
     q: "Can I change plans anytime?",

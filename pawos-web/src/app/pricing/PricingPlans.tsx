@@ -41,6 +41,7 @@ const INDIVIDUAL_PLANS: Plan[] = [
       "Basic Workspace & File Management",
       "Local Runtime Features",
       "AI-powered planning & analysis with Paw Flash — execution requires Paw Pro",
+      "500 PC included every 14 days",
     ],
   },
   {
@@ -50,6 +51,7 @@ const INDIVIDUAL_PLANS: Plan[] = [
     period: "month",
     features: [
       "Everything in Paw Go",
+      "2,000 PC included each billing period (weekly limit 1,000 PC)",
       "Full AI models: Paw Flash, Swift, Core, Vision & Voice",
       "Eligible to purchase/select production-ready runtime entitlements",
       "Coding Runtime can be added explicitly for terminal, file, git, build, and validation execution",
@@ -63,7 +65,8 @@ const INDIVIDUAL_PLANS: Plan[] = [
     period: "month",
     features: [
       "Everything in Paw Pro",
-      "Pro Max 5x: 10,000 PC included — or Pro Max 20x ($250/mo): 25,000 PC included",
+      "Pro Max 5x: 10,000 PC included each billing period (weekly limit 5,000 PC)",
+      "Pro Max 20x ($250/mo): 25,000 PC included each billing period (weekly limit 12,500 PC)",
       "Runtime purchases remain cumulative across Pro and Pro Max",
       "Priority access to new Paw models",
     ],

@@ -47,7 +47,7 @@ export const billingPages: DocPage[] = [
     title: 'Usage',
     description: 'How PawOS reports what you\'ve used this period.',
     blocks: [
-      { type: 'paragraph', text: 'Settings → Usage shows the Paw Compute (PC) you have used and have left: your plan for the current billing period, your weekly limit, and any extra usage or credits you have bought — each as its own line with its price, PC and expiry.' },
+      { type: 'paragraph', text: 'Settings → Usage shows the Paw Compute (PC) you have used and have left: your plan for the current billing period, your weekly limit, and any credits you have bought.' },
       {
         type: 'list',
         items: [
@@ -75,7 +75,7 @@ export const billingPages: DocPage[] = [
       {
         type: 'status',
         status: 'implemented',
-        text: 'Pro and Pro Max include a set amount of PC per billing period with a weekly limit; extra usage and credits add more. Paw Go includes 500 PC every 14 days. Team and Enterprise draw from an organization-wide pool.',
+        text: 'Pro and Pro Max include a set amount of PC per billing period with a weekly limit; credits add more. Paw Go includes 500 PC every 14 days. Team and Enterprise draw from an organization-wide pool.',
       },
       {
         type: 'warning',
@@ -145,8 +145,8 @@ export const billingPages: DocPage[] = [
           'Pro Max 20x: 25,000 PC per billing period ($250/month), with a weekly limit of 12,500 PC.',
           'Team and Enterprise: usage is drawn from your organization’s shared pool.',
           'Reached your weekly limit? The rest of your plan is still there — it becomes available again when the weekly limit resets.',
-          'Used all of your plan’s PC for this billing period? Buy extra usage for the rest of the period (Pro $15 for 1,500 PC, Pro Max 5x $50 for 5,000 PC, Pro Max 20x $175 for 17,500 PC — it expires when your plan renews), buy credits, or wait for your plan to renew.',
-          'Credits: pay any amount from $5 and get 100 PC per $1. Credits never expire and are used after your plan and any extra usage.',
+          'Used all of your plan’s PC for this billing period? Buy credits, upgrade, or wait for your plan to renew. Included plan PC does not carry over.',
+          'Credits: pay any amount from $5 and get 100 PC per $1. Credits never expire and are used after your plan’s included PC.',
           'Everything else keeps working — hitting a limit is never a hard stop for the rest of the app.',
         ],
       },
@@ -202,8 +202,7 @@ export const billingPages: DocPage[] = [
           'Annual Option: $200/year (USD) or ₹19,053/year (INR) — saves 17%',
           'Execution: Full file edits, commands, installs, deployments',
           'Paw Compute: 2,000 PC per billing period, with a weekly limit of 1,000 PC (on the annual plan, 2,000 PC each month)',
-          'Extra usage: $15 for 1,500 PC, until your plan renews',
-          'Autonomous Work: Available at volume-tiered pricing',
+          'Autonomous Work: Not included — available on Pro Max and above',
           'Use Cases: Individual developers, freelancers, solo work',
           'Billing: Individual account, auto-renewal (cancel anytime)',
         ],
@@ -223,10 +222,9 @@ export const billingPages: DocPage[] = [
         items: [
           'Pro Max 5x: $100/month (₹9,565) — 10,000 PC per billing period, with a weekly limit of 5,000 PC',
           'Pro Max 20x: $250/month (₹23,913) — 25,000 PC per billing period, with a weekly limit of 12,500 PC',
-          'Extra usage: Pro Max 5x $50 for 5,000 PC, Pro Max 20x $175 for 17,500 PC, until your plan renews',
           'Execution: Full capabilities (same as Pro)',
           'Advanced Features: Extended context windows, custom configurations',
-          'Autonomous Work: Same volume-tiered pricing',
+          'Autonomous Work: Included — paid from your Ticket Balance at volume-tiered pricing',
           'Billing: Monthly only, individual account',
           'Use Cases: Data scientists, full-stack developers, complex systems',
         ],

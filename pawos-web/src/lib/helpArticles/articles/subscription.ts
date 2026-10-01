@@ -58,7 +58,7 @@ export const SUBSCRIPTION_ARTICLES: HelpArticle[] = [
     requirements: ['A PawOS account on Paw Pro'],
     permissions: [],
     administration: 'Individual tier — no organization/seat concept.',
-    billing: '$20/month, with 2,000 PC (Paw Compute) per billing period and a weekly limit of 1,000 PC. Extra usage ($15 for 1,500 PC) and credits ($1 = 100 PC) are available if you need more.',
+    billing: '$20/month, with 2,000 PC (Paw Compute) per billing period and a weekly limit of 1,000 PC. Included plan PC does not carry over. Credits ($1 = 100 PC, never expire) are available if you need more.',
     faq: [
       { question: 'What AI models does Pro unlock?', answer: 'Paw Flash, Swift, Core, Vision, Voice and Memory — plus Paw Fable with purchased usage credits.' },
       { question: 'Is there a usage limit on Pro?', answer: 'Yes — Pro includes 2,000 PC per billing period, with a weekly limit of 1,000 PC. Pro Max 5x includes 10,000 PC and Pro Max 20x includes 25,000 PC.' },
@@ -90,7 +90,7 @@ export const SUBSCRIPTION_ARTICLES: HelpArticle[] = [
     requirements: ['A PawOS account on Paw Pro Max'],
     permissions: [],
     administration: 'Individual tier — no organization/seat concept.',
-    billing: '$100/month for Pro Max 5x (10,000 PC per billing period), or $250/month for Pro Max 20x (25,000 PC per billing period). Extra usage: $50 for 5,000 PC or $175 for 17,500 PC.',
+    billing: '$100/month for Pro Max 5x (10,000 PC per billing period, weekly limit 5,000 PC), or $250/month for Pro Max 20x (25,000 PC per billing period, weekly limit 12,500 PC). Credits: $1 = 100 PC.',
     faq: [{ question: 'What’s different between Pro and Pro Max?', answer: 'The same models and features, with more Paw Compute: 10,000 PC (Pro Max 5x) or 25,000 PC (Pro Max 20x) per billing period, versus 2,000 PC on Pro. Organization features begin at Team.' }],
     relatedArticleIds: ['paw-pro', 'team'],
     relatedSettings: ['Billing'],
