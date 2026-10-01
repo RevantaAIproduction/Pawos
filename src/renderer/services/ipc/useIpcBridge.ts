@@ -129,7 +129,7 @@ export function useIpcBridge() {
         reason: string,
         category?: AiUsageCategory,
         pawModelId?: PawModelId
-      ): Promise<{ aggregated: AggregatedTurnUsage; balance: CreditBalance }> =>
+      ): Promise<import('../../../shared/billing/UsageBucketTypes').RecordedTurnUsage> =>
         ipc.billingRecordTurnUsage(submission, reason, category, pawModelId),
       billingReleaseGenerationSlot: async (): Promise<void> =>
         ipc.billingReleaseGenerationSlot(),
@@ -137,8 +137,8 @@ export function useIpcBridge() {
         usage: ProviderUsageMetadata,
         requestType: UsageRequestType,
         context: { sessionId: string | null; runId: string | null }
-      ): Promise<NormalizedUsageRecord> => ipc.billingReportUsageEvent(usage, requestType, context),
-      billingGetUsageEvents: async (limit?: number): Promise<NormalizedUsageRecord[]> => ipc.billingGetUsageEvents(limit),
+      ): Promise<import('../../../shared/billing/UsageBucketTypes').UsageEventAck> => ipc.billingReportUsageEvent(usage, requestType, context),
+      billingGetUsageEvents: async (limit?: number): Promise<import('../../../shared/billing/UsageBucketTypes').LocalUsageEventSummary[]> => ipc.billingGetUsageEvents(limit),
       billingGrantComputeBonus: async (units: number): Promise<EntitlementSnapshot> => ipc.billingGrantComputeBonus(units),
 
       governanceApprove: async (approvalId: string): Promise<{ ok: boolean; error?: string }> =>

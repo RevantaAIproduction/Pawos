@@ -4,6 +4,7 @@ import { subscriptionStore } from './SubscriptionStore';
 import { creditStore } from './CreditStore';
 import { usageEventStore } from './UsageEventStore';
 import { pawComputeCapacityStore } from './PawComputeCapacityStore';
+import { usageBucketClient } from './UsageBucketClient';
 import type { RuntimeEntitlementGrant } from '../../shared/billing/BillingTypes';
 
 beforeEach(() => {
@@ -97,23 +98,38 @@ describe('EntitlementService — Paw Compute usage-limit enforcement (paid tiers
     }
   });
 
-  it('Pro has a real, finite, positive 5-hour rolling window limit — not null/unlimited', () => {
-    vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'pro', status: 'active' });
+  it('Pro and Pro Max have no 5-hour window or active-hour caps — paid usage is accounted in server buckets', () => {
     vi.spyOn(usageEventStore, 'list').mockReturnValue([]);
-    const snap = entitlementService.getSnapshot();
-    expect(snap.limit5hPc).not.toBeNull();
-    expect(snap.limit5hPc as number).toBeGreaterThan(0);
+    vi.spyOn(usageBucketClient, 'getCachedSummary').mockReturnValue(null);
+    for (const tier of ['pro', 'proMax'] as const) {
+      vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier, status: 'active' });
+      const snap = entitlementService.getSnapshot();
+      expect(snap.limit5hPc).toBeNull();
+      expect(snap.activeHours5h).toBeNull();
+      expect(snap.activeHoursWeekly).toBeNull();
+    }
   });
 
-  it('Pro Max 5h limit is larger than Pro — different rolling window capacity, not 20x monthly', () => {
+  it('Pro Max weekly pace and plan period come from the customer-safe server summary, in customer PC', () => {
     vi.spyOn(usageEventStore, 'list').mockReturnValue([]);
-    vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'pro', status: 'active' });
-    const proSnap = entitlementService.getSnapshot();
-
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'proMax', status: 'active' });
-    const proMaxSnap = entitlementService.getSnapshot();
-
-    expect((proMaxSnap.limit5hPc as number)).toBeGreaterThan((proSnap.limit5hPc as number));
+    vi.spyOn(usageBucketClient, 'getCachedSummary').mockReturnValue({
+      plan: { productKey: 'pro_max_5x_monthly', label: 'Pro Max 5x plan' },
+      bucketFunded: true,
+      buckets: [{ id: 'b1', type: 'monthly_plan', label: 'Pro Max 5x plan', amountPaidCents: 10000, pcTotal: 10000, pcUsed: 1000, pcRemaining: 9000, percentUsed: 10, status: 'active', startsAt: null, expiresAt: null, resetsAt: null, productKey: 'pro_max_5x_monthly' }],
+      weeklyPacing: { percentUsed: 20, reached: false, resetsAt: new Date(Date.now() + 86_400_000).toISOString(), pcLimit: 5000 },
+      creditsPcRemaining: 300,
+      limitReached: false,
+      limitReason: null,
+      limitResetsAt: null,
+    });
+    const snap = entitlementService.getSnapshot();
+    expect(snap.limitWeeklyPc).toBe(5000);
+    expect(snap.usageWeeklyPc).toBe(1000);
+    expect(snap.limitMonthlyPc).toBe(10000);
+    expect(snap.usageMonthlyPc).toBe(1000);
+    expect(snap.purchasedPcRemaining).toBe(300);
+    expect(snap.usageSummary?.buckets).toHaveLength(1);
   });
 
   it('Team Premium seats have a larger 5h rolling window than Team Standard', () => {
@@ -127,20 +143,37 @@ describe('EntitlementService — Paw Compute usage-limit enforcement (paid tiers
     expect((premiumSnap.limit5hPc as number)).toBeGreaterThan((standardSnap.limit5hPc as number));
   });
 
-  it('hasCreditsRemaining() is false when 5h usage equals the limit (rolling window exhausted)', () => {
+  it('bucket-funded detection follows the server summary, not the tier name', () => {
+    const funded = { plan: { productKey: 'anything_new', label: 'New plan' }, bucketFunded: true, buckets: [], weeklyPacing: null, creditsPcRemaining: 0, limitReached: false, limitReason: null, limitResetsAt: null };
+    // A tier the code has never heard of is bucket-metered when the server says so…
+    vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'go', status: 'none' });
+    vi.spyOn(usageBucketClient, 'getCachedSummary').mockReturnValue(funded);
+    expect(entitlementService.isBucketMetered()).toBe(true);
+    // …and a paid tier is not, when the server says it has no current plan bucket.
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'pro', status: 'active' });
-    const capacity = pawComputeCapacityStore.resolve('pro');
-    const limit5h = capacity.window5hPc as number;
-      const now = Date.now();
-      // Ensure the active window starts before our record
-      vi.spyOn(usageEventStore, 'getActiveWindowStartAt').mockReturnValue(now - 2000);
-      vi.spyOn(usageEventStore, 'getWeeklyCycleStartAt').mockReturnValue(now - 2000);
-      
-      // Fill the 5h window exactly to the limit with non-fable records inside the window
-      vi.spyOn(usageEventStore, 'list').mockReturnValue([
-        { usageEventId: 'e1', requestId: 'r1', timestamp: now - 1000, normalizedCompute: (limit5h) * 10, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, totalTokens: null, thoughtsTokens: null, requestType: 'conversationTurn', sessionId: null, runId: null, provider: 'gemini', model: 'gemini-2.0-flash' },
-      ]);
+    vi.spyOn(usageBucketClient, 'getCachedSummary').mockReturnValue({ ...funded, plan: null, bucketFunded: false });
+    expect(entitlementService.isBucketMetered()).toBe(false);
+    // Team / Enterprise stay pooled even if a summary said otherwise.
+    vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'enterprise', status: 'active' });
+    vi.spyOn(usageBucketClient, 'getCachedSummary').mockReturnValue(funded);
+    expect(entitlementService.isBucketMetered()).toBe(false);
+    expect(entitlementService.isPooledUsage()).toBe(true);
+  });
+
+  it('Pro: the server summary decides — weekly pace reached blocks; local usage records never do', () => {
+    vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'pro', status: 'active' });
+    const now = Date.now();
+    // A local ledger far beyond the old Pro caps changes nothing for a bucket-metered tier.
+    vi.spyOn(usageEventStore, 'list').mockReturnValue([
+      { usageEventId: 'e1', requestId: 'r1', timestamp: now - 1000, normalizedCompute: 10_000_000, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, totalTokens: null, thoughtsTokens: null, requestType: 'conversationTurn', sessionId: null, runId: null, provider: 'gemini', model: 'gemini-2.0-flash' },
+    ]);
+    const base = { plan: { productKey: 'pro_monthly', label: 'Pro plan' }, bucketFunded: true, buckets: [], weeklyPacing: null, creditsPcRemaining: 0, limitResetsAt: null };
+    vi.spyOn(usageBucketClient, 'getCachedSummary').mockReturnValue({ ...base, limitReached: false, limitReason: null });
+    expect(entitlementService.hasCreditsRemaining()).toBe(true);
+
+    vi.spyOn(usageBucketClient, 'getCachedSummary').mockReturnValue({ ...base, limitReached: true, limitReason: 'plan_weekly_paced' });
     expect(entitlementService.hasCreditsRemaining()).toBe(false);
+    expect(entitlementService.checkGeneration().reason).toMatch(/^Weekly limit reached/);
   });
 
   it('Enterprise is reported as pooled, and hasCreditsRemaining() stays true locally regardless of local CreditStore usage (the real check is server-side)', () => {

@@ -2,6 +2,39 @@ import React from 'react';
 import type { EntitlementSnapshot } from '../../../shared/billing/BillingTypes';
 import { formatPlanName } from '../../billing/EntitlementDisplay';
 import { getExhaustionPrimaryActions } from './CreditsRequiredNotice';
+import { usageLimitMessage, type CustomerUsageBucket } from '../../../shared/billing/UsageBucketTypes';
+
+function formatDate(iso: string | null): string {
+  if (!iso) return '';
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+/** The customer-facing price of a bucket ("$20"), straight from the server's product configuration. */
+function formatPrice(cents: number): string {
+  const dollars = cents / 100;
+  return `$${Number.isInteger(dollars) ? dollars.toLocaleString() : dollars.toFixed(2)}`;
+}
+
+/** Extra usage and credits — each purchase is its own bucket, shown with its price and customer PC. */
+function PurchasedBuckets({ buckets }: { buckets: CustomerUsageBucket[] }) {
+  const shown = buckets.filter((b) => b.type !== 'monthly_plan' && (b.status === 'active' || b.status === 'exhausted'));
+  if (shown.length === 0) return null;
+  return (
+    <div data-testid="plan-usage-purchased">
+      {shown.map((b) => (
+        <LimitRow
+          key={b.id}
+          label={`${b.label || (b.type === 'mid_month_purchase' ? 'Extra usage' : 'Credits')} · ${formatPrice(b.amountPaidCents)}`}
+          used={b.pcUsed}
+          limit={b.pcTotal}
+          unit="PC"
+          reset={b.expiresAt ? `expires ${formatDate(b.expiresAt)}` : 'no expiry'}
+        />
+      ))}
+    </div>
+  );
+}
 
 function formatPlanHeading(entitlement: EntitlementSnapshot): string {
   if (entitlement.tier === 'team') return `Team ${entitlement.seatTier === 'premium' ? 'Premium' : 'Standard'} (pooled)`;
@@ -94,6 +127,10 @@ export function PlanUsageLimits({
   );
   const limitReached = !entitlement.pooled && !entitlement.hasCreditsRemaining;
 
+  const summary = entitlement.usageSummary ?? null;
+  // Bucket-funded comes from the server's product configuration, never from the tier name.
+  const bucketMetered = summary?.bucketFunded === true;
+
   if (entitlement.tier === 'go') {
     return (
       <div data-testid="plan-usage-go-status">
@@ -102,10 +139,12 @@ export function PlanUsageLimits({
           <span style={{ width: 8, height: 8, borderRadius: 4, background: limitReached ? 'var(--pawos-danger, #d9534f)' : '#4caf50' }} />
           {limitReached ? 'Limit reached — upgrade or buy Paw Compute to keep going.' : 'Working normally.'}
         </div>
+        {summary && <div style={{ marginTop: 8 }}><PurchasedBuckets buckets={summary.buckets} /></div>}
         {limitReached && <LimitActions entitlement={entitlement} onUpgrade={onUpgrade} onBuyCompute={onBuyCompute} />}
       </div>
     );
   }
+  const planBucket = bucketMetered ? summary?.buckets.find((b) => b.type === 'monthly_plan' && (b.status === 'active' || b.status === 'exhausted')) ?? null : null;
 
   // PawOS Build: a reset that would land at or after the grant's end never happens — access ends instead.
   const buildEndsAt = entitlement.tier === 'build' ? entitlement.buildAccess?.endsAt ?? null : null;
@@ -131,15 +170,21 @@ export function PlanUsageLimits({
                 ? finalBuildWeek
                   ? 'Limit reached — this is the last week of your PawOS Build access, so it will not reset again. Upgrade to Pro to keep going.'
                   : 'Limit reached — buy Paw Compute to keep going, or wait for it to reset automatically.'
-                : 'Limit reached for now.'}
+                : bucketMetered && summary?.limitReason
+                  ? usageLimitMessage(summary.limitReason, summary.limitResetsAt).split('\n').slice(1).join(' ')
+                  : 'Limit reached for now.'}
             </div>
           )}
           {entitlement.limit5hPc !== null && (
             <LimitRow label="5-hour window" used={entitlement.usage5hPc} limit={entitlement.limit5hPc} unit="PC" reset={windowReset} />
           )}
           {entitlement.limitWeeklyPc !== null && (
-            <LimitRow label="This week" used={entitlement.usageWeeklyPc} limit={entitlement.limitWeeklyPc} unit="PC" reset={weekReset} />
+            <LimitRow label={bucketMetered ? 'Weekly limit' : 'This week'} used={entitlement.usageWeeklyPc} limit={entitlement.limitWeeklyPc} unit="PC" reset={weekReset} />
           )}
+          {planBucket && (
+            <LimitRow label={`${planBucket.label || 'Plan'} · ${formatPrice(planBucket.amountPaidCents)} · this period`} used={planBucket.pcUsed} limit={planBucket.pcTotal} unit="PC" reset={planBucket.resetsAt ? `renews ${formatDate(planBucket.resetsAt)}` : null} />
+          )}
+          {summary && <PurchasedBuckets buckets={summary.buckets} />}
           {entitlement.activeHours5h !== null && (
             <LimitRow label="Active time · 5-hour window" used={entitlement.activeHoursUsed5h} limit={entitlement.activeHours5h} unit="h" reset={windowReset} />
           )}

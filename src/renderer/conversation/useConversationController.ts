@@ -17,6 +17,8 @@ import { withAutonomousTaskBilling } from '../organization/AutonomousTaskBilling
 import type { VisemeFrame } from './LipSyncTypes';
 import type { SubmittedInputContext } from './ConversationTypes';
 import { buildSystemPrompt, buildLanguageInstruction } from './systemPrompt';
+import { isSmallTalkMessage } from './smallTalk';
+import { MINIMAL_QUESTION_SYSTEM_PROMPT } from './simpleQuestion';
 import { DEFAULT_EXECUTION_MODE, buildPlanModeInstruction, type ConversationExecutionMode } from '../../shared/actions/ExecutionModeTypes';
 import type { EffectiveTierId, EntitlementSnapshot, SubscriptionTierId } from '../../shared/billing/BillingTypes';
 import { DEFAULT_PAW_MODEL_ID, type PawModelId } from '../../shared/ai/PawModelTypes';
@@ -45,7 +47,7 @@ export function useConversationController(args?: {
     speechPlaybackState: 'off',
     pendingConfirmation: false,
   });
-  const [streamingPawCompute, setStreamingPawCompute] = useState(0);
+  const [streamingActive, setStreamingActive] = useState(false);
   const [streamingElapsedSeconds, setStreamingElapsedSeconds] = useState(0);
 
   const runtimeRef = useRef<ConversationRuntime | null>(null);
@@ -151,6 +153,17 @@ export function useConversationController(args?: {
     const planModeInstruction = executionModeRef.current === 'plan' ? buildPlanModeInstruction() : '';
     const combined = [base, addendum, languageInstruction, planModeInstruction].filter(Boolean).join('\n\n');
     runtimeRef.current?.setReasoningSystemPrompt(combined);
+    // Simple factual questions get a one-line instruction instead of the full prompt — plus the user's
+    // chosen reply language when one is set (empty for English), nothing else (simpleQuestion.ts).
+    runtimeRef.current?.setReasoningMinimalSystemPrompt([MINIMAL_QUESTION_SYSTEM_PROMPT, languageInstruction].filter(Boolean).join('\n\n'));
+    // The same pieces, so a tool/task request can carry only its capability sections (contextPlanner.ts).
+    runtimeRef.current?.setReasoningPromptParts({
+      canExecute,
+      canMakeResumes,
+      personalityAddendum: addendum ?? '',
+      languageInstruction,
+      planModeInstruction,
+    });
   }, []);
 
   /** Switches the composer's execution mode — see ExecutionModeTypes.ts. Re-applies the system
@@ -392,14 +405,14 @@ export function useConversationController(args?: {
       onTurnUsage: (submission) => {
         lastTurnUsageRef.current = submission;
       },
-      onStreamingUsage: (pawCompute, elapsedSeconds) => {
-        setStreamingPawCompute(pawCompute);
+      onStreamingUsage: (elapsedSeconds) => {
+        setStreamingActive(true);
         setStreamingElapsedSeconds(elapsedSeconds);
       },
       onStateChange: (state) => {
         onStateChangeRef.current?.(state);
         if (state === 'completed' || state === 'error') {
-          setStreamingPawCompute(0);
+          setStreamingActive(false);
           const currentSnapshot = runtimeRef.current?.getSnapshot();
           const lastTaskMessage = currentSnapshot ? [...currentSnapshot.messages].reverse().find((m) => m.task) : undefined;
           const actionTypes = lastTaskMessage?.task?.actions.map((a) => a.type) ?? [];
@@ -484,8 +497,11 @@ export function useConversationController(args?: {
           // Count user prompts in the session
           const promptCount = session.turns.filter(t => t.transcript.trim()).length;
           setCurrentSessionPromptCount(promptCount);
-          // A brand-new session gets a short topic name ("PawOS build warnings") after its first reply.
-          if (session.turns.length === 1 && turn.transcript.trim() && turn.assistantResponse.trim()) {
+          // A brand-new session gets a short topic name ("PawOS build warnings") after its first real
+          // reply. Locally answered greetings never trigger this Gemini call; a chat that started with
+          // greetings is named on its first real message instead.
+          const onlyGreetingsBefore = session.turns.slice(0, -1).every((t) => isSmallTalkMessage(t.transcript));
+          if (!turn.answeredLocally && onlyGreetingsBefore && turn.transcript.trim() && turn.assistantResponse.trim()) {
             const apiKey = aiProviderConfigStore.getApiKey('gemini');
             if (apiKey) {
               void nameSession({ apiKey, transcript: turn.transcript, reply: turn.assistantResponse }).then(async ({ name, usage }) => {
@@ -799,7 +815,7 @@ export function useConversationController(args?: {
     activePawModel,
     modelTierRequirements,
     selectModel,
-    streamingPawCompute,
+    streamingActive,
     streamingElapsedSeconds,
 
     // Session management

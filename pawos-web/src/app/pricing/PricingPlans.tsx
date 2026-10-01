@@ -63,7 +63,7 @@ const INDIVIDUAL_PLANS: Plan[] = [
     period: "month",
     features: [
       "Everything in Paw Pro",
-      "5x the usage of Paw Pro — or 20x on Pro Max 20x ($250/mo)",
+      "Pro Max 5x: 10,000 PC included — or Pro Max 20x ($250/mo): 25,000 PC included",
       "Runtime purchases remain cumulative across Pro and Pro Max",
       "Priority access to new Paw models",
     ],

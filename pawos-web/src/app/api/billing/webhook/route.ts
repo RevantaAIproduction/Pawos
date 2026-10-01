@@ -11,7 +11,8 @@ import { creditVerifiedTicketBalancePayment } from "@/lib/billing/ticketBalanceC
 import { creditVerifiedUsageCreditsPayment } from "@/lib/billing/usageCreditsCrediting";
 
 import { createServiceClient } from "@/lib/supabase/serviceClient";
-import { creditPaidInvoice } from "@/lib/billing/invoiceCrediting";
+import { creditPaidInvoice, fetchRazorpayInvoice } from "@/lib/billing/invoiceCrediting";
+import { creditVerifiedMidMonthPayment, MID_MONTH_PRODUCT_TYPE } from "@/lib/billing/midMonthPurchase";
 
 type RazorpayWebhookEvent = {
   event: string;
@@ -226,6 +227,20 @@ async function applyPaymentCapturedEvent(event: RazorpayWebhookEvent): Promise<b
     identity: { source: "orderNotes" as const },
   };
 
+  if (productType === MID_MONTH_PRODUCT_TYPE) {
+    const midMonth = await creditVerifiedMidMonthPayment(baseParams).catch((error) => ({
+      ok: false as const,
+      status: 500,
+      reason: error instanceof Error ? error.message : String(error),
+    }));
+    if (!midMonth.ok) {
+      console.log(`[razorpay-webhook] payment.captured for ${paymentId} (mid_month_purchase) not granted via webhook: ${midMonth.reason}`);
+      return !((midMonth.status ?? 0) >= 500);
+    }
+    console.log(`[razorpay-webhook] payment.captured for ${paymentId} (mid_month_purchase) granted.`);
+    return true;
+  }
+
   const result = await (productType === "usage_credits"
     ? creditVerifiedUsageCreditsPayment(baseParams)
     : creditVerifiedTicketBalancePayment(baseParams) // default: "ticket_balance" (or legacy orders without productType)
@@ -264,6 +279,51 @@ async function applyInvoicePaidEvent(event: RazorpayWebhookEvent): Promise<boole
   }
   console.log(`[razorpay-webhook] invoice.paid ${invoiceId} credited $${result.amountUsd} (${result.productType}).`);
   return true;
+}
+
+/**
+ * A refunded usage purchase: its usage bucket stops funding anything new. Credits and mid-month
+ * buckets are found by the payment id; a refunded subscription payment revokes that subscription's
+ * current plan bucket. Usage already consumed is never clawed back, and Ticket Balance (autonomous)
+ * refunds are left exactly as before — logged, no automatic wallet action.
+ * Returns false when it should be retried.
+ */
+async function applyRefundEvent(event: RazorpayWebhookEvent): Promise<boolean> {
+  const payment = event.payload.payment?.entity as
+    | { id?: string; invoice_id?: string | null; notes?: Record<string, string> }
+    | undefined;
+  const paymentId = payment?.id;
+  if (!paymentId) {
+    console.warn("[razorpay-webhook] refund.processed has no payment id — skipping.");
+    return true;
+  }
+  const productType = payment?.notes?.productType;
+  let subscriptionId: string | null = null;
+  if (!productType && payment?.invoice_id) {
+    const credentials = getRazorpayCredentials();
+    const invoice = credentials ? await fetchRazorpayInvoice(payment.invoice_id, credentials).catch(() => null) : null;
+    subscriptionId = (invoice as { subscription_id?: string | null } | null)?.subscription_id ?? null;
+  }
+  if (productType !== "usage_credits" && productType !== MID_MONTH_PRODUCT_TYPE && !subscriptionId) {
+    console.log(`[razorpay-webhook] Verified "refund.processed" for ${paymentId} — not a usage purchase; no automatic action taken.`);
+    return true;
+  }
+  try {
+    const { data, error } = await createServiceClient().rpc("revoke_usage_bucket_service", {
+      p_payment_id: subscriptionId ? null : paymentId,
+      p_subscription_id: subscriptionId,
+      p_reason: "refund",
+    });
+    if (error) {
+      console.error(`[razorpay-webhook] Revoking the usage bucket for refunded payment ${paymentId} failed:`, error.message);
+      return false;
+    }
+    console.log(`[razorpay-webhook] refund.processed ${paymentId}: usage bucket revoked`, data);
+    return true;
+  } catch (error) {
+    console.error(`[razorpay-webhook] Revoking the usage bucket for refunded payment ${paymentId} failed:`, error);
+    return false;
+  }
 }
 
 const SUBSCRIPTION_EVENTS = new Set([
@@ -311,11 +371,14 @@ export async function POST(request: Request) {
     if (!(await applySubscriptionEvent(event))) {
       return NextResponse.json({ ok: false, reason: "Subscription could not be recorded yet." }, { status: 500 });
     }
-  } else if (event.event === "payment.failed" || event.event === "refund.processed") {
-    // Failed/refund events affecting the wallet: honestly logged, never auto-reversing an already
-    // -credited balance (clawback after funds may already be spent is a distinct business-policy
-    // decision, out of scope here) and never duplicating a credit for a payment that never captured.
-    console.log(`[razorpay-webhook] Verified "${event.event}" event received — no automatic wallet action taken.`, {
+  } else if (event.event === "refund.processed") {
+    if (!(await applyRefundEvent(event))) {
+      return NextResponse.json({ ok: false, reason: "Refund could not be applied yet." }, { status: 500 });
+    }
+  } else if (event.event === "payment.failed") {
+    // A failed payment never created anything (buckets and wallets are granted only for captured
+    // payments), so there is nothing to undo.
+    console.log(`[razorpay-webhook] Verified "payment.failed" event received — nothing was granted for it.`, {
       paymentId: event.payload.payment?.entity?.id,
     });
   } else {

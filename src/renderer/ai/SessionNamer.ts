@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { SessionClassifierUsage } from './SessionClassifier';
+import { bridgeUsageGate, finishGeminiCall, reserveGeminiCall, usageFromMetadata } from '../reasoning/providers/geminiUsageReservation';
 
 /** Tidies a model-written title: no quotes, no trailing punctuation, sentence-sized. Null if nothing usable is left. */
 export function cleanSessionName(raw: string): string | null {
@@ -28,20 +29,31 @@ export async function nameSession(params: {
   const { apiKey, transcript, reply, model = 'gemini-3.5-flash-lite', baseUrl = 'https://generativelanguage.googleapis.com/v1beta' } = params;
   const prompt = `Name this conversation for a chat list, like "PawOS build warnings", "OAuth parity web/desktop" or "Resume for frontend role": 2 to 6 words, sentence case, the topic only — no quotes, no ending punctuation, never "Conversation about".\n\nUser: ${transcript.slice(0, 1500)}\n\nAssistant: ${reply.slice(0, 1500)}`;
   const requestId = uuidv4();
+  const gate = bridgeUsageGate();
+  let reservationId: string | null = null;
+  let responded = false;
   try {
+    const body = {
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        responseSchema: { type: 'object', properties: { title: { type: 'string' } }, required: ['title'] },
+      } as Record<string, unknown>,
+    };
+    // Reserved like every paid Gemini call; a refusal just leaves the session's first-message title.
+    ({ reservationId } = await reserveGeminiCall({ gate, baseUrl, model, apiKey, body, requestKey: requestId, category: 'background', maxOutputTokens: 1024 }));
     const res = await fetch(`${baseUrl}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          responseSchema: { type: 'object', properties: { title: { type: 'string' } }, required: ['title'] },
-        },
-      }),
+      body: JSON.stringify(body),
     });
-    if (!res.ok) return { name: null, usage: null };
+    responded = res.ok;
+    if (!res.ok) {
+      finishGeminiCall(gate, reservationId, requestId, { usage: null, requestFailed: true });
+      return { name: null, usage: null };
+    }
     const json = await res.json();
+    finishGeminiCall(gate, reservationId, requestId, { usage: usageFromMetadata(json.usageMetadata), requestFailed: false });
     const u = json.usageMetadata;
     const usage: SessionClassifierUsage | null = u
       ? {
@@ -63,6 +75,9 @@ export async function nameSession(params: {
     }
     return { name: cleanSessionName(title), usage };
   } catch {
+    // A refused reservation or a network failure before any response: nothing was billed. (After a
+    // successful response with unreadable usage, the reservation is left for the server to close.)
+    if (!responded) finishGeminiCall(gate, reservationId, requestId, { usage: null, requestFailed: true });
     return { name: null, usage: null };
   }
 }

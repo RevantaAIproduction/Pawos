@@ -33,13 +33,13 @@ export const AI_USAGE_CATEGORIES: AiUsageCategory[] = [
 ];
 
 export const AI_USAGE_CATEGORY_LABELS: Record<AiUsageCategory, string> = {
-  chat: 'Chat',
+  chat: 'Chat conversation',
   coding: 'Coding',
   browserAutomation: 'Browser Automation',
   desktopAutomation: 'Desktop Automation',
   research: 'Research',
   meetings: 'Meetings',
-  voice: 'Voice',
+  voice: 'Voice conversation',
   mobileRuntime: 'Mobile Runtime',
   companion: 'Companion',
   agentExecution: 'Agent Execution',
@@ -47,13 +47,13 @@ export const AI_USAGE_CATEGORY_LABELS: Record<AiUsageCategory, string> = {
 };
 
 export const AI_USAGE_CATEGORY_DESCRIPTIONS: Record<AiUsageCategory, string> = {
-  chat: 'Direct conversation with Paw — no desktop action was performed.',
+  chat: 'Messages you typed to Paw, where no desktop action was performed.',
   coding: 'Git, builds, installs, running commands, and reading/analyzing your project.',
   browserAutomation: 'Browsing, searching, filling forms, and reading pages on the web.',
   desktopAutomation: 'Files, folders, clipboard, windows, and other local system actions.',
   research: 'Comparisons, workspace investigation, and infrastructure/error lookups.',
   meetings: 'Meeting capture, communication processing, and follow-up drafting.',
-  voice: 'Turns you spoke to Paw rather than typed, with no further action taken.',
+  voice: 'Messages you spoke to Paw with push-to-talk, where no desktop action was performed.',
   mobileRuntime: 'Pairing and managing a paired mobile device.',
   companion: 'Companion goals, routines, and memory.',
   agentExecution: 'Autonomous engineering tasks, deployments, and PR review.',

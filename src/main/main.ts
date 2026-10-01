@@ -40,6 +40,7 @@ import { pricingConfigStore } from './billing/PricingConfigStore';
 import { ticketPricingConfigStore } from './billing/TicketPricingConfigStore';
 import { subscriptionStore } from './billing/SubscriptionStore';
 import { creditStore } from './billing/CreditStore';
+import { cleanupLegacyBillingFiles } from './billing/LegacyBillingCleanup';
 import { usageQuotaConfigStore } from './billing/UsageQuotaConfigStore';
 import { usageStore } from './billing/UsageStore';
 import { pawComputeConfigStore } from './billing/PawComputeConfigStore';
@@ -427,6 +428,8 @@ app.whenReady().then(async () => {
   pricingConfigStore.init();
   ticketPricingConfigStore.init();
   subscriptionStore.init();
+  // Retired local billing files (paid usage is server-authoritative now) — exact files only.
+  cleanupLegacyBillingFiles(app.getPath('userData'));
   creditStore.init();
   usageQuotaConfigStore.init();
   usageStore.init();

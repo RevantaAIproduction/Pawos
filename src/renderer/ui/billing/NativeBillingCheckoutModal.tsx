@@ -13,9 +13,6 @@ import {
   estimateTicketBalancePaymentInr,
   NATIVE_PAYMENT_METHOD_DETAILS,
   subscriptionAmountInr,
-  USAGE_CREDITS_PRESETS_USD,
-  USAGE_CREDITS_MIN_USD,
-  USAGE_CREDITS_MAX_USD,
   AUTONOMOUS_WORK_CREDITS_PRESETS_USD,
   AUTONOMOUS_WORK_CREDITS_MIN_USD,
   AUTONOMOUS_WORK_CREDITS_MAX_USD,
@@ -567,6 +564,7 @@ interface CustomCheckoutFormProps {
 
 function CustomCheckoutPaymentForm({
   amountPaise,
+  usdInrRate,
   label,
   totalInr,
   availableMethods,
@@ -601,8 +599,8 @@ function CustomCheckoutPaymentForm({
       <div>
         <div style={{ fontSize: 15, fontWeight: 700 }}>{label}</div>
         <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6, padding: '12px 0', borderTop: '1px solid rgba(var(--pawos-overlay-rgb), 0.1)', borderBottom: '1px solid rgba(var(--pawos-overlay-rgb), 0.1)' }}>
-          {lineItem('Amount', formatUsd(amountPaise / 100 / 95.65))}
-          {lineItem('Exchange rate', '1 USD = ₹95.65 INR')}
+          {lineItem('Amount', formatUsd(amountPaise / 100 / usdInrRate))}
+          {lineItem('Exchange rate', `1 USD = ₹${usdInrRate} INR`)}
           {lineItem('Total', totalInr, true)}
         </div>
       </div>
@@ -819,6 +817,19 @@ export function NativeBillingCheckoutModal({
     ? (intent.seatTier === 'premium' ? 100 : 20)
     : 0;
 
+  // Usage credits: presets, bounds and the INR rate come from the server's configuration (never
+  // hardcoded here). Autonomous Work Credits keep their own existing values.
+  const [usageCreditsConfig, setUsageCreditsConfig] = useState<any>(null);
+  useEffect(() => {
+    if (!isUsageCredits) return;
+    ipc.billingGetUsageCreditsConfig()
+      .then(setUsageCreditsConfig)
+      .catch(() => setUsageCreditsConfig({ ok: false, reason: 'Credit purchases are unavailable right now.' }));
+  }, [isUsageCredits]);
+  const usageConfig = usageCreditsConfig && usageCreditsConfig.ok ? usageCreditsConfig : null;
+  const usageConfigUnavailable = isUsageCredits && usageCreditsConfig !== null && !usageConfig;
+  const usdInrRate: number = isUsageCredits ? usageConfig?.usdInrRate ?? TICKET_BALANCE_USD_INR_RATE : TICKET_BALANCE_USD_INR_RATE;
+
   // For credit kinds with no pre-set amount (usageCredits), user picks here.
   const preSetAmount = isSubscription ? null : (intent as { amountUsd?: number }).amountUsd ?? null;
   const [selectedAmountUsd, setSelectedAmountUsd] = useState<number | null>(preSetAmount);
@@ -916,7 +927,7 @@ export function NativeBillingCheckoutModal({
   // Razorpay takes one-time orders up to ₹50,000 — anything above is paid by invoice (≤ ₹5,00,000
   // each, split server-side), for everyone: personal or organization, credits or Team/Enterprise.
   const isHighValue = useMemo(() => {
-    const aboveOrderLimit = (usd: number) => usd * TICKET_BALANCE_USD_INR_RATE > ONE_TIME_ORDER_LIMIT_INR;
+    const aboveOrderLimit = (usd: number) => usd * usdInrRate > ONE_TIME_ORDER_LIMIT_INR;
     if (isSubscription) {
       const intentTier = intent as Extract<typeof intent, { kind: 'tierPurchase' }>;
       if (intentTier.tier === 'team' || intentTier.tier === 'enterprise') {
@@ -980,12 +991,14 @@ export function NativeBillingCheckoutModal({
   const effectiveAmountUsd = isAdditionalSeat ? additionalSeatPriceUsd : (selectedAmountUsd ?? 0);
   const totalInr = isSubscription
     ? subscriptionAmountInr(intent.tier, intent.seatTier, quantity, proMaxVariant ?? undefined)
-    : estimateTicketBalancePaymentInr(effectiveAmountUsd);
+    : isUsageCredits
+      ? Math.round(effectiveAmountUsd * usdInrRate * 100) / 100
+      : estimateTicketBalancePaymentInr(effectiveAmountUsd);
   const totalText = formatPaymentInr(totalInr ?? 0);
 
-  const presets = isUsageCredits ? USAGE_CREDITS_PRESETS_USD : AUTONOMOUS_WORK_CREDITS_PRESETS_USD;
-  const minAmount = isUsageCredits ? USAGE_CREDITS_MIN_USD : AUTONOMOUS_WORK_CREDITS_MIN_USD;
-  const maxAmount = isUsageCredits ? USAGE_CREDITS_MAX_USD : AUTONOMOUS_WORK_CREDITS_MAX_USD;
+  const presets = isUsageCredits ? usageConfig?.topupPresetsUsd ?? [] : AUTONOMOUS_WORK_CREDITS_PRESETS_USD;
+  const minAmount = isUsageCredits ? usageConfig?.minTopupUsd ?? Infinity : AUTONOMOUS_WORK_CREDITS_MIN_USD;
+  const maxAmount = isUsageCredits ? usageConfig?.maxTopupUsd ?? 0 : AUTONOMOUS_WORK_CREDITS_MAX_USD;
 
   const needsProMaxVariantSelection = isSubscription && (intent as any).tier === 'proMax' && !proMaxVariant;
   const needsAmountSelection = !isSubscription && !isAdditionalSeat && selectedAmountUsd === null;
@@ -1543,7 +1556,7 @@ export function NativeBillingCheckoutModal({
         throw new Error('Invalid intent');
       }
 
-      const totalInr = Math.round(totalUsd * TICKET_BALANCE_USD_INR_RATE); // same ₹95.65/USD as every other checkout
+      const totalInr = Math.round(totalUsd * usdInrRate); // the same configured rate as the rest of this checkout
 
       // Step 1: Create billing case with persona assignment
       const casePayload: Record<string, unknown> = {
@@ -1882,6 +1895,7 @@ export function NativeBillingCheckoutModal({
           {/* Custom Checkout Form */}
           <CustomCheckoutPaymentForm
             amountPaise={Math.round((totalInr ?? 0) * 100)} // Convert INR to paise
+            usdInrRate={usdInrRate}
             label={label}
             totalInr={totalText}
             availableMethods={availableMethods}
@@ -2527,6 +2541,11 @@ export function NativeBillingCheckoutModal({
           {!isSubscription && selectedAmountUsd === null && (
             <div>
               <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 8 }}>Select amount</div>
+              {isUsageCredits && !usageConfig ? (
+                <div style={{ fontSize: 12.5, color: usageConfigUnavailable ? '#e08c8c' : undefined }}>
+                  {usageConfigUnavailable ? usageCreditsConfig.reason : 'Loading purchase options…'}
+                </div>
+              ) : (
               <PresetAmountPicker
                 presets={presets}
                 min={minAmount}
@@ -2535,6 +2554,7 @@ export function NativeBillingCheckoutModal({
                 onSelect={setSelectedAmountUsd}
                 disabled={isBusy}
               />
+              )}
             </div>
           )}
 
@@ -2562,7 +2582,7 @@ export function NativeBillingCheckoutModal({
           {(!needsAmountSelection || isSubscription) && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '14px 0', borderTop: '1px solid rgba(var(--pawos-overlay-rgb), 0.1)', borderBottom: '1px solid rgba(var(--pawos-overlay-rgb), 0.1)' }}>
               {!isSubscription && lineItem('Purchase', formatUsd(effectiveAmountUsd))}
-              {!isSubscription && lineItem('Exchange rate', '1 USD = ₹95.65 INR')}
+              {!isSubscription && lineItem('Exchange rate', `1 USD = ₹${usdInrRate} INR`)}
               {lineItem('Charged today', totalText)}
               {lineItem('Tax', '₹0.00 INR')}
               {lineItem('Total', totalText, true)}

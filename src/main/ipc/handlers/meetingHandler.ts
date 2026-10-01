@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { normalizedComputeToCustomerPc } from '../../../shared/billing/CustomerPcCommercialModel';
+import { finishMainProcessGeminiCall, reserveMainProcessGeminiCall } from '../../billing/MeteredGeminiCall';
 /**
  * IPC handler for meeting management (recording, summarization, distribution).
  * Pro tier and higher feature - gated by tier checks in handlers.
@@ -198,17 +199,23 @@ Focus on:
     const requestId = uuidv4();
     const baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
 
+    const requestBody = {
+      contents: [{ role: 'user', parts: [{ text: summaryPrompt }] }],
+      generationConfig: { responseMimeType: 'application/json' },
+    };
+    // Paid usage is reserved on the server before the call (sets the granted maxOutputTokens).
+    const reservation = await reserveMainProcessGeminiCall({ baseUrl, model, apiKey, body: requestBody, requestKey: requestId, category: 'meetings' });
+    if (!reservation.ok) return { ok: false, reason: reservation.message };
+
     let res: Response;
     try {
       res = await fetch(`${baseUrl}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: summaryPrompt }] }],
-          generationConfig: { responseMimeType: 'application/json' },
-        }),
+        body: JSON.stringify(requestBody),
       });
     } catch (fetchError) {
+      finishMainProcessGeminiCall(reservation.reservationId, requestId, null);
       return {
         ok: false,
         reason: `Failed to call Gemini API: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}`,
@@ -217,6 +224,7 @@ Focus on:
 
     if (!res.ok) {
       const errorText = await res.text().catch(() => 'Unknown error');
+      finishMainProcessGeminiCall(reservation.reservationId, requestId, null);
       return {
         ok: false,
         reason: `Gemini API error: ${res.status} ${res.statusText}`,
@@ -237,11 +245,14 @@ Focus on:
         };
       };
     } catch {
+      // Usage unknown on a successful call: the server closes the reservation at its full amount.
       return {
         ok: false,
         reason: 'Failed to parse Gemini response',
       };
     }
+    // A successful response without usage is left for the server to close at the full reservation.
+    if (json.usageMetadata) finishMainProcessGeminiCall(reservation.reservationId, requestId, json.usageMetadata);
 
     // Extract text content
     const summaryText = json.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -283,7 +294,7 @@ Focus on:
       // Consume Tier Compute using the existing billing infrastructure
       // This uses the normal AI usage path, not Autonomous Work PC
       const normalizedCompute = computeNormalizedCompute(providerUsageMetadata);
-      creditStore.consume(normalizedComputeToCustomerPc(normalizedCompute), 'meeting-summarization', 'meetings', false);
+      if (!entitlementService.isBucketMetered()) creditStore.consume(normalizedComputeToCustomerPc(normalizedCompute), 'meeting-summarization', 'meetings');
     }
 
     // Build structured summary

@@ -243,6 +243,18 @@ class RollingUsageGate {
       return { allowed: false, pooled: false, reason: 'inflight', usage: this.getRollingUsage(tier, seatTier, now, proMaxVariant) };
     }
 
+    return this.checkIncludedCapacity(tier, seatTier, now, proMaxVariant);
+  }
+
+  /**
+   * The included-capacity limits alone (no in-flight slot check) — used per Gemini call inside a turn
+   * that already holds the slot, to decide whether Go/Build's free allowance still covers the call.
+   */
+  checkIncludedCapacity(tier: EffectiveTierId, seatTier?: SeatTier, now = Date.now(), proMaxVariant?: '5x' | '20x'): GenerationCheckResult {
+    const capacity = pawComputeCapacityStore.resolve(tier, seatTier, proMaxVariant);
+    if (capacity.pooled) {
+      return { allowed: true, pooled: true, deferTo: 'organizationUsageService', usage: this.getRollingUsage(tier, seatTier, now, proMaxVariant) };
+    }
     const usage = this.getRollingUsage(tier, seatTier, now, proMaxVariant);
     // PawOS Build: a limit whose reset lands at or after the grant's end never resets.
     const buildEndsAt = tier === 'build' ? buildAccessStore.getEndsAt() : null;

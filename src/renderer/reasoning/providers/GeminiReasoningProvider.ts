@@ -6,11 +6,30 @@ import type {
   ReasoningProviderSession,
 } from '../ReasoningProvider';
 import { parseSseStream, readErrorBody } from './httpStream';
+import {
+  auditGeminiRequest,
+  countGeminiInputTokens,
+  formatGeminiInputAudit,
+  isGeminiInputAuditEnabled,
+  type GeminiRequestBody,
+} from './geminiInputAudit';
+import {
+  bridgeUsageGate,
+  finishGeminiCall,
+  reserveGeminiCall,
+  usageFromMetadata,
+  type GeminiUsageGate,
+} from './geminiUsageReservation';
+import type { ModelCallUsage } from '../../../shared/billing/UsageBucketTypes';
 
 export type GeminiReasoningConfig = {
   apiKey: string;
   model?: string;
   baseUrl?: string;
+  /** Usage reservation gate (defaults to the desktop bridge). Every request is reserved before it is sent. */
+  usageGate?: GeminiUsageGate | null;
+  /** The active Paw model (e.g. 'paw-fable' is funded by credits only). */
+  getPawModelId?: () => string | undefined;
 };
 
 type GeminiPart =
@@ -105,6 +124,39 @@ function toGeminiTools(request: ReasoningProviderRequest) {
   ];
 }
 
+/** The exact JSON body sent to streamGenerateContent — shared with the dev-only input audit so it
+ *  always measures what is really sent. */
+export function buildGeminiRequestBody(request: ReasoningProviderRequest): GeminiRequestBody {
+  return {
+    contents: toGeminiContents(request),
+    ...(request.systemPrompt
+      ? { systemInstruction: { parts: [{ text: request.systemPrompt }] } }
+      : {}),
+    ...(toGeminiTools(request) ? { tools: toGeminiTools(request) } : {}),
+    // Explicit output limit for authorization/cost-bounding: 8,000 tokens is conservative
+    // for Flash and below, covers typical autonomous task responses without truncating normal
+    // conversation responses in non-autonomous contexts. This limit ensures pre-request cost
+    // authorization is defensible: max output PC = 8K tokens * pricing.outputPerMillionUsd.
+    generationConfig: {
+      maxOutputTokens: 8000,
+    },
+  };
+}
+
+/** Development builds only: logs how this request's input splits by category (never the key or any
+ *  user text), then the real total from countTokens once it arrives. Never blocks the request. */
+function logGeminiInputAudit(baseUrl: string, model: string, apiKey: string, body: GeminiRequestBody, input: string, contextPath?: string): void {
+  if (!isGeminiInputAuditEnabled()) return;
+  try {
+    console.info(formatGeminiInputAudit(model, auditGeminiRequest(body, input), contextPath));
+    void countGeminiInputTokens(baseUrl, model, apiKey, body).then((real) => {
+      if (real !== null) console.info(`[Gemini Input Audit] model=${model} realTotalInputTokens (countTokens): ${real}`);
+    });
+  } catch {
+    // diagnostics must never affect a real request
+  }
+}
+
 /**
  * No activity (not even the connection opening, not a single SSE chunk) for
  * this long means the request is genuinely dead, not just a slow model —
@@ -155,8 +207,32 @@ export function createGeminiReasoningProvider(config: GeminiReasoningConfig): Re
         callbacks.onStart?.();
         resetIdleTimer();
         let full = '';
+        const usageGate = config.usageGate === undefined ? bridgeUsageGate() : config.usageGate;
+        let reservationId: string | null = null;
+        let reservedInputTokens = 0;
+        let lastUsage: ModelCallUsage | null = null;
+        let responseStarted = false;
         try {
           const url = `${baseUrl}/models/${model}:streamGenerateContent?alt=sse&key=${encodeURIComponent(config.apiKey)}`;
+
+          const requestBody = buildGeminiRequestBody(request);
+          logGeminiInputAudit(baseUrl, model, config.apiKey, requestBody, request.input, request.contextPath);
+
+          // Paid usage: reserve the worst case on the server BEFORE sending (fails closed). Sets the
+          // granted maxOutputTokens on the body — the cap that keeps the call inside its reservation.
+          const reserved = await reserveGeminiCall({
+            gate: usageGate,
+            baseUrl,
+            model,
+            apiKey: config.apiKey,
+            body: requestBody,
+            requestKey: requestId,
+            category: 'chat',
+            pawModelId: config.getPawModelId?.(),
+          });
+          reservationId = reserved.reservationId;
+          reservedInputTokens = reserved.inputTokens;
+          if (controller.signal.aborted) throw controller.signal.reason ?? new Error('Cancelled.');
 
           // Phase 2 Active Time: Server-authoritative measurement of exact AI execution
           // We report the exact boundaries of the network request so the Main Process can
@@ -167,26 +243,14 @@ export function createGeminiReasoningProvider(config: GeminiReasoningConfig): Re
             method: 'POST',
             signal: controller.signal,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: toGeminiContents(request),
-              ...(request.systemPrompt
-                ? { systemInstruction: { parts: [{ text: request.systemPrompt }] } }
-                : {}),
-              ...(toGeminiTools(request) ? { tools: toGeminiTools(request) } : {}),
-              // Explicit output limit for authorization/cost-bounding: 8,000 tokens is conservative
-              // for Flash and below, covers typical autonomous task responses without truncating normal
-              // conversation responses in non-autonomous contexts. This limit ensures pre-request cost
-              // authorization is defensible: max output PC = 8K tokens * pricing.outputPerMillionUsd.
-              generationConfig: {
-                maxOutputTokens: 8000,
-              },
-            }),
+            body: JSON.stringify(requestBody),
           });
           resetIdleTimer();
 
           if (!res.ok) {
             throw new Error(`Gemini request failed (${res.status}): ${await readErrorBody(res)}`);
           }
+          responseStarted = true;
 
           await parseSseStream(
             res,
@@ -217,6 +281,7 @@ export function createGeminiReasoningProvider(config: GeminiReasoningConfig): Re
                 // most recent real number even if the stream is cancelled mid-flight.
                 const usageMetadata = json.usageMetadata;
                 if (usageMetadata && typeof usageMetadata === 'object') {
+                  lastUsage = usageFromMetadata(usageMetadata);
                   callbacks.onUsage?.({
                     provider: 'gemini',
                     model,
@@ -251,6 +316,13 @@ export function createGeminiReasoningProvider(config: GeminiReasoningConfig): Re
           }
         } finally {
           (globalThis as any).__pawos_ipc__?.billingReportRequestEnd(requestId).catch(() => {});
+          // Close the reservation: the reported usage; or, for a stream stopped before Gemini reported
+          // usage, the input plus the text received so far (the server caps it at the reservation);
+          // or a release when the request was rejected before any response.
+          const usage =
+            lastUsage ??
+            (responseStarted ? { promptTokens: reservedInputTokens, candidatesTokens: Math.ceil(full.length / 4), cachedTokens: 0, thoughtsTokens: 0 } : null);
+          finishGeminiCall(usageGate, reservationId, requestId, { usage, requestFailed: !responseStarted });
         }
       })();
 

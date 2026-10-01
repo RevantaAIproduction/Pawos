@@ -32,7 +32,7 @@ describe('Hand-edited files in the user data folder change nothing', () => {
     const huge = { window5hPc: 1e9, windowWeeklyPc: 1e9, window5hActiveHours: null, windowWeeklyActiveHours: null, pooled: false };
     writeBillingFile('paw-compute-capacity.json', { version: 4, tiers: { go: huge, pro: huge, proMax: huge, build: huge } });
     pawComputeCapacityStore.init();
-    expect(pawComputeCapacityStore.resolve('go')).toMatchObject({ window5hPc: 1000, windowWeeklyPc: 1000 });
+    expect(pawComputeCapacityStore.resolve('go')).toMatchObject({ window5hPc: 500, windowWeeklyPc: 500 });
     expect(pawComputeCapacityStore.resolve('pro')).toMatchObject({ window5hPc: 1250, windowWeeklyPc: 5000 });
     expect(pawComputeCapacityStore.resolve('proMax', undefined, '20x')).toMatchObject({ windowWeeklyPc: 100_000 });
     expect(pawComputeCapacityStore.resolve('build')).toMatchObject({ window5hPc: 500, windowWeeklyPc: 1500 });
@@ -53,32 +53,24 @@ describe('Hand-edited files in the user data folder change nothing', () => {
     expect(JSON.stringify(usageQuotaConfigStore.get())).toBe(builtIn);
   });
 
-  it('credits.json cannot grant purchased Paw Compute — the balance only comes from the server', () => {
+  it('credits.json cannot grant purchased Paw Compute — there is no local purchased balance at all', () => {
     writeBillingFile('credits.json', { userId: 'someone', purchasedUsageCreditsUsd: 99_999 });
     creditStore.init();
-    expect(creditStore.getBalance().purchasedUsageCreditsUsd).toBe(0);
+    expect('purchasedUsageCreditsUsd' in creditStore.getBalance()).toBe(false);
   });
 
-  it('a saved unsent deduction is only ever charged to the account that spent it', async () => {
+  it('saved legacy unsent deductions are dropped on load — never sent to the frozen legacy deduction', () => {
     writeBillingFile('credits.json', {
       pendingDeductions: [
         { usageEventId: 'evt-a', amountUsd: 1, timestamp: 1, userId: 'user-a' },
         { usageEventId: 'evt-b', amountUsd: 2, timestamp: 2, userId: 'user-b' },
-        { usageEventId: 'evt-legacy', amountUsd: 3, timestamp: 3 },
       ],
     });
-    creditStore.init();
-    process.env.SUPABASE_URL = 'https://example.supabase.co';
-    process.env.SUPABASE_PUBLISHABLE_KEY = 'anon-key';
-    const fetchMock = vi.fn(async (url: string) =>
-      url.includes('deduct_usage_credits') ? new Response('5', { status: 200 }) : new Response(JSON.stringify([{ balance_usd: 10 }]), { status: 200 }),
-    );
+    const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-
-    await creditStore.syncUsageCredits('token-b', 'user-b');
-    const deductions = fetchMock.mock.calls.filter(([url]) => String(url).includes('deduct_usage_credits'));
-    expect(deductions).toHaveLength(1);
-    expect(JSON.parse(String((deductions[0][1] as RequestInit).body))).toMatchObject({ p_usage_event_id: 'evt-b' });
-    expect(creditStore.getBalance().purchasedUsageCreditsUsd).toBe(10);
+    creditStore.init();
+    expect(fetchMock).not.toHaveBeenCalled();
+    const saved = JSON.parse(fs.readFileSync(path.join(userData, 'billing', 'credits.json'), 'utf-8'));
+    expect(saved.pendingDeductions).toBeUndefined();
   });
 });

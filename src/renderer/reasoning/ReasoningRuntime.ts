@@ -8,9 +8,11 @@ import type {
 import type {
   ReasoningProvider,
   ReasoningProviderCallbacks,
+  ReasoningProviderRequest,
   ReasoningProviderSession,
 } from './ReasoningProvider';
 import type { ProviderUsageMetadata } from '../../shared/billing/UsageMeteringTypes';
+import { recentPlainTextHistory } from '../conversation/simpleQuestion';
 
 export type ReasoningRuntimeCallbacks = {
   onStart?: () => void;
@@ -44,6 +46,11 @@ function createMessage(
 export class ReasoningRuntime {
   private provider: ReasoningProvider;
   private systemPrompt = '';
+  /** One-line prompt for minimal-path turns (runTurn's `minimal` option). Empty = such turns are sent
+   *  exactly like any other turn. */
+  private minimalSystemPrompt = '';
+  /** This turn's own context (minimal or selected), reused by its continuations; null = full default. */
+  private turnOverride: { systemPrompt: string; tools: ReasoningToolDefinition[]; contextPath: NonNullable<ReasoningProviderRequest['contextPath']> } | null = null;
   private tools: ReasoningToolDefinition[] = [];
   private history: ReasoningMessage[] = [];
   private activeSession: ReasoningProviderSession | null = null;
@@ -75,6 +82,10 @@ export class ReasoningRuntime {
 
   setSystemPrompt(systemPrompt: string) {
     this.systemPrompt = systemPrompt;
+  }
+
+  setMinimalSystemPrompt(systemPrompt: string) {
+    this.minimalSystemPrompt = systemPrompt;
   }
 
   getTools() {
@@ -131,7 +142,19 @@ export class ReasoningRuntime {
     ];
   }
 
-  runTurn(input: string, callbacks: ReasoningRuntimeCallbacks = {}): ReasoningTurnHandle {
+  /**
+   * `opts.minimal`: a simple factual/general question (see conversation/simpleQuestion.ts) — sent with
+   * the one-line minimal prompt and zero tools, plus either no history (`includeHistory: false`, a
+   * standalone question) or only the last few plain text messages (a follow-up to a previous plain
+   * Q&A). Ignored when no minimal prompt is set. The turn is still recorded in full history.
+   */
+  runTurn(
+    input: string,
+    callbacks: ReasoningRuntimeCallbacks = {},
+    opts: { minimal?: { includeHistory: boolean }; selected?: { systemPrompt: string; tools: ReasoningToolDefinition[] } } = {}
+  ): ReasoningTurnHandle {
+    // A new turn starts from the default context; runTurn's options set this turn's own below.
+    this.turnOverride = null;
     const trimmedInput = input.trim();
     if (!trimmedInput) {
       const completed = Promise.resolve({
@@ -156,7 +179,30 @@ export class ReasoningRuntime {
     const userMessage = createMessage('user', trimmedInput, 'final');
     this.history = [...this.history, userMessage];
 
+    if (opts.minimal && this.minimalSystemPrompt) {
+      const includeHistory = opts.minimal.includeHistory;
+      this.turnOverride = { systemPrompt: this.minimalSystemPrompt, tools: [], contextPath: includeHistory ? 'minimal-follow-up' : 'minimal-question' };
+      return this.streamAndTrack(includeHistory ? recentPlainTextHistory(priorHistory) : [], trimmedInput, callbacks, this.turnOverride);
+    }
+    if (opts.selected) {
+      // Per-request capability selection: this turn — including every tool-result continuation —
+      // uses only these tools and prompt sections (widened via setTurnContext on escalation).
+      this.turnOverride = { systemPrompt: opts.selected.systemPrompt, tools: opts.selected.tools, contextPath: 'selected' };
+      return this.streamAndTrack(priorHistory, trimmedInput, callbacks, this.turnOverride);
+    }
     return this.streamAndTrack(priorHistory, trimmedInput, callbacks);
+  }
+
+  /** The current turn's selected context (null = the full default prompt and tools). */
+  getTurnContext(): { systemPrompt: string; tools: ReasoningToolDefinition[] } | null {
+    return this.turnOverride ? { systemPrompt: this.turnOverride.systemPrompt, tools: [...this.turnOverride.tools] } : null;
+  }
+
+  /** Replaces the current turn's selected context — used when the model requests more capabilities
+   *  mid-turn; the next continueTurn() uses it. No effect on a full-context turn. */
+  setTurnContext(context: { systemPrompt: string; tools: ReasoningToolDefinition[] }): void {
+    if (!this.turnOverride || this.turnOverride.contextPath !== 'selected') return;
+    this.turnOverride = { ...this.turnOverride, systemPrompt: context.systemPrompt, tools: [...context.tools] };
   }
 
   /**
@@ -168,6 +214,12 @@ export class ReasoningRuntime {
    * learning whether its own tool call actually worked.
    */
   continueTurn(callbacks: ReasoningRuntimeCallbacks = {}): ReasoningTurnHandle {
+    // A continuation keeps its turn's selected tools/prompt, so a tool result is always interpreted
+    // with the same (or a widened) tool set — never the minimal path's history-less view, though:
+    // minimal turns carry no tools and therefore never continue.
+    if (this.turnOverride && this.turnOverride.contextPath === 'selected') {
+      return this.streamAndTrack(this.getHistory(), '', callbacks, this.turnOverride);
+    }
     return this.streamAndTrack(this.getHistory(), '', callbacks);
   }
 
@@ -175,7 +227,8 @@ export class ReasoningRuntime {
   private streamAndTrack(
     historyForRequest: ReasoningMessage[],
     input: string,
-    callbacks: ReasoningRuntimeCallbacks
+    callbacks: ReasoningRuntimeCallbacks,
+    override?: { systemPrompt: string; tools: ReasoningToolDefinition[]; contextPath: ReasoningProviderRequest['contextPath'] }
   ): ReasoningTurnHandle {
     const turnId = ++this.activeTurnId;
     const toolCalls: ReasoningToolCall[] = [];
@@ -222,10 +275,11 @@ export class ReasoningRuntime {
       this.activeTurnReject = settleRejected;
       this.activeSession = this.provider.streamResponse(
         {
-          systemPrompt: this.systemPrompt,
+          systemPrompt: override ? override.systemPrompt : this.systemPrompt,
           history: historyForRequest,
           input,
-          tools: this.getTools(),
+          tools: override ? override.tools : this.getTools(),
+          contextPath: override ? override.contextPath : 'full',
         },
         {
           onStart: () => {

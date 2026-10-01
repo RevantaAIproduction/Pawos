@@ -10,10 +10,23 @@ const mocks = vi.hoisted(() => ({
   getRazorpayCredentials: vi.fn(() => ({ keyId: "rzp_key", keySecret: "rzp_secret" })),
   recordRazorpaySubscription: vi.fn(async () => "recorded"),
   creditPaidInvoice: vi.fn(),
+  fetchRazorpayInvoice: vi.fn(),
+  creditVerifiedMidMonthPayment: vi.fn(),
+  rpc: vi.fn(),
 }));
 
 vi.mock("@/lib/billing/invoiceCrediting", () => ({
   creditPaidInvoice: mocks.creditPaidInvoice,
+  fetchRazorpayInvoice: mocks.fetchRazorpayInvoice,
+}));
+
+vi.mock("@/lib/billing/midMonthPurchase", () => ({
+  MID_MONTH_PRODUCT_TYPE: "mid_month_purchase",
+  creditVerifiedMidMonthPayment: mocks.creditVerifiedMidMonthPayment,
+}));
+
+vi.mock("@/lib/supabase/serviceClient", () => ({
+  createServiceClient: () => ({ rpc: mocks.rpc }),
 }));
 
 vi.mock("@/lib/billing/razorpay", async (importOriginal) => ({
@@ -67,6 +80,9 @@ beforeEach(() => {
   process.env.RAZORPAY_WEBHOOK_SECRET = WEBHOOK_SECRET;
   mocks.creditVerifiedTicketBalancePayment.mockReset();
   mocks.creditVerifiedUsageCreditsPayment.mockReset();
+  mocks.creditVerifiedMidMonthPayment.mockReset();
+  mocks.fetchRazorpayInvoice.mockReset();
+  mocks.rpc.mockReset();
 });
 
 describe("Razorpay billing webhook", () => {
@@ -270,5 +286,55 @@ describe("Razorpay billing webhook", () => {
     expect(response.status).toBe(200);
     expect(mocks.creditVerifiedTicketBalancePayment).not.toHaveBeenCalled();
     expect(mocks.creditVerifiedUsageCreditsPayment).not.toHaveBeenCalled();
+  });
+  it("dispatches payment.captured with productType='mid_month_purchase' to the mid-month grant only", async () => {
+    mocks.creditVerifiedMidMonthPayment.mockResolvedValue({ ok: true, pc: 1500 });
+    const body = JSON.stringify({
+      event: "payment.captured",
+      payload: { payment: { entity: { id: "pay_mm", order_id: "order_mm", notes: { productType: "mid_month_purchase", userId: "user-1" } } } },
+    });
+    const response = await POST(requestFor(body, signatureFor(body)));
+    expect(response.status).toBe(200);
+    expect(mocks.creditVerifiedMidMonthPayment).toHaveBeenCalledWith({ orderId: "order_mm", paymentId: "pay_mm", signature: "", identity: { source: "orderNotes" } });
+    expect(mocks.creditVerifiedUsageCreditsPayment).not.toHaveBeenCalled();
+    expect(mocks.creditVerifiedTicketBalancePayment).not.toHaveBeenCalled();
+  });
+
+  it("asks Razorpay to retry a mid-month grant that failed on our side", async () => {
+    mocks.creditVerifiedMidMonthPayment.mockResolvedValue({ ok: false, status: 500, reason: "db down" });
+    const body = JSON.stringify({
+      event: "payment.captured",
+      payload: { payment: { entity: { id: "pay_mm", order_id: "order_mm", notes: { productType: "mid_month_purchase" } } } },
+    });
+    expect((await POST(requestFor(body, signatureFor(body)))).status).toBe(500);
+  });
+
+  it("refund of a credits or mid-month purchase revokes that payment's usage bucket", async () => {
+    mocks.rpc.mockResolvedValue({ data: { revoked: 1 }, error: null });
+    for (const productType of ["usage_credits", "mid_month_purchase"]) {
+      const body = JSON.stringify({ event: "refund.processed", payload: { payment: { entity: { id: `pay_${productType}`, notes: { productType } } } } });
+      expect((await POST(requestFor(body, signatureFor(body)))).status).toBe(200);
+      expect(mocks.rpc).toHaveBeenLastCalledWith("revoke_usage_bucket_service", { p_payment_id: `pay_${productType}`, p_subscription_id: null, p_reason: "refund" });
+    }
+  });
+
+  it("refund of a subscription payment revokes that subscription's current plan bucket", async () => {
+    mocks.fetchRazorpayInvoice.mockResolvedValue({ id: "inv_s", subscription_id: "sub_77" });
+    mocks.rpc.mockResolvedValue({ data: { revoked: 1 }, error: null });
+    const body = JSON.stringify({ event: "refund.processed", payload: { payment: { entity: { id: "pay_sub", invoice_id: "inv_s" } } } });
+    expect((await POST(requestFor(body, signatureFor(body)))).status).toBe(200);
+    expect(mocks.rpc).toHaveBeenCalledWith("revoke_usage_bucket_service", { p_payment_id: null, p_subscription_id: "sub_77", p_reason: "refund" });
+  });
+
+  it("refund of a Ticket Balance top-up is left as before (no automatic action)", async () => {
+    const body = JSON.stringify({ event: "refund.processed", payload: { payment: { entity: { id: "pay_tb", notes: { productType: "ticket_balance" } } } } });
+    expect((await POST(requestFor(body, signatureFor(body)))).status).toBe(200);
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it("a refund that could not be applied asks Razorpay to retry", async () => {
+    mocks.rpc.mockResolvedValue({ data: null, error: { message: "db down" } });
+    const body = JSON.stringify({ event: "refund.processed", payload: { payment: { entity: { id: "pay_x", notes: { productType: "usage_credits" } } } } });
+    expect((await POST(requestFor(body, signatureFor(body)))).status).toBe(500);
   });
 });

@@ -394,7 +394,7 @@ export function ConversationPanel({
   onSelectModel,
   currentWorkingFile = undefined,
   wakeWord = 'PawOS',
-  streamingPawCompute = 0,
+  streamingActive = false,
   streamingElapsedSeconds = 0,
   onCancel,
   onOpenSidebar,
@@ -467,7 +467,8 @@ export function ConversationPanel({
   onSelectModel?: (id: PawModelId) => void;
   currentWorkingFile?: string;
   wakeWord?: string;
-  streamingPawCompute?: number;
+  /** A reply is being generated (progress only — PC comes from the server summary). */
+  streamingActive?: boolean;
   streamingElapsedSeconds?: number;
   onOpenSidebar?: (cardType: 'terminal' | 'worktree' | 'browser' | 'background-tasks') => void;
   activeTask?: ConversationTaskRecord;
@@ -1231,10 +1232,14 @@ export function ConversationPanel({
     if (!text) {
       return;
     }
+    // Push-to-talk only fills this box (lastSyncedVoiceDraftRef); text sent exactly as dictated is a
+    // voice turn (source left undefined — see categorizeTurn), anything else was typed.
+    const dictated = lastSyncedVoiceDraftRef.current.trim() !== '' && text === lastSyncedVoiceDraftRef.current.trim();
+    const inputSource: SubmittedInputContext['source'] = wasPasted ? 'pasted' : dictated ? undefined : 'typed';
 
     // If task is running and text is not empty, queue the message instead of sending
     if (snapshot.state === 'performingAction' && text) {
-      const context: SubmittedInputContext | undefined = wasPasted ? { source: 'pasted' } : { projectId: windowCtx.context.project?.id };
+      const context: SubmittedInputContext | undefined = { source: inputSource, projectId: windowCtx.context.project?.id };
       setQueuedMessage({ text, context });
       setDraft('');
       lastSyncedVoiceDraftRef.current = '';
@@ -1272,9 +1277,7 @@ export function ConversationPanel({
       ? `${fileContextPrompt}\n\nUser request: ${text}`
       : text;
 
-    const context = wasPasted
-      ? { source: 'pasted' as const, reasoningText, projectId: windowCtx.context.project?.id }
-      : { reasoningText, projectId: windowCtx.context.project?.id };
+    const context: SubmittedInputContext = { source: inputSource, reasoningText, projectId: windowCtx.context.project?.id };
 
     // EXECUTION STRATEGY: Check if this is an explicit strategy change request
     const strategyChange = detectStrategyChange(text);
@@ -2007,11 +2010,9 @@ export function ConversationPanel({
               ? entitlement.buildFinalWeek
                 ? 'PawOS Build limit reached — last week of Build access, no reset. Upgrade to Pro to keep going'
                 : 'PawOS Build limit reached — buy Paw Compute, or wait for the automatic reset (see Settings → Usage)'
-              : entitlement.tier === 'pro_max'
-              ? 'Buy credits: 5x ($100) or 20x ($250)'
-              : entitlement.tier === 'pro'
-              ? 'Upgrade to Pro Max or buy credits: 5x ($100) or 20x ($250)'
-              : 'Upgrade to Pro or Pro Max, or buy Paw Compute'}
+              : entitlement.usageSummary?.bucketFunded
+              ? 'Buy extra usage or credits to keep going, or wait for your limit to reset (see Settings → Usage)'
+              : 'Upgrade your plan or buy Paw Compute to keep going (see Settings → Usage)'}
           </button>
           <button
             className={styles.upgradeClose}
@@ -2166,11 +2167,13 @@ export function ConversationPanel({
 
           <div className={styles.usageIndicatorDropdown} style={{ position: 'relative' }}>
             {(() => {
-              const usage5h = entitlement?.usage5hPc ?? 0;
-              const limit5h = entitlement?.limit5hPc ?? Infinity;
-              const totalUsage = usage5h + (streamingPawCompute ?? 0);
-              const percentage = (totalUsage / limit5h) * 100;
-              const isStreaming = (streamingPawCompute ?? 0) > 0;
+              // Percent of the nearest limit, from the entitlement snapshot (server summary for
+              // bucket-funded accounts) — never a client-side estimate.
+              const percentage =
+                entitlement?.limit5hPc != null ? ((entitlement.usage5hPc ?? 0) / entitlement.limit5hPc) * 100
+                : entitlement?.limitWeeklyPc != null ? ((entitlement.usageWeeklyPc ?? 0) / entitlement.limitWeeklyPc) * 100
+                : 0;
+              const isStreaming = streamingActive;
 
               let circleColor = 'rgba(120, 150, 200, 0.6)'; // muted blue
               const limitReached = entitlement ? !entitlement.pooled && !entitlement.hasCreditsRemaining : false;

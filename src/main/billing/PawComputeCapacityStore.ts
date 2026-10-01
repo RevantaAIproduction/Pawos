@@ -28,7 +28,8 @@ function defaultConfig(): RollingCapacityConfig {
   return {
     version: CURRENT_CONFIG_VERSION,
     tiers: {
-      go:          { window5hPc: 1_000,       windowWeeklyPc: 1_000,  window5hActiveHours: null, windowWeeklyActiveHours: 5,   pooled: false },
+      // Paw Go: 500 PC per 14-day cycle, charged at the real PC cost (no multiplier).
+      go:          { window5hPc: 500,         windowWeeklyPc: 500,    window5hActiveHours: null, windowWeeklyActiveHours: 5,   pooled: false },
       pro:         { window5hPc: 1_250,       windowWeeklyPc: 5_000,  window5hActiveHours: 5,    windowWeeklyActiveHours: 20,  pooled: false },
       proMax:      { window5hPc: 4_166.6667,  windowWeeklyPc: 25_000, window5hActiveHours: 5,    windowWeeklyActiveHours: 30,  pooled: false }, // 5x variant; 20x is 100k/40h
       team:        { window5hPc: 1_250,       windowWeeklyPc: 5_000,  window5hActiveHours: null, windowWeeklyActiveHours: 20,  pooled: true  }, // Handled server-side usually, but defining limits here

@@ -3,6 +3,7 @@ import { createLocalReasoningProvider } from './LocalReasoningProvider';
 import { createOpenAiReasoningProvider } from './providers/OpenAiReasoningProvider';
 import { createAnthropicReasoningProvider } from './providers/AnthropicReasoningProvider';
 import { createGeminiReasoningProvider } from './providers/GeminiReasoningProvider';
+import { aiProviderConfigStore } from '../ai/AIProviderConfigStore';
 import { createOllamaReasoningProvider } from './providers/OllamaReasoningProvider';
 import {
   createLmStudioReasoningProvider,
@@ -38,7 +39,12 @@ export function createReasoningProvider(config: ReasoningProviderConfig): Reason
     case 'anthropic':
       return createAnthropicReasoningProvider({ apiKey: config.apiKey ?? '', model: config.model, baseUrl: config.baseUrl });
     case 'gemini':
-      return createGeminiReasoningProvider({ apiKey: config.apiKey ?? '', model: config.model, baseUrl: config.baseUrl });
+      return createGeminiReasoningProvider({
+        apiKey: config.apiKey ?? '',
+        model: config.model,
+        baseUrl: config.baseUrl,
+        getPawModelId: () => aiProviderConfigStore.getActivePawModel(),
+      });
     case 'ollama':
       return createOllamaReasoningProvider({ model: config.model ?? 'llama3.2', baseUrl: config.baseUrl });
     case 'openrouter':

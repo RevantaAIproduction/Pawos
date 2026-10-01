@@ -72,7 +72,7 @@ export const gettingStartedPages: DocPage[] = [
           ['Task', 'One user request plus its action timeline and final evidence.'],
           ['Work Record', 'The structured trace of a task: commands, file changes, validation, screenshots, failures, and final report.'],
           ['Plan', 'A structured review artifact, usually file-by-file, produced before mutation.'],
-          ['Paw Compute', 'The rolling usage meter for normal reasoning and runtime work.'],
+          ['Paw Compute', 'The usage meter for normal reasoning and runtime work ($1 of value = 100 PC).'],
           ['Autonomous Work Credits', 'A separate dollar wallet used only for successful Autonomous Ticket completions.'],
         ],
       },

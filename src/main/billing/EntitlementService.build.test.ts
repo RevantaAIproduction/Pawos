@@ -10,7 +10,12 @@ import { entitlementService } from './EntitlementService';
 import { buildAccessStore } from './BuildAccessStore';
 import { subscriptionStore } from './SubscriptionStore';
 import { usageEventStore } from './UsageEventStore';
-import { creditStore } from './CreditStore';
+import { usageBucketClient } from './UsageBucketClient';
+
+/** A server summary holding `pc` of purchased credits (customer PC; $1 = 100 PC). */
+const creditsSummary = (pc: number) => ({
+  plan: null, bucketFunded: false, buckets: [], weeklyPacing: null, creditsPcRemaining: pc, limitReached: pc <= 0, limitReason: pc <= 0 ? ('no_allowance' as const) : null, limitResetsAt: null,
+});
 import { rollingUsageGate } from './RollingUsageGate';
 import type { NormalizedUsageRecord } from '../../shared/billing/UsageMeteringTypes';
 
@@ -51,7 +56,7 @@ describe('PawOS Build — effective tier resolution and enforcement', () => {
     vi.spyOn(usageEventStore, 'getActiveWindowStartAt').mockReturnValue(Date.now() - HOUR);
     vi.spyOn(usageEventStore, 'getWeeklyCycleStartAt').mockReturnValue(Date.now() - DAY);
     vi.spyOn(usageEventStore, 'getGoCycleStatus').mockReturnValue({ cycleStartAt: Date.now() - DAY, refreshesUsed: 0 });
-    vi.spyOn(creditStore, 'getBalance').mockReturnValue({ purchasedUsageCreditsUsd: 0 } as any);
+    vi.spyOn(usageBucketClient, 'getCachedSummary').mockReturnValue(creditsSummary(0));
     while (rollingUsageGate.inflightCount > 0) rollingUsageGate.releaseSlot();
   });
 
@@ -116,7 +121,7 @@ describe('PawOS Build — effective tier resolution and enforcement', () => {
   });
 
   it('purchased Paw Compute continues Build past its limit in weeks 1–7, and on Go', () => {
-    vi.spyOn(creditStore, 'getBalance').mockReturnValue({ purchasedUsageCreditsUsd: 50 } as any);
+    vi.spyOn(usageBucketClient, 'getCachedSummary').mockReturnValue(creditsSummary(5000));
     vi.spyOn(usageEventStore, 'list').mockReturnValue([record({ normalizedCompute: (1500) * 10 / 3, timestamp: Date.now() - 2 * HOUR })]);
 
     grantBuild();
@@ -132,7 +137,7 @@ describe('PawOS Build — effective tier resolution and enforcement', () => {
   });
 
   it('in Build\'s final (no-reset) week purchases cannot continue it — the way on is upgrading to Pro', () => {
-    vi.spyOn(creditStore, 'getBalance').mockReturnValue({ purchasedUsageCreditsUsd: 50 } as any);
+    vi.spyOn(usageBucketClient, 'getCachedSummary').mockReturnValue(creditsSummary(5000));
     vi.spyOn(usageEventStore, 'list').mockReturnValue([record({ normalizedCompute: (1500) * 10 / 3, timestamp: Date.now() - 2 * HOUR })]);
     const start = Date.now() - 52 * DAY; // day 52 of 56: the final week 8 (days 50–56)
     grantBuild(start, start + 56 * DAY);
@@ -156,7 +161,7 @@ describe('PawOS Build — effective tier resolution and enforcement', () => {
   });
 
   it('Paw Fable is refused for Build even with a purchased balance', () => {
-    vi.spyOn(creditStore, 'getBalance').mockReturnValue({ purchasedUsageCreditsUsd: 50 } as any);
+    vi.spyOn(usageBucketClient, 'getCachedSummary').mockReturnValue(creditsSummary(5000));
     grantBuild();
     const check = entitlementService.checkGeneration('paw-fable');
     expect(check.allowed).toBe(false);
@@ -168,7 +173,7 @@ describe('PawOS Build — effective tier resolution and enforcement', () => {
     expect(entitlementService.effectiveTier()).toBe('go');
     const { features } = entitlementService.getEntitlements();
     expect(features).not.toContain('atsScoring');
-    expect(entitlementService.checkGeneration().usage.limit7d).toBe(1000); // Go's cycle limit, not Build's 1,500
+    expect(entitlementService.checkGeneration().usage.limit7d).toBe(500); // Go's cycle limit, not Build's 1,500
     expect(entitlementService.getSnapshot().tier).toBe('go');
   });
 

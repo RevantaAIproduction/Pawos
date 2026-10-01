@@ -375,7 +375,8 @@ export async function runCareerTool(request: CareerToolRequest, generate: Genera
   // Mirror billing:recordTurnUsage's history write so Analytics shows career usage alongside chat.
   if (result.usageRecord) {
     const customerPc = normalizedComputeToCustomerPc(result.usageRecord.normalizedCompute);
-    if (customerPc > 0) creditStore.consume(customerPc, `career:${request.tool}`, 'chat', false, false, result.usageRecord.usageEventId);
+    // Pro / Pro Max usage is shown from the server bucket history instead.
+    if (customerPc > 0 && !entitlementService.isBucketMetered()) creditStore.consume(customerPc, `career:${request.tool}`, 'chat');
   }
 
   if (!result.ok) return { ok: false, code: 'ai-error', reason: result.reason };

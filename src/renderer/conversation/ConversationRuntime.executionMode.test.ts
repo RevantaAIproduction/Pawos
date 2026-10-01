@@ -407,7 +407,8 @@ describe('ConversationRuntime execution modes — confirmation wiring', () => {
 
     runtime.openConversation(null); // New chat
     expect(runtime.getSnapshot().messages).toEqual([]);
-    runtime.submitTranscript('hello');
+    // Not a greeting — greetings are answered locally without reaching the model (smallTalk.ts).
+    runtime.submitTranscript('what can you do?');
     for (let i = 0; i < 100 && hints.length < 2; i += 1) await Promise.resolve();
     expect(seen[1]!.history).toEqual([]);
     expect(hints[1]).toEqual({ type: 'new' }); // never filed into an old chat
@@ -698,9 +699,10 @@ describe('ConversationRuntime execution modes — confirmation wiring', () => {
     expect(seen[0]).toContain('fix the login bug');
 
     runtime.setProjectFolder(null);
-    runtime.submitTranscript('hello');
+    // Not a greeting — greetings are answered locally without reaching the model (smallTalk.ts).
+    runtime.submitTranscript('what can you do?');
     for (let i = 0; i < 40 && seen.length < 2; i += 1) await Promise.resolve();
-    expect(seen[1]).toBe('hello');
+    expect(seen[1]).toBe('what can you do?');
   }, 10000);
 
   it('"deny" skips it — the action never runs', async () => {

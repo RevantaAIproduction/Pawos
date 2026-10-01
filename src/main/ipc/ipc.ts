@@ -32,7 +32,11 @@ import { pawComputeConfigStore } from '../billing/PawComputeConfigStore';
 import { subscriptionStore } from '../billing/SubscriptionStore';
 import { rollingUsageGate } from '../billing/RollingUsageGate';
 import { buildAccessStore } from '../billing/BuildAccessStore';
-import { normalizedComputeToCustomerPc, customerPcToPurchaseUsd } from '../../shared/billing/CustomerPcCommercialModel';
+import { normalizedComputeToCustomerPc } from '../../shared/billing/CustomerPcCommercialModel';
+import { usageBucketClient } from '../billing/UsageBucketClient';
+import { authorizeModelCall } from '../billing/ModelCallAuthorizer';
+import { recordedTurnUsageResponse, toLocalUsageEventSummary, usageEventAck } from '../billing/customerSafeIpc';
+import type { ModelCallReservationRequest, ModelCallUsage } from '../../shared/billing/UsageBucketTypes';
 import { creditStore } from '../billing/CreditStore';
 import { recordTurnUsage, recordUsageEvent, reportRequestStart, reportRequestEnd } from '../billing/UsageMeteringEngine';
 import { usageEventStore } from '../billing/UsageEventStore';
@@ -490,11 +494,11 @@ export function registerIpc(opts: {
         broadcastEntitlementChanged();
         for (const win of BrowserWindow.getAllWindows()) win.webContents.send('billing:subscriptionUpdated');
       }),
-      // Purchased Paw Compute balance — server-authoritative (credits.json is never trusted for it).
-      creditStore
-        .syncUsageCredits(accessToken, accessTokenUserId(accessToken) ?? undefined)
+      // Usage buckets (plan, extra usage, credits) — server-authoritative, customer-safe summary only.
+      Promise.resolve(creditStore.setUser(accessTokenUserId(accessToken)))
+        .then(() => usageBucketClient.refreshSummary())
         .then(() => broadcastEntitlementChanged())
-        .catch((err) => console.error('[Credits] Balance sync failed:', err)),
+        .catch((err) => console.error('[UsageBuckets] Summary sync failed:', err)),
     ]);
     if (result.ok && buildAccessStore.isActive()) buildUsageReporter.schedule(0);
     return result;
@@ -537,14 +541,22 @@ export function registerIpc(opts: {
   ipcMain.handle('billing:resetSubscription', () => {
     subscriptionStore.reset();
     creditStore.reset();
+    usageBucketClient.clear();
     buildAccessStore.clear();
     usageEventStore.setAccount(null);
     broadcastEntitlementChanged();
   });
-  ipcMain.handle('billing:syncUsageCredits', (_evt, accessToken: string) => creditStore.syncUsageCredits(accessToken));
+  // Kept for older renderer surfaces: refreshes the server usage-bucket summary (purchased credits
+  // live in buckets now — there is no local balance to sync).
+  ipcMain.handle('billing:syncUsageCredits', async () => {
+    const summary = await usageBucketClient.refreshSummary();
+    broadcastEntitlementChanged();
+    return { ok: summary !== null };
+  });
   ipcMain.handle('billing:getCreditBalance', () => ({ ...creditStore.getBalance(), limit: entitlementService.getCreditLimit() }));
-  ipcMain.handle('billing:consumeCredit', (_evt, amount: number, reason: string, category?: AiUsageCategory, pawModelId?: PawModelId) => {
-    creditStore.consume(amount, reason, category, pawModelId === 'paw-fable');
+  ipcMain.handle('billing:consumeCredit', (_evt, amount: number, reason: string, category?: AiUsageCategory, _pawModelId?: PawModelId) => {
+    // Local history only — never a charge (paid usage is settled per Gemini call on the server).
+    creditStore.consume(amount, reason, category);
     const balance = creditStore.getBalance();
 
     return { ...balance, limit: entitlementService.getCreditLimit() };
@@ -593,49 +605,21 @@ export function registerIpc(opts: {
         rollingUsageGate.releaseSlot();
       }
 
-      // Whether this turn ran on purchased credits because included capacity was exhausted (on PawOS
-      // Build, only possible before its final week — see EntitlementService.checkGeneration()).
-      const isPurchased = !isFable && entitlementService.checkGeneration().purchasedContinuation;
-
       const aggregated = recordTurnUsage(submission.requests, { sessionId: submission.sessionId, runId: submission.runId }, isFable, submission.promptLineCount);
       if (tier === 'build') buildUsageReporter.schedule();
       scheduleUsageLedgerSync();
-      let customerPc = normalizedComputeToCustomerPc(aggregated.newNormalizedCompute);
-      // Paw Go (only — never Build, which is its own effective tier) charges 2x the actual PC cost
-      if (tier === 'go') {
-        customerPc = customerPc * 2;
+      // Real PC cost for every tier — Go's smaller allowance is set in PawComputeCapacityStore, not by
+      // inflating what each turn is charged (which also double-billed Go's purchased credits).
+      // Paid usage (Pro / Pro Max buckets, credits, Paw Fable) was already reserved and settled per
+      // Gemini call on the server (billing:reserveModelCall / billing:settleModelCall) — this handler
+      // never charges. It keeps the local ledger (Go/Build free allowance, Analytics) and, for tiers
+      // whose usage isn't bucket-metered, the local history in the Go/Build PC unit.
+      const customerPc = normalizedComputeToCustomerPc(aggregated.newNormalizedCompute);
+      if (customerPc > 0 && !isFable && !entitlementService.isBucketMetered()) {
+        creditStore.consume(customerPc, reason, category);
       }
-      if (customerPc <= 0) return { ...creditStore.getBalance(), limit: entitlementService.getCreditLimit() };
-      const outboxId = aggregated.newRecords[0]?.usageEventId ?? `${submission.sessionId ?? 'session'}:${submission.runId ?? 'run'}:${Date.now()}`;
-      creditStore.consume(customerPc, reason, category, isFable, isPurchased, outboxId);
-      
-      const supabaseUrl = process.env.SUPABASE_URL;
-      const anonKey = process.env.SUPABASE_PUBLISHABLE_KEY;
-
-      if ((isFable || isPurchased) && submission.accessToken && supabaseUrl && anonKey) {
-        const usdCost = customerPcToPurchaseUsd(customerPc);
-        if (usdCost > 0) {
-          try {
-            const response = await fetch(`${supabaseUrl}/rest/v1/rpc/deduct_usage_credits`, {
-              method: 'POST',
-              headers: {
-                apikey: anonKey,
-                Authorization: `Bearer ${submission.accessToken}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ p_amount_usd: usdCost, p_usage_event_id: outboxId }),
-            });
-            if (response.ok) {
-              creditStore.resolvePendingDeduction(outboxId);
-              const newBalanceUsd = Number(await response.json());
-              creditStore.setPurchasedUsageCreditsUsd(Number.isFinite(newBalanceUsd) ? newBalanceUsd : 0);
-            } else {
-              console.error("Failed to deduct usage credits:", await response.text());
-            }
-          } catch (e) {
-            console.error("Failed to deduct usage credits:", e);
-          }
-        }
+      if (entitlementService.isBucketMetered() || isFable) {
+        void usageBucketClient.refreshSummary().then(() => broadcastEntitlementChanged());
       }
 
       // Enterprise Server-Authoritative Update
@@ -667,7 +651,8 @@ export function registerIpc(opts: {
         }
       }
 
-      return { aggregated, balance: { ...creditStore.getBalance(), limit: entitlementService.getCreditLimit() } };
+      // Customer-safe only: never the aggregated records (model, token counts, normalizedCompute).
+      return recordedTurnUsageResponse({ ...creditStore.getBalance(), limit: entitlementService.getCreditLimit() });
     }
   );
   /**
@@ -680,6 +665,41 @@ export function registerIpc(opts: {
     }
   });
   /**
+   * Usage buckets — the per-Gemini-call path for paid usage. Called by every Gemini call site BEFORE
+   * the request (with its exact input-token count) and after it (with Gemini's usageMetadata).
+   * The server picks the funding bucket, prices the call and charges it; the renderer only learns
+   * whether it may go ahead and with how many output tokens, or a customer-facing denial.
+   */
+  ipcMain.handle('billing:reserveModelCall', (_evt, request: ModelCallReservationRequest) => {
+    if (!request || typeof request.requestKey !== 'string' || typeof request.model !== 'string' || !Number.isFinite(request.inputTokens)) {
+      return { ok: false, reason: 'service_unavailable', message: 'Invalid usage request.' };
+    }
+    return authorizeModelCall({
+      requestKey: request.requestKey.slice(0, 120),
+      model: request.model,
+      inputTokens: Math.max(0, Math.ceil(request.inputTokens)),
+      inputIsUpperBound: request.inputIsUpperBound === true,
+      maxOutputTokens: Number.isFinite(Number(request.maxOutputTokens)) && Number(request.maxOutputTokens) > 0 ? Number(request.maxOutputTokens) : undefined,
+      category: typeof request.category === 'string' ? request.category.slice(0, 40) : 'chat',
+      pawModelId: typeof request.pawModelId === 'string' ? request.pawModelId : undefined,
+    });
+  });
+  ipcMain.handle('billing:settleModelCall', async (_evt, params: { reservationId: string; usageEventId: string; usage: ModelCallUsage }) => {
+    if (!params?.reservationId || !params.usageEventId || !params.usage) return;
+    await usageBucketClient.settle(params.reservationId, params.usageEventId, params.usage);
+    broadcastEntitlementChanged();
+  });
+  ipcMain.handle('billing:releaseModelCall', async (_evt, reservationId: string) => {
+    if (!reservationId) return;
+    await usageBucketClient.release(reservationId);
+    broadcastEntitlementChanged();
+  });
+  // Customer-safe usage: plan / extra usage / credits buckets in customer PC, and PC history.
+  ipcMain.handle('billing:getUsageSummary', async (_evt, refresh?: boolean) =>
+    refresh || !usageBucketClient.getCachedSummary() ? usageBucketClient.refreshSummary() : usageBucketClient.getCachedSummary()
+  );
+  ipcMain.handle('billing:getUsageHistory', (_evt, limit?: number) => usageBucketClient.getHistory(typeof limit === 'number' ? limit : 100));
+  /**
    * Ledger-only usage reporting for a real Gemini request made from a renderer-side call site that
    * has no main-process equivalent (today: SessionClassifier.ts, which lives purely in the renderer
    * and so cannot import UsageMeteringEngine directly). Deliberately does NOT call
@@ -690,8 +710,11 @@ export function registerIpc(opts: {
    */
   ipcMain.handle(
     'billing:reportUsageEvent',
-    (_evt, usage: ProviderUsageMetadata, requestType: UsageRequestType, context: { sessionId: string | null; runId: string | null }) =>
-      recordUsageEvent(usage, requestType, context)
+    (_evt, usage: ProviderUsageMetadata, requestType: UsageRequestType, context: { sessionId: string | null; runId: string | null }) => {
+      recordUsageEvent(usage, requestType, context);
+      // An acknowledgement only — the stored record (model, tokens, normalizedCompute) stays in main.
+      return usageEventAck();
+    }
   );
 
   ipcMain.handle('billing:reportRequestStart', (_evt, requestId: string) => {
@@ -704,7 +727,11 @@ export function registerIpc(opts: {
 
   // Real, per-request usage ledger — the Usage Details view's data source (Model / Input / Output /
   // Total tokens / Paw Compute consumed, all real provider-reported values, never fabricated).
-  ipcMain.handle('billing:getUsageEvents', (_evt, limit?: number) => usageEventStore.list(limit));
+  // Local request ledger without model, token counts or compute values — the renderer gets no
+  // provider-level usage data. Customer usage history comes from billing:getUsageHistory.
+  ipcMain.handle('billing:getUsageEvents', (_evt, limit?: number) =>
+    usageEventStore.list(limit).map(toLocalUsageEventSummary)
+  );
   // Real per-turn consumption history (up to 200 entries, see CreditStore.ts) — the Analytics
   // dashboard's usage breakdown/activity feed/insights are all derived from this, never fabricated.
   ipcMain.handle('billing:getCreditHistory', () => creditStore.getHistory());
@@ -1107,13 +1134,108 @@ export function registerIpc(opts: {
         if (!response.ok || !result?.ok || typeof result.amountUsd !== 'number') {
           return { ok: false, reason: cleanReason(result, `Payment could not be verified: ${response.statusText}`) };
         }
-        // Load the new balance from the server right away, so the purchase lets the user continue now.
-        await creditStore.syncUsageCredits(params.accessToken, accessTokenUserId(params.accessToken) ?? undefined).catch(() => undefined);
+        // Load the new credits bucket from the server right away, so the purchase lets the user continue now.
+        await usageBucketClient.refreshSummary().catch(() => undefined);
         broadcastEntitlementChanged();
         for (const win of BrowserWindow.getAllWindows()) {
           win.webContents.send('billing:usageCreditsPurchased', { amountUsd: result.amountUsd, organizationId: params.organizationId });
         }
         return { ok: true, amountUsd: result.amountUsd, topupId: result.topupId };
+      } catch (error) {
+        return { ok: false, reason: error instanceof Error ? error.message : 'Payment verification failed.' };
+      }
+    }
+  );
+  // Mid-month purchase (extra usage until the current Pro / Pro Max period ends). The product, its
+  // fixed price and its expiry come from the server for this account — the renderer sends only the
+  // session. Customer-facing values only (price, PC, expiry).
+  const postBillingApi = async (route: string, body: Record<string, unknown>) => {
+    const response = await fetch(`${PAWOS_BILLING_API_BASE_URL}/api/billing/${route}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const result = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+    return { response, result };
+  };
+  // Credits purchase UI configuration (presets, bounds, INR rate, PC per dollar) — from the server,
+  // never hardcoded in the app.
+  ipcMain.handle('billing:getUsageCreditsConfig', async () => {
+    try {
+      const response = await fetch(`${PAWOS_BILLING_API_BASE_URL}/api/billing/usage-credits-config`);
+      const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+      const presets = Array.isArray(body?.topupPresetsUsd) ? (body!.topupPresetsUsd as unknown[]).map(Number).filter((n) => Number.isFinite(n) && n > 0) : [];
+      const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null);
+      const min = num(body?.minTopupUsd), max = num(body?.maxTopupUsd), rate = num(body?.usdInrRate), pcPerUsd = num(body?.pcPerUsd);
+      if (!response.ok || min === null || max === null || rate === null || pcPerUsd === null) {
+        return { ok: false, reason: 'Credit purchases are unavailable right now. Check your connection and try again.' };
+      }
+      return { ok: true, topupPresetsUsd: presets, minTopupUsd: min, maxTopupUsd: max, usdInrRate: rate, pcPerUsd };
+    } catch {
+      return { ok: false, reason: 'Credit purchases are unavailable right now. Check your connection and try again.' };
+    }
+  });
+  ipcMain.handle('billing:getMidMonthOffer', async (_evt, accessToken?: string) => {
+    if (!accessToken) return { ok: false, reason: 'Missing PawOS session. Sign in again.' };
+    try {
+      const { response, result } = await postBillingApi('mid-month-offer', { accessToken });
+      if (!response.ok || !result?.ok) return { ok: false, reason: cleanReason(result, 'Extra usage is not available right now.') };
+      if (result.available !== true) return { ok: true, available: false, reason: typeof result.reason === 'string' ? result.reason : undefined };
+      return {
+        ok: true,
+        available: true,
+        label: String(result.label ?? 'Extra usage'),
+        amountUsd: Number(result.amountUsd),
+        amountInr: typeof result.amountInr === 'number' ? result.amountInr : null,
+        pc: Number(result.pc),
+        expiresAt: String(result.expiresAt ?? ''),
+      };
+    } catch (error) {
+      return { ok: false, reason: error instanceof Error ? error.message : 'Extra usage is not available right now.' };
+    }
+  });
+  ipcMain.handle('billing:createMidMonthCheckout', async (_evt, accessToken?: string) => {
+    if (!accessToken) return { ok: false, reason: 'Missing PawOS session. Sign in again before buying.' };
+    try {
+      const { response, result } = await postBillingApi('checkout-mid-month', { accessToken });
+      if (!response.ok || !result?.ok || typeof result.orderId !== 'string' || typeof result.keyId !== 'string' || typeof result.amountPaise !== 'number') {
+        return { ok: false, reason: cleanReason(result, 'Could not create the payment order.') };
+      }
+      return {
+        ok: true,
+        keyId: result.keyId,
+        orderId: result.orderId,
+        amountUsd: Number(result.amountUsd),
+        amountInr: Number(result.amountInr),
+        amountPaise: result.amountPaise,
+        usdInrRate: Number(result.usdInrRate),
+        currency: 'INR' as const,
+        label: String(result.label ?? 'Extra usage'),
+        pc: Number(result.pc),
+        expiresAt: String(result.expiresAt ?? ''),
+      };
+    } catch (error) {
+      return { ok: false, reason: error instanceof Error ? error.message : 'Could not create the payment order.' };
+    }
+  });
+  ipcMain.handle(
+    'billing:verifyMidMonthPayment',
+    async (_evt, params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string }) => {
+      if (!params?.accessToken || !params.orderId || !params.paymentId || !params.signature) {
+        return { ok: false, reason: 'Missing payment verification fields.' };
+      }
+      try {
+        const { response, result } = await postBillingApi('verify-mid-month', {
+          accessToken: params.accessToken,
+          orderId: params.orderId,
+          paymentId: params.paymentId,
+          signature: params.signature,
+        });
+        if (!response.ok || !result?.ok) return { ok: false, reason: cleanReason(result, 'Payment could not be verified.') };
+        await usageBucketClient.refreshSummary().catch(() => undefined);
+        broadcastEntitlementChanged();
+        for (const win of BrowserWindow.getAllWindows()) win.webContents.send('billing:usageCreditsPurchased', {});
+        return { ok: true, pc: Number(result.pc), expiresAt: typeof result.expiresAt === 'string' ? result.expiresAt : null };
       } catch (error) {
         return { ok: false, reason: error instanceof Error ? error.message : 'Payment verification failed.' };
       }

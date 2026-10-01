@@ -24,7 +24,7 @@ describe('Rolling limits — exact approved values', () => {
   // [tier, seatTier, proMaxVariant] -> 5h PC, weekly PC, 5h active hours, weekly active hours, pooled.
   // The 5-hour window cap is part of the weekly total, never extra capacity.
   it.each([
-    ['Go', 'go', undefined, undefined, 1_000, 1_000, null, 5, false],
+    ['Go', 'go', undefined, undefined, 500, 500, null, 5, false],
     ['PawOS Build', 'build', undefined, undefined, 500, 1_500, 5, 15, false],
     ['Pro', 'pro', undefined, undefined, 1_250, 5_000, 5, 20, false],
     ['Pro Max 5x', 'proMax', undefined, '5x', 4_166.6667, 25_000, 5, 30, false],

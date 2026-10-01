@@ -11,6 +11,8 @@ export type SubscriptionRecord = {
   /** Pro monthly vs Pro yearly (separate Razorpay plans) — Pro Max is always monthly. */
   billing_frequency: "monthly" | "yearly";
   status: string;
+  /** Start of the paid cycle (Razorpay current_start) — plan usage buckets follow it. Null before the first charge. */
+  current_period_start: string | null;
   current_period_end: string;
   source: string;
   updated_at: string;
@@ -52,6 +54,7 @@ export function toSubscriptionRecord(
       pro_max_variant: resolved.tier === "proMax" ? resolved.proMaxVariant ?? "5x" : null,
       billing_frequency: billingFrequency,
       status: subscription.status,
+      current_period_start: subscription.current_start ? new Date(subscription.current_start * 1000).toISOString() : null,
       current_period_end: new Date(periodEndMs).toISOString(),
       source,
       updated_at: new Date(now).toISOString(),
@@ -71,7 +74,15 @@ export async function recordRazorpaySubscription(subscription: RazorpaySubscript
     return "skipped";
   }
   try {
-    const { error } = await createServiceClient().from("pawos_subscriptions").upsert(built.record, { onConflict: "id" });
+    const client = createServiceClient();
+    let { error } = await client.from("pawos_subscriptions").upsert(built.record, { onConflict: "id" });
+    if (error && /current_period_start/.test(error.message)) {
+      // The usage-bucket migration (which adds current_period_start) isn't applied yet — still
+      // record the plan; buckets fall back to "period end minus one cycle" for the start.
+      const withoutStart: Partial<SubscriptionRecord> = { ...built.record };
+      delete withoutStart.current_period_start;
+      ({ error } = await client.from("pawos_subscriptions").upsert(withoutStart, { onConflict: "id" }));
+    }
     if (error) {
       console.error("[subscription-records] Upsert failed:", error.message, { subscriptionId: subscription.id });
       return "failed";

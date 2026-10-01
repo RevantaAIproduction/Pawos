@@ -4,9 +4,6 @@ import {
   AUTONOMOUS_WORK_CREDITS_MIN_USD,
   AUTONOMOUS_WORK_CREDITS_PRESETS_USD,
   NATIVE_PAYMENT_METHOD_DETAILS,
-  USAGE_CREDITS_MAX_USD,
-  USAGE_CREDITS_MIN_USD,
-  USAGE_CREDITS_PRESETS_USD,
   estimateTicketBalancePaymentInr,
   formatInr,
   formatUsd,
@@ -56,14 +53,11 @@ describe('nativeCheckoutModel', () => {
     expect(isExternalBillingUrl('https://pawos.revantaai.com/legal/privacy-policy')).toBe(false);
   });
 
-  it('usage credits: $5 minimum, $20k maximum, presets cover $5–$100', () => {
-    expect(USAGE_CREDITS_MIN_USD).toBe(5);
-    expect(USAGE_CREDITS_MAX_USD).toBe(20_000);
-    expect(USAGE_CREDITS_PRESETS_USD).toContain(5);
-    expect(USAGE_CREDITS_PRESETS_USD).toContain(10);
-    expect(USAGE_CREDITS_PRESETS_USD).toContain(100);
-    expect(Math.min(...USAGE_CREDITS_PRESETS_USD)).toBeGreaterThanOrEqual(USAGE_CREDITS_MIN_USD);
-    expect(Math.max(...USAGE_CREDITS_PRESETS_USD)).toBeLessThanOrEqual(USAGE_CREDITS_MAX_USD);
+  it('usage credit amounts are not hardcoded in the app — they come from the server configuration', async () => {
+    const model = await import('./nativeCheckoutModel');
+    expect('USAGE_CREDITS_PRESETS_USD' in model).toBe(false);
+    expect('USAGE_CREDITS_MIN_USD' in model).toBe(false);
+    expect('USAGE_CREDITS_MAX_USD' in model).toBe(false);
   });
 
   it('autonomous work credits: $30 minimum, $20k maximum, presets start at $30', () => {
@@ -74,7 +68,4 @@ describe('nativeCheckoutModel', () => {
     expect(Math.max(...AUTONOMOUS_WORK_CREDITS_PRESETS_USD)).toBeLessThanOrEqual(AUTONOMOUS_WORK_CREDITS_MAX_USD);
   });
 
-  it('usage credits min is lower than autonomous work credits min', () => {
-    expect(USAGE_CREDITS_MIN_USD).toBeLessThan(AUTONOMOUS_WORK_CREDITS_MIN_USD);
-  });
 });

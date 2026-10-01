@@ -191,6 +191,8 @@ export type ConversationTurnRecord = {
   evidence?: ConversationEvidenceRef[];
   /** The project folder open when this turn ran — which project's chats it belongs to. */
   projectFolder?: string;
+  /** A greeting/thanks answered locally with no model request (see smallTalk.ts). */
+  answeredLocally?: boolean;
 };
 
 /** A single state transition or notable runtime event — structured, dev-console-only debugging, never rendered to the user. */

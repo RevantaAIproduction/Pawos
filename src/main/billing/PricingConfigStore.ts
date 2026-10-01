@@ -63,7 +63,7 @@ function defaultConfig(): PricingConfig {
         billingPeriod: 'month',
         features: [
           'Everything in Pro',
-          '20x the usage headroom of Pro',
+          'Pro Max 5x: 10,000 PC included — or Pro Max 20x ($250/mo): 25,000 PC included',
           'Runtime purchases remain cumulative across Pro and Pro Max',
           'Priority access to new Paw models',
         ],

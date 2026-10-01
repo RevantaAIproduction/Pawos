@@ -331,7 +331,7 @@ export default function CompanionExperience() {
               currentWorkingFile={undefined}
               activeTask={activeTask}
               wakeWord={undefined}
-              streamingPawCompute={conversation.streamingPawCompute}
+              streamingActive={conversation.streamingActive}
               streamingElapsedSeconds={conversation.streamingElapsedSeconds}
               onCancel={() => conversation.cancel()}
               projectFolder={conversation.projectFolder}

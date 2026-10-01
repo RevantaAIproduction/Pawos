@@ -258,7 +258,7 @@ export function contextBridge() {
       reason: string,
       category?: AiUsageCategory,
       pawModelId?: PawModelId
-    ): Promise<{ aggregated: AggregatedTurnUsage; balance: CreditBalance }> =>
+    ): Promise<import('../../../shared/billing/UsageBucketTypes').RecordedTurnUsage> =>
       ipcApi.invoke('billing:recordTurnUsage', submission, reason, category, pawModelId),
     billingReleaseGenerationSlot: async (): Promise<void> =>
       ipcApi.invoke('billing:releaseGenerationSlot'),
@@ -266,7 +266,7 @@ export function contextBridge() {
       usage: ProviderUsageMetadata,
       requestType: UsageRequestType,
       context: { sessionId: string | null; runId: string | null }
-    ): Promise<NormalizedUsageRecord> => ipcApi.invoke('billing:reportUsageEvent', usage, requestType, context),
+    ): Promise<import('../../../shared/billing/UsageBucketTypes').UsageEventAck> => ipcApi.invoke('billing:reportUsageEvent', usage, requestType, context),
     billingRecordAutonomousTurnUsage: async (submission: TurnUsageSubmission): Promise<void> =>
       ipcApi.invoke('billing:recordAutonomousTurnUsage', submission),
     billingFlushUsageEvents: async (runId: string): Promise<NormalizedUsageRecord[]> =>
@@ -284,8 +284,15 @@ export function contextBridge() {
       // Fallback for old response format (number) during transition
       return typeof result === 'number' ? result : 0;
     },
-    billingGetUsageEvents: async (limit?: number): Promise<NormalizedUsageRecord[]> => ipcApi.invoke('billing:getUsageEvents', limit),
+    billingGetUsageEvents: async (limit?: number): Promise<import('../../../shared/billing/UsageBucketTypes').LocalUsageEventSummary[]> => ipcApi.invoke('billing:getUsageEvents', limit),
     billingGetCreditHistory: async (): Promise<CreditConsumptionRecord[]> => ipcApi.invoke('billing:getCreditHistory'),
+    billingReserveModelCall: async (request: import('../../../shared/billing/UsageBucketTypes').ModelCallReservationRequest): Promise<import('../../../shared/billing/UsageBucketTypes').ModelCallReservation> =>
+      ipcApi.invoke('billing:reserveModelCall', request),
+    billingSettleModelCall: async (params: { reservationId: string; usageEventId: string; usage: import('../../../shared/billing/UsageBucketTypes').ModelCallUsage }): Promise<void> =>
+      ipcApi.invoke('billing:settleModelCall', params),
+    billingReleaseModelCall: async (reservationId: string): Promise<void> => ipcApi.invoke('billing:releaseModelCall', reservationId),
+    billingGetUsageSummary: async (refresh?: boolean): Promise<import('../../../shared/billing/UsageBucketTypes').CustomerUsageSummary | null> => ipcApi.invoke('billing:getUsageSummary', refresh),
+    billingGetUsageHistory: async (limit?: number): Promise<import('../../../shared/billing/UsageBucketTypes').CustomerUsageHistoryEntry[]> => ipcApi.invoke('billing:getUsageHistory', limit),
     billingGrantComputeBonus: async (units: number): Promise<EntitlementSnapshot> => ipcApi.invoke('billing:grantComputeBonus', units),
     entitlementGetSnapshot: async (): Promise<EntitlementSnapshot> => ipcApi.invoke('entitlement:getSnapshot'),
     entitlementIsModelAvailable: async (modelId: PawModelId): Promise<boolean> =>
@@ -319,6 +326,11 @@ export function contextBridge() {
       ipcApi.invoke('billing:createNativeUsageCreditsCheckout', amountUsd, organizationId, accessToken),
     billingVerifyNativeUsageCreditsPayment: async (params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string; organizationId?: string }): Promise<NativeCreditsVerificationResult> =>
       ipcApi.invoke('billing:verifyNativeUsageCreditsPayment', params),
+    billingGetUsageCreditsConfig: async (): Promise<import('../../../shared/billing/UsageBucketTypes').UsageCreditsPurchaseConfig> => ipcApi.invoke('billing:getUsageCreditsConfig'),
+    billingGetMidMonthOffer: async (accessToken?: string): Promise<import('../../../shared/billing/UsageBucketTypes').MidMonthOfferResult> => ipcApi.invoke('billing:getMidMonthOffer', accessToken),
+    billingCreateMidMonthCheckout: async (accessToken?: string): Promise<import('../../../shared/billing/UsageBucketTypes').MidMonthCheckoutResult> => ipcApi.invoke('billing:createMidMonthCheckout', accessToken),
+    billingVerifyMidMonthPayment: async (params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string }): Promise<import('../../../shared/billing/UsageBucketTypes').MidMonthVerificationResult> =>
+      ipcApi.invoke('billing:verifyMidMonthPayment', params),
     billingCreateNativeTierCheckout: async (tier: SubscriptionTierId, options?: CheckoutOptions, organizationId?: string, accessToken?: string): Promise<NativeTierCheckoutResult> =>
       ipcApi.invoke('billing:createNativeTierCheckout', tier, options, organizationId, accessToken),
     billingVerifyNativeTierPayment: async (params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string; organizationId?: string; tier: SubscriptionTierId; seatCount?: number; seatTier?: SeatTier }): Promise<NativeTierVerificationResult> =>

@@ -8,15 +8,15 @@ export const SUBSCRIPTION_ARTICLES: HelpArticle[] = [
     summary: 'PawOS’s real, genuinely free tier — real AI for planning, analysis & investigation; execution requires Paw Pro.',
     overview:
       'Paw Go is PawOS’s free tier. It is a real, deliberate product decision, not a limited trial: Go includes ' +
-      'real AI (Paw Flash) for investigation, analysis, and planning, drawing from a capped monthly AI credit ' +
-      'allowance — but it never executes anything on your behalf. Generating or modifying code, running ' +
+      'real AI (Paw Flash) for investigation, analysis, and planning, with 500 PC (Paw Compute) included every ' +
+      '14 days — but it never executes anything on your behalf. Generating or modifying code, running ' +
       'commands, and deploying always require Paw Pro. Everything non-AI — companion visuals, Projects, git ' +
       'tooling, and basic workspace features — also works fully on Go.',
     features: [
       'Companion Studio and desktop companion visuals',
       'Basic workspace and file management',
       'Local runtime features (Projects, git, history)',
-      'Real AI for planning, analysis & investigation (Paw Flash), with a capped credit allowance',
+      'Real AI for planning, analysis & investigation (Paw Flash), with 500 PC included every 14 days',
     ],
     howItWorks: 'Go is the default, unauthenticated-friendly tier. It is not gated behind a trial countdown — it stays free indefinitely. Go can investigate, analyze, and plan with real AI; upgrading to Pro is what unlocks execution — generating and modifying code, running commands, deploying, and voice conversations.',
     bestPractices: ['Use Go if you want PawOS as a companion-visual and project/git tool with AI-assisted planning and analysis, but no execution', 'Upgrade to Pro when you want Paw to actually generate/modify code, run commands, deploy, or hold voice conversations'],
@@ -25,7 +25,7 @@ export const SUBSCRIPTION_ARTICLES: HelpArticle[] = [
     requirements: [],
     permissions: [],
     administration: 'Go has no organization/seat concept — it is an individual, single-account tier.',
-    billing: 'Free — $0. No payment method required. AI usage on Go draws from a capped monthly credit allowance (exact limit still being finalized).',
+    billing: 'Free — $0. No payment method required. Includes 500 PC every 14 days; if you need more, you can buy credits ($1 = 100 PC, never expire) or upgrade.',
     faq: [
       { question: 'Is Paw Go a trial?', answer: 'No — it is a genuinely free, ongoing tier with real AI for planning and analysis by design, not a time-limited trial.' },
       { question: 'Who is Paw Go for?', answer: 'Anyone who wants the companion, project/git tooling, and AI-assisted planning/analysis without needing Paw to execute changes on their behalf.' },
@@ -58,10 +58,10 @@ export const SUBSCRIPTION_ARTICLES: HelpArticle[] = [
     requirements: ['A configured AI provider/API key to actually use unlocked AI features'],
     permissions: [],
     administration: 'Individual tier — no organization/seat concept.',
-    billing: 'Currently uncapped monthly AI credit limit (pricing/limits marked "Business Configuration Required" until finalized).',
+    billing: '$20/month — 2,000 PC (Paw Compute) per billing period, with a weekly limit of 1,000 PC. Need more? Extra usage is $15 for 1,500 PC (until your plan renews), and credits are $1 per 100 PC (they never expire).',
     faq: [
       { question: 'What AI models does Pro unlock?', answer: 'The full roster: paw-flash, paw-swift, paw-core, paw-fable, paw-vision, paw-voice, and paw-memory.' },
-      { question: 'Is there a credit limit on Pro?', answer: 'Pro is currently uncapped while specific limits are being finalized.' },
+      { question: 'Is there a usage limit on Pro?', answer: 'Yes. Pro includes 2,000 PC per billing period, with a weekly limit of 1,000 PC. If you reach the weekly limit, the rest of your plan becomes available when the weekly limit resets. If you use all 2,000 PC, you can buy extra usage or credits, or wait for your plan to renew.' },
     ],
     relatedArticleIds: ['paw-go', 'paw-pro-max', 'analytics-ai-usage'],
     relatedSettings: ['Billing', 'Usage'],
@@ -90,8 +90,8 @@ export const SUBSCRIPTION_ARTICLES: HelpArticle[] = [
     requirements: ['A configured AI provider/API key'],
     permissions: [],
     administration: 'Individual tier — no organization/seat concept.',
-    billing: 'Currently uncapped monthly AI credit limit (pricing marked "Business Configuration Required" until finalized).',
-    faq: [{ question: 'What’s different between Pro and Pro Max?', answer: 'They share the same model roster and features today; Pro Max is the higher individual pricing tier. Organization capability begins at Team, not Pro Max.' }],
+    billing: 'Pro Max 5x: $100/month — 10,000 PC per billing period, weekly limit 5,000 PC. Pro Max 20x: $250/month — 25,000 PC per billing period, weekly limit 12,500 PC. Extra usage: $50 for 5,000 PC (5x) or $175 for 17,500 PC (20x), until your plan renews. Credits: $1 per 100 PC, never expire.',
+    faq: [{ question: 'What’s different between Pro and Pro Max?', answer: 'The same model roster, with more Paw Compute: 10,000 PC (Pro Max 5x) or 25,000 PC (Pro Max 20x) per billing period, versus 2,000 PC on Pro. Organization capability begins at Team, not Pro Max.' }],
     relatedArticleIds: ['paw-pro', 'team'],
     relatedSettings: ['Billing'],
     relatedApps: ['upgrade', 'settings'],
@@ -141,7 +141,7 @@ export const SUBSCRIPTION_ARTICLES: HelpArticle[] = [
       'workspaceAdministrator (manages workspaces/projects), and member (standard access). A Team owner can ' +
       'invite/remove their own employees and manage their own org’s billing, but cannot see other organizations ' +
       'or access PawOS’s internal platform administration.',
-    billing: 'Seat-based, roughly 2–150 seats. Per-seat pricing is currently "Business Configuration Required" (not yet finalized).',
+    billing: 'Seat-based, roughly 2–150 seats: Standard seats $20/seat/month, Premium seats $100/seat/month. AI usage is drawn from your organization’s shared pool.',
     faq: [
       { question: 'Who can invite new members?', answer: 'The organization owner and, depending on the action, a billing or workspace administrator.' },
       { question: 'Is Team roles/billing/security fully built?', answer: 'General and Members are real and working today; Roles, Billing, Workspace, Security, Audit, and Integrations are visibly reserved for a future full workspace rollout.' },
@@ -193,7 +193,7 @@ export const SUBSCRIPTION_ARTICLES: HelpArticle[] = [
       'organization functionality today. Multiple departments/workspaces, organization-wide policies, ' +
       'centralized security/privacy/analytics administration, and dedicated deployment/migration support are ' +
       'explicitly roadmap items — not yet built — and are marked as such rather than presented as available.',
-    billing: 'Seat-based, starting around 20 seats with no upper bound. Centralized invoicing and per-seat pricing are currently "Business Configuration Required" (not yet finalized).',
+    billing: 'Seat-based, starting around 20 seats with no upper bound, with custom per-seat pricing and centralized invoicing — contact sales. AI usage is drawn from your organization’s shared pool.',
     faq: [
       { question: 'Does Enterprise support multiple departments today?', answer: 'Not yet — department structure and organization-wide policy management are roadmap items, not current features.' },
       { question: 'Is Enterprise the same underlying system as Team?', answer: 'Yes — the same real Organization/Membership/Role system, extended with a broader enterprise role set.' },

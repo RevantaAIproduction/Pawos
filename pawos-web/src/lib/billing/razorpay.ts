@@ -401,6 +401,8 @@ export type RazorpaySubscription = {
   status: string;
   quantity?: number;
   notes?: Record<string, string>;
+  /** Start of the currently paid billing cycle. */
+  current_start?: number | null;
   /** End of the currently paid billing cycle. */
   current_end?: number | null;
   /** Next scheduled charge. */

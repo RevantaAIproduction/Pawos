@@ -172,7 +172,6 @@ export type CreditBalance = {
   weekResetsAt: number;
   fableUsedThisPeriod: number;
   standardPurchasedUsedThisPeriod: number;
-  purchasedUsageCreditsUsd: number;
 };
 
 export type CreditConsumptionRecord = {
@@ -380,4 +379,8 @@ export type EntitlementSnapshot = {
 
   // Go Refreshes
   goRefreshesRemaining?: number;
+
+  /** Pro / Pro Max (and anyone holding credits): the customer-safe usage bucket summary from the
+   *  server — plan, extra usage and credits in customer PC only. Null before the first sync. */
+  usageSummary?: import('./UsageBucketTypes').CustomerUsageSummary | null;
 };

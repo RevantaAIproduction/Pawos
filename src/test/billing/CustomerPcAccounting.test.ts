@@ -1,6 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import { normalizedComputeToCustomerPc, customerPurchaseUsdToPurchasedPc, customerPcToPurchaseUsd } from "../../shared/billing/CustomerPcCommercialModel";
 import { creditStore } from "../../main/billing/CreditStore";
+import { entitlementService } from "../../main/billing/EntitlementService";
+import { subscriptionStore } from "../../main/billing/SubscriptionStore";
+import { usageBucketClient, UsageBucketClient } from "../../main/billing/UsageBucketClient";
 
 describe("Customer PC Accounting", () => {
   it("NORMAL-001: $1 provider cost -> 1000 NC -> 300 Customer PC ($3 of value, 3x markup)", () => {
@@ -18,69 +21,35 @@ describe("Customer PC Accounting", () => {
   });
 });
 
-describe("Fable & Usage Credits Accounting", () => {
-  it("FABLE-002 to FABLE-005, FABLE-010: Fable stops at $0 and consumes Purchased Usage Credits without Tier Limits", () => {
-    creditStore.reset();
-    creditStore.state.userId = "user123";
-    
-    // FABLE-005: blocks at $0
-    expect(creditStore.getBalance().purchasedUsageCreditsUsd).toBe(0);
-
-    // FABLE-006: purchase $10
-    creditStore.setPurchasedUsageCreditsUsd(10);
-    expect(creditStore.getBalance().purchasedUsageCreditsUsd).toBe(10);
-    
-    // purchase another $10
-    creditStore.setPurchasedUsageCreditsUsd(20);
-    expect(creditStore.getBalance().purchasedUsageCreditsUsd).toBe(20);
-
-    // Consume $9 via Fable (isFable=true)
-    creditStore.consume(900, "test", undefined, true, false);
-    expect(creditStore.getBalance().purchasedUsageCreditsUsd).toBe(11);
-    
-    // Consume $11
-    creditStore.consume(1100, "test", undefined, true, false);
-    expect(creditStore.getBalance().purchasedUsageCreditsUsd).toBe(0);
-    
-    // FABLE-010: cannot produce negative balance
-    creditStore.consume(100, "test", undefined, true, false);
-    expect(creditStore.getBalance().purchasedUsageCreditsUsd).toBe(0);
+describe("Fable & purchased credits (server usage buckets)", () => {
+  const summary = (creditsPc: number) => ({
+    plan: null, bucketFunded: false, buckets: [], weeklyPacing: null, creditsPcRemaining: creditsPc,
+    limitReached: creditsPc <= 0, limitReason: creditsPc <= 0 ? ("no_allowance" as const) : null, limitResetsAt: null,
   });
-  
-  it("FABLE-011: Outbox tracking for failed remote deduction", () => {
-    creditStore.reset();
-    creditStore.state.userId = "user123";
-    creditStore.setPurchasedUsageCreditsUsd(10);
-    
-    // Simulate generation with outbox id
-    const outboxId = "test-uuid";
-    creditStore.consume(100, "test", undefined, true, false, outboxId);
-    
-    expect(creditStore.getBalance().purchasedUsageCreditsUsd).toBe(9);
-    expect(creditStore.getPendingDeductions().length).toBe(1);
-    expect(creditStore.getPendingDeductions()[0].amountUsd).toBe(1);
-    
-    // On sync, the pending deduction should be preserved if not resolved
-    creditStore.setPurchasedUsageCreditsUsd(10); // Remote says 10 (deduction failed previously)
-    expect(creditStore.getBalance().purchasedUsageCreditsUsd).toBe(9); // Correctly overrides to 9 locally
-    
-    // If resolved
-    creditStore.resolvePendingDeduction(outboxId);
-    creditStore.setPurchasedUsageCreditsUsd(9); // Remote says 9 (deduction succeeded)
-    expect(creditStore.getBalance().purchasedUsageCreditsUsd).toBe(9);
-    expect(creditStore.getPendingDeductions().length).toBe(0);
+
+  it("FABLE-005: Fable is available only while purchased credits remain (from the server summary)", () => {
+    vi.spyOn(subscriptionStore, "get").mockReturnValue({ tier: "pro", status: "active" });
+    vi.spyOn(usageBucketClient, "getCachedSummary").mockReturnValue(summary(0));
+    expect(entitlementService.checkGeneration("paw-fable").allowed).toBe(false);
+    vi.spyOn(usageBucketClient, "getCachedSummary").mockReturnValue(summary(1000));
+    expect(entitlementService.checkGeneration("paw-fable").allowed).toBe(true);
+    expect(entitlementService.getPurchasedCreditsRemaining()).toBe(1000);
+    vi.restoreAllMocks();
   });
-  
-  it("FABLE-013: Account A credits never appear in Account B", () => {
+
+  it("FABLE-010: local history never holds or reduces a purchased balance", () => {
     creditStore.reset();
-    creditStore.state.userId = "userA";
-    creditStore.setPurchasedUsageCreditsUsd(50);
-    
-    // logout
-    creditStore.reset();
-    
-    // login B
-    creditStore.state.userId = "userB";
-    expect(creditStore.getBalance().purchasedUsageCreditsUsd).toBe(0);
+    creditStore.setUser("user123");
+    creditStore.consume(900, "test");
+    expect("purchasedUsageCreditsUsd" in creditStore.getBalance()).toBe(false);
+  });
+
+  it("FABLE-013: signing out clears the cached summary — account A credits never appear for account B", () => {
+    const client = new UsageBucketClient(async () => ({ ...summary(5000), buckets: [] }) as never);
+    return client.refreshSummary().then(() => {
+      expect(client.getCachedSummary()?.creditsPcRemaining).toBe(5000);
+      client.clear();
+      expect(client.getCachedSummary()).toBeNull();
+    });
   });
 });

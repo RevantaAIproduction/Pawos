@@ -365,7 +365,7 @@ export const ipc = {
     reason: string,
     category?: AiUsageCategory,
     pawModelId?: PawModelId
-  ): Promise<{ aggregated: AggregatedTurnUsage; balance: CreditBalance }> {
+  ): Promise<import('../../../shared/billing/UsageBucketTypes').RecordedTurnUsage> {
     return getBridge().billingRecordTurnUsage(submission, reason, category, pawModelId);
   },
   async billingReleaseGenerationSlot(): Promise<void> {
@@ -375,14 +375,29 @@ export const ipc = {
     usage: ProviderUsageMetadata,
     requestType: UsageRequestType,
     context: { sessionId: string | null; runId: string | null }
-  ): Promise<NormalizedUsageRecord> {
+  ): Promise<import('../../../shared/billing/UsageBucketTypes').UsageEventAck> {
     return getBridge().billingReportUsageEvent(usage, requestType, context);
   },
-  async billingGetUsageEvents(limit?: number): Promise<NormalizedUsageRecord[]> {
+  async billingGetUsageEvents(limit?: number): Promise<import('../../../shared/billing/UsageBucketTypes').LocalUsageEventSummary[]> {
     return getBridge().billingGetUsageEvents(limit);
   },
   async billingGetCreditHistory(): Promise<CreditConsumptionRecord[]> {
     return getBridge().billingGetCreditHistory();
+  },
+  async billingReserveModelCall(request: import('../../../shared/billing/UsageBucketTypes').ModelCallReservationRequest): Promise<import('../../../shared/billing/UsageBucketTypes').ModelCallReservation> {
+    return getBridge().billingReserveModelCall(request);
+  },
+  async billingSettleModelCall(params: { reservationId: string; usageEventId: string; usage: import('../../../shared/billing/UsageBucketTypes').ModelCallUsage }): Promise<void> {
+    return getBridge().billingSettleModelCall(params);
+  },
+  async billingReleaseModelCall(reservationId: string): Promise<void> {
+    return getBridge().billingReleaseModelCall(reservationId);
+  },
+  async billingGetUsageSummary(refresh?: boolean): Promise<import('../../../shared/billing/UsageBucketTypes').CustomerUsageSummary | null> {
+    return getBridge().billingGetUsageSummary(refresh);
+  },
+  async billingGetUsageHistory(limit?: number): Promise<import('../../../shared/billing/UsageBucketTypes').CustomerUsageHistoryEntry[]> {
+    return getBridge().billingGetUsageHistory(limit);
   },
   async billingGrantComputeBonus(units: number): Promise<EntitlementSnapshot> {
     return getBridge().billingGrantComputeBonus(units);
@@ -440,6 +455,18 @@ export const ipc = {
   },
   async billingVerifyNativeUsageCreditsPayment(params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string; organizationId?: string }): Promise<NativeCreditsVerificationResult> {
     return getBridge().billingVerifyNativeUsageCreditsPayment(params);
+  },
+  async billingGetUsageCreditsConfig(): Promise<import('../../../shared/billing/UsageBucketTypes').UsageCreditsPurchaseConfig> {
+    return getBridge().billingGetUsageCreditsConfig();
+  },
+  async billingGetMidMonthOffer(accessToken?: string): Promise<import('../../../shared/billing/UsageBucketTypes').MidMonthOfferResult> {
+    return getBridge().billingGetMidMonthOffer(accessToken);
+  },
+  async billingCreateMidMonthCheckout(accessToken?: string): Promise<import('../../../shared/billing/UsageBucketTypes').MidMonthCheckoutResult> {
+    return getBridge().billingCreateMidMonthCheckout(accessToken);
+  },
+  async billingVerifyMidMonthPayment(params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string }): Promise<import('../../../shared/billing/UsageBucketTypes').MidMonthVerificationResult> {
+    return getBridge().billingVerifyMidMonthPayment(params);
   },
   async billingCreateNativeTierCheckout(tier: SubscriptionTierId, options?: CheckoutOptions, organizationId?: string, accessToken?: string): Promise<NativeTierCheckoutResult> {
     return getBridge().billingCreateNativeTierCheckout(tier, options, organizationId, accessToken);

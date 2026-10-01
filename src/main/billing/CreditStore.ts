@@ -3,21 +3,11 @@ import * as path from "path";
 import { app } from "electron";
 import type { CreditBalance, CreditConsumptionRecord } from "../../shared/billing/BillingTypes";
 import type { AiUsageCategory } from "../../shared/billing/AiUsageCategories";
-import { customerPcToPurchaseUsd } from "../../shared/billing/CustomerPcCommercialModel";
-import { usageEventStore } from "./UsageEventStore";
 
 const FILE_NAME = "credits.json";
 const PERIOD_MS = 30 * 24 * 60 * 60 * 1000;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_HISTORY = 200;
-
-export type PendingDeduction = {
-  usageEventId: string;
-  amountUsd: number;
-  timestamp: number;
-  /** The account the usage belongs to — a deduction is only ever sent with that account's session. */
-  userId?: string;
-};
 
 type State = {
   userId: string | null;
@@ -26,8 +16,6 @@ type State = {
   usedThisWeek: number;
   weekResetsAt: number;
   history: CreditConsumptionRecord[];
-  purchasedUsageCreditsUsd: number;
-  pendingDeductions: PendingDeduction[];
 };
 
 function freshPeriod(): Pick<State, "usedThisPeriod" | "periodResetsAt" | "history"> {
@@ -38,9 +26,19 @@ function freshWeek(): Pick<State, "usedThisWeek" | "weekResetsAt"> {
   return { usedThisWeek: 0, weekResetsAt: Date.now() + WEEK_MS };
 }
 
+/**
+ * Local usage HISTORY only (the Analytics activity feed) — never a balance and never a charge.
+ *
+ * Purchased usage used to be a local cache of the server wallet (user_usage_credits) plus a queue of
+ * unsent "pending deductions" flushed to deduct_usage_credits(). That path is retired: paid usage is
+ * now reserved and settled per Gemini call against server usage buckets (UsageBucketClient.ts), and
+ * deduct_usage_credits() is frozen on the server. Unsent legacy deductions found in an old
+ * credits.json are dropped on load (logged) — they can no longer be delivered, and the legacy wallet
+ * moves to a bucket with its full customer value.
+ */
 class CreditStore {
   private file = "";
-  private state: State = { ...freshPeriod(), ...freshWeek(), purchasedUsageCreditsUsd: 0, userId: null, pendingDeductions: [] };
+  private state: State = { ...freshPeriod(), ...freshWeek(), userId: null };
 
   init(): void {
     if (!app || !app.getPath) return;
@@ -48,20 +46,22 @@ class CreditStore {
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     try {
       const parsed = JSON.parse(fs.readFileSync(this.file, "utf-8"));
-      // The purchased balance and the account it belongs to are never trusted from this file (anyone
-      // can edit it): they start empty and come only from the server — syncUsageCredits() runs on
-      // every sign-in / token refresh and after each purchase. Only unsent deductions are kept, so
-      // usage already spent is still charged when the server balance arrives.
+      const legacyPending = Array.isArray(parsed.pendingDeductions) ? parsed.pendingDeductions : [];
+      if (legacyPending.length > 0) {
+        console.warn(`[Credits] Dropping ${legacyPending.length} unsent legacy credit deduction(s); purchased usage is now settled per call on the server.`);
+      }
       this.state = {
-        ...this.state,
-        ...parsed,
         userId: null,
-        purchasedUsageCreditsUsd: 0,
-        pendingDeductions: Array.isArray(parsed.pendingDeductions) ? parsed.pendingDeductions : [],
+        usedThisPeriod: Number(parsed.usedThisPeriod) || 0,
+        periodResetsAt: Number(parsed.periodResetsAt) || Date.now() + PERIOD_MS,
+        usedThisWeek: Number(parsed.usedThisWeek) || 0,
+        weekResetsAt: Number(parsed.weekResetsAt) || Date.now() + WEEK_MS,
+        history: Array.isArray(parsed.history) ? parsed.history : [],
       };
       this.rolloverIfNeeded();
+      if (legacyPending.length > 0 || "purchasedUsageCreditsUsd" in parsed) this.save();
     } catch {
-      this.state = { ...freshPeriod(), ...freshWeek(), purchasedUsageCreditsUsd: 0, userId: null, pendingDeductions: [] };
+      this.state = { ...freshPeriod(), ...freshWeek(), userId: null };
       this.save();
     }
   }
@@ -76,98 +76,25 @@ class CreditStore {
     if (Date.now() > this.state.weekResetsAt) this.state = { ...this.state, ...freshWeek() };
   }
 
-  consume(amount: number, reason: string, category?: AiUsageCategory, isFable = false, isPurchased = false, usageEventId?: string): void {
+  /** The signed-in account this local history belongs to. */
+  setUser(userId: string | null): void {
+    this.state.userId = userId;
+  }
+
+  /** Adds one entry to the local usage history (display only). */
+  consume(amount: number, reason: string, category?: AiUsageCategory): void {
     if (!this.state.userId) return; // Anonymous/unauthenticated safety
     this.rolloverIfNeeded();
-    if (isFable || isPurchased) {
-      const usdAmount = customerPcToPurchaseUsd(amount);
-      this.state.purchasedUsageCreditsUsd = Math.max(0, this.state.purchasedUsageCreditsUsd - usdAmount);
-      if (usageEventId && usdAmount > 0) {
-        this.state.pendingDeductions.push({ usageEventId, amountUsd: usdAmount, timestamp: Date.now(), userId: this.state.userId });
-      }
-    } else {
-      this.state.usedThisPeriod += amount;
-      this.state.usedThisWeek += amount;
-    }
+    this.state.usedThisPeriod += amount;
+    this.state.usedThisWeek += amount;
     this.state.history.push({ amount, reason, at: Date.now(), category });
     if (this.state.history.length > MAX_HISTORY) this.state.history = this.state.history.slice(-MAX_HISTORY);
     this.save();
   }
 
-  resolvePendingDeduction(usageEventId: string): void {
-    this.state.pendingDeductions = this.state.pendingDeductions.filter(p => p.usageEventId !== usageEventId);
-    this.save();
-  }
-
-  getPendingDeductions(): PendingDeduction[] {
-    return [...this.state.pendingDeductions];
-  }
-
-  setPurchasedUsageCreditsUsd(amountUsd: number): void {
-    // The server is authoritative. We update the local cache, then re-apply any STILL-pending local usage
-    // so we dont accidentally grant free usage before those pending ones sync.
-    let effectiveUsd = amountUsd;
-    for (const pending of this.state.pendingDeductions) {
-      effectiveUsd -= pending.amountUsd;
-    }
-    this.state.purchasedUsageCreditsUsd = Math.max(0, effectiveUsd);
-    this.save();
-  }
-
   reset(): void {
-    this.state = {
-      ...freshPeriod(),
-      ...freshWeek(),
-      userId: null,
-      purchasedUsageCreditsUsd: 0,
-      pendingDeductions: [],
-    };
+    this.state = { ...freshPeriod(), ...freshWeek(), userId: null };
     this.save();
-  }
-
-  async syncUsageCredits(accessToken: string, userId?: string): Promise<{ ok: boolean; reason?: string }> {
-    this.state.userId = userId ?? this.state.userId;
-    // Unsent deductions belong to the account that spent them — never charge another account's balance.
-    this.state.pendingDeductions = this.state.pendingDeductions.filter((p) => p.userId === this.state.userId);
-    this.save();
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const anonKey = process.env.SUPABASE_PUBLISHABLE_KEY;
-    if (!supabaseUrl || !anonKey) return { ok: false, reason: "Supabase is not configured" };
-    
-    // 1. Flush any pending deductions FIRST
-    for (const pending of [...this.state.pendingDeductions]) {
-       try {
-         const resp = await fetch(`${supabaseUrl}/rest/v1/rpc/deduct_usage_credits`, {
-           method: "POST",
-           headers: { apikey: anonKey, Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-           body: JSON.stringify({ p_amount_usd: pending.amountUsd, p_usage_event_id: pending.usageEventId })
-         });
-         if (resp.ok) {
-           this.resolvePendingDeduction(pending.usageEventId);
-         }
-       } catch (e) {
-         console.error("Failed to flush pending deduction", e);
-       }
-    }
-
-    // 2. Fetch authoritative balance
-    try {
-      const response = await fetch(`${supabaseUrl}/rest/v1/user_usage_credits?select=balance_usd`, {
-        headers: { apikey: anonKey, Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (Array.isArray(data) && data.length > 0) {
-          this.setPurchasedUsageCreditsUsd(Number(data[0]?.balance_usd) || 0);
-        } else {
-          this.setPurchasedUsageCreditsUsd(0);
-        }
-        return { ok: true };
-      }
-      return { ok: false, reason: "Fetch failed" };
-    } catch (e) {
-      return { ok: false, reason: String(e) };
-    }
   }
 
   getBalance(): CreditBalance {
@@ -180,7 +107,6 @@ class CreditStore {
       weekResetsAt: this.state.weekResetsAt,
       fableUsedThisPeriod: 0,
       standardPurchasedUsedThisPeriod: 0,
-      purchasedUsageCreditsUsd: this.state.purchasedUsageCreditsUsd,
     };
   }
 

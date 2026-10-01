@@ -124,7 +124,7 @@ export const troubleshootingPages: DocPage[] = [
     title: 'Usage limits',
     description: 'You’ve hit your Paw Compute limit for the period.',
     blocks: [
-      { type: 'paragraph', text: 'Everything else keeps working. You’re offered three options: upgrade, buy additional Paw Compute directly, or use an existing Paw Credits balance. See Billing → Limits.' },
+      { type: 'paragraph', text: 'Everything else keeps working. If you reached your weekly limit, the rest of your plan becomes available again when the weekly limit resets. If you used all of your plan’s PC for the billing period, you can buy extra usage or credits, upgrade, or wait for your plan to renew. See Billing → Limits.' },
     ],
     related: ['billing/limits', 'billing/paw-compute'],
   },

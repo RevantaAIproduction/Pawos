@@ -123,7 +123,7 @@ describe('Career tools (PawOS Build student features)', () => {
     }
     expect(inflightDuringCall).toBe(1); // held an in-flight generation slot for the duration
     expect(rollingUsageGate.inflightCount).toBe(0); // and released it
-    expect(consume).toHaveBeenCalledWith(expect.any(Number), 'career:atsScore', 'chat', false, false, 'evt-career');
+    expect(consume).toHaveBeenCalledWith(expect.any(Number), 'career:atsScore', 'chat');
   });
 
   it('reports AI failures honestly and still releases the slot', async () => {

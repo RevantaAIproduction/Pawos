@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { bridgeUsageGate, finishGeminiCall, reserveGeminiCall, usageFromMetadata } from '../reasoning/providers/geminiUsageReservation';
 
 export type SessionContinuationCandidate = {
   id: string;
@@ -60,28 +61,43 @@ export async function classifySessionContinuation(params: {
   // Minted once, right here, for this one real outgoing request — PawOS's own per-request identity
   // (Gemini's response body carries no stable id of its own). Makes the usage-ledger write idempotent.
   const requestId = uuidv4();
-  const res = await fetch(`${baseUrl}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: 'object',
-          properties: {
-            action: { type: 'string', enum: ['continue', 'new'] },
-            sessionId: { type: 'string' },
-          },
-          required: ['action'],
+  const body = {
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', enum: ['continue', 'new'] },
+          sessionId: { type: 'string' },
         },
+        required: ['action'],
       },
-    }),
-  });
+    } as Record<string, unknown>,
+  };
+  // Reserved like every paid Gemini call (a refusal throws, and the caller falls back to its own
+  // time-based heuristic).
+  const gate = bridgeUsageGate();
+  const { reservationId } = await reserveGeminiCall({ gate, baseUrl, model, apiKey, body, requestKey: requestId, category: 'background', maxOutputTokens: 2048 });
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    finishGeminiCall(gate, reservationId, requestId, { usage: null, requestFailed: true });
+    throw error;
+  }
 
-  if (!res.ok) return { decision: { action: 'new', sessionId: null }, usage: null };
+  if (!res.ok) {
+    finishGeminiCall(gate, reservationId, requestId, { usage: null, requestFailed: true });
+    return { decision: { action: 'new', sessionId: null }, usage: null };
+  }
 
   const json = await res.json();
+  finishGeminiCall(gate, reservationId, requestId, { usage: usageFromMetadata(json.usageMetadata), requestFailed: false });
   const usageMetadata = json.usageMetadata;
   const usage: SessionClassifierUsage | null = usageMetadata
     ? {

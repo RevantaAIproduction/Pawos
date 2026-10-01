@@ -25,6 +25,27 @@ import type { ReasoningTurnHandle } from '../reasoning/ReasoningRuntime';
 import type { ReasoningProvider } from '../reasoning/ReasoningProvider';
 import type { ReasoningToolCall, ReasoningToolDefinition } from '../reasoning/ReasoningTypes';
 import { ACTION_TOOL_DEFINITIONS, toolCallToActionRequest } from '../ai/IntentRegistry';
+import { isSmallTalkMessage, localSmallTalkReply } from './smallTalk';
+import { classifyMinimalQuestion, MINIMAL_QUESTION_SYSTEM_PROMPT } from './simpleQuestion';
+import { planRequestContext } from './contextPlanner';
+import { buildSystemPromptForCapabilities } from './systemPrompt';
+import {
+  buildRequestCapabilitiesTool,
+  CAPABILITY_GROUPS,
+  expandCapabilityGroups,
+  REQUEST_CAPABILITIES_TOOL_NAME,
+  selectToolsForGroups,
+  type CapabilityGroup,
+} from '../ai/capabilityGroups';
+
+/** The pieces the full system prompt is built from — lets a request use only its capability sections. */
+export type ReasoningPromptParts = {
+  canExecute: boolean;
+  canMakeResumes: boolean;
+  personalityAddendum: string;
+  languageInstruction: string;
+  planModeInstruction: string;
+};
 import { aiProviderConfigStore } from '../ai/AIProviderConfigStore';
 // [DEBUG-TEMP] remove this import and the one voiceDebugBus.emit() call in log() once real-mic verification is done.
 import { voiceDebugBus } from './VoiceDebugBus';
@@ -137,23 +158,6 @@ function buildDefaultResponse(transcript: string) {
   }
 
   return `I heard: ${trimmed}`;
-}
-
-/**
- * Estimate Paw Compute cost from token usage.
- * This is a rough estimate — actual cost is calculated server-side.
- * Approximation: ~0.0001 PC per input token, ~0.0003 PC per output token.
- */
-function estimatePawComputeFromUsage(usages: TurnUsageSubmission['requests']): number {
-  let totalPc = 0;
-  for (const req of usages) {
-    const usage = req.usage;
-    if (!usage) continue;
-    const inputCost = (usage.inputTokens ?? 0) * 0.0001;
-    const outputCost = (usage.outputTokens ?? 0) * 0.0003;
-    totalPc += inputCost + outputCost;
-  }
-  return totalPc;
 }
 
 /**
@@ -290,6 +294,13 @@ export class ConversationRuntime {
   }
 
   private pendingConfirmation: { request: ActionRequest; toolCall: ReasoningToolCall; task?: ConversationTaskRecord | null; goal?: string } | null = null;
+  /** The last model turn took the minimal path (a plain Q&A, no tools) — a short follow-up about it may too. */
+  private lastTurnWasMinimalQuestion = false;
+  /** Pieces of the full system prompt, so a request can be built from only its capability sections
+   *  (set by the controller; unset → per-request selection is off and every turn uses the full context). */
+  private promptParts: ReasoningPromptParts | null = null;
+  /** The current turn's selected capability groups (null = full or minimal context). */
+  private turnCapabilityGroups: CapabilityGroup[] | null = null;
 
   /** Project ID (org_projects.id) for this turn's context — propagated to all ActionRequests created in this turn for RLS scoping. */
   private currentTurnProjectId: string | undefined = undefined;
@@ -464,11 +475,11 @@ export class ConversationRuntime {
        */
       onTurnUsage?: (submission: TurnUsageSubmission) => void;
       /**
-       * Fires live during streaming with partial/cumulative Paw Compute usage
-       * burned so far in the current turn. Used to display real-time consumption
-       * in the chat UI. Called multiple times as each API request completes.
+       * Fires as each request of the current turn completes, with the seconds elapsed in the turn —
+       * a progress signal only. PC is never estimated here: customer PC comes from the server's
+       * bucket accounting (usage summary) after settlement.
        */
-      onStreamingUsage?: (pawCompute: number, elapsedSeconds: number) => void;
+      onStreamingUsage?: (elapsedSeconds: number) => void;
       /**
        * Executes an action the AI requested (via IPC to the main-process
        * ActionEngine). The AI only ever names an intent; PawOS decides how
@@ -591,6 +602,7 @@ export class ConversationRuntime {
     if (args.executeAction) {
       this.args.reasoningRuntime.setTools(ACTION_TOOL_DEFINITIONS);
     }
+    this.args.reasoningRuntime.setMinimalSystemPrompt(MINIMAL_QUESTION_SYSTEM_PROMPT);
 
     args.onProcessOutput?.(this.handleProcessOutput);
     args.onProcessExit?.(this.handleProcessExit);
@@ -678,6 +690,126 @@ export class ConversationRuntime {
 
   setReasoningSystemPrompt(systemPrompt: string) {
     this.args.reasoningRuntime.setSystemPrompt(systemPrompt);
+  }
+
+  /** The one-line prompt used for simple factual questions (plus the user's language setting, if any). */
+  setReasoningMinimalSystemPrompt(systemPrompt: string) {
+    this.args.reasoningRuntime.setMinimalSystemPrompt(systemPrompt);
+  }
+
+  /** The parts the full system prompt is made of — enables per-request capability selection. */
+  setReasoningPromptParts(parts: ReasoningPromptParts) {
+    this.promptParts = parts;
+  }
+
+  /**
+   * Per-request capability selection (contextPlanner.ts): a tool/task request the planner can place
+   * gets only its capability groups' tools and prompt sections, plus request_capabilities to load
+   * more mid-turn. null → the full context, unchanged (autonomous runs, uploads, reference images,
+   * continuations, anything the planner can't place confidently, or no prompt parts set).
+   */
+  private selectedContextFor(transcript: string, context?: SubmittedInputContext): { groups: CapabilityGroup[]; systemPrompt: string; tools: ReasoningToolDefinition[] } | null {
+    if (!this.promptParts || this.args.autonomousRunId) return null;
+    if (context?.source && context.source !== 'typed') return null;
+    if (context?.largePromptAttachment || context?.imageDataUrl || this.pendingReferenceImages.length > 0) return null;
+    const plan = planRequestContext(transcript);
+    if (!plan) return null;
+    const built = this.buildSelectedContext(plan.groups);
+    return built ? { groups: plan.groups, ...built } : null;
+  }
+
+  /** Tools and system prompt for `groups`. Tools come from the plan-filtered list the runtime already
+   *  holds, plus every tool already called in this conversation (so its earlier calls/results stay
+   *  interpretable), plus the request_capabilities escalation tool. */
+  private buildSelectedContext(groups: CapabilityGroup[]): { systemPrompt: string; tools: ReasoningToolDefinition[] } | null {
+    const parts = this.promptParts;
+    if (!parts) return null;
+    const history = this.args.reasoningRuntime.getHistory();
+    const usedToolNames = new Set<string>();
+    for (const m of history) {
+      if (m.role === 'tool' && m.name) usedToolNames.add(m.name);
+      for (const call of m.toolCalls ?? []) usedToolNames.add(call.name);
+    }
+    const available = this.args.reasoningRuntime.getTools().filter((t) => t.name !== REQUEST_CAPABILITIES_TOOL_NAME);
+    const tools = [...selectToolsForGroups(available, groups, usedToolNames), buildRequestCapabilitiesTool(groups)];
+    const capabilityNote = `Tools loaded for this request: ${groups.join(', ')}. If you need a capability that isn't loaded, call ${REQUEST_CAPABILITIES_TOOL_NAME} first — don't tell the user you can't do it.`;
+    const systemPrompt = [
+      buildSystemPromptForCapabilities(parts.canExecute, parts.canMakeResumes, groups),
+      parts.personalityAddendum,
+      parts.languageInstruction,
+      parts.planModeInstruction,
+      capabilityNote,
+    ].filter(Boolean).join('\n\n');
+    return { systemPrompt, tools };
+  }
+
+  /** The escalation valve: the model asked for more capability groups mid-turn — widen this turn's
+   *  context, then continue so its next step can use them. */
+  private async expandCapabilities(toolCall: ReasoningToolCall, currentTurn: number, ctx: TurnContext): Promise<void> {
+    const raw = (toolCall.arguments as { groups?: unknown } | undefined)?.groups;
+    const requested = (Array.isArray(raw) ? raw : [raw]).filter((g): g is CapabilityGroup => typeof g === 'string' && (CAPABILITY_GROUPS as string[]).includes(g));
+    let result: ActionResult;
+    if (!this.turnCapabilityGroups) {
+      result = { ok: true, data: { note: 'Every capability is already loaded for this request. Continue.' } };
+    } else if (requested.length === 0) {
+      result = { ok: false, reason: 'failed', message: `Unknown capability group. Valid groups: ${CAPABILITY_GROUPS.join(', ')}.` };
+    } else {
+      const groups = expandCapabilityGroups([...this.turnCapabilityGroups, ...requested]);
+      const widened = this.buildSelectedContext(groups);
+      if (widened) {
+        this.turnCapabilityGroups = groups;
+        this.args.reasoningRuntime.setTurnContext(widened);
+      }
+      result = { ok: true, data: { loaded: groups, note: `Loaded: ${requested.join(', ')}. Their tools are available now — continue the task.` } };
+    }
+    this.log('capabilities-requested', { requested, groups: this.turnCapabilityGroups ?? 'all' });
+    await this.recordAndMaybeContinueAfterTool(toolCall, { type: 'requestCapabilities' } as unknown as ActionRequest, result, currentTurn, ctx);
+  }
+
+  /**
+   * Simple factual/general question typed or spoken in a normal conversation with nothing attached →
+   * minimal path (one-line prompt, zero tools; history only for a follow-up to a previous plain Q&A).
+   * null → the full path, unchanged. See simpleQuestion.ts for what counts.
+   */
+  private minimalQuestionMode(transcript: string, context?: SubmittedInputContext): { includeHistory: boolean } | null {
+    if (this.args.autonomousRunId) return null;
+    if (context?.source && context.source !== 'typed') return null;
+    if (context?.temporaryExecutionMode || context?.largePromptAttachment || context?.imageDataUrl) return null;
+    if (this.pendingReferenceImages.length > 0) return null;
+    const hasHistory = this.args.reasoningRuntime.getHistory().some((m) => (m.role === 'user' || m.role === 'assistant') && m.content.trim());
+    const decision = classifyMinimalQuestion(transcript, { hasHistory, previousWasMinimalQuestion: this.lastTurnWasMinimalQuestion });
+    if (!decision) return null;
+    return { includeHistory: decision.kind === 'followUp' };
+  }
+
+  /**
+   * True only for a pure greeting/thanks typed or spoken by the user in a normal (non-autonomous)
+   * conversation, with nothing attached, no per-turn execution mode, and Paw's last message not a
+   * question. Everything else — including every possible follow-up — goes to the model unchanged.
+   */
+  private shouldAnswerLocally(transcript: string, context?: SubmittedInputContext): boolean {
+    if (this.args.autonomousRunId) return false;
+    if (context?.source && context.source !== 'typed') return false;
+    if (context?.temporaryExecutionMode || context?.largePromptAttachment || context?.imageDataUrl) return false;
+    if (this.pendingReferenceImages.length > 0) return false;
+    const lastAssistantMessage = [...this.args.reasoningRuntime.getHistory()].reverse().find((m) => m.role === 'assistant' && m.content.trim())?.content;
+    return isSmallTalkMessage(transcript, { lastAssistantMessage });
+  }
+
+  /**
+   * Finishes a greeting/thanks turn with Paw's local reply: shown, spoken (if voice output is on),
+   * saved to the chat, and completed through the normal finalize path with zero usage — so nothing is
+   * metered and the generation slot is released. Not added to the model's history: it carries no
+   * information a later request needs.
+   */
+  private async answerLocally(currentTurn: number, transcript: string): Promise<void> {
+    const reply = localSmallTalkReply(transcript);
+    if (this.currentTurnRecord) this.currentTurnRecord.answeredLocally = true;
+    this.log('local-small-talk-reply');
+    this.appendMessage('assistant', reply);
+    this.enqueueSpeech(reply, currentTurn);
+    const ctx: TurnContext = { ttsBuffer: '', finalResponse: reply, assistantMessageId: null, startedAtMs: Date.now(), usages: [] };
+    await this.drainPendingActionsAndFinalize(currentTurn, ctx, transcript);
   }
 
   open() {
@@ -876,6 +1008,8 @@ export class ConversationRuntime {
    */
   openConversation(session: ConversationSession | null) {
     this.cancel();
+    // A reopened chat's earlier turns weren't produced here — never treat them as a plain Q&A to follow up on.
+    this.lastTurnWasMinimalQuestion = false;
     this.args.reasoningRuntime.seedHistory(
       (session?.turns ?? []).slice(-REOPENED_CHAT_MEMORY_TURNS).flatMap((turn) => [
         { role: 'user' as const, content: turn.transcript },
@@ -1149,6 +1283,12 @@ export class ConversationRuntime {
     this.pendingActionPromises = [];
     this.log('turn-start', { turnId: currentTurn, transcript, source: context?.source ?? 'typed' });
 
+    // A pure greeting or thanks is answered right here — no Gemini request at all (smallTalk.ts).
+    if (this.shouldAnswerLocally(transcript, context)) {
+      await this.answerLocally(currentTurn, transcript);
+      return;
+    }
+
     if (context?.source === 'image' && context.imageDataUrl) {
       this.pendingReferenceImages.push(context.imageDataUrl);
     }
@@ -1179,13 +1319,24 @@ export class ConversationRuntime {
 
     let turnFailed = false;
     let turnHandle: ReasoningTurnHandle;
+    // Simple factual/general question → one-line prompt, zero tools, the user's own words unchanged
+    // (simpleQuestion.ts). Everything else takes the full path exactly as before.
+    const minimal = this.minimalQuestionMode(transcript, context);
+    this.lastTurnWasMinimalQuestion = minimal !== null;
+    // A tool/task request the planner can place → only its capability groups' tools and prompt
+    // sections (contextPlanner.ts); the user's words and project/file context are sent unchanged.
+    const selected = minimal ? null : this.selectedContextFor(transcript, context);
+    this.turnCapabilityGroups = selected?.groups ?? null;
+    if (selected) this.log('context-selected', { groups: selected.groups, toolCount: selected.tools.length });
+    const turnInput = minimal ? transcript : reasoningInput;
+    const turnOptions = minimal ? { minimal } : selected ? { selected: { systemPrompt: selected.systemPrompt, tools: selected.tools } } : {};
     // Shared with handleToolCall/continueReasoningTurn — a tool-result
     // continuation streams into the SAME buffers as this initial call.
     const promptLineCount = context?.largePromptAttachment?.lineCount ?? transcript.split('\n').length;
     const turnContext: TurnContext = { ttsBuffer: '', finalResponse: '', assistantMessageId: null, startedAtMs: Date.now(), usages: [], promptLineCount };
 
     try {
-      turnHandle = this.args.reasoningRuntime.runTurn(reasoningInput, this.buildStreamCallbacks(currentTurn, turnContext));
+      turnHandle = this.args.reasoningRuntime.runTurn(turnInput, this.buildStreamCallbacks(currentTurn, turnContext), turnOptions);
       this.reasoningTurn = turnHandle;
 
       const result = await turnHandle.completed;
@@ -1213,7 +1364,7 @@ export class ConversationRuntime {
       if (nothingStreamedYet && !NOT_AUTO_RECOVERABLE.has(failureClass)) {
         this.log('recovering-turn', { failureClass, message });
         try {
-          turnHandle = this.args.reasoningRuntime.runTurn(reasoningInput, this.buildStreamCallbacks(currentTurn, turnContext));
+          turnHandle = this.args.reasoningRuntime.runTurn(turnInput, this.buildStreamCallbacks(currentTurn, turnContext), turnOptions);
           this.reasoningTurn = turnHandle;
           const retryResult = await turnHandle.completed;
           turnContext.finalResponse = retryResult.response || retryResult.assistantMessage?.content || turnContext.finalResponse;
@@ -1457,10 +1608,9 @@ export class ConversationRuntime {
         // reported via onTurnUsage right before the turn is finalized (drainPendingActionsAndFinalize).
         if (result.usage) ctx.usages.push({ usage: result.usage, requestType });
 
-        // Emit live streaming usage for UI display
+        // Live progress for the UI (elapsed time only — no client-side PC estimate).
         const elapsedSeconds = Math.floor((Date.now() - ctx.startedAtMs) / 1000);
-        const estimatedPawCompute = estimatePawComputeFromUsage(ctx.usages);
-        this.args.onStreamingUsage?.(estimatedPawCompute, elapsedSeconds);
+        this.args.onStreamingUsage?.(elapsedSeconds);
 
         ctx.finalResponse = result.response || result.assistantMessage?.content || '';
         if (result.assistantMessage) {
@@ -1565,6 +1715,11 @@ export class ConversationRuntime {
       await this.showWidget(toolCall, currentTurn, ctx);
       return;
     }
+    // Load more capability groups mid-turn (per-request selection's safety valve) — runs nothing.
+    if (toolCall.name === REQUEST_CAPABILITIES_TOOL_NAME) {
+      await this.expandCapabilities(toolCall, currentTurn, ctx);
+      return;
+    }
     // A resume shown in chat for download — nothing is written to disk, so no permission question.
     if (toolCall.name === 'present_resume') {
       await this.presentResume(toolCall, currentTurn, ctx);
@@ -1624,7 +1779,8 @@ export class ConversationRuntime {
       const mode = tempMode ?? this.args.getExecutionMode?.() ?? DEFAULT_EXECUTION_MODE;
       const bypassPermissionsEnabled = this.args.isBypassPermissionsEnabled?.() ?? false;
       if (shouldAutoConfirmAction(mode, request.type, bypassPermissionsEnabled)) {
-        await this.executeConfirmedAction(request, toolCall, currentTurn);
+        // Mid-turn: stays in this turn's one usage collection (see executeConfirmedAction).
+        await this.executeConfirmedAction(request, toolCall, currentTurn, ctx);
         return;
       }
       this.askPermissionInChat(request, toolCall, currentTurn, ctx);
@@ -1742,7 +1898,8 @@ export class ConversationRuntime {
       const mode = tempMode ?? this.args.getExecutionMode?.() ?? DEFAULT_EXECUTION_MODE;
       const bypassPermissionsEnabled = this.args.isBypassPermissionsEnabled?.() ?? false;
       if (shouldAutoConfirmAction(mode, request.type, bypassPermissionsEnabled)) {
-        await this.executeConfirmedAction(request, toolCall, currentTurn);
+        // Mid-turn: stays in this turn's one usage collection (see executeConfirmedAction).
+        await this.executeConfirmedAction(request, toolCall, currentTurn, ctx);
         return;
       }
       const waitingText = 'Waiting for you to reply "allow"';
@@ -1952,9 +2109,19 @@ export class ConversationRuntime {
     this.resumeAfterAction(currentTurn);
   }
 
-  private async executeConfirmedAction(request: ActionRequest, toolCall: ReasoningToolCall, currentTurn: number): Promise<void> {
+  /**
+   * `turnCtx`: the context of the turn this action belongs to when it is auto-confirmed mid-turn
+   * (Accept Edits / Bypass / a hands-on turn's temporary mode). Its Gemini usage and final reply then
+   * stay in that ONE collection, and the turn that owns it (handleTranscript → its
+   * drainPendingActionsAndFinalize, which waits for this and every continuation) is the only place
+   * it is finalized and reported. Omitted when the confirmation IS its own turn (the user's "allow"
+   * reply, or a resumed governance approval): a fresh collection is created and finalized here.
+   */
+  private async executeConfirmedAction(request: ActionRequest, toolCall: ReasoningToolCall, currentTurn: number, turnCtx?: TurnContext): Promise<void> {
     const executeAction = this.args.executeAction;
     if (!executeAction) return;
+    const ownsTurn = turnCtx === undefined;
+    const ctx: TurnContext = turnCtx ?? { ttsBuffer: '', finalResponse: '', assistantMessageId: null, startedAtMs: Date.now(), usages: [] };
 
     if (currentTurn === this.turnId) this.updateSnapshot({ state: 'performingAction' });
     this.log('action-start', { type: request.type, confirmed: true });
@@ -1974,8 +2141,9 @@ export class ConversationRuntime {
             reason: 'requires-confirmation',
             message: `Action requires approval. Current status: ${approvalStatus.status}`,
           };
-          // Record the failed attempt and notify model
-          await this.recordAndMaybeContinueAfterTool(toolCall, request, failure, currentTurn, { ttsBuffer: '', finalResponse: '', assistantMessageId: null, startedAtMs: Date.now(), usages: [] });
+          // Record the failed attempt and notify model — in this turn's one usage collection.
+          await this.recordAndMaybeContinueAfterTool(toolCall, request, failure, currentTurn, ctx);
+          if (ownsTurn) await this.drainPendingActionsAndFinalize(currentTurn, ctx, 'yes');
           return;
         }
       } catch (error) {
@@ -1986,15 +2154,11 @@ export class ConversationRuntime {
           reason: 'requires-confirmation',
           message: 'Could not verify approval status. Action blocked for safety.',
         };
-        await this.recordAndMaybeContinueAfterTool(toolCall, request, failure, currentTurn, { ttsBuffer: '', finalResponse: '', assistantMessageId: null, startedAtMs: Date.now(), usages: [] });
+        await this.recordAndMaybeContinueAfterTool(toolCall, request, failure, currentTurn, ctx);
+        if (ownsTurn) await this.drainPendingActionsAndFinalize(currentTurn, ctx, 'yes');
         return;
       }
     }
-
-    // A fresh turn (started in handleTranscript's confirmation branch), so
-    // it gets its own buffers — same shape as the initial runTurn's, and
-    // shared with any tool calls this continuation itself triggers.
-    const ctx: TurnContext = { ttsBuffer: '', finalResponse: '', assistantMessageId: null, startedAtMs: Date.now(), usages: [] };
 
     const actionStartedAt = Date.now();
     const inProgressText = await this.args.describeAction?.(request).catch(() => null) ?? 'Working on that…';
@@ -2025,7 +2189,7 @@ export class ConversationRuntime {
       });
       this.log('action-error', { message });
       await this.recordAndMaybeContinueAfterTool(toolCall, confirmedRequest, failure, currentTurn, ctx);
-      await this.drainPendingActionsAndFinalize(currentTurn, ctx, 'yes');
+      if (ownsTurn) await this.drainPendingActionsAndFinalize(currentTurn, ctx, 'yes');
       return;
     }
     this.activeActionIdByType.delete(request.type);
@@ -2049,7 +2213,9 @@ export class ConversationRuntime {
     this.executionSupervisor.recordAction(confirmedRequest, result, { label: doneText, startedAt: actionStartedAt, endedAt: Date.now() });
 
     await this.recordAndMaybeContinueAfterTool(toolCall, confirmedRequest, result, currentTurn, ctx);
-    await this.drainPendingActionsAndFinalize(currentTurn, ctx, 'yes');
+    // Only the owner of the usage collection finalizes it: a mid-turn auto-confirm leaves that to
+    // its turn, so the turn's earlier calls and its real final reply are never dropped.
+    if (ownsTurn) await this.drainPendingActionsAndFinalize(currentTurn, ctx, 'yes');
   }
 
   private appendMessage(role: 'system' | 'user' | 'assistant', content: string, status: 'final' | 'streaming' = 'final') {
@@ -2631,6 +2797,9 @@ export class ConversationRuntime {
         hint = { type: 'continue', sessionId: this.activeSessionId };
       } else if (this.startNewSession) {
         hint = { type: 'new' };
+      } else if (turn.answeredLocally) {
+        // A locally answered greeting never costs a Gemini call — including this session classifier.
+        hint = { type: 'auto' };
       } else if (this.args.resolveSession) {
         hint = await this.args.resolveSession(turn.transcript);
       } else {

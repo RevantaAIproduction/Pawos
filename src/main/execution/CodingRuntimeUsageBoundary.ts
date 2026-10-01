@@ -8,9 +8,6 @@ import { rollingUsageGate } from '../billing/RollingUsageGate';
 import { usageEventStore } from '../billing/UsageEventStore';
 import { buildUsageReporter } from '../billing/BuildUsageReporter';
 import { scheduleUsageLedgerSync } from '../billing/UsageLedgerSync';
-import { creditStore } from '../billing/CreditStore';
-import { fileOveragePricePc, fileOveragePriceUsd } from '../../shared/billing/FileOveragePricing';
-import { customerPcToPurchaseUsd } from '../../shared/billing/CustomerPcCommercialModel';
 
 export type PooledCodingRuntimeUsageRecorder = (params: {
   organizationId: string;
@@ -105,15 +102,10 @@ function isExemptAutonomousWrite(request: ActionRequest): boolean {
   return Boolean(request.autonomousRunId) && entitlementService.isFeatureAvailable('autonomousTaskBilling');
 }
 
-/** Over-cap files approved at enforcement time, charged once the write actually succeeds. */
-const pendingOverageCharges = new WeakMap<ActionRequest, number>();
-
 /**
  * Refuses a counted code-file change (a new file, or an edit of 30+ lines) once the period's hidden
  * file cap is used up (monthly for Go, weekly otherwise); smaller edits stay allowed. Presented as
- * the Paw Compute limit. Past the cap each counted file is paid from purchased Paw Compute —
- * $1 = 5 files, or 8 small ones (FileOveragePricing) — on every tier, except PawOS Build's final
- * week. A balance that can't cover the next file blocks it (buy more or wait for the reset).
+ * the Paw Compute limit. Past the cap, counted file changes wait for the cap to reset.
  */
 export function enforceFileCap(request: ActionRequest): ActionResult | null {
   const change = classifyFileChange(request);
@@ -122,41 +114,21 @@ export function enforceFileCap(request: ActionRequest): ActionResult | null {
   const tier = entitlementService.effectiveTier();
   if (rollingUsageGate.canMakeFileChange(tier, change.counted, Date.now(), entitlementService.currentProMaxVariant())) return null;
 
-  const pricePc = fileOveragePricePc(change.lines);
-  const priceUsd = fileOveragePriceUsd(change.lines);
-  const canBuyPast = entitlementService.canContinueOnPurchasedCompute();
-  if (canBuyPast && entitlementService.getStandardBonusCreditsRemaining() >= pricePc) {
-    pendingOverageCharges.set(request, pricePc);
-    return null;
-  }
-
-  const balanceUsd = customerPcToPurchaseUsd(entitlementService.getStandardBonusCreditsRemaining());
-  const shortfall =
-    canBuyPast && balanceUsd > 0
-      ? ` This file needs $${priceUsd.toFixed(3).replace(/0$/, '')} of Paw Compute and you have $${balanceUsd.toFixed(2)} left.`
-      : '';
-  return failure(rollingUsageGate.fileCapMessage(tier) + shortfall, {
+  // Buying file changes past the cap with purchased Paw Compute is paused: purchased usage now lives
+  // in server usage buckets, which are charged only for real model usage, and no per-file price has
+  // been set for them.
+  return failure(rollingUsageGate.fileCapMessage(tier), {
     limit: tier === 'go' ? 'monthly' : 'weekly',
     buildFinalWeek: entitlementService.isBuildFinalWeek(),
-    filePriceUsd: priceUsd,
   });
 }
 
-/**
- * Records a successful counted code-file change in the active usage ledger (device for Go, account
- * for paid), and charges purchased Paw Compute for an over-cap file — through the same deduction
- * path as other purchased usage (synced to the server, idempotent per file write).
- */
+/** Records a successful counted code-file change in the active usage ledger (device for Go, account for paid). */
 export function recordCodeFileWrite(request: ActionRequest, result: ActionResult): void {
   const change = pendingClassifications.get(request);
-  const overagePc = pendingOverageCharges.get(request);
   pendingClassifications.delete(request);
-  pendingOverageCharges.delete(request);
   if (!change || !change.counted || !result.ok || isExemptAutonomousWrite(request)) return;
-  const writeId = usageEventStore.recordFileWrite(change.path, { kind: change.kind, lines: change.lines });
-  if (overagePc !== undefined && overagePc > 0) {
-    creditStore.consume(overagePc, `file-overage:${change.kind}`, 'coding', false, true, `file-overage:${writeId}`);
-  }
+  usageEventStore.recordFileWrite(change.path, { kind: change.kind, lines: change.lines });
   if (entitlementService.effectiveTier() === 'build') buildUsageReporter.schedule();
   scheduleUsageLedgerSync();
 }

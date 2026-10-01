@@ -12,6 +12,8 @@ export type ReasoningProviderRequest = {
   /** The new user input to append after history, or '' for a tool-result continuation — providers must not append a trailing empty user turn when this is ''. */
   input: string;
   tools: ReasoningToolDefinition[];
+  /** Which context path built this request — used only by the development input audit. */
+  contextPath?: 'full' | 'minimal-question' | 'minimal-follow-up' | 'selected';
 };
 
 export type ReasoningProviderCallbacks = {

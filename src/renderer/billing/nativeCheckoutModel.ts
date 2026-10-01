@@ -11,9 +11,6 @@ export const NATIVE_PAYMENT_METHOD_DETAILS: Record<NativePaymentMethod, { label:
 };
 
 // ── Usage Credits (normal Paw Compute top-ups, $5 minimum) ───────────────────
-export const USAGE_CREDITS_PRESETS_USD: readonly number[] = [5, 10, 30, 50, 100];
-export const USAGE_CREDITS_MIN_USD = 5;
-export const USAGE_CREDITS_MAX_USD = 20_000;
 
 // ── Autonomous Work Credits (ticket balance top-ups, $30 minimum) ─────────────
 export const AUTONOMOUS_WORK_CREDITS_PRESETS_USD: readonly number[] = [30, 60, 100, 250, 500];

@@ -12,6 +12,8 @@ import {
 import type { CreditBalance, CreditConsumptionRecord, SubscriptionTierId } from '../../../../shared/billing/BillingTypes';
 import type { TicketBalance } from '../../../../shared/organization/AutonomousTaskBillingTypes';
 import type { AuthUser } from '../../../auth/AuthTypes';
+import { useEntitlementSnapshot } from '../../../billing/useEntitlementSnapshot';
+import { PlanUsageLimits } from '../../billing/PlanUsageLimits';
 
 function getErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -47,7 +49,7 @@ function buildInsights(aggregates: CategoryAggregate[], history: CreditConsumpti
 
   const top = [...aggregates].sort((a, b) => b.count - a.count)[0];
   if (top && top.percent >= 1) {
-    insights.push(`${AI_USAGE_CATEGORY_LABELS[top.category]} consumed the most AI Usage this period (${top.percent.toFixed(0)}%).`);
+    insights.push(`${AI_USAGE_CATEGORY_LABELS[top.category]} used the most Paw Compute this period (${top.percent.toFixed(0)}%).`);
   }
 
   const now = Date.now();
@@ -58,9 +60,9 @@ function buildInsights(aggregates: CategoryAggregate[], history: CreditConsumpti
     const thisWeekTotal = thisWeek.reduce((s, r) => s + r.amount, 0);
     const lastWeekTotal = lastWeek.reduce((s, r) => s + r.amount, 0);
     if (thisWeekTotal > lastWeekTotal * 1.15) {
-      insights.push('AI Usage increased compared to last week.');
+      insights.push('Your Paw Compute use increased compared to last week.');
     } else if (thisWeekTotal < lastWeekTotal * 0.85) {
-      insights.push('AI Usage decreased compared to last week.');
+      insights.push('Your Paw Compute use decreased compared to last week.');
     }
   }
 
@@ -82,10 +84,16 @@ function buildInsights(aggregates: CategoryAggregate[], history: CreditConsumpti
 
   const smallest = aggregates.length > 1 ? [...aggregates].sort((a, b) => a.percent - b.percent)[0] : null;
   if (smallest && smallest.percent > 0 && smallest.percent <= 8) {
-    insights.push(`${AI_USAGE_CATEGORY_LABELS[smallest.category]} used only ${smallest.percent.toFixed(0)}% of your AI Usage.`);
+    insights.push(`${AI_USAGE_CATEGORY_LABELS[smallest.category]} used only ${smallest.percent.toFixed(0)}% of your Paw Compute.`);
   }
 
   return insights;
+}
+
+/** Paw Compute amounts are fractional (cost-based): one decimal under 10 PC, whole PC above. */
+function formatPc(value: number): string {
+  const rounded = value < 10 ? Math.round(value * 10) / 10 : Math.round(value);
+  return `${rounded.toLocaleString()} PC`;
 }
 
 function activityLabel(record: CreditConsumptionRecord): string {
@@ -93,88 +101,89 @@ function activityLabel(record: CreditConsumptionRecord): string {
   return AI_USAGE_CATEGORY_LABELS[category];
 }
 
-/** Interactive doughnut — real SVG arcs sized by each category's real share of usage, not a static
- *  image. Hovering an arc or its legend row shows consumed amount, percentage, and what the
- *  category means. */
-function UsageDoughnut({ aggregates, total }: { aggregates: CategoryAggregate[]; total: number }) {
-  const [hovered, setHovered] = useState<AiUsageCategory | null>(null);
-  const size = 200;
-  const radius = 74;
-  const strokeWidth = 26;
-  const circumference = 2 * Math.PI * radius;
+/** SVG path for one pie wedge from `startAngle` to `endAngle` (radians, 0 = 12 o'clock, clockwise). */
+function wedgePath(cx: number, cy: number, r: number, startAngle: number, endAngle: number): string {
+  const x1 = cx + r * Math.sin(startAngle);
+  const y1 = cy - r * Math.cos(startAngle);
+  const x2 = cx + r * Math.sin(endAngle);
+  const y2 = cy - r * Math.cos(endAngle);
+  const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
+  return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+}
 
-  let cumulativePercent = 0;
-  const arcs = aggregates.map((agg) => {
-    const arcLength = (agg.percent / 100) * circumference;
-    const offset = (cumulativePercent / 100) * circumference;
-    cumulativePercent += agg.percent;
-    return { ...agg, arcLength, offset };
+/** Interactive pie chart — one filled wedge per category, sized by its real share of Paw Compute.
+ *  Hovering a wedge or its legend row pulls the wedge out and shows what the category means. A
+ *  single category is drawn as a full pie (not an empty ring). */
+export function UsagePieChart({ aggregates, total }: { aggregates: CategoryAggregate[]; total: number }) {
+  const [hovered, setHovered] = useState<AiUsageCategory | null>(null);
+  const size = 180;
+  const cx = size / 2;
+  const cy = size / 2;
+  const radius = 80;
+  const sorted = [...aggregates].sort((a, b) => b.count - a.count);
+
+  let angle = 0;
+  const wedges = sorted.map((agg) => {
+    const sweep = (agg.percent / 100) * Math.PI * 2;
+    const start = angle;
+    angle += sweep;
+    const mid = start + sweep / 2;
+    return { ...agg, start, end: angle, mid };
   });
 
-  const active = hovered ? aggregates.find((a) => a.category === hovered) : null;
+  const active = hovered ? sorted.find((a) => a.category === hovered) : null;
+  const single = wedges.length === 1;
 
   return (
-    <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
-      <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
-        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
-          <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={strokeWidth} />
-          {arcs.map((arc) => (
-            <circle
-              key={arc.category}
-              cx={size / 2}
-              cy={size / 2}
-              r={radius}
-              fill="none"
-              stroke={AI_USAGE_CATEGORY_COLORS[arc.category]}
-              strokeWidth={hovered === arc.category ? strokeWidth + 4 : strokeWidth}
-              strokeDasharray={`${arc.arcLength} ${circumference - arc.arcLength}`}
-              strokeDashoffset={-arc.offset}
-              strokeLinecap="butt"
-              style={{ cursor: 'pointer', transition: 'stroke-width 0.15s ease, opacity 0.15s ease', opacity: hovered && hovered !== arc.category ? 0.45 : 1 }}
-              onMouseEnter={() => setHovered(arc.category)}
-              onMouseLeave={() => setHovered(null)}
-            />
-          ))}
-        </svg>
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', pointerEvents: 'none' }}>
-          {active ? (
-            <>
-              <span style={{ fontSize: 22, fontWeight: 700 }}>{active.percent.toFixed(0)}%</span>
-              <span style={{ fontSize: 11, color: '#96969e', maxWidth: 110 }}>{AI_USAGE_CATEGORY_LABELS[active.category]}</span>
-            </>
-          ) : (
-            <>
-              <span style={{ fontSize: 22, fontWeight: 700 }}>{total}</span>
-              <span style={{ fontSize: 11, color: '#96969e' }}>turns tracked</span>
-            </>
-          )}
-        </div>
-      </div>
+    <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'center' }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink: 0, overflow: 'visible' }} role="img" aria-label="Paw Compute by category">
+        {wedges.map((w) => {
+          const isHovered = hovered === w.category;
+          const pull = isHovered && !single ? 6 : 0;
+          const dx = pull * Math.sin(w.mid);
+          const dy = -pull * Math.cos(w.mid);
+          const common = {
+            fill: AI_USAGE_CATEGORY_COLORS[w.category],
+            stroke: '#141418',
+            strokeWidth: single ? 0 : 2,
+            style: { cursor: 'pointer', transition: 'transform 0.15s ease, opacity 0.15s ease', opacity: hovered && !isHovered ? 0.5 : 1, transform: `translate(${dx}px, ${dy}px)` },
+            onMouseEnter: () => setHovered(w.category),
+            onMouseLeave: () => setHovered(null),
+          };
+          return single
+            ? <circle key={w.category} cx={cx} cy={cy} r={radius} {...common} />
+            : <path key={w.category} d={wedgePath(cx, cy, radius, w.start, w.end)} {...common} />;
+        })}
+      </svg>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 200, flex: 1 }}>
-        {arcs.map((arc) => (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 220, flex: 1 }}>
+        <div style={{ fontSize: 12, color: '#96969e', marginBottom: 4 }}>
+          Total: <strong style={{ color: 'inherit' }}>{formatPc(total)}</strong>
+        </div>
+        {wedges.map((w) => (
           <div
-            key={arc.category}
-            onMouseEnter={() => setHovered(arc.category)}
+            key={w.category}
+            onMouseEnter={() => setHovered(w.category)}
             onMouseLeave={() => setHovered(null)}
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 8,
-              padding: '4px 6px',
+              gap: 10,
+              padding: '6px 8px',
               borderRadius: 6,
               cursor: 'pointer',
-              background: hovered === arc.category ? 'rgba(255,255,255,0.05)' : 'transparent',
+              background: hovered === w.category ? 'rgba(255,255,255,0.05)' : 'transparent',
             }}
           >
-            <span style={{ width: 9, height: 9, borderRadius: 999, background: AI_USAGE_CATEGORY_COLORS[arc.category], flexShrink: 0 }} />
-            <span style={{ fontSize: 12.5, flex: 1 }}>{AI_USAGE_CATEGORY_LABELS[arc.category]}</span>
-            <span style={{ fontSize: 12.5, fontWeight: 600, color: '#96969e' }}>{arc.percent.toFixed(0)}%</span>
+            <span style={{ width: 10, height: 10, borderRadius: 3, background: AI_USAGE_CATEGORY_COLORS[w.category], flexShrink: 0 }} />
+            <span style={{ fontSize: 13, flex: 1 }}>{AI_USAGE_CATEGORY_LABELS[w.category]}</span>
+            <span style={{ fontSize: 12.5, color: '#96969e' }}>{formatPc(w.count)}</span>
+            <span style={{ fontSize: 12.5, fontWeight: 600, width: 42, textAlign: 'right' }}>{w.percent.toFixed(0)}%</span>
           </div>
         ))}
-        {active && (
-          <p className={styles.cardBody} style={{ marginTop: 4, fontSize: 11.5 }}>{AI_USAGE_CATEGORY_DESCRIPTIONS[active.category]}</p>
-        )}
+        <p className={styles.cardBody} style={{ marginTop: 6, fontSize: 11.5, minHeight: 16 }}>
+          {active ? AI_USAGE_CATEGORY_DESCRIPTIONS[active.category] : 'Hover a slice to see what it includes.'}
+        </p>
       </div>
     </div>
   );
@@ -188,11 +197,13 @@ function UsageDoughnut({ aggregates, total }: { aggregates: CategoryAggregate[];
  * a fresh account with no history renders the Empty State, not a fabricated chart.
  */
 export function AnalyticsSection({ user }: { user: AuthUser }) {
+  const entitlement = useEntitlementSnapshot();
   const [tier, setTier] = useState<SubscriptionTierId | null>(null);
   const [balance, setBalance] = useState<CreditBalance | null>(null);
   const [history, setHistory] = useState<CreditConsumptionRecord[]>([]);
   const [ticketBalance, setTicketBalance] = useState<TicketBalance | null>(null);
   const [loading, setLoading] = useState(true);
+  const [bucketFunded, setBucketFunded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -205,11 +216,24 @@ export function AnalyticsSection({ user }: { user: AuthUser }) {
       ipc.billingGetCreditBalance(),
       ipc.billingGetCreditHistory(),
     ])
-      .then(([subscription, creditBalance, creditHistory]) => {
+      .then(async ([subscription, creditBalance, creditHistory]) => {
         setTier(subscription.tier);
         setBalance(creditBalance);
-        setHistory(creditHistory);
-        if (subscription.tier === 'pro' || subscription.tier === 'proMax') {
+        // Bucket-funded usage is accounted on the server in customer PC; show that history.
+        const usageSummary = await ipc.billingGetUsageSummary().catch(() => null);
+        setBucketFunded(usageSummary?.bucketFunded === true);
+        if (usageSummary?.bucketFunded) {
+          const serverHistory = await ipc.billingGetUsageHistory(200).catch(() => []);
+          setHistory(serverHistory.map((entry) => ({
+            amount: entry.pc,
+            reason: entry.category,
+            at: Date.parse(entry.at),
+            category: (AI_USAGE_CATEGORIES as string[]).includes(entry.category) ? (entry.category as AiUsageCategory) : 'chat',
+          })));
+        } else {
+          setHistory(creditHistory);
+        }
+        if (subscription.tier === 'proMax') {
           autonomousTaskBillingService.getTicketBalance(null).then(setTicketBalance).catch(() => {});
         }
       })
@@ -220,7 +244,7 @@ export function AnalyticsSection({ user }: { user: AuthUser }) {
   const aggregates = useMemo(() => aggregateByCategory(history), [history]);
   const insights = useMemo(() => buildInsights(aggregates, history), [aggregates, history]);
   const recentActivity = useMemo(() => [...history].sort((a, b) => b.at - a.at).slice(0, 20), [history]);
-  const totalTurns = history.reduce((s, r) => s + r.amount, 0);
+  const totalUsage = history.reduce((s, r) => s + r.amount, 0);
 
   if (user.isGuest) {
     return (
@@ -249,10 +273,10 @@ export function AnalyticsSection({ user }: { user: AuthUser }) {
     );
   }
 
-  const usedThisPeriod = balance?.usedThisPeriod ?? 0;
-  const limit = balance?.limit ?? null;
-  const percentUsed = limit && limit > 0 ? Math.min(100, (usedThisPeriod / limit) * 100) : null;
-  const resetsAt = balance?.periodResetsAt ? new Date(balance.periodResetsAt) : null;
+  // Usage is metered in Paw Compute (PC) against rolling 5-hour / weekly windows — there is no
+  // monthly cap (CreditBalance.limit is null for every tier), so show the real plan limits instead.
+  const planBucket = entitlement?.usageSummary?.buckets.find((b) => b.type === 'monthly_plan' && b.status !== 'expired' && b.status !== 'revoked');
+  const usedThisPeriod = bucketFunded ? planBucket?.pcUsed ?? 0 : balance?.usedThisPeriod ?? 0;
   const isTeamOrEnterprise = tier === 'team' || tier === 'enterprise';
 
   return (
@@ -260,31 +284,11 @@ export function AnalyticsSection({ user }: { user: AuthUser }) {
       {/* 1. Usage Overview */}
       <div className={styles.card}>
         <h3 className={styles.cardTitle}>Usage Overview</h3>
-        <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap', marginTop: 10, marginBottom: limit ? 12 : 0 }}>
-          <div>
-            <p className={styles.cardBody} style={{ fontSize: 12, color: '#96969e' }}>AI Usage this period</p>
-            <p style={{ fontSize: 20, fontWeight: 700 }}>{usedThisPeriod} {usedThisPeriod === 1 ? 'turn' : 'turns'}</p>
-          </div>
-          <div>
-            <p className={styles.cardBody} style={{ fontSize: 12, color: '#96969e' }}>Included limit</p>
-            <p style={{ fontSize: 20, fontWeight: 700 }}>{limit === null ? 'Unlimited' : limit}</p>
-          </div>
-          {resetsAt && (
-            <div>
-              <p className={styles.cardBody} style={{ fontSize: 12, color: '#96969e' }}>Resets</p>
-              <p style={{ fontSize: 20, fontWeight: 700 }}>{resetsAt.toLocaleDateString()}</p>
-            </div>
-          )}
+        <div style={{ marginTop: 10, marginBottom: 12 }}>
+          <p className={styles.cardBody} style={{ fontSize: 12, color: '#96969e' }}>Paw Compute used · current 30-day period</p>
+          <p style={{ fontSize: 20, fontWeight: 700 }}>{formatPc(usedThisPeriod)}</p>
         </div>
-        {percentUsed !== null ? (
-          <div style={{ height: 8, borderRadius: 999, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${percentUsed}%`, borderRadius: 999, background: 'linear-gradient(90deg, var(--pawos-accent), var(--pawos-accent-2))', transition: 'width 0.3s ease' }} />
-          </div>
-        ) : (
-          <p className={styles.cardBody} style={{ fontSize: 12 }}>
-            Your plan currently includes unlimited AI conversation usage — there is no configured monthly cap to track against.
-          </p>
-        )}
+        <PlanUsageLimits entitlement={entitlement} />
       </div>
 
       {history.length === 0 ? (
@@ -292,16 +296,16 @@ export function AnalyticsSection({ user }: { user: AuthUser }) {
         <div className={styles.card} style={{ textAlign: 'center', padding: '40px 24px' }}>
           <h3 className={styles.cardTitle}>No AI activity yet</h3>
           <p className={styles.cardBody} style={{ marginTop: 6, maxWidth: 380, marginLeft: 'auto', marginRight: 'auto' }}>
-            Once you start using PawOS, your AI Usage breakdown, activity timeline, and insights will appear here.
+            Once you start using PawOS, your Paw Compute breakdown, recent activity, and insights will appear here.
           </p>
         </div>
       ) : (
         <>
           {/* 2. AI Usage Breakdown */}
           <div className={styles.card}>
-            <h3 className={styles.cardTitle}>AI Usage Breakdown</h3>
+            <h3 className={styles.cardTitle}>Paw Compute by activity</h3>
             <div style={{ marginTop: 10 }}>
-              <UsageDoughnut aggregates={aggregates} total={totalTurns} />
+              <UsagePieChart aggregates={aggregates} total={totalUsage} />
             </div>
           </div>
 
@@ -343,11 +347,11 @@ export function AnalyticsSection({ user }: { user: AuthUser }) {
       <div className={styles.card}>
         <h3 className={styles.cardTitle}>Credits</h3>
         <p className={styles.cardBody} style={{ marginTop: 6, marginBottom: 12 }}>
-          PawOS tracks two separate balances: your plan&apos;s AI conversation usage (above, currently{' '}
-          {limit === null ? 'unlimited on every paid plan' : `capped at ${limit} per period`}), and — for Pro and
-          above — a separate dollar-denominated Ticket Balance used only for the Autonomous Ticket System.
+          PawOS tracks two separate balances: your plan&apos;s Paw Compute (above, limited by rolling 5-hour and
+          weekly windows), and — for Pro Max and above — a separate dollar-denominated Ticket Balance used only
+          for the Autonomous Ticket System.
         </p>
-        {tier === 'pro' || tier === 'proMax' ? (
+        {tier === 'proMax' ? (
           ticketBalance ? (
             <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
               <div>
@@ -368,7 +372,7 @@ export function AnalyticsSection({ user }: { user: AuthUser }) {
             <strong>Organization → Credits &amp; Billing</strong> for the current balance and usage history.
           </p>
         ) : (
-          <p className={styles.cardBody}>Available on Pro and above.</p>
+          <p className={styles.cardBody}>Available on Pro Max and above.</p>
         )}
       </div>
 

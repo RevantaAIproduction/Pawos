@@ -29,6 +29,13 @@ describe("toSubscriptionRecord", () => {
     });
   });
 
+  it("records the paid cycle start so plan usage buckets follow Razorpay's real cycle", () => {
+    expect(toSubscriptionRecord({ id: "s", plan_id: "plan_pro", status: "active", current_start: 1_758_000_000, current_end: 1_760_600_000, notes: { userId: "u" } }, "x", NOW).record)
+      .toMatchObject({ current_period_start: new Date(1_758_000_000 * 1000).toISOString() });
+    expect(toSubscriptionRecord({ id: "s", plan_id: "plan_pro", status: "authenticated", notes: { userId: "u" } }, "x", NOW).record)
+      .toMatchObject({ current_period_start: null });
+  });
+
   it("keeps the Pro Max variant", () => {
     expect(toSubscriptionRecord({ id: "s", plan_id: "plan_pm20", status: "active", current_end: 1, notes: { userId: "u" } }, "x", NOW).record).toMatchObject({ tier: "proMax", pro_max_variant: "20x" });
     expect(toSubscriptionRecord({ id: "s", plan_id: "plan_pm5", status: "active", current_end: 1, notes: { userId: "u" } }, "x", NOW).record).toMatchObject({ tier: "proMax", pro_max_variant: "5x" });

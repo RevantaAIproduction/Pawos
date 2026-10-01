@@ -317,7 +317,7 @@ describe('RollingUsageGate - Fixed Cycles', () => {
   });
 
   describe('GO REGRESSION', () => {
-    it('22, 23, 24, 25. Go remains 1,000 PC, 14-day cycle, unaffected by Pro changes', () => {
+    it('22, 23, 24, 25. Go remains 500 PC, 14-day cycle, unaffected by Pro changes', () => {
       const now = Date.now();
       usageEventStore.getGoCycleStatus = vi.fn().mockReturnValue({ cycleStartAt: now - 10000, refreshesUsed: 0 });
       usageEventStore.getLastGoRefreshAt = vi.fn().mockReturnValue(undefined);
@@ -327,7 +327,7 @@ describe('RollingUsageGate - Fixed Cycles', () => {
       ]);
       const result = rollingUsageGate.canStartGeneration('go', undefined, now);
       expect(result.allowed).toBe(false);
-      expect(result.usage.limit7d).toBe(1000); // represents the 14-day PC limit for Go
+      expect(result.usage.limit7d).toBe(500); // represents the 14-day PC limit for Go
     });
   });
 });

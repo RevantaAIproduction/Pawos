@@ -81,8 +81,8 @@ export const PAW_MODEL_CATALOG: PawModelDescriptor[] = [
     id: 'paw-fable',
     label: 'Paw Fable',
     category: 'reasoning',
-    description: "Paw's own dedicated model — always runs on your purchased Paw Credits, never your plan's included Paw Compute allowance.",
-    switchMessage: "Paw Fable always spends Paw Credits, never your plan's included Paw Compute — it needs a real Paw Credits balance to answer.",
+    description: "Paw's own dedicated model — always runs on your purchased credits, never your plan's included Paw Compute.",
+    switchMessage: "Paw Fable always uses your purchased credits, never your plan's included Paw Compute — it needs credits to answer.",
     status: 'available',
   },
   {

@@ -8,6 +8,8 @@
  * "Execute-class stays hidden until the tier allows it" discipline, applied to prompt text instead
  * of tool definitions).
  */
+import type { CapabilityGroup } from '../ai/capabilityGroups';
+
 export type SystemPromptModule = {
   id: string;
   tier: 'always' | 'executeOnly';
@@ -61,6 +63,21 @@ export const INTELLIGENCE_PROMPT_MODULES: SystemPromptModule[] = [
  * (a future runtime's own prompt guidance) register here rather than growing systemPrompt.ts's
  * core template literal further.
  */
+/** Which capability group(s) each module serves — used only for per-request prompt selection. */
+export const PROMPT_MODULE_GROUPS: Record<string, CapabilityGroup[]> = {
+  projectPlanningUx: ['coding'],
+  intelligenceRuntime: ['intelligence'],
+  executionPlanner: ['intelligence'],
+  executionTruthAndCompletion: ['coding', 'terminal', 'devBrowser'],
+  codingRuntimeBehavior: ['coding', 'design'],
+};
+
+/** Same tier rules as assemblePromptModules, limited to modules serving one of `groups`. */
+export function assemblePromptModulesForGroups(canExecute: boolean, groups: CapabilityGroup[], modules: SystemPromptModule[] = INTELLIGENCE_PROMPT_MODULES): string[] {
+  const wanted = new Set(groups);
+  return assemblePromptModules(canExecute, modules.filter((m) => (PROMPT_MODULE_GROUPS[m.id] ?? []).some((g) => wanted.has(g))));
+}
+
 export function assemblePromptModules(canExecute: boolean, modules: SystemPromptModule[] = INTELLIGENCE_PROMPT_MODULES): string[] {
   // Every 'always' module first, then 'executeOnly' ones — so an executing tier's prompt is always
   // the non-executing prompt plus more (additive, never reordered), regardless of registration order.

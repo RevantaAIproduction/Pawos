@@ -165,3 +165,109 @@ async function handlePaymentSuccess(
     options.setBusy(false);
   }
 }
+
+/** The signed-in session's access token (refreshed once if needed), or null. */
+async function currentAccessToken(): Promise<{ token: string | null; email: string; name: string }> {
+  const supabase = await getSupabaseClient();
+  let { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session?.access_token && sessionData.session?.refresh_token) {
+    const refreshed = await supabase.auth.refreshSession();
+    sessionData = { session: refreshed.data.session };
+  }
+  const user = sessionData.session?.user;
+  return {
+    token: sessionData.session?.access_token ?? null,
+    email: user?.email ?? '',
+    name: (user?.user_metadata?.name as string | undefined) || '',
+  };
+}
+
+function loadRazorpay(): Promise<boolean> {
+  if (window.Razorpay) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const script = document.createElement('script');
+    script.src = RAZORPAY_SCRIPT_URL;
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
+
+function formatExpiry(iso: string | null | undefined): string {
+  if (!iso) return 'the end of your current plan period';
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? 'the end of your current plan period' : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+/**
+ * Mid-month purchase: extra usage for the rest of the current Pro / Pro Max plan period, at the
+ * plan's fixed price. The server decides the product, price and expiry from the account's plan;
+ * the customer sees the price, the PC it adds and the date it expires.
+ */
+export async function initiateMidMonthPayment(options: CreditsPaymentHandler) {
+  try {
+    options.setBusy(true);
+    options.setMessage(null);
+    const session = await currentAccessToken();
+    if (!session.token) {
+      options.setMessage('[error] Your session has expired. Sign in again and retry.');
+      options.setBusy(false);
+      return;
+    }
+    const checkout = await ipc.billingCreateMidMonthCheckout(session.token);
+    if (!checkout.ok) {
+      options.setMessage(`[error] ${checkout.reason}`);
+      options.setBusy(false);
+      return;
+    }
+    if (!(await loadRazorpay())) {
+      options.setMessage('[error] Could not load the payment page. Check your internet connection and try again.');
+      options.setBusy(false);
+      return;
+    }
+    const expires = formatExpiry(checkout.expiresAt);
+    const razorpay = new window.Razorpay({
+      key: checkout.keyId,
+      order_id: checkout.orderId,
+      amount: checkout.amountPaise,
+      currency: 'INR',
+      name: 'PawOS',
+      description: `${checkout.label} — ${checkout.pc.toLocaleString()} PC until ${expires}`,
+      prefill: { email: options.userEmail || session.email, name: session.name },
+      handler: async (response: any) => {
+        try {
+          const verified = await ipc.billingVerifyMidMonthPayment({
+            accessToken: session.token ?? undefined,
+            orderId: response.razorpay_order_id || checkout.orderId,
+            paymentId: response.razorpay_payment_id,
+            signature: response.razorpay_signature,
+          });
+          if (verified.ok) {
+            options.setMessage(`Payment successful. ${verified.pc.toLocaleString()} PC of extra usage added until ${formatExpiry(verified.expiresAt ?? checkout.expiresAt)}.`);
+            options.refresh();
+          } else {
+            options.setMessage(`[error] Verification failed: ${verified.reason}. If you were charged, contact support with payment ID ${response.razorpay_payment_id}.`);
+          }
+        } catch (error) {
+          options.setMessage(`[error] ${error instanceof Error ? error.message : String(error)}`);
+        } finally {
+          options.setBusy(false);
+        }
+      },
+      modal: {
+        ondismiss: () => {
+          options.setMessage('Payment cancelled');
+          options.setBusy(false);
+        },
+      },
+    });
+    razorpay.on?.('payment.failed', (response: any) => {
+      options.setMessage(`[error] ${response?.error?.description || 'Payment failed. Please try again.'}`);
+    });
+    razorpay.open();
+  } catch (error) {
+    options.setMessage(`[error] ${error instanceof Error ? error.message : 'Payment failed'}`);
+    options.setBusy(false);
+  }
+}

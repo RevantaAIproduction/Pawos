@@ -1,4 +1,5 @@
-import { assemblePromptModules } from './systemPromptModules';
+import { assemblePromptModules, assemblePromptModulesForGroups } from './systemPromptModules';
+import type { CapabilityGroup } from '../ai/capabilityGroups';
 
 /**
  * Paw's real system prompt core — the thing that actually makes the tool-calling
@@ -113,6 +114,81 @@ const RESUME_NOT_ON_PLAN = `Resumes / CVs / cover letters: resume building is pa
  */
 export function buildSystemPrompt(canExecute: boolean, canMakeResumes = false): string {
   return [CORE_PROMPT, canMakeResumes ? RESUME_RULES : RESUME_NOT_ON_PLAN, ...assemblePromptModules(canExecute)].join('\n\n');
+}
+
+/**
+ * Which capability group(s) each CORE_PROMPT paragraph serves, matched by its opening words ('core' =
+ * always sent — identity, the work lifecycle, evidence, confirmations, secret safety). Used only by
+ * buildSystemPromptForCapabilities; the full prompt above is unchanged. systemPrompt.test.ts fails if
+ * any paragraph is left unmatched, so new paragraphs must be tagged here.
+ */
+export const CORE_PROMPT_SECTION_TAGS: [string, 'core' | CapabilityGroup[]][] = [
+  ['You are Paw, an intelligent desktop employee', 'core'],
+  ['For real work, follow this lifecycle', 'core'],
+  ['Never claim something succeeded', 'core'],
+  ['Speak naturally about what you', 'core'],
+  ['Some actions (creating a folder', 'core'],
+  ['Credential and secret safety', 'core'],
+  ['Goal ownership:', ['system', 'coding', 'terminal', 'infra']],
+  ['Coding Intelligence:', ['coding', 'terminal', 'git']],
+  ['Coding mode (Paw Go / Paw Pro)', ['coding']],
+  ['Project Understanding and Coding Memory', ['coding']],
+  ['Live Code Diff', ['git', 'coding']],
+  ['Live TODO Progress', ['coding']],
+  ['Browser Preview and Console', ['devBrowser']],
+  ['Automatic build/run/test/fix loop', ['coding']],
+  ['Minimal Change Philosophy', ['coding']],
+  ['Browser Intelligence', ['browser', 'research']],
+  ['Workflow patterns:', ['browser', 'research']],
+  ['Comparison Engine', ['research']],
+  ['Workflow Templates', ['browser', 'research']],
+  ['Long Running Research', ['research']],
+  ['Authentication state', ['browser']],
+  ['Requirement Intelligence', ['coding', 'design', 'files']],
+  ['Folder and file creation', ['files']],
+  ['Design Intelligence', ['design']],
+  ['Creative Intelligence', ['design']],
+  ['Reference Intelligence', ['design']],
+  ['Visual Verification', ['devBrowser', 'design']],
+  ['Human Collaboration', ['design']],
+  ['Communication Intelligence', ['communication']],
+  ['You may sometimes speak up first', ['communication']],
+  ['Meeting apps (Zoom', ['communication']],
+  ['Relationship Intelligence', ['communication']],
+  ['Meeting Follow-up Intelligence', ['communication']],
+  ['Infrastructure Runtime', ['infra']],
+  ['Enterprise Ticket Intelligence', ['tickets']],
+  ['Autonomous Engineering Loop', ['tickets', 'autonomous']],
+  ['Autonomous Ticket System billing', ['autonomous']],
+  ['Git Collaboration', ['github']],
+  ['Infrastructure mode', ['infra']],
+  ['Email Follow-up', ['email']],
+  ['Office Intelligence', ['documents', 'email']],
+  ['Companion Memory', ['companion']],
+];
+
+export function corePromptParagraphs(): string[] {
+  return CORE_PROMPT.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+}
+
+/** The tag for one CORE_PROMPT paragraph, or null if it matches no entry (a test guards against that). */
+export function corePromptSectionTag(paragraph: string): 'core' | CapabilityGroup[] | null {
+  return CORE_PROMPT_SECTION_TAGS.find(([prefix]) => paragraph.startsWith(prefix))?.[1] ?? null;
+}
+
+/**
+ * The system prompt for a request that only needs `groups`: every 'core' paragraph, every paragraph
+ * tagged with a selected group, the resume rule only when documents are selected, and the capability
+ * modules for the selected groups. Same wording as buildSystemPrompt — only the selection differs.
+ */
+export function buildSystemPromptForCapabilities(canExecute: boolean, canMakeResumes: boolean, groups: CapabilityGroup[]): string {
+  const wanted = new Set(groups);
+  const paragraphs = corePromptParagraphs().filter((p) => {
+    const tag = corePromptSectionTag(p);
+    return tag === 'core' || tag === null || tag.some((g) => wanted.has(g));
+  });
+  const resume = wanted.has('documents') ? [canMakeResumes ? RESUME_RULES : RESUME_NOT_ON_PLAN] : [];
+  return [...paragraphs, ...resume, ...assemblePromptModulesForGroups(canExecute, groups)].join('\n\n');
 }
 
 /**

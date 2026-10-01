@@ -291,7 +291,7 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
       'Email, Google, and GitHub sign-in',
       'Paw Go as the free authenticated plan',
       'Runtime execution gated by account entitlements',
-      'Paw Credits extend compute only and do not unlock runtime access',
+      'Credits add Paw Compute only and do not unlock runtime access',
     ],
     howItWorks:
       'Choose Email, Google, or GitHub on the authentication screen. Once authenticated, your account starts ' +
@@ -329,8 +329,8 @@ export const GETTING_STARTED_ARTICLES: HelpArticle[] = [
         answer: 'Yes. Paw Go is free, but it requires an authenticated account.',
       },
       {
-        question: 'Do Paw Credits unlock runtime access?',
-        answer: 'No. Paw Credits extend compute only; runtime access is controlled by entitlement.',
+        question: 'Do credits unlock runtime access?',
+        answer: 'No. Credits add Paw Compute only; runtime access is controlled by your plan’s entitlements.',
       },
       {
         question: 'Can I use PawOS without signing in?',

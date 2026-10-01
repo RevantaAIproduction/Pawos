@@ -2,7 +2,10 @@ import { subscriptionStore } from './SubscriptionStore';
 import { creditStore } from './CreditStore';
 import { usageQuotaConfigStore } from './UsageQuotaConfigStore';
 import { rollingUsageGate } from './RollingUsageGate';
-import { customerPurchaseUsdToPurchasedPc } from '../../shared/billing/CustomerPcCommercialModel';
+import { pawComputeCapacityStore } from './PawComputeCapacityStore';
+import { pricingConfigStore } from './PricingConfigStore';
+import { usageBucketClient } from './UsageBucketClient';
+import { usageLimitMessage, type CustomerUsageSummary } from '../../shared/billing/UsageBucketTypes';
 import { testTierOverrideStore } from './TestTierOverrideStore';
 import { usageEventStore } from './UsageEventStore';
 import { buildAccessStore } from './BuildAccessStore';
@@ -432,8 +435,42 @@ class EntitlementService {
    * left must still be blocked here if that purchased-credit headroom is exhausted.
    */
   getPurchasedCreditsRemaining(): number {
-    const balance = creditStore.getBalance();
-    return Math.max(0, customerPurchaseUsdToPurchasedPc(balance.purchasedUsageCreditsUsd));
+    // Customer PC left in purchased credit buckets (server-authoritative; $1 = 100 PC).
+    return Math.max(0, usageBucketClient.getCachedSummary()?.creditsPcRemaining ?? 0);
+  }
+
+  /**
+   * Whether a current plan bucket funds this account's usage — decided by the server's product
+   * configuration (summary.bucketFunded), never by tier name. Every Gemini call of such an account
+   * is reserved against its buckets (plan → extra usage → credits).
+   */
+  isBucketMetered(): boolean {
+    return !this.isPooledUsage() && usageBucketClient.getCachedSummary()?.bucketFunded === true;
+  }
+
+  /**
+   * Organization billing (Team / Enterprise) — its own pooled path, unchanged. Decided by
+   * configuration: a seat-based plan in the plan catalog, or pooled usage/capacity config.
+   */
+  isPooledUsage(): boolean {
+    if (this.isComputePooled()) return true;
+    if (pricingConfigStore.get().plans.some((plan) => plan.id === this.baseTier() && plan.seatBased === true)) return true;
+    return pawComputeCapacityStore.resolve(this.effectiveTier(), this.getSeatTier(), this.currentProMaxVariant()).pooled;
+  }
+
+  /**
+   * An active paid personal subscription (any tier). Such an account never uses a free allowance:
+   * without a current plan bucket it can only continue on credits, and while the server summary is
+   * unknown its calls fail closed at reservation.
+   */
+  hasPaidSubscription(): boolean {
+    const { status } = subscriptionStore.getEffective();
+    return (status === 'active' || status === 'trialing') && !this.isPooledUsage();
+  }
+
+  /** Last customer-safe bucket summary from the server, or null before the first sync. */
+  getUsageSummary(): CustomerUsageSummary | null {
+    return usageBucketClient.getCachedSummary();
   }
 
   getFableCreditsRemaining(): number {
@@ -488,6 +525,24 @@ class EntitlementService {
       return { allowed: false, pooled: false, reason: 'Paw Fable credits exhausted', usage, purchasedContinuation: false };
     }
 
+    // Bucket-funded and paid accounts: the server buckets decide (every Gemini call is reserved there
+    // before it runs). This turn-level gate only stops a new turn early when the last known summary
+    // already says the limit is reached; the reservation itself is the authoritative check.
+    const summary = usageBucketClient.getCachedSummary();
+    if (this.isBucketMetered() || this.hasPaidSubscription()) {
+      if (rollingUsageGate.inflightCount > 0) return { allowed: false, pooled: false, reason: 'inflight', usage, purchasedContinuation: false };
+      if (!summary) return { allowed: true, pooled: false, usage, purchasedContinuation: false };
+      if (summary.bucketFunded) {
+        if (summary.limitReached && summary.limitReason) {
+          return { allowed: false, pooled: false, reason: usageLimitMessage(summary.limitReason, summary.limitResetsAt), usage, purchasedContinuation: false };
+        }
+        return { allowed: true, pooled: false, usage, purchasedContinuation: false };
+      }
+      // Paid subscription without a current plan bucket: credits only.
+      if (summary.creditsPcRemaining > 0) return { allowed: true, pooled: false, usage, purchasedContinuation: true };
+      return { allowed: false, pooled: false, reason: usageLimitMessage(summary.limitReason ?? 'no_allowance', summary.limitResetsAt), usage, purchasedContinuation: false };
+    }
+
     const result = rollingUsageGate.canStartGeneration(tier, seatTier, now, proMaxVariant);
     if (result.allowed || result.pooled) return { ...result, purchasedContinuation: false };
     if (result.reason === 'inflight') return { ...result, purchasedContinuation: false };
@@ -510,6 +565,7 @@ class EntitlementService {
     const tier = this.effectiveTier();
     const seatTier = this.getSeatTier();
     const rolling = rollingUsageGate.getRollingUsage(tier, seatTier, Date.now(), this.currentProMaxVariant());
+    const bucketView = this.isBucketMetered() || this.hasPaidSubscription() ? this.bucketSnapshotFields(usageBucketClient.getCachedSummary()) : null;
     return {
       tier,
       baseTier: this.baseTier(),
@@ -543,6 +599,31 @@ class EntitlementService {
       proMaxVariant: this.currentProMaxVariant(),
       ...(this.effectiveTier() === 'pro' ? { proBillingFrequency: subscriptionStore.getEffective().proBillingFrequency ?? 'monthly' } : {}),
       goRefreshesRemaining: usageEventStore.getGoRefreshesRemaining(),
+      usageSummary: usageBucketClient.getCachedSummary(),
+      ...(bucketView ?? {}),
+    };
+  }
+
+  /**
+   * Bucket-funded snapshot fields from the customer-safe summary: weekly pacing and the plan period
+   * in customer PC. The old 5-hour window and active-hour caps don't apply to bucket-funded accounts.
+   */
+  private bucketSnapshotFields(summary: CustomerUsageSummary | null): Partial<EntitlementSnapshot> {
+    const plan = summary?.buckets.find((b) => b.type === 'monthly_plan' && (b.status === 'active' || b.status === 'exhausted')) ?? null;
+    const pacing = summary?.weeklyPacing ?? null;
+    const weekResetsAt = pacing?.resetsAt ? Date.parse(pacing.resetsAt) : NaN;
+    return {
+      usage5hPc: 0,
+      limit5hPc: null,
+      activeHours5h: null,
+      activeHoursWeekly: null,
+      usageWindowResetsAt: null,
+      usageWeeklyPc: pacing ? Math.round((pacing.pcLimit * pacing.percentUsed) / 100) : 0,
+      limitWeeklyPc: pacing ? pacing.pcLimit : null,
+      usageMonthlyPc: plan ? plan.pcUsed : 0,
+      limitMonthlyPc: plan ? plan.pcTotal : null,
+      usageWeekResetsAt: Number.isFinite(weekResetsAt) ? weekResetsAt : Date.now(),
+      purchasedPcRemaining: summary?.creditsPcRemaining ?? 0,
     };
   }
 }

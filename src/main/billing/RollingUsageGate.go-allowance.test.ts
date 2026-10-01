@@ -29,10 +29,10 @@ describe('Go Tier 14-Day Cycle - GO-001 to GO-011', () => {
     vi.restoreAllMocks();
   });
 
-  it('GO-001: New Go user receives 1,000 PC and 3 refreshes', () => {
+  it('GO-001: New Go user receives 500 PC and 3 refreshes', () => {
     const now = Date.now();
     const capacity = pawComputeCapacityStore.resolve('go');
-    expect(capacity.windowWeeklyPc).toBe(1000); // represents the cycle allowance
+    expect(capacity.windowWeeklyPc).toBe(500); // represents the cycle allowance
     
     const status = usageEventStore.getGoCycleStatus(now);
     expect(status.cycleStartAt).toBe(now);
@@ -93,7 +93,7 @@ describe('Go Tier 14-Day Cycle - GO-001 to GO-011', () => {
     expect(status.cycleStartAt).toBe(start); // Start date hasn't changed
   });
 
-  it('GO-006: At the 14-day cycle boundary, allowance resets to 1,000 PC', () => {
+  it('GO-006: At the 14-day cycle boundary, allowance resets to 500 PC', () => {
     const start = Date.now();
     const cycleMs = 14 * 24 * 60 * 60 * 1000;
     const boundary = start + cycleMs;

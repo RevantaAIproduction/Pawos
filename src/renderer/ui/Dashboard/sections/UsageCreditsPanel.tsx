@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { initiateRazorpayCreditsPayment } from './CreditsPaymentHandler';
-import { usageCreditsService } from '../../../organization/UsageCreditsService';
+import { initiateMidMonthPayment, initiateRazorpayCreditsPayment } from './CreditsPaymentHandler';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
+import { getSupabaseClient } from '../../../auth/supabaseClient';
+import type { MidMonthOfferResult, UsageCreditsPurchaseConfig } from '../../../../shared/billing/UsageBucketTypes';
 
 interface UsageCreditsProps {
   userEmail: string;
@@ -13,26 +14,35 @@ export function UsageCreditsPanel({ userEmail, onPaymentComplete }: UsageCredits
   const [amount, setAmount] = useState('10');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [balanceUsd, setBalanceUsd] = useState<number | null>(null);
-  const [totalPurchasedUsd, setTotalPurchasedUsd] = useState<number>(0);
+  // Credits are customer value in PC ($1 = 100 PC), one bucket per purchase, from the server.
+  const [remainingPc, setRemainingPc] = useState<number | null>(null);
+  const [usedPc, setUsedPc] = useState<number>(0);
+  const [offer, setOffer] = useState<MidMonthOfferResult | null>(null);
+  // Presets, bounds, INR rate and PC per dollar come from the server's configuration.
+  const [purchaseConfig, setPurchaseConfig] = useState<UsageCreditsPurchaseConfig | null>(null);
 
   const fetchBalance = async () => {
     try {
-      const balance = await usageCreditsService.getBalance();
-      setBalanceUsd(balance.balanceUsd);
-      if (totalPurchasedUsd === 0) {
-        setTotalPurchasedUsd(balance.balanceUsd);
-      }
+      const summary = await ipc.billingGetUsageSummary(true);
+      const credits = (summary?.buckets ?? []).filter((b) => b.type === 'purchased_credits' && (b.status === 'active' || b.status === 'exhausted'));
+      setRemainingPc(summary?.creditsPcRemaining ?? 0);
+      setUsedPc(credits.reduce((sum, b) => sum + b.pcUsed, 0));
     } catch (error) {
-      console.error('Failed to fetch usage credits balance:', error);
-      setBalanceUsd(0);
+      console.error('Failed to fetch usage summary:', error);
+      setRemainingPc(0);
+    }
+    try {
+      const supabase = await getSupabaseClient();
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.access_token) setOffer(await ipc.billingGetMidMonthOffer(data.session.access_token));
+    } catch {
+      setOffer(null);
     }
   };
 
-  const usedUsd = totalPurchasedUsd - (balanceUsd ?? 0);
-
   useEffect(() => {
     fetchBalance();
+    ipc.billingGetUsageCreditsConfig().then(setPurchaseConfig).catch(() => setPurchaseConfig({ ok: false, reason: 'Credit purchases are unavailable right now.' }));
   }, []);
 
   useEffect(() => {
@@ -42,17 +52,23 @@ export function UsageCreditsPanel({ userEmail, onPaymentComplete }: UsageCredits
     });
   }, [onPaymentComplete]);
 
-  const presets = [5, 10, 30, 50, 100];
-  const inrAmount = Math.round(parseFloat(amount) * 95.65);
+  const config = purchaseConfig && purchaseConfig.ok ? purchaseConfig : null;
+  const presets = config?.topupPresetsUsd ?? [];
   const amountUsd = parseFloat(amount);
+  const inrAmount = config ? Math.round(amountUsd * config.usdInrRate) : 0;
+  const purchasedPc = config ? Math.round(amountUsd * config.pcPerUsd) : 0;
 
   const validateAmount = () => {
-    if (!amountUsd || amountUsd < 5) {
-      setMessage('[error] Minimum $5 required');
+    if (!config) {
+      setMessage(`[error] ${purchaseConfig && !purchaseConfig.ok ? purchaseConfig.reason : 'Credit purchases are unavailable right now.'}`);
       return false;
     }
-    if (amountUsd > 20000) {
-      setMessage('[error] Maximum $20,000 per transaction');
+    if (!amountUsd || amountUsd < config.minTopupUsd) {
+      setMessage(`[error] Minimum $${config.minTopupUsd.toLocaleString()} required`);
+      return false;
+    }
+    if (amountUsd > config.maxTopupUsd) {
+      setMessage(`[error] Maximum $${config.maxTopupUsd.toLocaleString()} per transaction`);
       return false;
     }
     setMessage(null);
@@ -71,20 +87,43 @@ export function UsageCreditsPanel({ userEmail, onPaymentComplete }: UsageCredits
     await initiateRazorpayCreditsPayment(amountUsd, false, options);
   };
 
+  const handleBuyExtraUsage = async () => {
+    const options = { setMessage, setBusy, refresh: () => { fetchBalance(); onPaymentComplete(); }, userEmail };
+    await initiateMidMonthPayment(options);
+  };
+
+  const extraUsageOffer = offer && offer.ok && offer.available ? offer : null;
+  const extraUsageBlock = extraUsageOffer ? (
+    <div style={{ marginTop: 16, padding: 12, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.04)' }} data-testid="mid-month-offer">
+      <div style={{ fontSize: '0.95em', fontWeight: 600, marginBottom: 4 }}>{extraUsageOffer.label}</div>
+      <div style={{ fontSize: '0.85em', opacity: 0.75, lineHeight: 1.5, marginBottom: 10 }}>
+        ${extraUsageOffer.amountUsd.toFixed(2)} adds {extraUsageOffer.pc.toLocaleString()} PC for the rest of your current plan period.
+        It expires on {new Date(extraUsageOffer.expiresAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}, when your plan renews.
+      </div>
+      <button
+        onClick={handleBuyExtraUsage}
+        disabled={busy}
+        style={{ padding: '8px 18px', backgroundColor: '#1967D2', color: '#fff', border: 'none', borderRadius: 4, cursor: busy ? 'not-allowed' : 'pointer', fontSize: '0.9em', fontWeight: 500 }}
+      >
+        {busy ? 'Processing...' : `Buy extra usage — $${extraUsageOffer.amountUsd.toFixed(2)}`}
+      </button>
+    </div>
+  ) : null;
+
   if (step === 'closed') {
     return (
       <div style={{ marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         <h3 style={{ fontSize: '1em', fontWeight: 600, margin: '0 0 8px 0' }}>💰 Usage Credits</h3>
         <p style={{ fontSize: '0.85em', opacity: 0.6, margin: '0 0 12px 0', lineHeight: 1.5 }}>
-          Pay-as-you-go compute credits. Minimum $5, maximum $20,000 per purchase.
+          Pay-as-you-go credits{config ? `. Minimum $${config.minTopupUsd.toLocaleString()}, maximum $${config.maxTopupUsd.toLocaleString()} per purchase.` : '.'}
         </p>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
           <div>
             <div style={{ fontSize: '1em', fontWeight: 600, margin: '0 0 8px 0' }}>
-              Remaining: ${balanceUsd !== null ? balanceUsd.toFixed(2) : '...'}
+              Remaining: {remainingPc !== null ? `${remainingPc.toLocaleString()} PC` : '...'}
             </div>
             <div style={{ fontSize: '0.9em', opacity: 0.7 }}>
-              Used: ${usedUsd.toFixed(2)}
+              Used: {usedPc.toLocaleString()} PC
             </div>
           </div>
           <button
@@ -103,6 +142,10 @@ export function UsageCreditsPanel({ userEmail, onPaymentComplete }: UsageCredits
             Buy usage credits
           </button>
         </div>
+        {extraUsageBlock}
+        {message && (
+          <p style={{ margin: '12px 0 0 0', fontSize: '0.9em', color: message.includes('error') ? '#ef4444' : '#4cb050' }}>{message}</p>
+        )}
       </div>
     );
   }
@@ -118,8 +161,8 @@ export function UsageCreditsPanel({ userEmail, onPaymentComplete }: UsageCredits
             type="number"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            min="5"
-            max="20000"
+            min={config?.minTopupUsd}
+            max={config?.maxTopupUsd}
             step="1"
             style={{
               width: '100%',
@@ -156,7 +199,7 @@ export function UsageCreditsPanel({ userEmail, onPaymentComplete }: UsageCredits
           </div>
 
           <div style={{ backgroundColor: 'rgba(25, 103, 210, 0.1)', borderRadius: 4, padding: 10, fontSize: '0.85em' }}>
-            <div style={{ marginBottom: 4 }}>Exchange Rate: 1 USD = ₹95.65</div>
+            {config && <div style={{ marginBottom: 4 }}>Exchange Rate: 1 USD = ₹{config.usdInrRate}</div>}
             <div style={{ fontWeight: 600, color: '#64B5F6' }}>
               Total: ₹{inrAmount.toLocaleString()} INR
             </div>
@@ -238,7 +281,7 @@ export function UsageCreditsPanel({ userEmail, onPaymentComplete }: UsageCredits
         </div>
 
         <div style={{ fontSize: '0.85em', opacity: 0.6 }}>
-          ≈ ${amountUsd.toFixed(2)} USD @ ₹95.65/USD
+          ≈ ${amountUsd.toFixed(2)} USD{config ? ` @ ₹${config.usdInrRate}/USD` : ''} · adds {purchasedPc.toLocaleString()} PC (no expiry)
         </div>
       </div>
 

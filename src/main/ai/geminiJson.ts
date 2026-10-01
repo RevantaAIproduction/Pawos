@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getGeminiApiKey } from './geminiApiKey';
 import { recordUsageEvent, reportRequestEnd, reportRequestStart } from '../billing/UsageMeteringEngine';
+import { finishMainProcessGeminiCall, reserveMainProcessGeminiCall } from '../billing/MeteredGeminiCall';
 import type { NormalizedUsageRecord, UsageRequestType } from '../../shared/billing/UsageMeteringTypes';
 
 /** JSON Schema subset accepted by Gemini's responseSchema. */
@@ -54,19 +55,28 @@ export async function generateJsonDetailed<T>(params: {
   // on ProviderUsageMetadata.requestId). Used to make the usage-ledger write idempotent and to key
   // the active-time measurement.
   const requestId = uuidv4();
+  const body: { contents: unknown; generationConfig: Record<string, unknown> } = {
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: { responseMimeType: 'application/json', responseSchema: schema },
+  };
+  // Paid usage is reserved on the server before the call (sets the granted maxOutputTokens).
+  const reservation = await reserveMainProcessGeminiCall({
+    baseUrl, model, apiKey, body, requestKey: requestId,
+    category: requestType === 'backgroundTask' ? 'background' : 'chat',
+  });
+  if (!reservation.ok) return { ok: false, reason: reservation.message, usageRecord: null };
+
   reportRequestStart(requestId);
   let res: Response;
   try {
     res = await fetch(`${baseUrl}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: 'application/json', responseSchema: schema },
-      }),
+      body: JSON.stringify(body),
     });
   } catch (err) {
     reportRequestEnd(requestId);
+    finishMainProcessGeminiCall(reservation.reservationId, requestId, null);
     return { ok: false, reason: `Could not reach the AI service: ${err instanceof Error ? err.message : String(err)}`, usageRecord: null };
   }
 
@@ -85,9 +95,16 @@ export async function generateJsonDetailed<T>(params: {
     json = (await res.json()) as typeof json;
   } catch {
     reportRequestEnd(requestId);
+    // The response body is unreadable, so Gemini's usage is unknown: leave the reservation for the
+    // server to close at its full (worst-case) amount rather than releasing it as free.
+    if (!res.ok) finishMainProcessGeminiCall(reservation.reservationId, requestId, null);
     return { ok: false, reason: `The AI service returned an unreadable response (HTTP ${res.status}).`, usageRecord: null };
   }
   reportRequestEnd(requestId);
+  // Settle with the reported usage; release only a rejected call that reported none. A successful
+  // response without usage is left for the server to close at the full reservation.
+  if (json.usageMetadata) finishMainProcessGeminiCall(reservation.reservationId, requestId, json.usageMetadata);
+  else if (!res.ok) finishMainProcessGeminiCall(reservation.reservationId, requestId, null);
 
   // Real Gemini usage metadata — covers every caller of this shared helper. Recorded even when the
   // response turns out to be unusable, because the provider still billed the tokens.
