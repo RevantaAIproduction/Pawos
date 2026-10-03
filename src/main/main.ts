@@ -578,7 +578,7 @@ app.whenReady().then(async () => {
     startGoogleSignIn: () => {
       if (!envVars.GOOGLE_CLIENT_ID || !envVars.GOOGLE_REDIRECT_URI) {
         return Promise.reject(
-          new Error('Google sign-in isnâ€™t configured yet â€” add GOOGLE_CLIENT_ID and GOOGLE_REDIRECT_URI to your .env.')
+          new Error("Google sign-in isn't configured yet - add GOOGLE_CLIENT_ID and GOOGLE_REDIRECT_URI to your .env.")
         );
       }
       return startGoogleSignIn({
@@ -596,7 +596,7 @@ app.whenReady().then(async () => {
     startGithubSignIn: (authorizeUrl: string) => {
       if (!envVars.GITHUB_REDIRECT_URI) {
         return Promise.reject(
-          new Error("GitHub sign-in isnâ€™t configured yet - add GITHUB_REDIRECT_URI to your .env.")
+          new Error("GitHub sign-in isn't configured yet - add GITHUB_REDIRECT_URI to your .env.")
         );
       }
       return waitForGitHubOAuthCallback(envVars.GITHUB_REDIRECT_URI, authorizeUrl);

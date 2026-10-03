@@ -201,9 +201,10 @@ function formatExpiry(iso: string | null | undefined): string {
 }
 
 /**
- * Mid-month purchase: extra usage for the rest of the current Pro / Pro Max plan period, at the
- * plan's fixed price. The server decides the product, price and expiry from the account's plan;
- * the customer sees the price, the PC it adds and the date it expires.
+ * Pending billing (mid-month purchase): lets a Pro / Pro Max account that has used its plan and all
+ * of its credits keep working until the plan renews, at the plan's fixed price. The server decides
+ * the product, price and expiry from the account's plan; the customer sees only the price and the
+ * renewal date — never PC or the product's internal name.
  */
 export async function initiateMidMonthPayment(options: CreditsPaymentHandler) {
   try {
@@ -233,7 +234,7 @@ export async function initiateMidMonthPayment(options: CreditsPaymentHandler) {
       amount: checkout.amountPaise,
       currency: 'INR',
       name: 'PawOS',
-      description: `${checkout.label} — ${checkout.pc.toLocaleString()} PC until ${expires}`,
+      description: `Pending billing — until ${expires}`,
       prefill: { email: options.userEmail || session.email, name: session.name },
       handler: async (response: any) => {
         try {
@@ -244,7 +245,7 @@ export async function initiateMidMonthPayment(options: CreditsPaymentHandler) {
             signature: response.razorpay_signature,
           });
           if (verified.ok) {
-            options.setMessage(`Payment successful. ${verified.pc.toLocaleString()} PC of extra usage added until ${formatExpiry(verified.expiresAt ?? checkout.expiresAt)}.`);
+            options.setMessage(`Billing complete. You can keep using PawOS until ${formatExpiry(verified.expiresAt ?? checkout.expiresAt)}.`);
             options.refresh();
           } else {
             options.setMessage(`[error] Verification failed: ${verified.reason}. If you were charged, contact support with payment ID ${response.razorpay_payment_id}.`);

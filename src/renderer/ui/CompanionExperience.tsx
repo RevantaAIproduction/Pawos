@@ -311,6 +311,7 @@ export default function CompanionExperience() {
               creditsNoticePooled={conversation.entitlement?.pooled ?? false}
               enterpriseContactAvailable
               onDismissCreditsNotice={() => conversation.dismissCreditsNotice()}
+              onBillingComplete={() => conversation.completePendingBilling()}
               onUpgrade={() => ipc.openUpgradeInDashboard()}
               onBuyCompute={() => setSettingsOpen(true)}
               onContactSales={() => void ipc.executeAction({ type: 'openUrl', url: 'https://pawos.revantaai.com/enterprise' })}

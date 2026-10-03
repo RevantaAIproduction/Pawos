@@ -35,7 +35,7 @@ export function DocsTopBar() {
           </Link>
 
           <div className="ml-2 hidden shrink-0 rounded-full border border-neutral-200 px-2.5 py-0.5 text-xs font-medium text-neutral-500 sm:block">
-            v0 (pre-release)
+            v1.0.0
           </div>
 
           <div className="flex-1" />

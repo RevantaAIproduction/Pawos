@@ -5,7 +5,7 @@ import { Button } from "../components/ui/Button";
 import { ConnectionsWorkflow } from "../components/ConnectionsWorkflow";
 import { HeroAnimation } from '../components/HeroAnimation';
 import { ParticleField } from '../components/ParticleField';
-import { DownloadWindowsButton } from '../components/DownloadWindowsButton';
+import { EarlyAccessSection } from '../components/early-access/EarlyAccessSection';
 
 
 
@@ -24,9 +24,9 @@ export default function Home() {
           The AI companion that gets work done.
         </p>
         <div className="flex justify-center">
-          <DownloadWindowsButton source="home-hero" className="px-8 py-4 text-base font-medium bg-white text-black rounded-full hover:bg-neutral-200 transition">
-            Download for Windows &rarr;
-          </DownloadWindowsButton>
+          <a href="#early-access" className="px-8 py-4 text-base font-medium bg-white text-black rounded-full hover:bg-neutral-200 transition">
+            Get Early Access &rarr;
+          </a>
         </div>
         </div>
       </section>
@@ -317,15 +317,18 @@ export default function Home() {
         </div>
       </section>
 
+      {/* EARLY ACCESS */}
+      <EarlyAccessSection />
+
       {/* 12. FINAL CTA */}
       <section className="py-32 px-6 text-center bg-neutral-950 relative z-10 border-t border-neutral-900">
         <h2 className="text-4xl md:text-6xl font-medium tracking-tight text-white mb-8">
           Your next task starts here.
         </h2>
         <div className="flex flex-col sm:flex-row justify-center gap-4">
-          <DownloadWindowsButton source="home-final-cta" className="px-8 py-4 text-base font-medium bg-white text-black hover:bg-neutral-200">
-            Download for Windows &rarr;
-          </DownloadWindowsButton>
+          <a href="#early-access" className="px-8 py-4 text-base font-medium bg-white text-black hover:bg-neutral-200">
+            Get Early Access &rarr;
+          </a>
           <Button href="/docs" variant="secondary" className="px-8 py-4 text-base font-medium bg-transparent text-white border border-neutral-700 hover:bg-neutral-900">
             Read Documentation
           </Button>

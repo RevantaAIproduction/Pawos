@@ -14,6 +14,7 @@ const STATIC_ROUTES = [
   "/features",
   "/pricing",
   "/enterprise",
+  "/early-access",
   "/docs",
   "/docs/autonomous-ticket-resolution",
   "/knowledge-base",

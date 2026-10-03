@@ -16,16 +16,24 @@ function formatPrice(cents: number): string {
   return `$${Number.isInteger(dollars) ? dollars.toLocaleString() : dollars.toFixed(2)}`;
 }
 
-/** Extra usage and credits — each purchase is its own bucket, shown with its price and customer PC. */
+/** Credits — each purchase is its own bucket, shown with its price and customer PC. A completed
+ *  pending billing (mid-month bucket) shows only its price and end date — never PC. */
 function PurchasedBuckets({ buckets }: { buckets: CustomerUsageBucket[] }) {
-  const shown = buckets.filter((b) => b.type !== 'monthly_plan' && (b.status === 'active' || b.status === 'exhausted'));
-  if (shown.length === 0) return null;
+  const isCurrent = (b: CustomerUsageBucket) => b.status === 'active' || b.status === 'exhausted';
+  const shown = buckets.filter((b) => b.type === 'purchased_credits' && isCurrent(b));
+  const billing = buckets.filter((b) => b.type === 'mid_month_purchase' && isCurrent(b));
+  if (shown.length === 0 && billing.length === 0) return null;
   return (
     <div data-testid="plan-usage-purchased">
+      {billing.map((b) => (
+        <div key={b.id} style={{ fontSize: 11, marginBottom: 10 }} data-testid="plan-usage-billing">
+          Billing · {formatPrice(b.amountPaidCents)} paid{b.expiresAt ? ` · until ${formatDate(b.expiresAt)}` : ''}
+        </div>
+      ))}
       {shown.map((b) => (
         <LimitRow
           key={b.id}
-          label={`${b.label || (b.type === 'mid_month_purchase' ? 'Extra usage' : 'Credits')} · ${formatPrice(b.amountPaidCents)}`}
+          label={`${b.label || 'Credits'} · ${formatPrice(b.amountPaidCents)}`}
           used={b.pcUsed}
           limit={b.pcTotal}
           unit="PC"

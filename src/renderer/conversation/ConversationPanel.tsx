@@ -13,6 +13,7 @@ import { getSupabaseClient } from '../auth/supabaseClient';
 import { useIpcBridge } from '../services/ipc/useIpcBridge';
 import { ipc as ipcBridge } from '../services/ipc/ipcBridgeImplementation';
 import { CreditsRequiredNotice, getExhaustionPrimaryActions } from '../ui/billing/CreditsRequiredNotice';
+import { PendingBillingNotice, isPendingBilling } from '../ui/billing/PendingBillingNotice';
 import { PlanUsageLimits } from '../ui/billing/PlanUsageLimits';
 import idleCharacterImage from './assets/idle-character.png';
 import type { EffectiveTierId, EntitlementSnapshot, SeatTier, SubscriptionTierId } from '../../shared/billing/BillingTypes';
@@ -376,6 +377,7 @@ export function ConversationPanel({
   creditsNoticePooled,
   enterpriseContactAvailable,
   onDismissCreditsNotice,
+  onBillingComplete,
   onUpgrade,
   onBuyCompute,
   onContactSales,
@@ -440,6 +442,8 @@ export function ConversationPanel({
   /** Whether the Pro Max -> Enterprise "Contact Sales" path is reachable from this screen. */
   enterpriseContactAvailable?: boolean;
   onDismissCreditsNotice?: () => void;
+  /** Pending billing was paid and verified — resume the request the limit stopped. */
+  onBillingComplete?: () => void;
   /** Opens the in-app upgrade flow for the next tier up â€” omit where there's no real navigation target yet. */
   onUpgrade?: () => void;
   /** Opens the Paw Compute top-up flow â€” omit where there's no real navigation target yet. */
@@ -1426,7 +1430,7 @@ export function ConversationPanel({
     const content = await file.text();
     const truncated = content.length > MAX_FILE_CHARS;
     const reasoningText = truncated
-      ? `${content.slice(0, MAX_FILE_CHARS)}\n\n[Truncated â€” the file continues beyond this point.]`
+      ? `${content.slice(0, MAX_FILE_CHARS)}\n\n[Truncated - the file continues beyond this point.]`
       : content;
 
     onSendTranscript(`ðŸ“Ž ${file.name}`, { reasoningText, source: 'file' });
@@ -1751,6 +1755,16 @@ export function ConversationPanel({
         redeemError={redeemCreditsError}
       />
     ) : null;
+  // Plan and credits both used up: the server's mid-period payment replaces the regular notice.
+  const limitNoticeElement =
+    creditsNoticeElement && onDismissCreditsNotice && onBillingComplete && isPendingBilling(entitlement) ? (
+      <PendingBillingNotice
+        userEmail={userEmail}
+        onDismiss={onDismissCreditsNotice}
+        onBillingComplete={onBillingComplete}
+        fallback={creditsNoticeElement}
+      />
+    ) : creditsNoticeElement;
 
   return (
     <section className={styles.panel} aria-label="Conversation panel">
@@ -1833,13 +1847,13 @@ export function ConversationPanel({
           )}
 
           {/* A request blocked before the first message still needs visible feedback. */}
-          {!hasMessages && creditsNoticeElement && <div style={{ padding: '0 16px 16px' }}>{creditsNoticeElement}</div>}
+          {!hasMessages && limitNoticeElement && <div style={{ padding: '0 16px 16px' }}>{limitNoticeElement}</div>}
 
           {/* CONVERSATION SCROLL AREA */}
           {hasMessages && (
             <div className={styles.conversationArea} ref={transcriptRef}>
               {/* Credits exhaustion notice */}
-              {creditsNoticeElement}
+              {limitNoticeElement}
 
               {/* File context selector for hands-on coding */}
               {windowCtx.context.project && (
@@ -2005,13 +2019,20 @@ export function ConversationPanel({
             onClick={() => ipc.openBillingSettings?.()}
             title="Click to open billing settings"
           >
-            Limit reached to {Math.round((entitlement.usage5hPc / (entitlement.limit5hPc ?? 1)) * 100)}% â€¢{' '}
+            {(() => {
+              // Plan-funded (bucket) accounts have no 5-hour window: show the weekly limit's
+              // percentage when there is one, otherwise no percentage. Go/Build keep the 5-hour one.
+              const pct = entitlement.usageSummary?.bucketFunded
+                ? entitlement.limitWeeklyPc ? Math.round((entitlement.usageWeeklyPc / entitlement.limitWeeklyPc) * 100) : null
+                : entitlement.limit5hPc != null ? Math.round((entitlement.usage5hPc / (entitlement.limit5hPc || 1)) * 100) : null;
+              return pct !== null ? `Limit reached to ${pct}% \u2022 ` : 'Limit reached \u2022 ';
+            })()}
             {entitlement.tier === 'build'
               ? entitlement.buildFinalWeek
                 ? 'PawOS Build limit reached — last week of Build access, no reset. Upgrade to Pro to keep going'
                 : 'PawOS Build limit reached — buy Paw Compute, or wait for the automatic reset (see Settings → Usage)'
               : entitlement.usageSummary?.bucketFunded
-              ? 'Buy extra usage or credits to keep going, or wait for your limit to reset (see Settings → Usage)'
+              ? 'Buy credits to keep going, or wait for your limit to reset (see Settings → Usage)'
               : 'Upgrade your plan or buy Paw Compute to keep going (see Settings → Usage)'}
           </button>
           <button

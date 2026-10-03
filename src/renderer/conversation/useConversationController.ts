@@ -254,7 +254,28 @@ export function useConversationController(args?: {
     }
   }, [entitlement?.tier]); // Only re-run if tier changes (e.g., after upgrade)
 
-  const dismissCreditsNotice = useCallback(() => setCreditsNoticeTier(null), []);
+  // The request the generation gate last refused, re-run once pending billing is completed.
+  const blockedGenerationRef = useRef<(() => void) | null>(null);
+  const dismissCreditsNotice = useCallback(() => {
+    blockedGenerationRef.current = null;
+    setCreditsNoticeTier(null);
+  }, []);
+  const completePendingBilling = useCallback(() => {
+    const retry = blockedGenerationRef.current;
+    blockedGenerationRef.current = null;
+    setCreditsNoticeTier(null);
+    refreshEntitlement();
+    retry?.();
+  }, [refreshEntitlement]);
+  // A purchase completed anywhere (Settings → Billing or the chat's Pending billing card) lifts the
+  // block: the refused request runs again and the gate re-checks it.
+  const completePendingBillingRef = useRef(completePendingBilling);
+  completePendingBillingRef.current = completePendingBilling;
+  useEffect(() => {
+    ipc.onUsageCreditsPurchased?.(() => {
+      if (blockedGenerationRef.current) completePendingBillingRef.current();
+    });
+  }, [ipc]);
 
   // Check if current session has reached its prompt limit (SESSION_PROMPT_LIMIT)
   const checkSessionLimit = useCallback(async (): Promise<boolean> => {
@@ -592,6 +613,10 @@ export function useConversationController(args?: {
                 setTimeout(() => tryGate(retryCount + 1), 2000);
                 return;
               }
+              // Kept so completing pending billing can re-run this request; the fresh snapshot
+              // carries the server's limit reason the notice decides on.
+              blockedGenerationRef.current = () => tryGate();
+              ipc.entitlementGetSnapshot().then(setEntitlement).catch(() => {});
               setCreditsNoticeTier(entitlementRef.current?.tier ?? 'go');
               return;
             }
@@ -804,6 +829,7 @@ export function useConversationController(args?: {
     openPath,
     creditsNoticeTier,
     dismissCreditsNotice,
+    completePendingBilling,
     refreshEntitlement,
     entitlement,
 

@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { initiateMidMonthPayment, initiateRazorpayCreditsPayment } from './CreditsPaymentHandler';
+import { initiateRazorpayCreditsPayment } from './CreditsPaymentHandler';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
-import { getSupabaseClient } from '../../../auth/supabaseClient';
-import type { MidMonthOfferResult, UsageCreditsPurchaseConfig } from '../../../../shared/billing/UsageBucketTypes';
+import type { UsageCreditsPurchaseConfig } from '../../../../shared/billing/UsageBucketTypes';
 
 interface UsageCreditsProps {
   userEmail: string;
@@ -17,7 +16,6 @@ export function UsageCreditsPanel({ userEmail, onPaymentComplete }: UsageCredits
   // Credits are customer value in PC ($1 = 100 PC), one bucket per purchase, from the server.
   const [remainingPc, setRemainingPc] = useState<number | null>(null);
   const [usedPc, setUsedPc] = useState<number>(0);
-  const [offer, setOffer] = useState<MidMonthOfferResult | null>(null);
   // Presets, bounds, INR rate and PC per dollar come from the server's configuration.
   const [purchaseConfig, setPurchaseConfig] = useState<UsageCreditsPurchaseConfig | null>(null);
 
@@ -30,13 +28,6 @@ export function UsageCreditsPanel({ userEmail, onPaymentComplete }: UsageCredits
     } catch (error) {
       console.error('Failed to fetch usage summary:', error);
       setRemainingPc(0);
-    }
-    try {
-      const supabase = await getSupabaseClient();
-      const { data } = await supabase.auth.getSession();
-      if (data.session?.access_token) setOffer(await ipc.billingGetMidMonthOffer(data.session.access_token));
-    } catch {
-      setOffer(null);
     }
   };
 
@@ -87,29 +78,6 @@ export function UsageCreditsPanel({ userEmail, onPaymentComplete }: UsageCredits
     await initiateRazorpayCreditsPayment(amountUsd, false, options);
   };
 
-  const handleBuyExtraUsage = async () => {
-    const options = { setMessage, setBusy, refresh: () => { fetchBalance(); onPaymentComplete(); }, userEmail };
-    await initiateMidMonthPayment(options);
-  };
-
-  const extraUsageOffer = offer && offer.ok && offer.available ? offer : null;
-  const extraUsageBlock = extraUsageOffer ? (
-    <div style={{ marginTop: 16, padding: 12, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.04)' }} data-testid="mid-month-offer">
-      <div style={{ fontSize: '0.95em', fontWeight: 600, marginBottom: 4 }}>{extraUsageOffer.label}</div>
-      <div style={{ fontSize: '0.85em', opacity: 0.75, lineHeight: 1.5, marginBottom: 10 }}>
-        ${extraUsageOffer.amountUsd.toFixed(2)} adds {extraUsageOffer.pc.toLocaleString()} PC for the rest of your current plan period.
-        It expires on {new Date(extraUsageOffer.expiresAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}, when your plan renews.
-      </div>
-      <button
-        onClick={handleBuyExtraUsage}
-        disabled={busy}
-        style={{ padding: '8px 18px', backgroundColor: '#1967D2', color: '#fff', border: 'none', borderRadius: 4, cursor: busy ? 'not-allowed' : 'pointer', fontSize: '0.9em', fontWeight: 500 }}
-      >
-        {busy ? 'Processing...' : `Buy extra usage — $${extraUsageOffer.amountUsd.toFixed(2)}`}
-      </button>
-    </div>
-  ) : null;
-
   if (step === 'closed') {
     return (
       <div style={{ marginBottom: 32, paddingBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
@@ -142,7 +110,6 @@ export function UsageCreditsPanel({ userEmail, onPaymentComplete }: UsageCredits
             Buy usage credits
           </button>
         </div>
-        {extraUsageBlock}
         {message && (
           <p style={{ margin: '12px 0 0 0', fontSize: '0.9em', color: message.includes('error') ? '#ef4444' : '#4cb050' }}>{message}</p>
         )}

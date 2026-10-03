@@ -1179,19 +1179,19 @@ export function registerIpc(opts: {
     if (!accessToken) return { ok: false, reason: 'Missing PawOS session. Sign in again.' };
     try {
       const { response, result } = await postBillingApi('mid-month-offer', { accessToken });
-      if (!response.ok || !result?.ok) return { ok: false, reason: cleanReason(result, 'Extra usage is not available right now.') };
+      if (!response.ok || !result?.ok) return { ok: false, reason: cleanReason(result, 'Billing is not available right now.') };
       if (result.available !== true) return { ok: true, available: false, reason: typeof result.reason === 'string' ? result.reason : undefined };
       return {
         ok: true,
         available: true,
-        label: String(result.label ?? 'Extra usage'),
+        label: String(result.label ?? 'Billing'),
         amountUsd: Number(result.amountUsd),
         amountInr: typeof result.amountInr === 'number' ? result.amountInr : null,
         pc: Number(result.pc),
         expiresAt: String(result.expiresAt ?? ''),
       };
     } catch (error) {
-      return { ok: false, reason: error instanceof Error ? error.message : 'Extra usage is not available right now.' };
+      return { ok: false, reason: error instanceof Error ? error.message : 'Billing is not available right now.' };
     }
   });
   ipcMain.handle('billing:createMidMonthCheckout', async (_evt, accessToken?: string) => {
@@ -1210,7 +1210,7 @@ export function registerIpc(opts: {
         amountPaise: result.amountPaise,
         usdInrRate: Number(result.usdInrRate),
         currency: 'INR' as const,
-        label: String(result.label ?? 'Extra usage'),
+        label: String(result.label ?? 'Billing'),
         pc: Number(result.pc),
         expiresAt: String(result.expiresAt ?? ''),
       };

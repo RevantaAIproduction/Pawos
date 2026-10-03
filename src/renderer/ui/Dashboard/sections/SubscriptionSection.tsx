@@ -11,6 +11,7 @@ import {
   type SubscriptionTierId,
 } from '../../../../shared/billing/BillingTypes';
 import { useEntitlementSnapshot } from '../../../billing/useEntitlementSnapshot';
+import { PendingBillingNotice, isPendingBilling } from '../../billing/PendingBillingNotice';
 import { describeBuildAccess, formatDate, formatPlanName, formatTierLabel } from '../../../billing/EntitlementDisplay';
 
 const TIER_LABELS: Record<SubscriptionTierId, string> = {
@@ -47,6 +48,7 @@ export function SubscriptionSection({
   const buildAccess = describeBuildAccess(entitlement);
   const isBuild = buildAccess.kind === 'active';
   const [message, setMessage] = useState<string | null>(null);
+  const [pendingBillingHidden, setPendingBillingHidden] = useState(false);
   const currentTier: SubscriptionTierId = subscription?.tier ?? 'go';
   const billingEmail = user.email ?? '';
 
@@ -136,6 +138,18 @@ export function SubscriptionSection({
           Compute Credits don't extend it) and the Autonomous Ticket System isn't part of the program. */}
       {!isBuild && (
         <>
+          {/* Plan and credits both used up — the same Pending billing card the chat shows. Once paid,
+              the entitlement change hides it. */}
+          {isPendingBilling(entitlement) && !pendingBillingHidden && (
+            <div style={{ marginBottom: 32 }}>
+              <PendingBillingNotice
+                userEmail={billingEmail}
+                onDismiss={() => setPendingBillingHidden(true)}
+                onBillingComplete={refresh}
+                fallback={null}
+              />
+            </div>
+          )}
           <UsageCreditsPanel userEmail={billingEmail} onPaymentComplete={refresh} />
           <AutonomousCreditsPanel userEmail={billingEmail} onPaymentComplete={refresh} currentTier={currentTier} />
         </>

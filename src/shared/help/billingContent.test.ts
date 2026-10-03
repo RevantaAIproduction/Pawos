@@ -18,9 +18,14 @@ describe('desktop help — billing content matches the live customer-facing mode
 
   it('states the locked customer values', () => {
     for (const value of ['$20/month — 2,000 PC', 'weekly limit of 1,000 PC', '$100/month — 10,000 PC', 'weekly limit 5,000 PC',
-      '$250/month — 25,000 PC', 'weekly limit 12,500 PC', '$15 for 1,500 PC', '$50 for 5,000 PC', '$175 for 17,500 PC',
-      '$1 per 100 PC', '500 PC every 14 days']) {
+      '$250/month — 25,000 PC', 'weekly limit 12,500 PC', '$1 per 100 PC', '500 PC every 14 days']) {
       expect(helpText).toContain(value);
+    }
+  });
+
+  it('never offers mid-month / extra usage to customers', () => {
+    for (const hidden of [/extra usage/i, /mid-?month/i, /mid-?cycle/i, /1,500 PC/, /17,500 PC/, /\$15 for/, /\$50 for/, /\$175/]) {
+      expect(helpText).not.toMatch(hidden);
     }
   });
 

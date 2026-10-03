@@ -220,7 +220,7 @@ export function usageLimitMessage(reason: UsageLimitReason, resetsAt: string | n
       return `Weekly limit reached\nYou've used this week's share of your plan. The rest of your plan is still there${when ? ` — your weekly limit resets ${when}` : ' — it resets at the start of next week'}.`;
     }
     case 'plan_exhausted':
-      return "Plan limit reached\nYou've used all the PC included in your plan for this period. Buy extra usage or credits to keep going, or wait for your plan to renew.";
+      return "Pending billing\nYou've used everything included in your plan for this period, including your credits. Complete billing to keep using PawOS, or wait for your plan to renew.";
     case 'no_allowance':
       return 'Limit reached\nYou have no PC left. Buy credits or upgrade your plan to keep going.';
     case 'service_unavailable':

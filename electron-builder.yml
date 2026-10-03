@@ -68,7 +68,7 @@ appx:
   customExtensionsPath: build/msix/extensions.xml
   artifactName: "${productName}-${version}-${arch}.msix"
 
-electronVersion: "35.0.0"
+electronVersion: "37.10.3"
 
 extraResources:
   - from: src/assets

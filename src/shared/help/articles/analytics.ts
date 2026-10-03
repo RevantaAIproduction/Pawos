@@ -37,8 +37,8 @@ export const ANALYTICS_ARTICLES: HelpArticle[] = [
     summary: 'Your Paw Compute (PC) usage by activity, and how much of your plan is left.',
     overview:
       'AI Usage shows the Paw Compute (PC) you have used, broken down by activity, together with your plan’s PC ' +
-      'for the current billing period, your weekly limit, and any extra usage or credits you have bought.',
-    features: ['PC used by activity', 'Plan PC used and remaining this billing period', 'Weekly limit, extra usage and credits shown separately'],
+      'for the current billing period, your weekly limit, and any credits you have bought.',
+    features: ['PC used by activity', 'Plan PC used and remaining this billing period', 'Weekly limit and credits shown separately'],
     howItWorks: 'PawOS counts Paw Compute on its servers as you use AI; the Usage settings tab and Analytics both show this same number, never an estimate.',
     bestPractices: ['Check Usage before a heavy AI task if you are close to your weekly limit'],
     examples: [],
@@ -49,7 +49,7 @@ export const ANALYTICS_ARTICLES: HelpArticle[] = [
     relatedArticleIds: ['analytics-productivity', 'paw-go', 'paw-pro'],
     relatedSettings: ['Usage', 'Billing'],
     relatedApps: ['analytics', 'settings'],
-    faq: [{ question: 'What happens when I reach a limit?', answer: 'You’ll see a clear notice rather than an unexplained failure. At the weekly limit, the rest of your plan becomes available when the weekly limit resets. When your plan’s PC for the period is used up, you can buy extra usage or credits, upgrade, or wait for your plan to renew.' }],
+    faq: [{ question: 'What happens when I reach a limit?', answer: 'You’ll see a clear notice rather than an unexplained failure. At the weekly limit, the rest of your plan becomes available when the weekly limit resets. When your plan’s PC for the period is used up, you can buy credits, upgrade, or wait for your plan to renew.' }],
     keywords: ['ai usage', 'credits', 'usage limit'],
     aliases: ['AI Usage', 'Credits'],
     pawosVersion: '0.1.0',

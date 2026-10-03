@@ -4,7 +4,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { DownloadWindowsButton } from "../DownloadWindowsButton";
 
 const NAV_ITEMS = [
   {
@@ -193,9 +192,9 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
             <Link href={userEmail ? "/dashboard" : "/login"} className="text-sm font-medium text-neutral-400 hover:text-white transition">
               {userEmail ? "Dashboard" : "Log in"}
             </Link>
-            <DownloadWindowsButton source="nav" className="text-sm font-medium text-white transition hover:opacity-80">
-              Download for Windows &#8599;
-            </DownloadWindowsButton>
+            <Link href="/early-access" className="text-sm font-medium text-white transition hover:opacity-80">
+              Get Early Access &#8599;
+            </Link>
           </div>
 
           <button
@@ -358,9 +357,9 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
               ))}
               
               <div className="border-t border-neutral-800 pt-8 flex flex-col gap-4">
-                <DownloadWindowsButton source="nav-mobile" onClose={() => setMobileOpen(false)} className="text-xl font-medium text-white text-left">
-                  Download for Windows &#8599;
-                </DownloadWindowsButton>
+                <Link href="/early-access" onClick={() => setMobileOpen(false)} className="text-xl font-medium text-white text-left">
+                  Get Early Access &#8599;
+                </Link>
                 <Link href={userEmail ? "/dashboard" : "/login"} className="text-xl font-medium text-neutral-400 hover:text-white" onClick={() => setMobileOpen(false)}>
                   {userEmail ? "Dashboard" : "Log in"}
                 </Link>
