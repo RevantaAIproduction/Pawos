@@ -4,10 +4,15 @@ const mocks = vi.hoisted(() => ({
   insert: vi.fn(),
   from: vi.fn(),
   createServiceClient: vi.fn(),
+  sendEarlyAccessConfirmation: vi.fn(),
 }));
 
 vi.mock("../../../lib/supabase/serviceClient", () => ({
   createServiceClient: mocks.createServiceClient,
+}));
+
+vi.mock("../../../lib/mail/earlyAccessMailer", () => ({
+  sendEarlyAccessConfirmation: mocks.sendEarlyAccessConfirmation,
 }));
 
 import { POST } from "./route";
@@ -38,6 +43,7 @@ describe("POST /api/early-access", () => {
     mocks.insert.mockResolvedValue({ error: null });
     mocks.from.mockReturnValue({ insert: mocks.insert });
     mocks.createServiceClient.mockReturnValue({ from: mocks.from });
+    mocks.sendEarlyAccessConfirmation.mockResolvedValue({ ok: true });
   });
 
   it("stores a registration with the fixed source and initial status", async () => {
@@ -56,6 +62,36 @@ describe("POST /api/early-access", () => {
       source: "pawos-website-early-access",
       status: "registered",
     });
+  });
+
+  it("sends one confirmation email to the stored name and email, after the insert", async () => {
+    await POST(req(VALID));
+    expect(mocks.sendEarlyAccessConfirmation).toHaveBeenCalledTimes(1);
+    expect(mocks.sendEarlyAccessConfirmation).toHaveBeenCalledWith("Ada Lovelace", "ada@example.com");
+    expect(mocks.insert.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.sendEarlyAccessConfirmation.mock.invocationCallOrder[0]
+    );
+  });
+
+  it("still reports success when the confirmation email fails", async () => {
+    mocks.sendEarlyAccessConfirmation.mockResolvedValue({ ok: false, message: "EAUTH 535" });
+    const res = await POST(req(VALID));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+  });
+
+  it("sends no email for a validation failure, duplicate, failed insert, missing config or honeypot", async () => {
+    await POST(req({ ...VALID, email: "nope" }));
+    mocks.insert.mockResolvedValueOnce({ error: { code: "23505", message: "duplicate key" } });
+    await POST(req(VALID));
+    mocks.insert.mockResolvedValueOnce({ error: { code: "42P01", message: "missing" } });
+    await POST(req(VALID));
+    mocks.createServiceClient.mockImplementationOnce(() => {
+      throw new Error("not configured");
+    });
+    await POST(req(VALID));
+    await POST(req({ ...VALID, website: "https://spam.example" }));
+    expect(mocks.sendEarlyAccessConfirmation).not.toHaveBeenCalled();
   });
 
   it("ignores a client-supplied source or status", async () => {

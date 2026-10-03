@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "../../../lib/supabase/serviceClient";
+import { sendEarlyAccessConfirmation } from "../../../lib/mail/earlyAccessMailer";
 import {
   EARLY_ACCESS_INITIAL_STATUS,
   EARLY_ACCESS_SOURCE,
@@ -10,7 +11,8 @@ import {
  * POST /api/early-access — the public Early Access form's only endpoint. Anonymous by design
  * (visitors have no PawOS account yet), so the insert uses the service-role client: the table
  * has RLS enabled with no policies, and this route's own validation is the only way a row gets
- * written. Stores the registration and nothing else — no email is sent, no account is created.
+ * written. Once the row is stored, one confirmation email goes to the registrant (see
+ * lib/mail/earlyAccessMailer.ts); no account is created.
  *
  * Responses: 200 { ok: true } · 400 { ok: false, errors } · 409 { ok: false, code: "duplicate" }
  * · 429 rate limited · 503 storage not configured · 500 storage failure.
@@ -103,6 +105,14 @@ export async function POST(request: Request) {
       { ok: false, message: "We couldn't save your registration. Please try again." },
       { status: 500 }
     );
+  }
+
+  // Only reached once the row exists — a validation failure, a duplicate (409) or a failed insert
+  // returns above and sends nothing, so a retry can't produce a second email. The registration is
+  // real either way: an email delivery problem is logged, never reported as "you're not on the list."
+  const sendResult = await sendEarlyAccessConfirmation(registration.name, registration.email);
+  if (!sendResult.ok) {
+    console.error("[early-access] confirmation email failed to send:", sendResult.message);
   }
 
   return NextResponse.json({ ok: true });
