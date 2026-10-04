@@ -62,7 +62,7 @@ const ORG_SECTION_TILES: SectionTileDef[] = [
   { id: 'temporaryPermissions', title: 'Temporary Permissions', description: 'Grant a capability to a member for a limited time.', icon: HistoryIcon },
   { id: 'workspace', title: 'Workspace', description: 'Shared containers for projects, documents, and research.', icon: OfficeIcon },
   { id: 'crm', title: 'Organization CRM', description: 'Contacts, companies, and meeting notes shared to the org.', icon: OrganizationIcon },
-  { id: 'credits', title: 'Credits & Billing', description: 'Credit pool, member credit requests, and the Autonomous Ticket System balance.', icon: CardIcon },
+  { id: 'credits', title: 'Credits & Billing', description: 'The Autonomous Ticket System balance, and on Enterprise the shared credit pool and member credit requests.', icon: CardIcon },
   { id: 'governance', title: 'Governance & Approvals', description: 'Require approval before a member can take an action.', icon: SecurityIcon },
   { id: 'credentialVault', title: 'Credential Vault', description: 'Shared connector credentials for the organization.', icon: PlugIcon },
   { id: 'sso', title: 'Single Sign-On', description: 'Federated identity for Team and Enterprise plans.', icon: LanguageIcon },
@@ -734,9 +734,10 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
           {selectedSection === 'crm' && <CrmCard organizationId={org.id} />}
           {selectedSection === 'credits' && (
             <>
-              <CreditPoolCard organizationId={org.id} orgMembers={members} />
+              {/* The shared credit pool is Enterprise-only: Paw Team members each use their own seat. */}
+              {tier === 'enterprise' && <CreditPoolCard organizationId={org.id} orgMembers={members} />}
               <AutonomousTaskBillingCard organizationId={org.id} />
-              {(tier === 'team' || tier === 'enterprise') && myRole !== 'member' && accessToken && (
+              {tier === 'enterprise' && myRole !== 'member' && accessToken && (
                 <AdminCreditManagementPanel
                   organizationId={org.id}
                   accessToken={accessToken}
@@ -745,7 +746,7 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
                     .map(m => ({ userId: m.userId, email: m.email, displayName: m.displayName }))}
                 />
               )}
-              {(tier === 'team' || tier === 'enterprise') && myRole === 'member' && accessToken && (
+              {tier === 'enterprise' && myRole === 'member' && accessToken && (
                 <MemberCreditRequestPanel
                   organizationId={org.id}
                   tier={tier as 'Team' | 'Enterprise'}

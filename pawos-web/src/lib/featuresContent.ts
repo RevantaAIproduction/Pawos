@@ -463,10 +463,10 @@ export const FEATURES: FeatureContent[] = [
     workflow: [
       { step: "Create a workspace", detail: "An organization owner sets up a shared workspace scoped to their email domain." },
       { step: "Invite the team", detail: "Members join and get access shaped by their role and any temporary grants." },
-      { step: "Collaborate live", detail: "Shared documents, tasks, and credit pools work across every member's own PawOS instance." },
+      { step: "Collaborate live", detail: "Shared documents and tasks work across every member's own PawOS instance (Enterprise adds a shared credit pool)." },
     ],
     useCases: [
-      "A small team sharing companions, credits, and CRM context",
+      "A small team sharing companions and CRM context, each member on their own seat",
       "A larger organization enforcing approval policies before infrastructure changes",
     ],
     limitations: [

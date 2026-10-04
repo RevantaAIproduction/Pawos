@@ -117,6 +117,7 @@ export const SUBSCRIPTION_ARTICLES: HelpArticle[] = [
       'Invite members by email with a role',
       'Shared organization visibility for billing and members',
       'Seat-based billing (roughly 2–150 seats)',
+      'Each member uses their own seat — Standard 2,000 PC or Premium 10,000 PC a month; no shared pool',
       'Full AI model roster for every member',
     ],
     howItWorks:

@@ -110,11 +110,13 @@ export const SUBSCRIPTION_ARTICLES: HelpArticle[] = [
     summary: 'Seat-based organizations for small teams — shared workspaces, roles and billing.',
     overview:
       'Paw Team is for teams who work together under one organization. Create an organization with a ' +
-      'readable ID like `ORG-RVT-001`, invite members with specific roles, and share workspaces, companions ' +
-      'and credits. Team is billed per seat: Standard $20/seat/month or Premium $100/seat/month.',
+      'readable ID like `ORG-RVT-001`, invite members with specific roles, and share workspaces and companions. ' +
+      'Team is billed per seat — Standard $20/seat/month (2,000 PC a month) or Premium $100/seat/month ' +
+      '(10,000 PC a month) — and each member uses their own seat\'s usage; there is no shared pool.',
     features: [
       'An organization with a readable ID, members and roles',
-      'Shared workspaces, shared companions and a shared credit pool',
+      'Shared workspaces and shared companions',
+      'Each member uses their own seat — no shared usage or credit pool',
       'Task management, AI-assisted PR review and remote assistance',
       'Credential vault, approval queue and audit log',
       '2–150 members; mix Standard and Premium seats freely',

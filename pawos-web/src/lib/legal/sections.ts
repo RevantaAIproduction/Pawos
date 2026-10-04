@@ -18,7 +18,7 @@ export const ENTITY_NAME = "Revanta AI";
 export const ENTITY_DESCRIPTOR =
   "Revanta AI, a business registered under India's Udyam (Micro, Small & Medium Enterprises) registration scheme, based in Hyderabad, Telangana, India";
 
-export const LAST_UPDATED = "31 August 2026";
+export const LAST_UPDATED = "4 October 2026";
 
 /**
  * Legal document version identifiers. These are incremented whenever a document's
@@ -41,9 +41,9 @@ export const DEFINITIONS_SECTION = {
     '"You" or "User" means the individual or organization using PawOS.',
     `"We," "us," or "our" refers to ${ENTITY_NAME}.`,
     '"Account" means a PawOS account created via email/password or Google sign-in, authenticated through our authentication provider (Supabase Auth).',
-    '"Self-Service Subscription" means a recurring Paw Go (free), Pro, Pro Max, Team, or Enterprise subscription that you or your organization activate, upgrade, downgrade, or cancel directly inside PawOS without needing to contact sales.',
-    '"Seat" means one licensed member of a Team or Enterprise Organization Workspace. Team seats are billed as either a Standard or Premium Seat Type at the rate shown on our Pricing page; Enterprise seats are billed at a uniform base rate plus usage.',
-    '"Organization Workspace" (or "Organization") means a shared Team or Enterprise environment scoped to a verified email domain, with its own members, roles, shared credit pool, and audit log.',
+    '"Self-Service Subscription" means a recurring Paw Go (free), Pro, or Pro Max subscription that you activate, upgrade, downgrade, or cancel directly inside PawOS without needing to contact sales. Team and Enterprise subscriptions are arranged with our sales team.',
+    '"Seat" means one licensed member of a Team or Enterprise Organization Workspace. Team seats are billed as either a Standard or Premium Seat Type at the rate shown on our Pricing page, and each Team Seat includes its own usage allowance for that member, which is not shared or pooled with other members; Enterprise seats are billed at a uniform base rate plus usage drawn from the organization\'s shared pool.',
+    '"Organization Workspace" (or "Organization") means a shared Team or Enterprise environment scoped to a verified email domain, with its own members, roles, and audit log. Enterprise Organizations also have a shared usage pool and shared credit pool; Team Organizations do not.',
     '"AI Credits" and "Ticket Balance" mean the prepaid usage mechanisms that fund, respectively, general AI conversation/reasoning usage on paid individual tiers and the Autonomous Ticket System. Both are prepaid wallets, never a monthly allowance that expires unused.',
     '"Autonomous Ticket System" (or "Autonomous Engineering Task") means PawOS\'s workflow for autonomously investigating, planning, implementing, testing, and delivering a real engineering ticket, billed only on genuine completion (a real pull request opened and the originating ticket updated) — never for a failed, cancelled, retry-limit-reached, or approval-denied run.',
     '"Companion Runtime" means PawOS\'s 3D animated companion feature (default character "Paw," or a companion you upload or customize), including its voice, personality, and memory features.',
@@ -142,7 +142,7 @@ export const SUBPROCESSORS_SECTION = {
 export const PAYMENTS_SECTION = {
   heading: "Payments and billing",
   paragraphs: [
-    "Paw Go is free. Pro, Pro Max, Team, and Enterprise are Self-Service Subscriptions: you activate, upgrade, downgrade, or cancel them directly inside PawOS, billed on a recurring monthly basis at the rate shown on our Pricing page at the time of purchase or renewal. Team seats are billed per Seat at the Standard or Premium rate you choose for each member; Enterprise seats are billed at a uniform base rate (20-seat minimum) plus Autonomous Ticket System usage at pass-through provider rates.",
+    "Paw Go is free. Pro and Pro Max are Self-Service Subscriptions: you activate, upgrade, downgrade, or cancel them directly inside PawOS, billed on a recurring monthly basis at the rate shown on our Pricing page at the time of purchase or renewal. Team and Enterprise are arranged with our sales team (sales@revantaai.com). Team seats are billed per Seat at the Standard or Premium rate chosen for each member, and each Team Seat's usage allowance belongs to that member alone; Enterprise seats are billed at a uniform base rate (20-seat minimum) plus Autonomous Ticket System usage at pass-through provider rates, with usage drawn from the organization's shared pool.",
     "The Autonomous Ticket System is billed separately from any subscription, through a prepaid Ticket Balance: you add funds in any amount (subject to a stated minimum) and a real dollar amount is deducted only once a ticket is genuinely completed — a real pull request opened and the originating ticket updated. A ticket that fails, is cancelled, hits a retry limit, or is denied approval never deducts anything, and an unused Ticket Balance never expires.",
     "All prices are shown in and billed in US Dollars (USD) unless our Pricing page states otherwise for your region. Payment processing is handled by Razorpay, our third-party payment processor; we do not ourselves store your full card or bank account details. Revanta AI is not currently registered for Goods and Services Tax (GST) in India, so GST is not charged on invoices; this document will be updated if that changes.",
   ],
