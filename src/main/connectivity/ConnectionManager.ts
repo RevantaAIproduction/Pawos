@@ -4,6 +4,7 @@ import type { ConnectorConnection, ConnectorStatus, ConnectivityScope } from '..
 import { connectorLifecycleToConnectionStatus } from '../../shared/connectivity/ConnectivityTypes';
 import { credentialVaultBridge } from './CredentialVaultBridge';
 import { persistCredentialViaRenderer, revokeCredentialViaRenderer } from './RendererConnectivityCredentialBridge';
+import { probeConnectorMcp } from './mcp/ConnectorMcpServers';
 
 function scopeKey(scope: ConnectivityScope): string {
   return `${scope.userId}:${scope.organizationId ?? ''}`;
@@ -66,6 +67,13 @@ class ConnectionManager {
     if (sender && !sender.isDestroyed()) {
       await this.persistStoredCredential(connectorId, scope);
     }
+
+    // Once per session: does this connector's official MCP server accept the token? (initialize +
+    // tools/list only — see probeConnectorMcp). Never blocks or fails the connection.
+    void credentialVaultBridge
+      .read(connectorId, scope)
+      .then((stored) => probeConnectorMcp(connectorId, stored?.secret))
+      .catch(() => {});
 
     return connection;
   }
@@ -156,6 +164,14 @@ class ConnectionManager {
     await sdk.authenticate(scope, credential);
     await sdk.refresh(scope).catch(() => {});
     const status = await sdk.getStatus(scope);
+    if (status.state === 'connected') {
+      // Prefer the vault copy (a connector that just refreshed has rotated it); fall back to what was restored.
+      const restored = (credential as { accessToken?: unknown } | null | undefined)?.accessToken;
+      void credentialVaultBridge
+        .read(connectorId, scope)
+        .then((stored) => probeConnectorMcp(connectorId, stored?.secret ?? (typeof restored === 'string' ? restored : undefined)))
+        .catch(() => {});
+    }
     this.upsertFromStatus(connectorId, scope, status);
     return status;
   }

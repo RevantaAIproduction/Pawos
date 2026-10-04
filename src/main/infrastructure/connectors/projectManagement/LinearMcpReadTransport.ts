@@ -1,8 +1,10 @@
 import type { InfraTicket } from '../../../../shared/infrastructure/InfrastructureTypes';
+import { McpError, McpReadClient, type McpFailureKind, type McpTool } from '../../../connectivity/mcp/McpReadClient';
 
 /**
  * Read-only transport to Linear's Remote MCP server, used by LinearConnector.listMyTickets() ahead
- * of its GraphQL query. Linear-specific on purpose — this is not a general MCP client.
+ * of its GraphQL query. The protocol itself lives in the shared McpReadClient; this file holds
+ * what is Linear-specific: the endpoint, the read-tool allowlist and the result mapping.
  *
  * Safety rules this file enforces:
  *  - Only the read-only endpoint below is ever contacted; the read-write endpoint is not referenced.
@@ -19,30 +21,18 @@ export const LINEAR_MCP_READONLY_ENDPOINT = 'https://mcp.linear.app/mcp/readonly
 /** In preference order. `list_issues` is only used when its schema accepts an `assignee` filter. */
 export const LINEAR_MCP_READ_TOOL_ALLOWLIST: readonly string[] = ['list_my_issues', 'list_issues'];
 
-const PROTOCOL_VERSION = '2025-06-18';
-const REQUEST_TIMEOUT_MS = 15_000;
 const RETRY_AFTER_FAILURE_MS = 5 * 60 * 1000;
 const MAX_ISSUES = 50;
 const MAX_DESCRIPTION_CHARS = 20_000;
 const MAX_FIELD_CHARS = 500;
 
-export type LinearMcpFailureKind = 'unauthorized' | 'unavailable' | 'malformed' | 'no-read-tool';
+export type LinearMcpFailureKind = McpFailureKind;
 
-export class LinearMcpError extends Error {
-  constructor(readonly kind: LinearMcpFailureKind, message: string) {
-    super(message);
-    this.name = 'LinearMcpError';
-  }
-}
+/** The shared MCP error type under its original Linear name (existing callers and tests use it). */
+export const LinearMcpError = McpError;
+export type LinearMcpError = McpError;
 
 type JsonObject = Record<string, unknown>;
-
-interface McpSession {
-  token: string;
-  sessionId?: string;
-  protocolVersion: string;
-  tool: { name: string; args: JsonObject };
-}
 
 function isObject(value: unknown): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -127,143 +117,55 @@ export function mapLinearMcpIssues(result: unknown): InfraTicket[] {
   return tickets as InfraTicket[];
 }
 
-/** Picks the allowlisted read tool for "issues assigned to me" from a `tools/list` result. */
-function pickAssignedIssuesTool(tools: unknown[]): McpSession['tool'] {
+interface ChosenTool {
+  token: string;
+  name: string;
+  args: JsonObject;
+}
+
+/** Picks the allowlisted read tool for "issues assigned to me" from the server's tool list. */
+function pickAssignedIssuesTool(tools: McpTool[]): { name: string; args: JsonObject } {
   for (const name of LINEAR_MCP_READ_TOOL_ALLOWLIST) {
-    const tool = tools.find((t): t is JsonObject => isObject(t) && t.name === name);
+    const tool = tools.find((t) => t.name === name);
     if (!tool) continue;
-    const annotations = isObject(tool.annotations) ? tool.annotations : {};
-    if (annotations.readOnlyHint === false || annotations.destructiveHint === true) continue;
-    const schema = isObject(tool.inputSchema) ? tool.inputSchema : {};
-    const properties = isObject(schema.properties) ? schema.properties : {};
+    if (tool.readOnlyHint === false || tool.destructiveHint === true) continue;
     const args: JsonObject = {};
     if (name === 'list_issues') {
       // Without a server-side assignee filter this tool would list other people's issues.
-      if (!('assignee' in properties)) continue;
+      if (!tool.inputProperties.includes('assignee')) continue;
       args.assignee = 'me';
     }
-    if ('limit' in properties) args.limit = MAX_ISSUES;
+    if (tool.inputProperties.includes('limit')) args.limit = MAX_ISSUES;
     return { name, args };
   }
   throw new LinearMcpError('no-read-tool', 'Linear MCP lists no allowlisted tool for assigned issues.');
 }
 
 export class LinearMcpReadTransport {
-  private session: McpSession | undefined;
-  private nextId = 1;
+  private readonly client = new McpReadClient(LINEAR_MCP_READONLY_ENDPOINT, 'Linear MCP');
+  private chosen: ChosenTool | undefined;
   /** After a failure, MCP is skipped (GraphQL serves the request) instead of failing every call:
    *  a rejected token stays skipped until the token changes, anything else for a few minutes. */
   private skip: { token?: string; until: number; kind: LinearMcpFailureKind } | undefined;
 
   /** Forgets the session and any skip state — called when Linear is disconnected. */
   reset(): void {
-    this.session = undefined;
+    this.client.dropSession();
+    this.chosen = undefined;
     this.skip = undefined;
   }
 
-  private headers(token: string): Record<string, string> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      Accept: 'application/json, text/event-stream',
-      Authorization: `Bearer ${token}`,
-    };
-    if (this.session?.token === token) {
-      headers['MCP-Protocol-Version'] = this.session.protocolVersion;
-      if (this.session.sessionId) headers['Mcp-Session-Id'] = this.session.sessionId;
-    }
-    return headers;
-  }
-
-  private async send(token: string, body: JsonObject, extraHeaders?: Record<string, string>): Promise<Response> {
-    let res: Response;
-    try {
-      res = await fetch(LINEAR_MCP_READONLY_ENDPOINT, {
-        method: 'POST',
-        headers: { ...this.headers(token), ...extraHeaders },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      });
-    } catch {
-      throw new LinearMcpError('unavailable', 'Could not reach the Linear MCP server.');
-    }
-    if (res.status === 401 || res.status === 403) {
-      throw new LinearMcpError('unauthorized', `Linear MCP rejected the access token (HTTP ${res.status}).`);
-    }
-    if (!res.ok) throw new LinearMcpError('unavailable', `Linear MCP returned HTTP ${res.status}.`);
-    return res;
-  }
-
-  /** One JSON-RPC request. The server may answer as plain JSON or as an SSE stream of messages. */
-  private async request(token: string, method: string, params: JsonObject, extraHeaders?: Record<string, string>): Promise<{ result: unknown; response: Response }> {
-    const id = this.nextId++;
-    const response = await this.send(token, { jsonrpc: '2.0', id, method, params }, extraHeaders);
-    let message: unknown;
-    try {
-      if ((response.headers.get('content-type') ?? '').includes('text/event-stream')) {
-        const events = (await response.text()).split(/\r?\n\r?\n/);
-        for (const event of events) {
-          const data = event
-            .split(/\r?\n/)
-            .filter((line) => line.startsWith('data:'))
-            .map((line) => line.slice(5).trimStart())
-            .join('\n');
-          if (!data) continue;
-          const parsed: unknown = JSON.parse(data);
-          if (isObject(parsed) && parsed.id === id) message = parsed;
-        }
-      } else {
-        message = await response.json();
-      }
-    } catch {
-      throw new LinearMcpError('malformed', `Linear MCP sent an unreadable response to ${method}.`);
-    }
-    if (!isObject(message) || message.id !== id) throw new LinearMcpError('malformed', `Linear MCP sent no response for ${method}.`);
-    if (message.error !== undefined) throw new LinearMcpError('unavailable', `Linear MCP returned an error for ${method}.`);
-    return { result: message.result, response };
-  }
-
-  /** initialize → notifications/initialized → tools/list, once per access token. */
-  private async openSession(token: string): Promise<McpSession> {
-    this.session = undefined;
-    const { result, response } = await this.request(token, 'initialize', {
-      protocolVersion: PROTOCOL_VERSION,
-      capabilities: {},
-      clientInfo: { name: 'pawos', version: '1' },
-    });
-    if (!isObject(result) || typeof result.protocolVersion !== 'string') {
-      throw new LinearMcpError('malformed', 'Linear MCP initialize returned no protocol version.');
-    }
-    const session: McpSession = {
-      token,
-      sessionId: response.headers.get('mcp-session-id') ?? undefined,
-      protocolVersion: result.protocolVersion,
-      tool: { name: '', args: {} },
-    };
-    this.session = session;
-    await this.send(token, { jsonrpc: '2.0', method: 'notifications/initialized' });
-
-    const tools: unknown[] = [];
-    let cursor: string | undefined;
-    for (let page = 0; page < 5; page++) {
-      const listed = (await this.request(token, 'tools/list', cursor ? { cursor } : {})).result;
-      if (!isObject(listed) || !Array.isArray(listed.tools)) throw new LinearMcpError('malformed', 'Linear MCP tools/list returned no tool list.');
-      tools.push(...listed.tools);
-      cursor = typeof listed.nextCursor === 'string' && listed.nextCursor ? listed.nextCursor : undefined;
-      if (!cursor) break;
-    }
-    session.tool = pickAssignedIssuesTool(tools);
-    console.info(`[linear-mcp] read-only session open; assigned issues are read with '${session.tool.name}'.`);
-    return session;
-  }
-
   private async callAssignedIssuesTool(token: string): Promise<InfraTicket[]> {
-    const session = this.session?.token === token && this.session.tool.name ? this.session : await this.openSession(token);
+    if (this.chosen?.token !== token || !this.client.hasOpenSession(token)) {
+      const picked = pickAssignedIssuesTool(await this.client.listTools(token));
+      this.chosen = { token, ...picked };
+      console.info(`[linear-mcp] read-only session open; assigned issues are read with '${picked.name}'.`);
+    }
     // Defence in depth: the name was chosen from the allowlist, and is checked against it again here.
-    if (!LINEAR_MCP_READ_TOOL_ALLOWLIST.includes(session.tool.name)) {
+    if (!LINEAR_MCP_READ_TOOL_ALLOWLIST.includes(this.chosen.name)) {
       throw new LinearMcpError('no-read-tool', 'Refusing to call a Linear MCP tool that is not allowlisted.');
     }
-    const { result } = await this.request(token, 'tools/call', { name: session.tool.name, arguments: session.tool.args });
-    return mapLinearMcpIssues(result);
+    return mapLinearMcpIssues(await this.client.callTool(token, this.chosen.name, this.chosen.args));
   }
 
   /**
@@ -278,13 +180,14 @@ export class LinearMcpReadTransport {
     }
     try {
       let tickets: InfraTicket[];
+      const hadSession = this.client.hasOpenSession(token) && this.chosen?.token === token;
       try {
         tickets = await this.callAssignedIssuesTool(token);
       } catch (error) {
         // A cached session the server has since dropped: open a new one and try once more.
-        const hadSession = this.session?.token === token && Boolean(this.session.tool.name);
         if (!(error instanceof LinearMcpError) || error.kind !== 'unavailable' || !hadSession) throw error;
-        this.session = undefined;
+        this.client.dropSession();
+        this.chosen = undefined;
         tickets = await this.callAssignedIssuesTool(token);
       }
       if (this.skip) console.info('[linear-mcp] read-only MCP is serving assigned issues again.');
@@ -292,7 +195,8 @@ export class LinearMcpReadTransport {
       return tickets;
     } catch (error) {
       const failure = error instanceof LinearMcpError ? error : new LinearMcpError('unavailable', 'Unexpected Linear MCP failure.');
-      this.session = undefined;
+      this.client.dropSession();
+      this.chosen = undefined;
       this.skip = {
         kind: failure.kind,
         token: failure.kind === 'unauthorized' ? token : undefined,

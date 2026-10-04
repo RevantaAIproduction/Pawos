@@ -80,6 +80,18 @@ function GitLabGlyph({ size = 32 }: { size?: number }) {
   );
 }
 
+function BitbucketGlyph({ size = 32 }: { size?: number }) {
+  const g = size * 0.6;
+  return (
+    <Badge size={size} background="linear-gradient(135deg, #2684FF, #0052CC)">
+      <svg width={g} height={g} viewBox="0 0 24 24" fill="none">
+        <path d="M4 5h16l-2.2 14H6.2Z" stroke="#fff" strokeWidth="1.8" strokeLinejoin="round" />
+        <path d="M9.5 10h5l-.7 4.5h-3.6Z" fill="#fff" />
+      </svg>
+    </Badge>
+  );
+}
+
 function LinearGlyph({ size = 32 }: { size?: number }) {
   const g = size * 0.6;
   return (
@@ -156,6 +168,7 @@ const CONNECTOR_GLYPHS: Record<string, (props: { size?: number }) => React.React
   googleWorkspace: GoogleWorkspaceGlyph,
   github: GitHubGlyph,
   gitlab: GitLabGlyph,
+  bitbucket: BitbucketGlyph,
   linear: LinearGlyph,
   vercel: VercelGlyph,
   netlify: NetlifyGlyph,

@@ -92,8 +92,8 @@ describe('BitbucketConnectorSDK', () => {
     expect(sdk.definition.oauth).toMatchObject({
       authorizationUrl: 'https://bitbucket.org/site/oauth2/authorize',
       tokenUrl: 'https://bitbucket.org/site/oauth2/access_token',
-      clientIdEnvVar: 'CONNECTOR_BITBUCKET_CLIENT_ID',
-      redirectUriEnvVar: 'CONNECTOR_BITBUCKET_CALLBACK_URL',
+      clientIdEnvVar: 'BITBUCKET_CLIENT_ID',
+      redirectUriEnvVar: 'BITBUCKET_CALLBACK_URL',
     });
     expect(sdk.definition.category).toBe('sourceControl');
   });

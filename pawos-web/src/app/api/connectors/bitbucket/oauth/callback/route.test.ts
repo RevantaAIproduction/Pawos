@@ -34,8 +34,8 @@ let proUser: User;
 let goUser: User;
 
 beforeEach(() => {
-  process.env.CONNECTOR_BITBUCKET_CLIENT_ID = "bb-key";
-  process.env.CONNECTOR_BITBUCKET_CLIENT_SECRET = "bb-secret";
+  process.env.BITBUCKET_CLIENT_ID = "bb-key";
+  process.env.BITBUCKET_CLIENT_SECRET = "bb-secret";
   state.backend = new FakeBackend();
   state.cookie = undefined;
   proUser = state.backend.addUser("pro-user", { subscription: { active: true, tier: "pro" } });
@@ -57,8 +57,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  delete process.env.CONNECTOR_BITBUCKET_CLIENT_ID;
-  delete process.env.CONNECTOR_BITBUCKET_CLIENT_SECRET;
+  delete process.env.BITBUCKET_CLIENT_ID;
+  delete process.env.BITBUCKET_CLIENT_SECRET;
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -96,7 +96,7 @@ describe("starting a Bitbucket connection from the web", () => {
     expect((await startConnect(startRequest(), bitbucket)).status).toBe(403);
 
     state.session = proUser;
-    delete process.env.CONNECTOR_BITBUCKET_CLIENT_SECRET;
+    delete process.env.BITBUCKET_CLIENT_SECRET;
     expect((await startConnect(startRequest(), bitbucket)).status).toBe(503);
   });
 });

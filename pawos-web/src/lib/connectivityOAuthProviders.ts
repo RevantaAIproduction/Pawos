@@ -41,7 +41,7 @@ export function getConnectivityOAuthProviderConfig(connectorId: string): Connect
       return provider('CONNECTOR_GITHUB_CLIENT_ID', 'CONNECTOR_GITHUB_CLIENT_SECRET', 'https://github.com/login/oauth/access_token');
     case 'bitbucket':
       // Bitbucket Cloud authenticates the OAuth consumer with HTTP Basic (Key:Secret).
-      return { ...provider('CONNECTOR_BITBUCKET_CLIENT_ID', 'CONNECTOR_BITBUCKET_CLIENT_SECRET', 'https://bitbucket.org/site/oauth2/access_token'), clientAuth: 'basic' };
+      return { ...provider('BITBUCKET_CLIENT_ID', 'BITBUCKET_CLIENT_SECRET', 'https://bitbucket.org/site/oauth2/access_token'), clientAuth: 'basic' };
     case 'gitlab':
       return provider('GITLAB_CLIENT_ID', 'GITLAB_CLIENT_SECRET', `${(process.env.GITLAB_URL ?? 'https://gitlab.com').replace(/\/+$/, '')}/oauth/token`);
     case 'linear':

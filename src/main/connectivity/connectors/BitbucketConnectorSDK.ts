@@ -50,9 +50,9 @@ export class BitbucketConnectorSDK implements ConnectorSDK {
       // Must be enabled on the Bitbucket OAuth consumer. pullrequest:write covers reading
       // repositories and pull requests and posting the AI review comment.
       scopes: ['account', 'repository', 'pullrequest:write'],
-      clientIdEnvVar: 'CONNECTOR_BITBUCKET_CLIENT_ID',
-      clientSecretEnvVar: 'CONNECTOR_BITBUCKET_CLIENT_SECRET',
-      redirectUriEnvVar: 'CONNECTOR_BITBUCKET_CALLBACK_URL',
+      clientIdEnvVar: 'BITBUCKET_CLIENT_ID',
+      clientSecretEnvVar: 'BITBUCKET_CLIENT_SECRET',
+      redirectUriEnvVar: 'BITBUCKET_CALLBACK_URL',
     },
     capabilities: ['readRepositories', 'readPullRequests'],
     capabilityDescriptors: [

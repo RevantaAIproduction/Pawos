@@ -249,7 +249,7 @@ function readImageAsDataUrl(file: File): Promise<string> {
 
 function getTierAppropriateConnectors(tier?: string): string[] {
   const freeConnectors: string[] = [];
-  const proConnectors = ['Gmail', 'Google Drive', 'Slack', 'Google Calendar', 'Outlook', 'Microsoft Teams'];
+  const proConnectors = ['Gmail', 'Google Drive', 'Slack', 'Google Calendar'];
   const proMaxConnectors = [...proConnectors, 'Jira', 'Linear', 'GitHub', 'GitLab', 'Notion'];
 
   switch (tier) {
@@ -296,22 +296,6 @@ function getConnectorIcon(name: string): JSX.Element {
         <svg {...iconProps} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
           <path d="M5 2c-1.1 0-2 .9-2 2v3h3V4c0-1.1-.9-2-2-2zm0 8c-1.1 0-2 .9-2 2v3h3v-3c0-1.1-.9-2-2-2zm6-8c-1.1 0-2 .9-2 2v3h3V4c0-1.1-.9-2-2-2zm0 8c-1.1 0-2 .9-2 2v3h3v-3c0-1.1-.9-2-2-2zm6-8c-1.1 0-2 .9-2 2v3h3V4c0-1.1-.9-2-2-2zm0 8c-1.1 0-2 .9-2 2v3h3v-3c0-1.1-.9-2-2-2z" fill="#E01E5A"/>
           <path d="M19 12c0-1.1-.9-2-2-2h-3v3h3c1.1 0 2-.9 2-2zm-8 0c0-1.1-.9-2-2-2H6v3h3c1.1 0 2-.9 2-2z" fill="#36C5F0"/>
-        </svg>
-      );
-    case 'Outlook':
-      return (
-        <svg {...iconProps} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-          <rect x="2" y="4" width="20" height="16" rx="2" fill="#0078D4"/>
-          <text x="12" y="16" fontSize="14" fontWeight="bold" fill="white" textAnchor="middle">O</text>
-        </svg>
-      );
-    case 'Microsoft Teams':
-      return (
-        <svg {...iconProps} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-          <rect x="2" y="2" width="8" height="8" fill="#6264A7"/>
-          <rect x="12" y="2" width="8" height="8" fill="#7FBA00"/>
-          <rect x="2" y="12" width="8" height="8" fill="#00A4EF"/>
-          <rect x="12" y="12" width="8" height="8" fill="#FFB900"/>
         </svg>
       );
     case 'Jira':
