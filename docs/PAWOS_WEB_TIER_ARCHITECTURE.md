@@ -83,6 +83,10 @@ changed or tested anything.
 One tier per account, resolved on the server from existing records (organization
 membership → subscription → Go). The Web policy and the connector entitlement mirror
 (`entitlements.ts`) both read that tier; there is no Web plan or Web subscription.
+The tier is resolved exactly as PawOS Desktop resolves it (`accountContext.ts` mirrors
+`EntitlementService.baseTier()` / `effectiveTier()`), so a plan bought on Web or on Desktop is the
+same plan, with the same usage, on both. Web differs only in what it can do (§4, §15) and in Paw Go's
+4-message Web cap.
 
 ## 7. Shared usage allowance
 

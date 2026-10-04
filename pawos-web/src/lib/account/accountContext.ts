@@ -9,10 +9,15 @@ import { TIER_LABELS, type AccountTier } from "./entitlements";
  * here is ever taken from the request body, query string or headers the browser controls: not the
  * user id, not the organization, not the tier, not the role.
  *
+ * One tier per account, resolved exactly as PawOS Desktop resolves it (EntitlementService
+ * baseTier() / effectiveTier()), so a plan bought on either surface is the same plan on both.
  * Tier sources, all existing server-side records (no new billing state):
- *  - PawOS Build: get_my_build_access() — an active admin grant overrides the subscription tier.
  *  - Team / Enterprise: an active organization_members row, tier from organizations.tier.
  *  - Pro / Pro Max: get_my_subscription() (Razorpay-backed pawos_subscriptions).
+ *  - Internal test accounts only: an admin_test_tier_overrides row replaces the tier above, as on
+ *    Desktop (TestTierOverrideStore).
+ *  - PawOS Build: get_my_build_access() — an active grant applies only when the account would
+ *    otherwise be on Paw Go; a paid plan always wins over it, as on Desktop.
  *  - Otherwise Paw Go.
  */
 
@@ -56,14 +61,28 @@ export function accountAvatarUrl(user: Pick<User, "user_metadata">): string | nu
 
 const TIER_RANK: Record<AccountTier, number> = { go: 0, build: 0, pro: 1, proMax: 2, team: 3, enterprise: 4 };
 
+/** The internal accounts PawOS Desktop lets test other tiers (TestTierOverrideStore.AUTHORIZED_ADMINS). */
+const TEST_TIER_ACCOUNTS = new Set(["tharun@revantaai.com", "founder@revantaai.com", "pawos@revantaai.com"]);
+const OVERRIDE_TIERS: readonly AccountTier[] = ["go", "pro", "proMax", "team", "enterprise"];
+
+/** The internal test-tier override, read as Desktop reads it (the account's own row, no organization). */
+async function testTierOverride(supabase: SupabaseClient, user: User): Promise<AccountTier | null> {
+  if (!user.email || !TEST_TIER_ACCOUNTS.has(user.email.toLowerCase())) return null;
+  const { data, error } = await supabase.from("admin_test_tier_overrides").select("override_tier").eq("user_id", user.id).is("organization_id", null).maybeSingle();
+  if (error) return null;
+  const tier = (data as { override_tier?: string } | null)?.override_tier;
+  return OVERRIDE_TIERS.includes(tier as AccountTier) ? (tier as AccountTier) : null;
+}
+
 type OrganizationRow = { role: string; organizations: { id: string; name: string; tier: string } | { id: string; name: string; tier: string }[] | null };
 
 /** Resolves the account from an already-authenticated Supabase client. Exported for tests. */
 export async function resolveAccountContext(supabase: SupabaseClient, user: User): Promise<AccountContext> {
-  const [subscriptionResult, buildResult, membershipResult] = await Promise.all([
+  const [subscriptionResult, buildResult, membershipResult, override] = await Promise.all([
     supabase.rpc("get_my_subscription"),
     supabase.rpc("get_my_build_access"),
     supabase.from("organization_members").select("role, organizations(id, name, tier)").eq("user_id", user.id).eq("status", "active"),
+    testTierOverride(supabase, user),
   ]);
 
   const subscription = (subscriptionResult.data ?? null) as { active?: boolean; tier?: string; proMaxVariant?: string | null; expiresAt?: string | null } | null;
@@ -82,9 +101,11 @@ export async function resolveAccountContext(supabase: SupabaseClient, user: User
   for (const org of organizations) {
     if (TIER_RANK[org.tier] > TIER_RANK[tier]) tier = org.tier;
   }
-  // An active Build grant governs entitlements while it lasts, exactly as on the desktop
-  // (EffectiveTierId in src/shared/billing/BillingTypes.ts).
-  if (build?.status === "active") tier = "build";
+  // Internal test accounts: the override replaces the tier, as Desktop's baseTier() does.
+  if (override) tier = override;
+  // An active Build grant applies only to an account that would otherwise be on Paw Go — a paid
+  // plan always wins over it (EntitlementService.effectiveTier() on Desktop).
+  if (tier === "go" && build?.status === "active") tier = "build";
 
   return {
     supabase,

@@ -92,12 +92,39 @@ describe("account tier is resolved from server records", () => {
     ["an active Pro subscription", { subscription: { active: true, tier: "pro" } }, "pro"],
     ["an active Pro Max subscription", { subscription: { active: true, tier: "proMax", proMaxVariant: "5x" } }, "proMax"],
     ["an inactive subscription", { subscription: { active: false, tier: "proMax" } }, "go"],
-    ["an active Build grant, even with a subscription", { subscription: { active: true, tier: "pro" }, buildStatus: "active" }, "build"],
+    ["an active Build grant without a paid plan", { buildStatus: "active" }, "build"],
+    ["a paid plan wins over an active Build grant, as on Desktop", { subscription: { active: true, tier: "pro" }, buildStatus: "active" }, "pro"],
     ["an expired Build grant", { buildStatus: "expired" }, "go"],
   ] as const)("%s → %s", async (_label, state, expected) => {
     const backend = new FakeBackend();
     const account = await backend.accountFor(backend.addUser("u1", state as never));
     expect(account.tier).toBe(expected);
+  });
+
+  it("an organization plan wins over an active Build grant, as on Desktop", async () => {
+    const backend = new FakeBackend();
+    const user = backend.addUser("student", { buildStatus: "active" });
+    backend.joinOrganization("student", { id: "org-2", name: "Uni", tier: "team" }, "member");
+    expect((await backend.accountFor(user)).tier).toBe("team");
+  });
+
+  it("internal test accounts get their test-tier override, as on Desktop; nobody else does", async () => {
+    const backend = new FakeBackend();
+    const admin = backend.addUser("admin", { email: "founder@revantaai.com", subscription: { active: true, tier: "pro" } });
+    const customer = backend.addUser("customer", { email: "someone@example.com", subscription: { active: true, tier: "pro" } });
+    backend.tables.admin_test_tier_overrides = [
+      { user_id: "admin", organization_id: null, real_tier: "pro", override_tier: "enterprise" },
+      { user_id: "customer", organization_id: null, real_tier: "pro", override_tier: "enterprise" },
+    ];
+    expect((await backend.accountFor(admin)).tier).toBe("enterprise");
+    expect((await backend.accountFor(customer)).tier).toBe("pro");
+    // An override to Paw Go lets an active Build grant apply, exactly as Desktop's effectiveTier().
+    backend.tables.admin_test_tier_overrides[0].override_tier = "go";
+    backend.users.set("admin", { ...backend.users.get("admin"), buildStatus: "active" });
+    expect((await backend.accountFor(admin)).tier).toBe("build");
+    // An unknown tier in the row is ignored.
+    backend.tables.admin_test_tier_overrides[0].override_tier = "ultra";
+    expect((await backend.accountFor(admin)).tier).toBe("pro");
   });
 
   it("Team / Enterprise come only from an active organization membership", async () => {
