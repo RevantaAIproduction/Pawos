@@ -6,8 +6,8 @@ import { INTEGRATION_GROUPS, type IntegrationGroup, type IntegrationState } from
 import { SectionLabel, primaryButton, secondaryButton } from "../../../components/dashboard/ui";
 
 const ICON = {
-  width: 20,
-  height: 20,
+  width: 16,
+  height: 16,
   viewBox: "0 0 24 24",
   fill: "none",
   stroke: "currentColor",
@@ -44,6 +44,14 @@ const MCP_LABELS: Record<NonNullable<IntegrationState["mcp"]>, string> = {
   mcpSignIn: "MCP: needs its own sign-in, enabled from the desktop app after connecting.",
   providerSetup: "MCP: not available yet — awaiting setup with the provider.",
 };
+
+function ArrowUpRight() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M7 17 17 7M9 7h8v8" />
+    </svg>
+  );
+}
 
 type RowNotice = { kind: "info" | "error"; text: string };
 
@@ -131,15 +139,15 @@ export function IntegrationsList({ initial }: { initial: IntegrationState[] }) {
         return (
           <section key={group.id} aria-label={group.title}>
             <SectionLabel>{group.title}</SectionLabel>
-            <ul className="divide-y divide-neutral-800 overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900/40">
+            <ul className="divide-y divide-neutral-800/80 overflow-hidden rounded-xl border border-neutral-800/80 bg-neutral-900/40">
               {items.map((integration) => {
                 const notice = notices[integration.id];
                 const isConnected = integration.connection !== "notConnected";
                 return (
-                  <li key={integration.id} className="p-4 sm:p-5">
+                  <li key={integration.id} className="px-4 py-4 sm:px-5">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                      <div className="flex min-w-0 flex-1 items-start gap-4">
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-900 text-neutral-400">
+                      <div className="flex min-w-0 flex-1 items-start gap-3.5">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-neutral-800 bg-neutral-900 text-neutral-400">
                           {GROUP_ICONS[integration.group]}
                         </span>
                         <div className="min-w-0">
@@ -147,7 +155,7 @@ export function IntegrationsList({ initial }: { initial: IntegrationState[] }) {
                             <h3 className="text-sm font-medium text-neutral-100">{integration.name}</h3>
                             <StatusBadge integration={integration} />
                           </div>
-                          <p className="mt-1 text-sm text-neutral-400">{integration.description}</p>
+                          <p className="mt-0.5 text-sm text-neutral-400">{integration.description}</p>
                           {integration.mcp && <p className="mt-1 text-xs text-neutral-500">{MCP_LABELS[integration.mcp]}</p>}
                           {isConnected && integration.accountLabel && <p className="mt-1 text-xs text-neutral-500">Connected to {integration.accountLabel}</p>}
                           {!integration.entitled && integration.availableOn && (
@@ -158,8 +166,9 @@ export function IntegrationsList({ initial }: { initial: IntegrationState[] }) {
 
                       <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
                         {!integration.entitled ? (
-                          <Link href="/pricing" className={secondaryButton}>
+                          <Link href="/pricing" className={`${secondaryButton} text-neutral-400`}>
                             Upgrade
+                            <ArrowUpRight />
                           </Link>
                         ) : isConnected ? (
                           managing === integration.id ? (
@@ -184,6 +193,7 @@ export function IntegrationsList({ initial }: { initial: IntegrationState[] }) {
                         ) : (
                           <button type="button" className={primaryButton} onClick={() => connect(integration)} disabled={busy === integration.id}>
                             {busy === integration.id ? "Checking…" : "Connect"}
+                            {busy !== integration.id && <ArrowUpRight />}
                           </button>
                         )}
                       </div>

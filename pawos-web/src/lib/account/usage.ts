@@ -1,4 +1,5 @@
 import type { AccountContext } from "./accountContext";
+import { surfaceOfUsageCategory } from "../webPolicy/webCapabilities";
 
 /**
  * The account's Paw Compute (PC) usage, from get_my_usage_summary() — the same server function the
@@ -26,6 +27,39 @@ export interface UsageOverview {
   weeklyPacing: { percentUsed: number; reached: boolean; resetsAt: string | null } | null;
   limitReached: boolean;
   limitResetsAt: string | null;
+}
+
+export interface SurfaceActivity {
+  requests: number;
+  pc: number;
+}
+
+/**
+ * Recent charged activity split by where it happened. Web and Desktop draw on the same allowance;
+ * this only labels the server's own usage events by their category (see surfaceOfUsageCategory).
+ */
+export interface UsageActivity {
+  web: SurfaceActivity;
+  desktop: SurfaceActivity;
+  /** How many of the most recent usage events this covers. */
+  events: number;
+}
+
+const ACTIVITY_EVENTS = 200;
+
+/** Null when the history can't be read right now. */
+export async function getUsageActivity(account: AccountContext): Promise<UsageActivity | null> {
+  const { data, error } = await account.supabase.rpc("get_my_usage_history", { p_limit: ACTIVITY_EVENTS });
+  if (error || !Array.isArray(data)) return null;
+  const activity: UsageActivity = { web: { requests: 0, pc: 0 }, desktop: { requests: 0, pc: 0 }, events: data.length };
+  for (const event of data as Record<string, unknown>[]) {
+    const surface = activity[surfaceOfUsageCategory(str(event.category))];
+    surface.requests += 1;
+    surface.pc += num(event.pc);
+  }
+  activity.web.pc = Math.round(activity.web.pc * 10) / 10;
+  activity.desktop.pc = Math.round(activity.desktop.pc * 10) / 10;
+  return activity;
 }
 
 const num = (value: unknown): number => (typeof value === "number" && Number.isFinite(value) ? value : 0);

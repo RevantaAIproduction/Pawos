@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAccountContext } from "../../../lib/account/accountContext";
-import { Card, CardTitle, PageHeader, formatDate, secondaryButton } from "../../../components/dashboard/ui";
+import { PageHeader, Panel, Row, SectionLabel, formatDate, primaryButton, secondaryButton } from "../../../components/dashboard/ui";
 
 export const metadata: Metadata = { title: "Spending" };
 
@@ -26,47 +26,58 @@ export default async function DashboardSpendingPage() {
   ]);
 
   const planEnds = formatDate(account.subscriptionExpiresAt);
+  const canUpgrade = account.tier === "go" || account.tier === "pro" || account.tier === "build";
 
   return (
     <>
-      <PageHeader title="Spending" description="Your plan, credits and purchases." />
+      <PageHeader title="Spending" />
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Card>
-          <CardTitle>Plan</CardTitle>
-          <p className="mt-3 text-2xl font-semibold text-white">
-            {account.tierLabel}
-            {account.proMaxVariant && <span className="ml-2 text-base font-normal text-neutral-400">{account.proMaxVariant}</span>}
-          </p>
-          <p className="mt-1 text-sm text-neutral-500">{planEnds ? `Current period ends ${planEnds}.` : "No paid subscription period on this account."}</p>
-          <Link href="/pricing" className={`${secondaryButton} mt-5`}>
-            View plans
-          </Link>
-        </Card>
+      <div className="space-y-10">
+        <section aria-label="Plan">
+          <SectionLabel>Plan</SectionLabel>
+          <Panel>
+            <Row
+              label={
+                <>
+                  {account.tierLabel}
+                  {account.proMaxVariant && <span className="ml-2 font-normal text-neutral-500">{account.proMaxVariant}</span>}
+                </>
+              }
+              hint={planEnds ? `Current period ends ${planEnds}.` : "No paid subscription period on this account."}
+            >
+              <Link href="/pricing" className={canUpgrade ? primaryButton : secondaryButton}>
+                {canUpgrade ? "Upgrade plan" : "View plans"}
+              </Link>
+            </Row>
+          </Panel>
+        </section>
 
-        <Card>
-          <CardTitle>Autonomous Task Credits</CardTitle>
-          <p className="mt-3 text-3xl font-semibold text-white">{creditsRow?.balance ?? 0}</p>
-          <p className="mt-1 text-sm text-neutral-500">Prepaid credits for Autonomous Engineering Tasks, shared with your PawOS desktop app.</p>
-        </Card>
+        <section aria-label="Autonomous Task Credits">
+          <SectionLabel>Autonomous Task Credits</SectionLabel>
+          <Panel>
+            <Row label="Balance" hint="Prepaid credits for Autonomous Engineering Tasks, shared with your PawOS desktop app.">
+              <span className="text-base font-medium text-white">{creditsRow?.balance ?? 0}</span>
+            </Row>
+          </Panel>
+        </section>
+
+        <section aria-label="Purchase history">
+          <SectionLabel>Purchase history</SectionLabel>
+          <Panel>
+            {purchases && purchases.length > 0 ? (
+              purchases.map((purchase) => (
+                <div key={purchase.id} className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 px-4 py-3 text-sm sm:px-5">
+                  <span className="text-neutral-100">{purchase.credits} credits</span>
+                  <span className="text-neutral-400">${Number(purchase.amount_usd).toFixed(2)}</span>
+                  <span className="text-neutral-500">{formatDate(purchase.purchased_at) ?? ""}</span>
+                </div>
+              ))
+            ) : (
+              <p className="px-4 py-4 text-sm text-neutral-500 sm:px-5">No purchases yet.</p>
+            )}
+          </Panel>
+        </section>
       </div>
-
-      <Card className="mt-4">
-        <CardTitle>Purchase history</CardTitle>
-        {purchases && purchases.length > 0 ? (
-          <ul className="mt-3 divide-y divide-neutral-800 text-sm">
-            {purchases.map((purchase) => (
-              <li key={purchase.id} className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 py-2.5">
-                <span className="text-neutral-200">{purchase.credits} credits</span>
-                <span className="text-neutral-400">${Number(purchase.amount_usd).toFixed(2)}</span>
-                <span className="text-neutral-500">{formatDate(purchase.purchased_at) ?? ""}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-3 text-sm text-neutral-500">No purchases yet.</p>
-        )}
-      </Card>
     </>
   );
 }

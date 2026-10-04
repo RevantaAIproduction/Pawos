@@ -13,9 +13,9 @@ export function SignOutButton() {
     <button
       type="button"
       onClick={handleSignOut}
-      className="rounded-full border border-neutral-700 px-4 py-2 text-sm text-neutral-300 transition hover:bg-neutral-900 hover:text-white"
+      className="inline-flex items-center justify-center rounded-md border border-neutral-700 px-3 py-1.5 text-sm font-medium text-neutral-200 transition hover:bg-neutral-800"
     >
-      Sign out
+      Log out
     </button>
   );
 }

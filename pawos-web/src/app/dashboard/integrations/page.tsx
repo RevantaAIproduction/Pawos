@@ -36,7 +36,7 @@ export default async function DashboardIntegrationsPage({ searchParams }: { sear
     <>
       <PageHeader
         title="Integrations"
-        description={`Connections are shared between PawOS on the web and the desktop app. Your plan: ${account.tierLabel}.`}
+        description="Connect source control and the tools your work runs through. Connections are shared with the PawOS desktop app."
       />
       {callbackTarget && callbackMessage && (
         <p

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { inputClasses, primaryButton, secondaryButton } from "../../../components/dashboard/ui";
+import { Panel, Row, inputClasses, primaryButton, secondaryButton } from "../../../components/dashboard/ui";
 
 export interface PublicProfileSettings {
   handle: string;
@@ -15,9 +15,9 @@ export interface PublicProfileSettings {
 const MAX_LINKS = 5;
 
 /**
- * Public profile settings: the on/off switch, the handle behind the public URL, and the few
- * fields the owner chooses to show. Saved through PUT /api/dashboard/profile; the URL shown is the
- * one the server returned for the saved handle.
+ * The editable half of the Profile panel: display name, handle, links, and the public-profile
+ * switch. Saved through PUT /api/dashboard/profile; the URL shown is the one the server returned
+ * for the saved handle.
  */
 export function PublicProfileForm({ initial }: { initial: PublicProfileSettings }) {
   const [saved, setSaved] = useState(initial);
@@ -72,49 +72,22 @@ export function PublicProfileForm({ initial }: { initial: PublicProfileSettings 
     setLinks((current) => current.map((link, i) => (i === index ? { ...link, ...patch } : link)));
 
   return (
-    <form onSubmit={submit} noValidate className="space-y-6">
-      <label className="flex cursor-pointer items-start gap-3">
-        <input
-          type="checkbox"
-          checked={enabled}
-          disabled={saving}
-          onChange={(event) => setEnabled(event.target.checked)}
-          className="mt-0.5 h-4 w-4 rounded border-neutral-700 bg-neutral-900 accent-white"
-        />
-        <span>
-          <span className="block text-sm font-medium text-neutral-100">Public profile</span>
-          <span className="block text-sm text-neutral-400">
-            When on, anyone with the link can see your name, picture, handle, Companion, bio and the links below. Your email, plan, usage and connections
-            are never shown.
-          </span>
-        </span>
-      </label>
+    <form onSubmit={submit} noValidate>
+      <Panel className="rounded-t-none border-t-0">
+        <Row label={<label htmlFor="profile-display-name">Display name</label>}>
+          <input
+            id="profile-display-name"
+            value={displayName}
+            disabled={saving}
+            maxLength={80}
+            onChange={(event) => setDisplayName(event.target.value)}
+            placeholder="Defaults to your account name"
+            className={inputClasses}
+          />
+        </Row>
 
-      {saved.publicProfileEnabled ? (
-        <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-4">
-          <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">Your public profile</p>
-          <p className="mt-2 break-all font-mono text-sm text-neutral-200" data-testid="public-profile-url">
-            {saved.publicUrl}
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" className={secondaryButton} onClick={copyUrl}>
-              {copied ? "Copied" : "Copy link"}
-            </button>
-            <a href={`/u/${saved.handle}`} target="_blank" rel="noopener noreferrer" className={secondaryButton}>
-              View profile
-            </a>
-          </div>
-        </div>
-      ) : (
-        <p className="text-sm text-neutral-500">Your public profile is off. The link below won&apos;t show anything until you turn it on and save.</p>
-      )}
-
-      <div className="grid gap-5 sm:grid-cols-2">
-        <div>
-          <label htmlFor="profile-handle" className="mb-2 block text-sm font-medium text-neutral-300">
-            Handle
-          </label>
-          <div className="flex items-center gap-2">
+        <Row label={<label htmlFor="profile-handle">Handle</label>} hint="3–30 lowercase letters, numbers or hyphens.">
+          <div className="flex w-full items-center gap-2">
             <span className="shrink-0 text-sm text-neutral-500">/u/</span>
             <input
               id="profile-handle"
@@ -127,38 +100,15 @@ export function PublicProfileForm({ initial }: { initial: PublicProfileSettings 
               className={inputClasses}
             />
           </div>
-          <p className="mt-1.5 text-xs text-neutral-500">3–30 lowercase letters, numbers or hyphens. Changing it changes your link.</p>
-        </div>
-        <div>
-          <label htmlFor="profile-display-name" className="mb-2 block text-sm font-medium text-neutral-300">
-            Display name <span className="ml-1 font-normal text-neutral-600">Optional</span>
-          </label>
-          <input
-            id="profile-display-name"
-            value={displayName}
-            disabled={saving}
-            maxLength={80}
-            onChange={(event) => setDisplayName(event.target.value)}
-            placeholder="Defaults to your account name"
-            className={inputClasses}
-          />
-        </div>
-      </div>
+        </Row>
 
-      <div>
-        <label htmlFor="profile-bio" className="mb-2 block text-sm font-medium text-neutral-300">
-          Bio <span className="ml-1 font-normal text-neutral-600">Optional</span>
-        </label>
-        <textarea id="profile-bio" value={bio} disabled={saving} maxLength={280} rows={3} onChange={(event) => setBio(event.target.value)} className={`${inputClasses} resize-y`} />
-      </div>
+        <Row label={<label htmlFor="profile-bio">Bio</label>} align="start">
+          <textarea id="profile-bio" value={bio} disabled={saving} maxLength={280} rows={2} onChange={(event) => setBio(event.target.value)} className={`${inputClasses} resize-y`} />
+        </Row>
 
-      <fieldset>
-        <legend className="mb-2 text-sm font-medium text-neutral-300">
-          Public links <span className="ml-1 font-normal text-neutral-600">Optional, up to {MAX_LINKS}</span>
-        </legend>
-        <div className="space-y-2">
-          {links.map((link, index) => (
-            <div key={index} className="flex flex-col gap-2 sm:flex-row">
+        {links.map((link, index) => (
+          <Row key={index} label={`Link ${index + 1}`}>
+            <div className="flex w-full flex-col gap-2 sm:flex-row">
               <input
                 aria-label={`Link ${index + 1} label`}
                 value={link.label}
@@ -166,7 +116,7 @@ export function PublicProfileForm({ initial }: { initial: PublicProfileSettings 
                 maxLength={40}
                 placeholder="Label"
                 onChange={(event) => updateLink(index, { label: event.target.value })}
-                className={`${inputClasses} sm:w-40`}
+                className={`${inputClasses} sm:w-32`}
               />
               <input
                 aria-label={`Link ${index + 1} URL`}
@@ -183,25 +133,64 @@ export function PublicProfileForm({ initial }: { initial: PublicProfileSettings 
                 Remove
               </button>
             </div>
-          ))}
-        </div>
-        {links.length < MAX_LINKS && (
-          <button type="button" className={`${secondaryButton} mt-3`} disabled={saving} onClick={() => setLinks((current) => [...current, { label: "", url: "" }])}>
-            Add link
-          </button>
-        )}
-      </fieldset>
+          </Row>
+        ))}
 
-      <div className="flex flex-wrap items-center gap-4">
-        <button type="submit" className={primaryButton} disabled={saving}>
-          {saving ? "Saving…" : "Save profile"}
-        </button>
-        {message && (
-          <span role={message.kind === "error" ? "alert" : "status"} className={`text-sm ${message.kind === "error" ? "text-red-400" : "text-neutral-300"}`}>
-            {message.text}
-          </span>
+        {links.length < MAX_LINKS && (
+          <Row label="Links" hint={`Shown on your public profile. Up to ${MAX_LINKS}.`}>
+            <button type="button" className={secondaryButton} disabled={saving} onClick={() => setLinks((current) => [...current, { label: "", url: "" }])}>
+              Add link
+            </button>
+          </Row>
         )}
-      </div>
+
+        <Row
+          label="Public profile"
+          hint="When on, anyone with the link can see your name, picture, handle, Companion, bio and links. Your email, plan, usage and connections are never shown."
+          align="start"
+        >
+          <button
+            type="button"
+            role="switch"
+            aria-checked={enabled}
+            aria-label="Public profile"
+            disabled={saving}
+            onClick={() => setEnabled((value) => !value)}
+            className={`relative h-5 w-9 shrink-0 rounded-full transition ${enabled ? "bg-neutral-100" : "bg-neutral-700"}`}
+          >
+            <span className={`absolute top-0.5 h-4 w-4 rounded-full transition-all ${enabled ? "left-[18px] bg-black" : "left-0.5 bg-neutral-300"}`} />
+          </button>
+        </Row>
+
+        {saved.publicProfileEnabled && (
+          <Row label="Your public link" align="start">
+            <div className="w-full sm:text-right">
+              <p className="break-all font-mono text-sm text-neutral-200" data-testid="public-profile-url">
+                {saved.publicUrl}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2 sm:justify-end">
+                <button type="button" className={secondaryButton} onClick={copyUrl}>
+                  {copied ? "Copied" : "Copy link"}
+                </button>
+                <a href={`/u/${saved.handle}`} target="_blank" rel="noopener noreferrer" className={secondaryButton}>
+                  View profile
+                </a>
+              </div>
+            </div>
+          </Row>
+        )}
+
+        <div className="flex flex-wrap items-center justify-end gap-4 px-4 py-3 sm:px-5">
+          {message && (
+            <span role={message.kind === "error" ? "alert" : "status"} className={`text-sm ${message.kind === "error" ? "text-red-400" : "text-neutral-300"}`}>
+              {message.text}
+            </span>
+          )}
+          <button type="submit" className={primaryButton} disabled={saving}>
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </Panel>
     </form>
   );
 }

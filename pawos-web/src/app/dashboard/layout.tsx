@@ -21,7 +21,13 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   if (!account) redirect("/login");
 
   return (
-    <DashboardShell displayName={account.displayName} email={account.user.email ?? null} avatarUrl={account.avatarUrl} tierLabel={account.tierLabel}>
+    <DashboardShell
+      displayName={account.displayName}
+      email={account.user.email ?? null}
+      avatarUrl={account.avatarUrl}
+      tierLabel={account.tierLabel}
+      canUpgrade={account.tier === "go" || account.tier === "pro" || account.tier === "build"}
+    >
       {children}
     </DashboardShell>
   );

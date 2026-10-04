@@ -4,7 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAccountContext } from "../../../lib/account/accountContext";
 import { getMyProfile, publicProfileUrl, type AccountProfile } from "../../../lib/account/profile";
-import { Card, CardTitle, PageHeader, formatDate, secondaryButton } from "../../../components/dashboard/ui";
+import { PageHeader, Panel, Row, SectionLabel, formatDate, secondaryButton } from "../../../components/dashboard/ui";
 import { SignOutButton } from "../SignOutButton";
 import { PublicProfileForm } from "./PublicProfileForm";
 
@@ -23,83 +23,85 @@ export default async function DashboardSettingsPage() {
 
   return (
     <>
-      <PageHeader title="Settings" description="Your PawOS account and public profile." />
+      <PageHeader title="Settings" />
 
-      <div className="space-y-4">
-        <Card>
-          <CardTitle>Account</CardTitle>
-          <div className="mt-4 flex items-center gap-4">
-            {account.avatarUrl ? (
-              <Image src={account.avatarUrl} alt="" width={56} height={56} className="rounded-full" unoptimized />
-            ) : (
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-neutral-800 text-lg font-semibold text-neutral-300">
-                {account.displayName.slice(0, 1).toUpperCase()}
-              </div>
-            )}
-            <div className="min-w-0">
-              <p className="truncate text-lg font-medium text-white">{account.displayName}</p>
-              <p className="truncate text-sm text-neutral-400">{account.user.email}</p>
-            </div>
-          </div>
-          <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
-            <div>
-              <dt className="text-neutral-500">Plan</dt>
-              <dd className="mt-0.5 text-neutral-200">{account.tierLabel}</dd>
-            </div>
-            <div>
-              <dt className="text-neutral-500">Member since</dt>
-              <dd className="mt-0.5 text-neutral-200">{formatDate(account.user.created_at) ?? "—"}</dd>
-            </div>
-            <div className="sm:col-span-2">
-              <dt className="text-neutral-500">Account ID</dt>
-              <dd className="mt-0.5 break-all font-mono text-xs text-neutral-300">{account.user.id}</dd>
-            </div>
+      <div className="space-y-10">
+        <section aria-label="Profile">
+          <SectionLabel>Profile</SectionLabel>
+          {/* The read-only account rows and the editable profile rows read as one panel. */}
+          <Panel className={profile ? "rounded-b-none" : ""}>
+            <Row label="Email">
+              <span className="break-all text-sm text-neutral-300">{account.user.email}</span>
+            </Row>
+            <Row label="Profile image" hint="From the account you sign in with.">
+              {account.avatarUrl ? (
+                <Image src={account.avatarUrl} alt="" width={40} height={40} className="rounded-full" unoptimized />
+              ) : (
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-800 text-sm font-semibold text-neutral-300" aria-hidden="true">
+                  {account.displayName.slice(0, 1).toUpperCase()}
+                </span>
+              )}
+            </Row>
+            <Row label="Name">
+              <span className="text-sm text-neutral-300">{account.displayName}</span>
+            </Row>
+          </Panel>
+          {profile ? (
+            <PublicProfileForm
+              initial={{
+                handle: profile.handle,
+                publicProfileEnabled: profile.publicProfileEnabled,
+                displayName: profile.displayName,
+                bio: profile.bio,
+                links: profile.links,
+                publicUrl: publicProfileUrl(profile.handle),
+              }}
+            />
+          ) : (
+            <p className="mt-3 px-1 text-sm text-neutral-500">Handle, links and public profile settings aren&apos;t available right now. Try again in a moment.</p>
+          )}
+        </section>
+
+        <section aria-label="Account">
+          <SectionLabel>Account</SectionLabel>
+          <Panel>
+            <Row label="Plan">
+              <span className="text-sm text-neutral-300">{account.tierLabel}</span>
+            </Row>
+            <Row label="Member since">
+              <span className="text-sm text-neutral-300">{formatDate(account.user.created_at) ?? "—"}</span>
+            </Row>
+            <Row label="Account ID">
+              <span className="break-all font-mono text-xs text-neutral-400">{account.user.id}</span>
+            </Row>
             {account.organizations.length > 0 && (
-              <div className="sm:col-span-2">
-                <dt className="text-neutral-500">Organizations</dt>
-                <dd className="mt-0.5 text-neutral-200">{account.organizations.map((org) => `${org.name} (${org.role})`).join(", ")}</dd>
-              </div>
+              <Row label="Organizations">
+                <span className="text-sm text-neutral-300">{account.organizations.map((org) => `${org.name} (${org.role})`).join(", ")}</span>
+              </Row>
             )}
-          </dl>
-        </Card>
+          </Panel>
+        </section>
 
-        <Card>
-          <CardTitle>Public profile</CardTitle>
-          <div className="mt-4">
-            {profile ? (
-              <PublicProfileForm
-                initial={{
-                  handle: profile.handle,
-                  publicProfileEnabled: profile.publicProfileEnabled,
-                  displayName: profile.displayName,
-                  bio: profile.bio,
-                  links: profile.links,
-                  publicUrl: publicProfileUrl(profile.handle),
-                }}
-              />
-            ) : (
-              <p className="text-sm text-neutral-400">Public profile settings aren&apos;t available right now. Try again in a moment.</p>
-            )}
-          </div>
-        </Card>
+        <section aria-label="Desktop app">
+          <SectionLabel>Desktop app</SectionLabel>
+          <Panel>
+            <Row label="Appearance and privacy" hint="Theme, privacy and other app preferences are set in the PawOS desktop app, under Settings." />
+          </Panel>
+        </section>
 
-        <Card>
-          <CardTitle>Sign-in and session</CardTitle>
-          <p className="mt-3 text-sm text-neutral-400">Sign out of PawOS on this browser, or reset your password by email.</p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <SignOutButton />
-            <Link href="/forgot-password" className={secondaryButton}>
-              Reset password
-            </Link>
-          </div>
-        </Card>
-
-        <Card>
-          <CardTitle>Desktop app settings</CardTitle>
-          <p className="mt-3 text-sm text-neutral-400">
-            Appearance, privacy and other app preferences are managed in the PawOS desktop app under Settings. They aren&apos;t duplicated here.
-          </p>
-        </Card>
+        <section aria-label="More">
+          <SectionLabel>More</SectionLabel>
+          <Panel>
+            <Row label="Password" hint="Get an email with a link to set a new password.">
+              <Link href="/forgot-password" className={secondaryButton}>
+                Reset password
+              </Link>
+            </Row>
+            <Row label="Log out" hint="Ends your PawOS session in this browser.">
+              <SignOutButton />
+            </Row>
+          </Panel>
+        </section>
       </div>
     </>
   );

@@ -145,7 +145,7 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
     : [];
   const pathname = usePathname();
 
-  if (pathname?.startsWith("/docs") || pathname?.startsWith("/dashboard")) return null;
+  if (pathname?.startsWith("/docs") || pathname?.startsWith("/dashboard") || pathname === "/app" || pathname?.startsWith("/app/")) return null;
   const isCompanionMode = pathname === "/companion";
   if (isCompanionMode || pathname === "/auth/desktop-success") return null;
 
@@ -189,8 +189,8 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
   
           <div className="hidden items-center gap-6 md:flex">
             
-            <Link href={userEmail ? "/dashboard" : "/login"} className="text-sm font-medium text-neutral-400 hover:text-white transition">
-              {userEmail ? "Dashboard" : "Log in"}
+            <Link href={userEmail ? "/app" : "/login"} className="text-sm font-medium text-neutral-400 hover:text-white transition">
+              {userEmail ? "Open PawOS" : "Log in"}
             </Link>
             <Link href="/early-access" className="text-sm font-medium text-white transition hover:opacity-80">
               Get Early Access &#8599;
@@ -360,8 +360,8 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
                 <Link href="/early-access" onClick={() => setMobileOpen(false)} className="text-xl font-medium text-white text-left">
                   Get Early Access &#8599;
                 </Link>
-                <Link href={userEmail ? "/dashboard" : "/login"} className="text-xl font-medium text-neutral-400 hover:text-white" onClick={() => setMobileOpen(false)}>
-                  {userEmail ? "Dashboard" : "Log in"}
+                <Link href={userEmail ? "/app" : "/login"} className="text-xl font-medium text-neutral-400 hover:text-white" onClick={() => setMobileOpen(false)}>
+                  {userEmail ? "Open PawOS" : "Log in"}
                 </Link>
               </div>
             </div>
