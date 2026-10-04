@@ -406,6 +406,10 @@ describe("code changes from a phone", () => {
     const { context, page } = await open(users.pro, "mobile", "/app");
     await page.getByRole("radio", { name: "Change code" }).tap();
     await page.getByTestId("change-status").getByRole("link", { name: "Connect GitHub" }).waitFor();
+    // The steps before coding: connect GitHub (the current step), select a repository, start coding.
+    expect(await page.getByTestId("change-status").getByText("Select a repository", { exact: true }).isVisible()).toBe(true);
+    expect(await page.getByTestId("change-status").getByText("Start coding", { exact: true }).isVisible()).toBe(true);
+    await shot(page, "app-change-setup-mobile");
     await page.getByLabel("Message Paw").fill("Make the header sticky");
     expect(await page.getByRole("button", { name: "Send message" }).isDisabled()).toBe(true);
     await context.close();
@@ -421,6 +425,8 @@ describe("code changes from a phone", () => {
     await page.getByTestId("change-status").getByRole("button", { name: "Choose repository" }).tap();
     await page.getByRole("dialog", { name: "Choose a repository" }).getByRole("button", { name: /acme\/storefront/ }).tap();
     await page.getByTestId("change-status").getByText("acme/storefront", { exact: true }).waitFor();
+    // The repository and the branch changes go to stay visible above the message box.
+    expect(await page.getByTestId("current-branch").textContent()).toBe("main");
     await shot(page, "app-change-ready-mobile");
 
     await page.getByLabel("Message Paw").fill("Make the header sticky on mobile");

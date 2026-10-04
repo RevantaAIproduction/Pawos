@@ -12,6 +12,7 @@ import type { CodeChangeView } from "../../lib/webCode/codeChange";
 import { TaskPanel, useCodeChange } from "./TaskPanel";
 import { HandoffSheet } from "./HandoffSheet";
 import { RepoPickerSheet } from "./RepoPickerSheet";
+import { RepoStatus } from "./RepoStatus";
 
 type Photo = { name: string; url: string };
 type LocalMessage = Pick<WebChatMessage, "role" | "content"> & { id: string; pending?: boolean; requiresDesktop?: boolean; photos?: Photo[]; surface?: "web" | "desktop" };
@@ -615,54 +616,10 @@ export function WorkspaceChat({
     </button>
   );
 
-  /** In Change mode: where the change will go, or what is missing first. */
-  const changeStatus = (() => {
-    if (!changeMode) return null;
-    const row = "mb-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-md bg-neutral-800/50 px-3 py-2 text-sm";
-    const action = "inline-flex min-h-10 items-center font-medium text-white underline underline-offset-2 md:min-h-0";
-    switch (frontendChanges.state) {
-      case "githubNotConnected":
-        return (
-          <div className={row} data-testid="change-status">
-            <span className="text-neutral-300">Connect GitHub to make changes.</span>
-            <Link href="/dashboard/integrations" className={action}>
-              Connect GitHub
-            </Link>
-          </div>
-        );
-      case "githubNeedsReauth":
-        return (
-          <div className={row} data-testid="change-status">
-            <span className="text-neutral-300">Your GitHub connection needs to be renewed.</span>
-            <Link href="/dashboard/integrations" className={action}>
-              Reconnect GitHub
-            </Link>
-          </div>
-        );
-      case "noRepository":
-        return (
-          <div className={row} data-testid="change-status">
-            <span className="text-neutral-300">Choose the repository to change.</span>
-            <button type="button" onClick={() => setRepoPickerOpen(true)} className={action}>
-              Choose repository
-            </button>
-          </div>
-        );
-      case "ready":
-        return (
-          <div className={`${row} flex-nowrap`} data-testid="change-status">
-            <span className="min-w-0 flex-1 truncate text-neutral-300">
-              In <span className="font-medium text-white">{frontendChanges.repository.fullName}</span> · pushes to {frontendChanges.repository.defaultBranch}
-            </span>
-            <button type="button" onClick={() => setRepoPickerOpen(true)} disabled={busy} aria-label="Choose another repository" className={`${action} shrink-0`}>
-              Switch
-            </button>
-          </div>
-        );
-      default:
-        return null;
-    }
-  })();
+  /** In Change mode: the setup steps still to do, or the repository and branch changes go to. */
+  const changeStatus = changeMode ? (
+    <RepoStatus readiness={frontendChanges} busy={busy} onChooseRepository={() => setRepoPickerOpen(true)} />
+  ) : null;
   const handoffButton = "inline-flex min-h-10 items-center gap-1.5 rounded-md border border-neutral-700 px-3 text-sm text-neutral-200 transition hover:bg-neutral-800 md:min-h-8";
 
   return (
@@ -814,7 +771,7 @@ export function WorkspaceChat({
             disabled={busy || outOfMessages}
             rows={empty ? 3 : 2}
             enterKeyHint="enter"
-            placeholder={outOfMessages ? "Upgrade to keep chatting" : changeMode ? "Describe the frontend change — e.g. make the header sticky on mobile" : "Ask Paw to explain, plan or review"}
+            placeholder={outOfMessages ? "Upgrade to keep chatting" : changeMode ? (promptLimit ? "Describe a small change — e.g. change the heading to …" : "Describe the change — e.g. make the header sticky on mobile") : "Ask Paw to explain, plan or review"}
             className="max-h-[40dvh] w-full resize-none bg-transparent text-base text-neutral-100 placeholder-neutral-600 focus:outline-none disabled:opacity-60 md:text-sm"
           />
           <div className="mt-1 flex items-center gap-2">
@@ -843,7 +800,9 @@ export function WorkspaceChat({
                   </span>
                 </>
               ) : (
-                <span className="truncate">{changeMode ? "Frontend files only · you review the pull request" : "Chat only — work runs in PawOS Desktop"}</span>
+                <span className="truncate">{changeMode
+                    ? `${promptLimit ? "Small frontend changes" : "Frontend and backend code"} · pushed to ${frontendChanges.state === "ready" ? frontendChanges.repository.defaultBranch : "your branch"}`
+                    : "Chat only — work runs in PawOS Desktop"}</span>
               )}
             </span>
             <button

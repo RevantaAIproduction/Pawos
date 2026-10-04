@@ -243,7 +243,8 @@ export const gettingStartedPages: DocPage[] = [
         items: [
           { title: 'Sign in', detail: 'Open pawos.revantaai.com/app in any browser and sign in with your PawOS account. On a phone you can add it to your home screen.' },
           { title: 'Chat with Paw', detail: 'Ask Paw to explain, plan or review — paste code, or (on paid plans) attach a photo or a file. Your chats from PawOS Desktop are already here, labelled "Desktop".' },
-          { title: 'Connect GitHub', detail: 'To change code, connect GitHub (you can do it from your phone) and choose the repository Paw works in.' },
+          { title: 'Connect GitHub', detail: 'Switch to "Change code". A short checklist walks you through it: connect GitHub (you can do it from your phone), then select the repository Paw works in.' },
+          { title: 'Check the repository and branch', detail: 'Once selected, the repository and its branch stay shown above the message box — every change is committed and pushed to that branch. Use Switch to pick another repository.' },
           { title: 'Change code', detail: 'Switch the composer to "Change code" (Paw Go: "Small change") and describe the change. A task panel shows each step as Paw reads the repository, writes the change, checks it and pushes it.' },
           { title: 'See it live', detail: 'When your repository has preview deployments (Vercel, Netlify and others), the preview opens in a new tab. If a check or deployment fails, Paw tries to fix it automatically.' },
           { title: 'Continue on your computer', detail: 'Need your files, terminal or tests? Use Continue in PawOS Desktop — the chat is already there.' },
