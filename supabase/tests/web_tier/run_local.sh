@@ -41,6 +41,9 @@ trap 'dropdb --if-exists "$DB" >/dev/null 2>&1 || true' EXIT
 "${PSQL[@]}" -f "$MIGRATIONS/20261004050000_account_chats.sql"
 "${PSQL[@]}" -f "$MIGRATIONS/20261004050000_account_chats.sql"
 "${PSQL[@]}" -f "$HERE/account_chats.test.sql" 2>&1 | sed 's/^psql:[^ ]* NOTICE:  //'
+"${PSQL[@]}" -f "$MIGRATIONS/20261004060000_web_build_usage.sql"
+"${PSQL[@]}" -f "$MIGRATIONS/20261004060000_web_build_usage.sql"
+"${PSQL[@]}" -f "$HERE/build_usage.test.sql" 2>&1 | sed 's/^psql:[^ ]* NOTICE:  //'
 
 # ── Concurrency: 12 sessions race to claim messages for one Paw Go account at the same moment.
 "${PSQL[@]}" -c "insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000cc', 'race@example.com')"

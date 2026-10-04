@@ -17,6 +17,7 @@ import {
   webMessageLimitFor,
   webMessageWindowDaysFor,
   isWebUsageMetered,
+  webUsageSourceFor,
   codeChangeScopeFor,
   type WebCapabilityId,
 } from "./webCapabilities";
@@ -56,12 +57,15 @@ describe("the policy", () => {
     for (const tier of TIERS.filter((t) => t !== "go" && t !== "build")) expect(webMessageLimitFor({ tier })).toBeNull();
   });
 
-  it("charges Web model calls to the usage allowance on every plan but Paw Go, and scopes code changes by plan", () => {
-    expect(isWebUsageMetered({ tier: "go" })).toBe(false);
-    for (const tier of TIERS.filter((t) => t !== "go")) {
-      expect(isWebUsageMetered({ tier })).toBe(true);
-      expect(codeChangeScopeFor({ tier })).toBe("full");
-    }
+  it("counts Web usage where Desktop counts that plan's usage, and scopes code changes by plan", () => {
+    expect(webUsageSourceFor({ tier: "pro" })).toBe("planBuckets");
+    expect(webUsageSourceFor({ tier: "proMax" })).toBe("planBuckets");
+    expect(webUsageSourceFor({ tier: "team" })).toBe("organizationPool");
+    expect(webUsageSourceFor({ tier: "enterprise" })).toBe("organizationPool");
+    expect(webUsageSourceFor({ tier: "go" })).toBe("messageCap");
+    expect(webUsageSourceFor({ tier: "build" })).toBe("messageCap");
+    for (const tier of TIERS) expect(isWebUsageMetered({ tier })).toBe(tier === "pro" || tier === "proMax");
+    for (const tier of TIERS.filter((t) => t !== "go")) expect(codeChangeScopeFor({ tier })).toBe("full");
     expect(codeChangeScopeFor({ tier: "go" })).toBe("small");
     for (const tier of TIERS) expect(webCapabilityStatus({ tier }, "web.codeChanges")).toBe("available");
   });

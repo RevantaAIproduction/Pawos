@@ -417,9 +417,89 @@ describe("the admin-granted access tier: 12 Web messages a week", () => {
     const refused = await send(post({ content: "thirteenth" }));
     expect(refused.status).toBe(402);
     expect((await refused.json()).message).toMatch(/this week/);
-    expect(state.backend.usageCalls.filter((c) => c.name === "reserve_usage")).toHaveLength(12); // also on the usage allowance
+    // Never charged to usage buckets: this tier has none (Desktop doesn't charge its allowance to one either).
+    expect(state.backend.usageCalls.filter((c) => c.name === "reserve_usage")).toHaveLength(0);
     for (const row of state.backend.tables.web_chat_requests) row.updated_at = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
     expect((await send(post({ content: "next week" }))).status).toBe(200);
+  });
+});
+
+describe("usage is counted where PawOS Desktop counts it", () => {
+  it("the admin-granted access tier: Web messages come out of its included Paw Compute, not on top of it", async () => {
+    const startsAt = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000); // day 11 of the grant: week 2 began 3 days ago
+    state.backend.addUser("admin-tier-2", { buildStatus: "active", buildStartsAt: startsAt.toISOString(), buildEndsAt: new Date(startsAt.getTime() + 56 * 24 * 60 * 60 * 1000).toISOString() });
+    state.session = { id: "admin-tier-2", email: "b@example.com", user_metadata: {} } as unknown as User;
+    const ago = (hours: number) => new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+    const usage = state.backend.tables.web_build_usage;
+    const report = (weekPcUsed: number, windowPcUsed = 0) => {
+      state.backend.tables.pawos_build_usage_reports = [
+        { user_id: "admin-tier-2", report: { weekPcUsed, weekPcLimit: 1500, weekResetsAt: Date.now() + 4 * 24 * 60 * 60 * 1000, windowPcUsed, windowPcLimit: 500, windowResetsAt: Date.now() + 60 * 60 * 1000 } },
+      ];
+    };
+
+    // Desktop used 1,400 PC this week; Web used 99 → 1,499: one more message is allowed…
+    report(1400);
+    usage.push({ user_id: "admin-tier-2", request_key: "old-1", pc: 99, created_at: ago(30) });
+    usage.push({ user_id: "admin-tier-2", request_key: "last-week", pc: 900, created_at: ago(24 * 4) }); // previous grant week: not counted
+    const allowed = await send(post({ content: "hello" }));
+    expect(allowed.status).toBe(200);
+    // …and its cost is recorded against the same allowance, priced from the model's price row.
+    const recorded = usage.filter((row) => String(row.request_key).startsWith("web-chat:"));
+    expect(recorded).toHaveLength(1);
+    expect(Number(recorded[0].pc)).toBeGreaterThan(0);
+
+    // At 1,500 (Desktop and Web together) the week is used up: refused before anything is claimed.
+    usage.push({ user_id: "admin-tier-2", request_key: "old-2", pc: 1, created_at: ago(29) });
+    const claimsBefore = state.backend.tables.web_chat_requests.length;
+    const refused = await send(post({ content: "more" }));
+    expect(refused.status).toBe(402);
+    expect((await refused.json()).message).toMatch(/PawOS Desktop and Web together/);
+    expect(state.backend.tables.web_chat_requests).toHaveLength(claimsBefore);
+
+    // The 5-hour window too: 450 on Desktop + 50 on Web in the last 5 hours.
+    state.backend.tables.web_build_usage = [{ user_id: "admin-tier-2", request_key: "recent", pc: 50, created_at: ago(1) }];
+    report(600, 450);
+    expect((await send(post({ content: "window" }))).status).toBe(402);
+    // Once Desktop's reported week and window have reset, only Web's own use counts.
+    state.backend.tables.pawos_build_usage_reports[0].report = { weekPcUsed: 1500, weekPcLimit: 1500, weekResetsAt: Date.now() - 1000, windowPcUsed: 500, windowResetsAt: Date.now() - 1000 };
+    expect((await send(post({ content: "after reset" }))).status).toBe(200);
+    expect(state.backend.usageCalls.filter((c) => c.name === "reserve_usage")).toHaveLength(0);
+  });
+
+  it("the admin-granted access tier: every model call of a code change is recorded against its allowance", async () => {
+    state.backend.addUser("admin-tier-3", { buildStatus: "active" });
+    state.session = { id: "admin-tier-3", email: "c@example.com", user_metadata: {} } as unknown as User;
+    await ready();
+    expect((await send(post({ content: "Rename the button", mode: "codeChange", requestId: "build-change-01" }))).status).toBe(200);
+    const keys = state.backend.tables.web_build_usage.map((row) => String(row.request_key));
+    expect(keys.filter((key) => key.startsWith("web-change:build-change-01:")).length).toBeGreaterThanOrEqual(2);
+    expect(state.backend.usageCalls.filter((c) => c.name === "reserve_usage")).toHaveLength(0);
+  });
+
+  it("Team / Enterprise: one unit of the organization's pool per message, never the member's own buckets", async () => {
+    state.backend.addUser("team-member");
+    state.backend.joinOrganization("team-member", { id: "org-team", name: "Team", tier: "team" }, "member");
+    state.session = { id: "team-member", email: "t@example.com", user_metadata: {} } as unknown as User;
+    state.backend.organizationLimit = 2;
+    expect((await send(post({ content: "one" }))).status).toBe(200);
+    expect((await send(post({ content: "two" }))).status).toBe(200);
+    expect(state.backend.organizationUsage.get("org-team")).toBe(2);
+    const refused = await send(post({ content: "three" }));
+    expect(refused.status).toBe(402);
+    expect((await refused.json()).message).toMatch(/organization's shared usage/);
+    expect(state.backend.usageCalls.filter((c) => c.name === "reserve_usage")).toHaveLength(0);
+    // The refused message was released: nothing stored, and it can be sent once the pool allows.
+    expect(state.backend.tables.web_chat_messages.filter((m) => m.content === "three")).toHaveLength(0);
+  });
+
+  it("Team / Enterprise: a code change is one unit of the pool, whatever model calls it makes", async () => {
+    state.backend.addUser("ent-member");
+    state.backend.joinOrganization("ent-member", { id: "org-ent", name: "Ent", tier: "enterprise" }, "member");
+    state.session = { id: "ent-member", email: "e@example.com", user_metadata: {} } as unknown as User;
+    await ready();
+    expect((await send(post({ content: "Rename the button", mode: "codeChange", requestId: "ent-change-0001" }))).status).toBe(200);
+    expect(state.backend.organizationUsage.get("org-ent")).toBe(1);
+    expect(state.backend.usageCalls.filter((c) => c.name === "reserve_usage")).toHaveLength(0);
   });
 });
 

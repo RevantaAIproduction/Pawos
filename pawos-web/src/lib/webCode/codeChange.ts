@@ -3,6 +3,7 @@ import type { AccountContext } from "../account/accountContext";
 import { createServiceClient } from "../supabase/serviceClient";
 import { WebChatError } from "../webChat/errors";
 import { generate, meteredGenerate, type GenerateRequest, type ModelContent, type ModelReply } from "../webChat/model";
+import { recordBuildUsage } from "../webChat/sharedUsage";
 import type { WebChatMessage } from "../webChat/webChat";
 import { WEB_POLICY, type CodeChangeScope } from "../webPolicy/webCapabilities";
 import { changedLineCount, isEditablePath, normaliseRepoPath, suspiciousEdits, validateEdits, type CodeEdit } from "./codePolicy";
@@ -220,10 +221,17 @@ function recentConversation(history: WebChatMessage[]): string {
 
 const userTurn = (text: string): ModelContent[] => [{ role: "user", parts: [{ text }] }];
 
-/** One model call for a change: charged to the plan's allowance when metered (paid plans). */
+/**
+ * One model call for a change: charged to the plan's allowance when metered (paid plans); on the
+ * admin-granted access tier, recorded against that tier's included Paw Compute.
+ */
 export function changeModel(account: AccountContext, metered: boolean, requestId: string) {
-  return (step: string, request: GenerateRequest): Promise<ModelReply> =>
-    metered ? meteredGenerate(account, { requestKey: `web-change:${requestId}:${step}`, category: CODE_CHANGE_USAGE_CATEGORY }, request) : generate(request);
+  return async (step: string, request: GenerateRequest): Promise<ModelReply> => {
+    if (metered) return meteredGenerate(account, { requestKey: `web-change:${requestId}:${step}`, category: CODE_CHANGE_USAGE_CATEGORY }, request);
+    const reply = await generate(request);
+    if (account.tier === "build") await recordBuildUsage(account, `web-change:${requestId}:${step}`, reply.usage);
+    return reply;
+  };
 }
 
 function shortSha(sha: string): string {

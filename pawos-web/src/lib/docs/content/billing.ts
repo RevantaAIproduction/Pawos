@@ -174,14 +174,14 @@ export const billingPages: DocPage[] = [
           ['Pro', '2,000 PC per billing period, weekly limit 1,000 PC', 'The same allowance', 'Yes — one pool'],
           ['Pro Max 5x', '10,000 PC per billing period, weekly limit 5,000 PC', 'The same allowance', 'Yes — one pool'],
           ['Pro Max 20x', '25,000 PC per billing period, weekly limit 12,500 PC', 'The same allowance', 'Yes — one pool'],
-          ['Team / Enterprise', 'Your organization’s shared pool', 'The same pool', 'Yes — one pool'],
+          ['Team / Enterprise', 'Your organization’s shared pool', 'The same pool — each Web message counts once, like a Desktop message', 'Yes — one pool'],
         ],
       },
       {
         type: 'list',
         items: [
           'On paid plans, using PawOS on your phone uses the same Paw Compute as using it on your computer. There is no separate Web balance.',
-          'A code change from Web uses at least two model calls, plus any automatic fixes. On Go, a whole change counts as one of your 4 messages.',
+          'A code change from Web uses at least two model calls, plus any automatic fixes. On Go, a whole change counts as one of your 4 messages; on Team and Enterprise, it counts once against your organization’s pool.',
           'A reply that fails, or a change PawOS declines or that changes nothing, never uses a Go message and is never charged.',
           'Each Web message can be up to 4,000 characters. Photos can be up to 5 MB, and text or code files up to 60 KB.',
         ],

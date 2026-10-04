@@ -6,6 +6,7 @@ import {
   WEB_POLICY,
   WebCapabilityError,
   isWebUsageMetered,
+  webUsageSourceFor,
   promptTooLongFor,
   requireWebCapability,
   webMessageLimitFor,
@@ -14,6 +15,7 @@ import {
 } from "../webPolicy/webCapabilities";
 import { WebChatError } from "./errors";
 import { WEB_MODEL, generate, inputUpperBound, usageLimitMessage, type ModelContent, type ModelReply } from "./model";
+import { recordBuildUsage, requireBuildAllowance, takeOrganizationTurn } from "./sharedUsage";
 import { attachmentsByMessage, loadAttachmentForSend, type WebChatAttachment } from "./uploads";
 import { requireCodeChangeAccess, requireCodeChanges } from "../webCode/repository";
 import { linkChangeToChat, runCodeChange, type CodeChangeView } from "../webCode/codeChange";
@@ -324,6 +326,7 @@ export async function sendMessage(account: AccountContext, input: SendInput): Pr
   const messageLimit = messageLimitFor(account);
   const windowDays = webMessageWindowDaysFor(account);
   const metered = isWebUsageMetered(account);
+  const usageSource = webUsageSourceFor(account);
 
   if (clientRequestId) {
     const stored = await findStoredExchange(account, clientRequestId);
@@ -370,6 +373,9 @@ export async function sendMessage(account: AccountContext, input: SendInput): Pr
       ? `You've used all ${messageLimit} free messages on PawOS Web. Upgrade or use the PawOS desktop app to keep going.`
       : `You've used this week's ${messageLimit} messages on PawOS Web. They come back as the week rolls on — or use the PawOS desktop app.`;
   const service = createServiceClient();
+  // The admin-granted access tier: Web messages come out of its included Paw Compute (Desktop's
+  // reported usage plus Web's own), never on top of it.
+  if (account.tier === "build") await requireBuildAllowance(account);
 
   // 2. Claim. For Paw Go this is where the limit is decided — before any model call.
   const claim = await service.rpc("web_chat_begin_request", {
@@ -405,6 +411,8 @@ export async function sendMessage(account: AccountContext, input: SendInput): Pr
   };
 
   try {
+    // Team / Enterprise: one unit of the organization's shared pool, as Desktop counts a turn.
+    if (usageSource === "organizationPool") await takeOrganizationTurn(account);
     const image = wantsImage ? await loadAttachmentForSend(account, input.imageId) : null;
     let replyText: string;
     let requiresDesktop: boolean;
@@ -442,6 +450,7 @@ export async function sendMessage(account: AccountContext, input: SendInput): Pr
       ({ text: replyText, requiresDesktop } = extractDesktopMarker(reply.text));
       if (!replyText) throw new WebChatError("model_unavailable", "Paw couldn't answer just now. Please try again.", 502);
       chatUsage = reply.usage;
+      if (account.tier === "build") await recordBuildUsage(account, `web-chat:${requestId}`, reply.usage);
     }
 
     // 5. Store.

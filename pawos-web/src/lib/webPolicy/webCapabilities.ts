@@ -58,8 +58,16 @@ export const WEB_POLICY = {
   /** Paw Go: the longest prompt PawOS Web accepts — small requests only. */
   goMaxPromptLines: 2,
   goMaxPromptChars: 200,
-  /** The admin-granted access tier: Web messages in a rolling week. */
+  /**
+   * The admin-granted access tier: Web messages in a rolling week — WITHIN its included allowance,
+   * not on top of it: Web messages also stop once the tier's Paw Compute limits below are reached
+   * (PawOS Desktop's reported usage plus Web's own).
+   */
   adminTierWeeklyWebMessages: 12,
+  /** That tier's included Paw Compute — the same program terms PawOS Desktop enforces. */
+  adminTierWeeklyPc: 1_500,
+  adminTierWindowPc: 500,
+  adminTierWindowHours: 5,
   /**
    * Code changes from the web, pushed to the selected GitHub repository. Paid plans make full
    * changes (frontend and backend) on their usage allowance; Paw Go makes small frontend changes
@@ -210,9 +218,26 @@ export function webMessageWindowDaysFor(account: Pick<AccountContext, "tier">): 
   return account.tier === "build" ? 7 : null;
 }
 
-/** Whether Web model calls are charged to the plan's usage allowance (every tier but Paw Go). */
+/**
+ * Where a Web message's usage is counted — the same place PawOS Desktop counts that plan's usage:
+ *  - "planBuckets" (Pro, Pro Max): every model call is reserved and settled on the account's usage
+ *    buckets (reserve_usage → settle_usage), the one allowance Desktop also draws on;
+ *  - "organizationPool" (Team, Enterprise): one unit of the organization's shared monthly
+ *    'aiReasoning' pool per message (increment_organization_usage), exactly as Desktop counts a turn;
+ *  - "messageCap" (Paw Go, and the admin-granted access tier): the Web message cap only — never
+ *    charged to a bucket, as Desktop never charges these tiers' included allowance to one.
+ */
+export type WebUsageSource = "planBuckets" | "organizationPool" | "messageCap";
+
+export function webUsageSourceFor(account: Pick<AccountContext, "tier">): WebUsageSource {
+  if (account.tier === "pro" || account.tier === "proMax") return "planBuckets";
+  if (account.tier === "team" || account.tier === "enterprise") return "organizationPool";
+  return "messageCap";
+}
+
+/** Whether Web model calls are reserved and settled on the account's usage buckets (Pro, Pro Max). */
 export function isWebUsageMetered(account: Pick<AccountContext, "tier">): boolean {
-  return account.tier !== "go";
+  return webUsageSourceFor(account) === "planBuckets";
 }
 
 export type CodeChangeScope = "small" | "full";

@@ -17,6 +17,8 @@ type Row = Record<string, unknown>;
 export interface FakeUserState {
   subscription?: { active: boolean; tier: "pro" | "proMax"; proMaxVariant?: string | null; expiresAt?: string | null };
   buildStatus?: "none" | "active" | "expired" | "revoked";
+  buildStartsAt?: string;
+  buildEndsAt?: string;
   meta?: Record<string, unknown>;
   email?: string;
 }
@@ -34,7 +36,7 @@ interface ProfileRow {
 }
 
 const GUARDED_TABLES = ["web_chat_messages", "web_chat_usage", "web_chat_requests"];
-const SERVICE_ONLY_TABLES = ["web_chats", "web_chat_attachments", "web_repository_selection", "web_code_changes"];
+const SERVICE_ONLY_TABLES = ["web_chats", "web_chat_attachments", "web_repository_selection", "web_code_changes", "web_build_usage", "pawos_build_usage_reports"];
 
 const HANDLE = /^[a-z0-9](?:[a-z0-9-]{1,28})[a-z0-9]$/;
 const RESERVED = ["admin", "api", "pawos", "paw", "support", "help", "settings", "dashboard", "login", "signup", "revanta", "revantaai"];
@@ -52,7 +54,17 @@ export class FakeBackend {
     web_chat_attachments: [],
     web_repository_selection: [],
     web_code_changes: [],
+    pawos_build_usage_reports: [],
+    web_build_usage: [],
+    // The real price row for the Web model (usage_buckets.sql), read by the service role only.
+    model_prices: [{ model: "gemini-flash-latest", version: 1, active: true, input_usd_per_mtok: 0.75, cached_input_usd_per_mtok: 0.075, output_usd_per_mtok: 3.75, effective_from: "2026-01-01T00:00:00Z", effective_until: "2027-01-01T00:00:00Z" }],
   };
+  /**
+   * The organization pool (increment_organization_usage): used units per organization, and the
+   * monthly limit (null = unlimited). Over the limit it raises, like the real function.
+   */
+  organizationUsage = new Map<string, number>();
+  organizationLimit: number | null = null;
   /** Objects in Supabase Storage, keyed "bucket/path". Service role only, like the private bucket. */
   storage = new Map<string, { data: Uint8Array; contentType: string }>();
   /**
@@ -174,11 +186,25 @@ export class FakeBackend {
       return ok({ ok: true });
     }
 
+    if (name === "increment_organization_usage") {
+      this.usageCalls.push({ name, args });
+      const orgId = String(args.p_organization_id ?? "");
+      const member = this.tables.organization_members.some((row) => row.user_id === userId && row.status === "active" && (row.organization_id ?? (row.organizations as Row | undefined)?.id) === orgId);
+      if (!member) return fail("not authorized: not a member of this organization");
+      const used = this.organizationUsage.get(orgId) ?? 0;
+      const amount = Number(args.p_amount ?? 1);
+      if (this.organizationLimit !== null && used + amount > this.organizationLimit) {
+        return fail(`usage limit exceeded for capability ${String(args.p_capability)} (used ${used} of ${this.organizationLimit} this period)`);
+      }
+      this.organizationUsage.set(orgId, used + amount);
+      return ok([{ used_amount: used + amount, monthly_limit: this.organizationLimit }]);
+    }
+
     switch (name) {
       case "get_my_subscription":
         return ok(state.subscription ?? { active: false });
       case "get_my_build_access":
-        return ok({ status: state.buildStatus ?? "none" });
+        return ok({ status: state.buildStatus ?? "none", startsAt: state.buildStartsAt ?? null, endsAt: state.buildEndsAt ?? null });
       case "get_my_usage_summary":
         return ok(this.usageSummary);
       case "get_my_usage_history":
