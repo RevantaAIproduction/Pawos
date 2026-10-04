@@ -1,6 +1,7 @@
 import { autoUpdater } from 'electron-updater';
-import { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, screen, session, shell } from 'electron';
+import { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, screen, session, shell, Notification } from 'electron';
 import * as path from 'path';
+import * as fs from 'fs';
 import { pathToFileURL } from 'url';
 import { createTray } from './tray/trayManager';
 import { registerIpc } from './ipc/ipc';
@@ -73,6 +74,7 @@ import { slackConnectorSDK } from './connectivity/connectors/SlackConnectorSDK';
 import { startRatingPromptScheduler } from './feedback/RatingPromptScheduler';
 import { isStoreRuntime } from './platform/storeRuntime';
 import { registerUpdater } from './platform/updaterSetup';
+import { fetchLatestStoreVersion } from './platform/storeUpdates';
 import { registerPawosProtocolClient } from './platform/protocolRegistration';
 import { extractJumpAction, installJumpList, isJumpProtocolUrl, type JumpAction } from './platform/jumpList';
 import { applyStartWithWindows } from './platform/startWithWindows';
@@ -679,13 +681,29 @@ app.whenReady().then(async () => {
   registerUpdater({
     ipcMain,
     isStore: isStoreRuntime(),
+    currentVersion: app.getVersion(),
     // Accessing electron-updater's `autoUpdater` getter is what constructs the NsisUpdater.
     loadAutoUpdater: () => autoUpdater,
-    // Forward autoUpdater lifecycle events to the renderer via the "updater:state" channel.
+    // electron-builder writes app-update.yml only when the build has a publish (update feed) config.
+    hasUpdateFeed: app.isPackaged && fs.existsSync(path.join(process.resourcesPath, 'app-update.yml')),
+    fetchLatestStoreVersion: () => fetchLatestStoreVersion(),
+    // Forward updater states to the renderer via the "updater:state" channel.
     sendState: (state: string) => {
       if (mainWindow && mainWindow.webContents) {
         mainWindow.webContents.send('updater:state', state);
       }
+    },
+    notify: ({ title, body, onClick }) => {
+      if (!Notification.isSupported()) return;
+      const notification = new Notification({ title, body });
+      notification.on('click', onClick);
+      notification.show();
+    },
+    showApp: () => {
+      if (!mainWindow) return;
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
     },
     openExternal: (url: string) => shell.openExternal(url),
   });

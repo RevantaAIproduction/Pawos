@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { getDistribution, isStoreRuntime, STORE_UPDATES_URI, WINDOWS_STARTUP_SETTINGS_URI } from './storeRuntime';
-import { registerUpdater } from './updaterSetup';
+import { CHECK_INTERVAL_MS, FIRST_CHECK_DELAY_MS, registerUpdater } from './updaterSetup';
+import { compareVersions, fetchLatestStoreVersion, latestVersionInCatalog, STORE_CATALOG_URL, STORE_PRODUCT_URI } from './storeUpdates';
 import { registerPawosProtocolClient } from './protocolRegistration';
 import { applyStartWithWindows, getStartWithWindowsStatus, type StartWithWindowsDeps } from './startWithWindows';
 import type { StartupTaskState } from './storeStartupTask';
@@ -21,44 +22,173 @@ function fakeIpcMain() {
 }
 
 function fakeAutoUpdater() {
-  return { checkForUpdates: vi.fn().mockResolvedValue(undefined), quitAndInstall: vi.fn(), on: vi.fn() };
+  const listeners = new Map<string, (...args: any[]) => void>();
+  return {
+    listeners,
+    checkForUpdates: vi.fn().mockResolvedValue(undefined),
+    quitAndInstall: vi.fn(),
+    on: vi.fn((name: string, fn: (...args: any[]) => void) => listeners.set(name, fn)),
+  };
 }
 
-describe('registerUpdater', () => {
-  it('Store build: never constructs electron-updater, opens the Store for updates, and never installs', async () => {
-    const ipcMain = fakeIpcMain();
-    const loadAutoUpdater = vi.fn();
-    const sendState = vi.fn();
-    const openExternal = vi.fn().mockResolvedValue(undefined);
+/** Timers the test fires by hand: [delay, fn] pairs. */
+function fakeTimers() {
+  const timeouts: Array<[number, () => void]> = [];
+  const intervals: Array<[number, () => void]> = [];
+  return {
+    timeouts,
+    intervals,
+    timers: {
+      setTimeout: (fn: () => void, ms: number) => timeouts.push([ms, fn]),
+      setInterval: (fn: () => void, ms: number) => intervals.push([ms, fn]),
+    },
+  };
+}
 
-    expect(registerUpdater({ ipcMain, isStore: true, loadAutoUpdater, sendState, openExternal })).toBe('store');
+function updaterDeps(overrides: Partial<Parameters<typeof registerUpdater>[0]> = {}) {
+  const ipcMain = fakeIpcMain();
+  const clock = fakeTimers();
+  const deps = {
+    ipcMain,
+    isStore: true,
+    currentVersion: '1.0.1',
+    loadAutoUpdater: vi.fn(),
+    hasUpdateFeed: true,
+    fetchLatestStoreVersion: vi.fn().mockResolvedValue('1.0.1.0'),
+    sendState: vi.fn(),
+    notify: vi.fn(),
+    showApp: vi.fn(),
+    openExternal: vi.fn().mockResolvedValue(undefined),
+    timers: clock.timers,
+    ...overrides,
+  };
+  return { deps, ipcMain, clock };
+}
 
-    await expect(ipcMain.handlers.get('updater:check')!()).resolves.toBe(true);
-    await expect(ipcMain.handlers.get('updater:quitAndInstall')!()).resolves.toBe(false);
-    expect(openExternal).toHaveBeenCalledWith(STORE_UPDATES_URI);
-    expect(loadAutoUpdater).not.toHaveBeenCalled();
-    expect(sendState).not.toHaveBeenCalled();
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+describe('registerUpdater — Microsoft Store build', () => {
+  it('never constructs electron-updater, and checks on its own after launch and every few hours', async () => {
+    const { deps, clock } = updaterDeps();
+    expect(registerUpdater(deps)).toBe('store');
+    expect(deps.loadAutoUpdater).not.toHaveBeenCalled();
+    expect(clock.timeouts.map(([ms]) => ms)).toEqual([FIRST_CHECK_DELAY_MS]);
+    expect(clock.intervals.map(([ms]) => ms)).toEqual([CHECK_INTERVAL_MS]);
+    clock.timeouts[0]![1]();
+    await flush();
+    expect(deps.fetchLatestStoreVersion).toHaveBeenCalledTimes(1);
   });
 
-  it('direct (NSIS) build: keeps the electron-updater check / install / event forwarding flow', async () => {
-    const ipcMain = fakeIpcMain();
-    const updater = fakeAutoUpdater();
-    const sendState = vi.fn();
-    const openExternal = vi.fn();
+  it('a newer Store version: reports it, notifies once, and Update opens PawOS\'s own Store page — not the library', async () => {
+    const { deps, ipcMain, clock } = updaterDeps({ fetchLatestStoreVersion: vi.fn().mockResolvedValue('1.0.2.0') });
+    registerUpdater(deps);
+    clock.timeouts[0]![1]();
+    await flush();
 
-    expect(registerUpdater({ ipcMain, isStore: false, loadAutoUpdater: () => updater as any, sendState, openExternal })).toBe('direct');
+    expect(deps.sendState).toHaveBeenCalledWith('store-update-available');
+    await expect(ipcMain.handlers.get('updater:getState')!()).resolves.toEqual({ state: 'store-update-available', version: '1.0.2.0' });
+    expect(deps.notify).toHaveBeenCalledTimes(1);
+    expect(deps.notify.mock.calls[0]![0]).toMatchObject({ title: 'PawOS update available', body: expect.stringContaining('1.0.2.0') });
+
+    // Later checks don't notify again for the same version.
+    clock.intervals[0]![1]();
+    await flush();
+    expect(deps.notify).toHaveBeenCalledTimes(1);
+
+    // Clicking the notification or Update: PawOS's product page in the Store.
+    deps.notify.mock.calls[0]![0].onClick();
+    await expect(ipcMain.handlers.get('updater:quitAndInstall')!()).resolves.toBe(true);
+    expect(deps.openExternal).toHaveBeenCalledWith(STORE_PRODUCT_URI);
+    expect(deps.openExternal).not.toHaveBeenCalledWith(STORE_UPDATES_URI);
+  });
+
+  it('up to date: no notification, and the sidebar has nothing to show', async () => {
+    const { deps, ipcMain } = updaterDeps({ fetchLatestStoreVersion: vi.fn().mockResolvedValue('1.0.1.0') });
+    registerUpdater(deps);
+    await expect(ipcMain.handlers.get('updater:check')!()).resolves.toBe(true);
+    expect(deps.sendState).toHaveBeenLastCalledWith('update-not-available');
+    expect(deps.notify).not.toHaveBeenCalled();
+    expect(deps.openExternal).not.toHaveBeenCalled(); // checking never opens the Store
+  });
+
+  it('Store unreachable: a manual check reports an error; a background check changes nothing', async () => {
+    const { deps, ipcMain, clock } = updaterDeps({ fetchLatestStoreVersion: vi.fn().mockResolvedValue(null) });
+    registerUpdater(deps);
+    clock.timeouts[0]![1]();
+    await flush();
+    expect(deps.sendState).not.toHaveBeenCalled();
+    await expect(ipcMain.handlers.get('updater:check')!()).resolves.toBe(false);
+    expect(deps.sendState).toHaveBeenLastCalledWith('error');
+  });
+});
+
+describe('registerUpdater — direct download (NSIS) build', () => {
+  it('keeps the electron-updater flow, checks automatically, and notifies once a download is ready', async () => {
+    const updater = fakeAutoUpdater();
+    const { deps, ipcMain, clock } = updaterDeps({ isStore: false, loadAutoUpdater: () => updater as any });
+    expect(registerUpdater(deps)).toBe('direct');
 
     await expect(ipcMain.handlers.get('updater:check')!()).resolves.toBe(true);
     expect(updater.checkForUpdates).toHaveBeenCalledTimes(1);
-    await expect(ipcMain.handlers.get('updater:quitAndInstall')!()).resolves.toBe(true);
-    expect(updater.quitAndInstall).toHaveBeenCalledTimes(1);
-    expect(openExternal).not.toHaveBeenCalled();
+    expect(clock.timeouts.map(([ms]) => ms)).toEqual([FIRST_CHECK_DELAY_MS]);
+    expect(clock.intervals.map(([ms]) => ms)).toEqual([CHECK_INTERVAL_MS]);
 
     const events = updater.on.mock.calls.map(([name]) => name);
     expect(events).toEqual(['checking-for-update', 'update-available', 'download-progress', 'update-downloaded', 'update-not-available', 'error']);
-    const downloaded = updater.on.mock.calls.find(([name]) => name === 'update-downloaded')![1];
-    downloaded();
-    expect(sendState).toHaveBeenCalledWith('update-downloaded');
+
+    updater.listeners.get('update-available')!({ version: '1.0.2' });
+    updater.listeners.get('update-downloaded')!({ version: '1.0.2' });
+    expect(deps.sendState).toHaveBeenCalledWith('update-downloaded');
+    await expect(ipcMain.handlers.get('updater:getState')!()).resolves.toEqual({ state: 'update-downloaded', version: '1.0.2' });
+    expect(deps.notify).toHaveBeenCalledTimes(1);
+    expect(deps.notify.mock.calls[0]![0]).toMatchObject({ title: 'PawOS update ready' });
+
+    // A later background check or error doesn't hide an update that is ready to install.
+    updater.listeners.get('checking-for-update')!();
+    updater.listeners.get('error')!(new Error('offline'));
+    await expect(ipcMain.handlers.get('updater:getState')!()).resolves.toMatchObject({ state: 'update-downloaded' });
+
+    await expect(ipcMain.handlers.get('updater:quitAndInstall')!()).resolves.toBe(true);
+    expect(updater.quitAndInstall).toHaveBeenCalledTimes(1);
+    expect(deps.openExternal).not.toHaveBeenCalled();
+  });
+
+  it('without an update feed (dev run): no automatic checks', () => {
+    const updater = fakeAutoUpdater();
+    const { deps, clock } = updaterDeps({ isStore: false, hasUpdateFeed: false, loadAutoUpdater: () => updater as any });
+    registerUpdater(deps);
+    expect(clock.timeouts).toHaveLength(0);
+    expect(clock.intervals).toHaveLength(0);
+  });
+});
+
+describe('Store catalog version', () => {
+  it('reads PawOS\'s newest package version from the catalog, whatever its layout', () => {
+    const body = JSON.stringify({
+      Products: [{ DisplaySkuAvailabilities: [{ Sku: { Properties: { Packages: [
+        { PackageFullName: 'PawosAI.PawOS_1.0.1.0_x64__y5w6824kw3wcj' },
+        { PackageFullName: 'PawosAI.PawOS_1.0.10.0_x64__y5w6824kw3wcj' },
+        { PackageFullName: 'PawosAI.PawOS_1.0.9.0_arm64__y5w6824kw3wcj' },
+        { PackageFullName: 'SomeoneElse.App_9.9.9.0_x64__abc' },
+      ] } } }] }],
+    });
+    expect(latestVersionInCatalog(body)).toBe('1.0.10.0');
+    expect(latestVersionInCatalog('{"Products":[]}')).toBeNull();
+  });
+
+  it('compares versions numerically, with or without the fourth part', () => {
+    expect(compareVersions('1.0.2.0', '1.0.1')).toBe(1);
+    expect(compareVersions('1.0.1.0', '1.0.1')).toBe(0);
+    expect(compareVersions('1.0.9', '1.0.10')).toBe(-1);
+  });
+
+  it('fetch failures and non-OK answers mean "unknown", never a version', async () => {
+    await expect(fetchLatestStoreVersion(async () => { throw new Error('offline'); })).resolves.toBeNull();
+    await expect(fetchLatestStoreVersion(async () => ({ ok: false, text: async () => '' }))).resolves.toBeNull();
+    await expect(fetchLatestStoreVersion(async (url) => {
+      expect(url).toBe(STORE_CATALOG_URL);
+      return { ok: true, text: async () => '"PawosAI.PawOS_2.0.0.0_x64__y5w6824kw3wcj"' };
+    })).resolves.toBe('2.0.0.0');
   });
 });
 

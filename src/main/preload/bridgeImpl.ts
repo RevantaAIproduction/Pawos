@@ -631,6 +631,8 @@ export function contextBridge() {
     // Updater IPC methods
     checkForUpdates: () => ipcRenderer.invoke('updater:check'),
     quitAndInstall: () => ipcRenderer.invoke('updater:quitAndInstall'),
+    /** The current update state ({ state, version }) — so a window opened after a check still knows about an update. */
+    getUpdateState: () => ipcRenderer.invoke('updater:getState') as Promise<{ state: string; version: string | null }>,
     onUpdateState: (cb: (state: string) => void) => {
       const handler = (_: any, state: string) => cb(state);
       ipcRenderer.on('updater:state', handler);

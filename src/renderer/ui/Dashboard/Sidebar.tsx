@@ -4,6 +4,7 @@ import type { SectionId } from './sections';
 import { SECTION_TITLES } from './sections';
 import { HomeIcon, CompanionIcon, WorkIcon } from './NavIcons';
 import { ProfileMenu, type ProfileMenuAction } from './ProfileMenu';
+import { nextUpdateStatus, sidebarUpdateButton, statusFromState, type UpdateStatus } from './sections/updateStatus';
 
 const COLLAPSE_STORAGE_KEY = 'pawos.sidebarCollapsed';
 
@@ -239,36 +240,32 @@ export function Sidebar({
       // best-effort — a private/restricted profile just won't remember the preference
     }
   }, [collapsed]);
-  const [updateLabel, setUpdateLabel] = useState('Check for Updates');
+  // Update button: shown only when there is an update to act on (PawOS checks on its own and
+  // notifies; "Check for Updates" lives in Settings > Updates).
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>('idle');
+  const [updateVersion, setUpdateVersion] = useState<string | null>(null);
+  const updateButton = sidebarUpdateButton(updateStatus, updateVersion);
 
   const handleUpdateClick = () => {
-    if (updateLabel === 'Check for Updates') {
-      window.__pawos_ipc__.checkForUpdates();
-    } else if (updateLabel === 'Apply Update') {
-      window.__pawos_ipc__.quitAndInstall();
-    }
+    if (updateButton?.action === 'install') window.__pawos_ipc__.quitAndInstall();
   };
 
   useEffect(() => {
-    const unsubscribe = window.__pawos_ipc__.onUpdateState((state: string) => {
-      switch (state) {
-        case 'checking-for-update':
-          setUpdateLabel('Checking…');
-          break;
-        case 'update-available':
-        case 'download-progress':
-          setUpdateLabel('Downloading…');
-          break;
-        case 'update-downloaded':
-          setUpdateLabel('Apply Update');
-          break;
-        case 'update-not-available':
-        case 'error':
-          setUpdateLabel('Check for Updates');
-          break;
-        default:
-          // no change
-      }
+    const ipc = window.__pawos_ipc__;
+    const refresh = () => {
+      ipc
+        .getUpdateState?.()
+        .then((snapshot: { state: string; version: string | null } | undefined) => {
+          if (!snapshot) return;
+          setUpdateStatus(statusFromState(snapshot.state));
+          setUpdateVersion(snapshot.version ?? null);
+        })
+        .catch(() => {});
+    };
+    refresh();
+    const unsubscribe = ipc.onUpdateState((state: string) => {
+      setUpdateStatus((current) => nextUpdateStatus(current, state));
+      refresh();
     });
     return () => unsubscribe();
   }, []);
@@ -344,17 +341,21 @@ export function Sidebar({
               {!collapsed && <span>Admin</span>}
             </button>
           )}
-          {/* Update Button */}
-          <button
-            type="button"
-            className={styles.navItem}
-            onClick={handleUpdateClick}
-            title={updateLabel}
-            aria-label={updateLabel}
-          >
-            <span className={styles.navIcon}><RefreshIcon /></span>
-            {!collapsed && <span>{updateLabel}</span>}
-          </button>
+          {/* Update button — only when an update is downloading, ready, or waiting in the Store. */}
+          {updateButton && (
+            <button
+              type="button"
+              className={styles.navItem}
+              onClick={handleUpdateClick}
+              disabled={updateButton.action === null}
+              title={updateButton.label}
+              aria-label={updateButton.label}
+              data-testid="sidebar-update"
+            >
+              <span className={styles.navIcon}><RefreshIcon /></span>
+              {!collapsed && <span>{updateButton.label}</span>}
+            </button>
+          )}
         </nav>
 
       <div className={styles.navFooter}>

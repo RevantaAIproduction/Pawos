@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { describeUpdateStatus, nextUpdateStatus, type UpdateStatus, type UpdateStatusEvent } from './updateStatus';
+import { describeUpdateStatus, nextUpdateStatus, sidebarUpdateButton, statusFromState, type UpdateStatus, type UpdateStatusEvent } from './updateStatus';
 
 function run(events: (UpdateStatusEvent | string)[], from: UpdateStatus = 'idle'): UpdateStatus {
   return events.reduce<UpdateStatus>((s, e) => nextUpdateStatus(s, e), from);
@@ -42,8 +42,36 @@ describe('direct-download (NSIS) update status', () => {
   });
 
   it('never points anywhere but the updater — no download page link in any state', () => {
-    for (const s of ['idle', 'checking', 'downloading', 'ready', 'upToDate', 'error'] as UpdateStatus[]) {
+    for (const s of ['idle', 'checking', 'downloading', 'ready', 'available', 'upToDate', 'error'] as UpdateStatus[]) {
       expect(describeUpdateStatus(s).message).not.toMatch(/download page|pawos\.revantaai\.com|aren't available/i);
     }
+  });
+});
+
+describe('Microsoft Store update status', () => {
+  it('a newer version in the Store: "Update" with the version, and a failed later check keeps it', () => {
+    const s = run([{ type: 'check-started' }, 'store-update-available', { type: 'check-finished', ok: true }]);
+    expect(s).toBe('available');
+    expect(describeUpdateStatus(s, '1.0.2.0')).toEqual({ message: 'PawOS 1.0.2.0 is available in the Microsoft Store.', buttonLabel: 'Update', action: 'install' });
+    expect(nextUpdateStatus('available', { type: 'check-finished', ok: false })).toBe('available');
+  });
+
+  it("a window opened after a check starts from main's state", () => {
+    expect(statusFromState('store-update-available')).toBe('available');
+    expect(statusFromState('update-downloaded')).toBe('ready');
+    expect(statusFromState('idle')).toBe('idle');
+    expect(statusFromState(undefined)).toBe('idle');
+  });
+});
+
+describe('sidebar update button', () => {
+  it('is hidden unless there is an update to act on', () => {
+    for (const s of ['idle', 'checking', 'upToDate', 'error'] as UpdateStatus[]) expect(sidebarUpdateButton(s)).toBeNull();
+  });
+
+  it('shows the update when there is one', () => {
+    expect(sidebarUpdateButton('available', '1.0.2.0')).toEqual({ label: 'Update to 1.0.2.0', action: 'install' });
+    expect(sidebarUpdateButton('downloading')).toEqual({ label: 'Downloading update…', action: null });
+    expect(sidebarUpdateButton('ready')).toEqual({ label: 'Restart to update', action: 'install' });
   });
 });
