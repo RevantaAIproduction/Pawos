@@ -390,9 +390,9 @@ describe("features on a phone", () => {
 describe("code changes from a phone", () => {
   it("Paw Go: Small change mode, and prompts are limited to two lines — shown while typing", async () => {
     const { context, page } = await open(users.go, "mobile", "/app");
-    await page.getByRole("radio", { name: "Small change" }).tap();
+    await page.getByRole("radio", { name: "Code" }).tap();
     await page.getByTestId("change-status").getByRole("link", { name: "Connect GitHub" }).waitFor();
-    await page.getByRole("radio", { name: "Ask" }).tap();
+    await page.getByRole("radio", { name: "Chat" }).tap();
     await page.getByLabel("Message Paw").fill("Change the heading\nand the footer\nand the button");
     await page.getByTestId("prompt-limit").waitFor();
     expect(await page.getByRole("button", { name: "Send message" }).isDisabled()).toBe(true);
@@ -404,7 +404,11 @@ describe("code changes from a phone", () => {
 
   it("a paid plan without GitHub is asked to connect it first, and can't send a change", async () => {
     const { context, page } = await open(users.pro, "mobile", "/app");
-    await page.getByRole("radio", { name: "Change code" }).tap();
+    // Chat is the default mode and needs nothing set up — no GitHub steps until Code is chosen.
+    expect(await page.getByRole("radio", { name: "Chat" }).getAttribute("aria-checked")).toBe("true");
+    expect(await page.getByTestId("change-status").count()).toBe(0);
+    await shot(page, "app-chat-default-mobile");
+    await page.getByRole("radio", { name: "Code" }).tap();
     await page.getByTestId("change-status").getByRole("link", { name: "Connect GitHub" }).waitFor();
     // The steps before coding: connect GitHub (the current step), select a repository, start coding.
     expect(await page.getByTestId("change-status").getByText("Select a repository", { exact: true }).isVisible()).toBe(true);
@@ -421,7 +425,7 @@ describe("code changes from a phone", () => {
       github.signals.set(sha, { deployments: [{ environment: "Preview", state: "success", url: "https://preview.pawos-e2e.test/" }], checks: [{ id: 1, name: "build", status: "completed", conclusion: "success" }] });
     const { context, page } = await open(users.builder, "mobile", "/app");
     await context.route("https://preview.pawos-e2e.test/**", (route: Any) => route.fulfill({ contentType: "text/html", body: "<h1>Storefront preview</h1>" }));
-    await page.getByRole("radio", { name: "Change code" }).tap();
+    await page.getByRole("radio", { name: "Code" }).tap();
     await page.getByTestId("change-status").getByRole("button", { name: "Choose repository" }).tap();
     await page.getByRole("dialog", { name: "Choose a repository" }).getByRole("button", { name: /acme\/storefront/ }).tap();
     await page.getByTestId("change-status").getByText("acme/storefront", { exact: true }).waitFor();
@@ -441,6 +445,8 @@ describe("code changes from a phone", () => {
     await panel.getByText(/^Done/).waitFor({ timeout: 30_000 });
     expect(await panel.getByText("Commit and push to main").count()).toBe(1);
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
+    // A chat that holds a code change stays in Code mode after it finishes (and when reopened).
+    expect(await page.getByRole("radio", { name: "Code" }).getAttribute("aria-checked")).toBe("true");
     await shot(page, "app-change-done-mobile");
 
     // The new tab lands on the repository's preview.
@@ -454,7 +460,7 @@ describe("code changes from a phone", () => {
 
   it("on a computer the plan sits on the right", async () => {
     const { context, page } = await open(users.deskBuilder, "desktop", "/app");
-    await page.getByRole("radio", { name: "Change code" }).click();
+    await page.getByRole("radio", { name: "Code" }).click();
     await page.getByTestId("change-status").getByText("acme/storefront", { exact: true }).waitFor();
     await page.getByLabel("Message Paw").fill("Make the header bold");
     await page.getByRole("button", { name: "Send message" }).click();

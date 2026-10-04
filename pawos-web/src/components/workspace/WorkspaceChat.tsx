@@ -212,7 +212,8 @@ export function WorkspaceChat({
   const [connection, setConnection] = useState<Connection>("online");
   const [notice, setNotice] = useState<Notice | null>(null);
   const [handoffOpen, setHandoffOpen] = useState(false);
-  const [mode, setMode] = useState<Mode>("ask");
+  // Chat by default; a chat that holds a code change reopens in Code (e.g. after the change finishes).
+  const [mode, setMode] = useState<Mode>(initialChange && initialFrontendChanges.state !== "locked" ? "change" : "ask");
   const [frontendChanges, setFrontendChanges] = useState(initialFrontendChanges);
   const [changeId, setChangeId] = useState<string | null>(initialChange?.requestId ?? null);
   const [panelOpen, setPanelOpen] = useState(initialChange !== null && (openPlan || initialChange.state === "running" || initialChange.state === "pushed" || initialChange.state === "fixing"));
@@ -597,15 +598,17 @@ export function WorkspaceChat({
     setMode(next);
   };
 
-  const modeButton = (value: Mode, label: string, locked = false) => (
+  /** The Chat / Code switch at the top of the chat. Chat needs nothing set up; Code guides GitHub setup. */
+  const modeButton = (value: Mode, label: string, icon: React.ReactNode, locked = false) => (
     <button
       type="button"
       role="radio"
       aria-checked={mode === value}
       onClick={() => chooseMode(value)}
       disabled={busy}
-      className={`inline-flex min-h-10 items-center gap-1.5 rounded-md px-3 text-sm transition md:min-h-8 ${mode === value ? "bg-neutral-700 font-medium text-white" : "text-neutral-400 hover:text-white"}`}
+      className={`inline-flex min-h-10 items-center gap-2 rounded-full px-4 text-sm transition md:min-h-9 ${mode === value ? "bg-white font-semibold text-neutral-950 shadow-sm" : "text-neutral-400 hover:text-white"}`}
     >
+      {icon}
       {label}
       {locked && (
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label="Not included in your plan">
@@ -614,6 +617,28 @@ export function WorkspaceChat({
         </svg>
       )}
     </button>
+  );
+  const modeSwitch = (
+    // Below the phone's top bar (h-14 + safe area); at the very top on larger screens.
+    <div className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-20 -mx-3 mb-3 flex justify-center md:top-0 bg-[#141414]/90 px-3 py-2 backdrop-blur sm:-mx-4 sm:px-4">
+      <div role="radiogroup" aria-label="Mode" data-testid="mode-switch" className="inline-flex rounded-full border border-neutral-800 bg-neutral-900 p-1">
+        {modeButton(
+          "ask",
+          "Chat",
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />
+          </svg>
+        )}
+        {modeButton(
+          "change",
+          "Code",
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M8 6l-6 6 6 6M16 6l6 6-6 6" />
+          </svg>,
+          frontendChanges.state === "locked"
+        )}
+      </div>
+    </div>
   );
 
   /** In Change mode: the setup steps still to do, or the repository and branch changes go to. */
@@ -624,7 +649,10 @@ export function WorkspaceChat({
 
   return (
     <div className={showPanel ? "lg:pr-80" : ""}>
-    <div className={`mx-auto flex min-h-[calc(100dvh-3.5rem)] w-full max-w-3xl flex-col px-3 sm:px-4 md:min-h-dvh ${empty && !showPanel ? "justify-start pt-8 md:pt-20" : "pt-3 md:pt-5"}`}>
+    <div className={`mx-auto flex min-h-[calc(100dvh-3.5rem)] w-full max-w-3xl flex-col px-3 sm:px-4 md:min-h-dvh ${empty && !showPanel ? "justify-start" : ""}`}>
+      {modeSwitch}
+      {/* An empty chat starts with the message box near the top; once work starts it moves to the bottom. */}
+      {empty && !showPanel && <div className="h-6 md:h-16" aria-hidden="true" />}
       {showPanel && (
         <div className="mb-3 lg:hidden">
           <TaskPanel change={change} onClose={() => setPanelOpen(false)} notify={false} />
@@ -718,10 +746,6 @@ export function WorkspaceChat({
           <label htmlFor="workspace-message" className="sr-only">
             Message Paw
           </label>
-          <div role="radiogroup" aria-label="What Paw should do" className="mb-2 inline-flex rounded-lg bg-neutral-800/60 p-0.5">
-            {modeButton("ask", "Ask")}
-            {modeButton("change", promptLimit ? "Small change" : "Change code", frontendChanges.state === "locked")}
-          </div>
           {changeStatus}
           {attachment && (
             <div className="mb-2 flex items-center gap-2 rounded-md bg-neutral-800/70 py-1 pl-3 text-sm text-neutral-200">

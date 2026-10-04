@@ -127,7 +127,7 @@ export default function Home() {
             <div className="mx-auto w-full max-w-md rounded-2xl border border-neutral-800 bg-black p-5 shadow-2xl" aria-hidden="true">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-neutral-500">acme/storefront · main</span>
-                <span className="rounded-full border border-neutral-800 px-2 py-0.5 text-[11px] text-neutral-400">Change code</span>
+                <span className="rounded-full border border-neutral-800 px-2 py-0.5 text-[11px] text-neutral-400">Code</span>
               </div>
               <div className="mt-4 rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm text-neutral-200">
                 Make the checkout button say &ldquo;Place order&rdquo;
