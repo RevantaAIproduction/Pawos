@@ -113,7 +113,7 @@ function base64url(buf: Buffer): string {
 }
 
 /** Standard PKCE (RFC 7636) S256 pair — a fresh one per authorization request, never reused. */
-function generatePkcePair(): { verifier: string; challenge: string } {
+export function generatePkcePair(): { verifier: string; challenge: string } {
   const verifier = base64url(randomBytes(48));
   const challenge = base64url(createHash('sha256').update(verifier).digest());
   return { verifier, challenge };
@@ -126,7 +126,7 @@ function generatePkcePair(): { verifier: string; challenge: string } {
  * is Google-specific; any OAuth connector whose provider requires the same loopback mechanism
  * (rather than a custom URI scheme) reuses this unchanged via `oauth.useLoopbackRedirect`.
  */
-function startLoopbackListener(): Promise<{
+export function startLoopbackListener(): Promise<{
   redirectUri: string;
   waitForCallback: Promise<{ code: string } | { error: string }>;
   close: () => void;

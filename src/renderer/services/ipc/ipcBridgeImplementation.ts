@@ -172,6 +172,12 @@ export const ipc = {
   openUpgradeInDashboard() {
     getBridge().openUpgradeInDashboard();
   },
+  onUiJumpAction(cb: () => void) {
+    getBridge().onUiJumpAction(cb);
+  },
+  async consumeJumpAction(): Promise<'new-chat' | 'new-code-session' | null> {
+    return getBridge().consumeJumpAction();
+  },
   onUiNavigateUpgrade(cb: () => void) {
     getBridge().onUiNavigateUpgrade(cb);
   },
@@ -703,6 +709,15 @@ export const ipc = {
   },
   async connectivityDeploymentProfilesHydrate(profile: DeploymentProfile): Promise<ConnectivityIpcResult<void>> {
     return getBridge().connectivityDeploymentProfilesHydrate(profile);
+  },
+  async connectivityMcpStatus(): Promise<ConnectivityIpcResult<Array<{ connectorId: string; serverName: string; auth: 'existingCredential' | 'mcpSignIn' | 'providerSetup'; entitled: boolean; mcpSignedIn: boolean; requirement?: string; callableTools: number }>>> {
+    return getBridge().connectivityMcpStatus();
+  },
+  async connectivityMcpConnect(connectorId: string, scope: ConnectivityScope): Promise<ConnectivityIpcResult<{ connected: boolean }>> {
+    return getBridge().connectivityMcpConnect(connectorId, scope);
+  },
+  async connectivityMcpDisconnect(connectorId: string, scope: ConnectivityScope): Promise<ConnectivityIpcResult<void>> {
+    return getBridge().connectivityMcpDisconnect(connectorId, scope);
   },
   async connectivityGetStoredCredential(connectorId: string, scope: ConnectivityScope): Promise<ConnectivityIpcResult<{ secret: string; authMethod: string } | undefined>> {
     return getBridge().connectivityGetStoredCredential(connectorId, scope);

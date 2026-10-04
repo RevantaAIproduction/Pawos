@@ -183,6 +183,7 @@ import { connectJiraCredentialPlugin } from './plugins/infrastructure/ConnectJir
 import { connectivityConnectPlugin } from './plugins/infrastructure/ConnectivityConnectPlugin';
 import { investigateTicketPlugin } from './plugins/infrastructure/InvestigateTicketPlugin';
 import { listMyTicketsPlugin } from './plugins/infrastructure/ListMyTicketsPlugin';
+import { connectorMcpPlugin } from './plugins/infrastructure/ConnectorMcpPlugin';
 import { investigateProductionIssuePlugin } from './plugins/infrastructure/InvestigateProductionIssuePlugin';
 import { analyzeRepositoryPlugin } from './plugins/intelligence/AnalyzeRepositoryPlugin';
 import { investigateRepoBugPlugin } from './plugins/intelligence/InvestigateRepoBugPlugin';
@@ -406,6 +407,7 @@ export class DesktopExecutionEngine extends EventEmitter {
     getInfrastructureGraphSummaryPlugin,
     investigateTicketPlugin,
     listMyTicketsPlugin,
+    connectorMcpPlugin,
     investigateProductionIssuePlugin,
     analyzeRepositoryPlugin,
     investigateRepoBugPlugin,

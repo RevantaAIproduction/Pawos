@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CONNECTOR_MCP_SERVERS, probeConnectorMcp, resetConnectorMcpProbes } from './ConnectorMcpServers';
+import { probeConnectorMcp, resetConnectorMcpProbes } from './ConnectorMcpServers';
+import { MCP_PROVIDERS } from '../../../shared/connectivity/McpProviders';
 import { McpError, McpReadClient } from './McpReadClient';
 
 /** Fake MCP servers only — no real credentials and no network. */
@@ -47,20 +48,14 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('official MCP servers per connector', () => {
-  it('lists an HTTPS endpoint on the provider for every connector, read-only where one exists', () => {
-    expect(Object.keys(CONNECTOR_MCP_SERVERS).sort()).toEqual(['github', 'gitlab', 'jira', 'linear', 'netlify', 'railway', 'slack', 'vercel']);
-    for (const server of Object.values(CONNECTOR_MCP_SERVERS)) expect(server.endpoint).toMatch(/^https:\/\//);
-    expect(CONNECTOR_MCP_SERVERS.linear.endpoint).toBe('https://mcp.linear.app/mcp/readonly');
-    expect(CONNECTOR_MCP_SERVERS.github.endpoint).toBe('https://api.githubcopilot.com/mcp/readonly');
-  });
-
-  it('marks the servers that run their own sign-in, so the existing token is never sent to them', async () => {
+describe('providers whose MCP server does not take the connector token', () => {
+  it('are never sent it', async () => {
     const server = installServer();
-    for (const connectorId of ['jira', 'netlify', 'slack']) {
-      expect(CONNECTOR_MCP_SERVERS[connectorId].auth).toBe('separateSignIn');
+    for (const connectorId of ['jira', 'netlify', 'gitlab', 'bitbucket']) {
+      expect(MCP_PROVIDERS[connectorId].auth).toBe('mcpSignIn');
       expect(await probeConnectorMcp(connectorId, 'token-1')).toEqual({ status: 'separateSignIn' });
     }
+    expect(await probeConnectorMcp('slack', 'token-1')).toEqual({ status: 'providerSetup' });
     expect(server.requests).toHaveLength(0);
   });
 });
@@ -97,7 +92,7 @@ describe('probeConnectorMcp', () => {
     await probeConnectorMcp('github', 'token-1');
     const afterFirst = server.requests.length;
     expect(await probeConnectorMcp('github', 'token-1')).toBeUndefined();
-    expect(await probeConnectorMcp('bitbucket', 'token-1')).toBeUndefined();
+    expect(await probeConnectorMcp('microsoft', 'token-1')).toBeUndefined();
     expect(await probeConnectorMcp('vercel', undefined)).toBeUndefined();
     expect(server.requests.length).toBe(afterFirst);
 

@@ -5,6 +5,7 @@ import { connectorLifecycleToConnectionStatus } from '../../shared/connectivity/
 import { credentialVaultBridge } from './CredentialVaultBridge';
 import { persistCredentialViaRenderer, revokeCredentialViaRenderer } from './RendererConnectivityCredentialBridge';
 import { probeConnectorMcp } from './mcp/ConnectorMcpServers';
+import { isMcpCredentialId, mcpCredentialId } from '../../shared/connectivity/McpProviders';
 
 function scopeKey(scope: ConnectivityScope): string {
   return `${scope.userId}:${scope.organizationId ?? ''}`;
@@ -115,6 +116,27 @@ class ConnectionManager {
         console.error(`[ConnectionManager] Failed to revoke persisted credential for '${connection.connectorId}': ${result.message}`);
       }
     }
+    // A connector's separate MCP sign-in does not outlive the connector.
+    const mcpId = mcpCredentialId(connection.connectorId);
+    if (await credentialVaultBridge.read(mcpId, connection.scope)) {
+      await credentialVaultBridge.revoke(mcpId, connection.scope);
+      if (sender) this.credentialPersistSender = sender;
+      await this.revokeStoredCredential(mcpId, connection.scope);
+    }
+  }
+
+  /** Records the app window that can reach the durable store, for flows that persist outside connect()/restore(). */
+  rememberCredentialPersistSender(sender: WebContents): void {
+    this.credentialPersistSender = sender;
+  }
+
+  /** Removes a credential from the durable store (the counterpart of persistStoredCredential). Best-effort, never throws. */
+  async revokeStoredCredential(connectorId: string, scope: ConnectivityScope): Promise<boolean> {
+    const sender = this.credentialPersistSender;
+    if (!sender || sender.isDestroyed()) return false;
+    const result = await revokeCredentialViaRenderer(sender, scope, connectorId);
+    if (!result.ok) console.error(`[ConnectionManager] Failed to revoke persisted credential for '${connectorId}': ${result.message}`);
+    return result.ok;
   }
 
   async getStatus(connectionId: string): Promise<ConnectorConnection | undefined> {
@@ -155,6 +177,18 @@ class ConnectionManager {
    * `requiresReauth` if the refresh token itself was rejected).
    */
   async restore(connectorId: string, scope: ConnectivityScope, credential: unknown, sender?: WebContents): Promise<ConnectorStatus> {
+    if (isMcpCredentialId(connectorId)) {
+      // A connector's separate MCP sign-in: not a connector of its own, so there is no SDK to
+      // authenticate — the credential just goes back into the vault for the MCP gateway to use.
+      if (sender) this.credentialPersistSender = sender;
+      const c = credential as { accessToken?: unknown; refreshToken?: unknown; expiresAt?: unknown } | null | undefined;
+      if (!c || typeof c.accessToken !== 'string') throw new Error('MCP credential must include accessToken.');
+      await credentialVaultBridge.store(connectorId, scope, c.accessToken, 'oauth2', {
+        refreshToken: typeof c.refreshToken === 'string' ? c.refreshToken : undefined,
+        expiresAt: typeof c.expiresAt === 'number' ? c.expiresAt : undefined,
+      });
+      return { state: 'connected', capabilities: [] };
+    }
     const sdk = connectorRegistry.get(connectorId);
     if (!sdk) {
       throw new Error(`Cannot restore — no connector registered with id '${connectorId}'.`);

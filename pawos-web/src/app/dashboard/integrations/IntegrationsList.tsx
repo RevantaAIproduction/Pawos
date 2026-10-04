@@ -39,6 +39,12 @@ const GROUP_ICONS: Record<IntegrationGroup, ReactNode> = {
   ),
 };
 
+const MCP_LABELS: Record<NonNullable<IntegrationState["mcp"]>, string> = {
+  existingCredential: "MCP: uses this connection in the desktop app — no second sign-in.",
+  mcpSignIn: "MCP: needs its own sign-in, enabled from the desktop app after connecting.",
+  providerSetup: "MCP: not available yet — awaiting setup with the provider.",
+};
+
 type RowNotice = { kind: "info" | "error"; text: string };
 
 function StatusBadge({ integration }: { integration: IntegrationState }) {
@@ -142,6 +148,7 @@ export function IntegrationsList({ initial }: { initial: IntegrationState[] }) {
                             <StatusBadge integration={integration} />
                           </div>
                           <p className="mt-1 text-sm text-neutral-400">{integration.description}</p>
+                          {integration.mcp && <p className="mt-1 text-xs text-neutral-500">{MCP_LABELS[integration.mcp]}</p>}
                           {isConnected && integration.accountLabel && <p className="mt-1 text-xs text-neutral-500">Connected to {integration.accountLabel}</p>}
                           {!integration.entitled && integration.availableOn && (
                             <p className="mt-1 text-xs text-neutral-500">Available on a higher plan — included from {integration.availableOn}.</p>

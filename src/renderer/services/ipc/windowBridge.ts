@@ -164,6 +164,8 @@ export function contextBridge() {
     onSettingsUpdated: (cb: (s: SettingsState) => void) => on('settings:updated', cb),
     onUiOpenSettings: (cb: () => void) => on('ui:open-settings', cb),
     openUpgradeInDashboard: () => ipcApi?.send('ui:open-upgrade'),
+    onUiJumpAction: (cb: () => void) => on('ui:jump-action', cb),
+    consumeJumpAction: async (): Promise<'new-chat' | 'new-code-session' | null> => ipcApi.invoke('ui:consume-jump-action'),
     onUiNavigateUpgrade: (cb: () => void) => on('ui:navigate-upgrade', cb),
 
     feedbackSubmit: async (submission: FeedbackSubmission): Promise<boolean> => ipcApi.invoke('feedback:submit', submission),
@@ -470,6 +472,11 @@ export function contextBridge() {
       ipcApi.invoke('connectivity:oauth:cancel', requestId),
     connectivityDeploymentProfilesHydrate: async (profile: DeploymentProfile): Promise<ConnectivityIpcResult<void>> =>
       ipcApi.invoke('connectivity:deploymentProfiles:hydrate', profile),
+    connectivityMcpStatus: async (): Promise<ConnectivityIpcResult<Array<{ connectorId: string; serverName: string; auth: 'existingCredential' | 'mcpSignIn' | 'providerSetup'; entitled: boolean; mcpSignedIn: boolean; requirement?: string; callableTools: number }>>> => ipcApi.invoke('connectivity:mcp:status'),
+    connectivityMcpConnect: async (connectorId: string, scope: ConnectivityScope): Promise<ConnectivityIpcResult<{ connected: boolean }>> =>
+      ipcApi.invoke('connectivity:mcp:connect', connectorId, scope),
+    connectivityMcpDisconnect: async (connectorId: string, scope: ConnectivityScope): Promise<ConnectivityIpcResult<void>> =>
+      ipcApi.invoke('connectivity:mcp:disconnect', connectorId, scope),
     connectivityGetStoredCredential: async (connectorId: string, scope: ConnectivityScope): Promise<ConnectivityIpcResult<{ secret: string; authMethod: string } | undefined>> =>
       ipcApi.invoke('connectivity:getStoredCredential', connectorId, scope),
     connectivityGetJiraMetadata: async (scope: ConnectivityScope): Promise<ConnectivityIpcResult<{ cloudId: string; siteUrl: string; siteName: string } | undefined>> =>

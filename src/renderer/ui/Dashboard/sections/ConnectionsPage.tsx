@@ -162,6 +162,37 @@ export function ConnectionsPage({ scope, onUpgrade }: { scope: ConnectivityScope
 
   const [busyConnectorId, setBusyConnectorId] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
+  // Per-connector MCP state (see ConnectorMcpGateway.status) — which connectors have a separate
+  // MCP sign-in, and whether this account has completed it. Never contains a credential.
+  const [mcpStatus, setMcpStatus] = useState<Record<string, { auth: string; mcpSignedIn: boolean; callableTools: number; serverName: string }>>({});
+
+  async function refreshMcpStatus() {
+    try {
+      const result = await ipc.connectivityMcpStatus();
+      if (result.ok) setMcpStatus(Object.fromEntries(result.data.map((row) => [row.connectorId, row])));
+    } catch {
+      // MCP is optional: without its status the row simply shows no MCP control.
+    }
+  }
+
+  useEffect(() => {
+    void refreshMcpStatus();
+  }, []);
+
+  /** Starts or removes a connector's separate MCP sign-in. Explicit user action only. */
+  async function toggleMcpAccess(connectorId: string, signedIn: boolean) {
+    setBusyConnectorId(connectorId);
+    setRowError(connectorId, null);
+    try {
+      const result = signedIn ? await ipc.connectivityMcpDisconnect(connectorId, scope) : await ipc.connectivityMcpConnect(connectorId, scope);
+      if (!result.ok) setRowError(connectorId, result.error);
+    } catch (e) {
+      setRowError(connectorId, getErrorMessage(e));
+    } finally {
+      await refreshMcpStatus();
+      setBusyConnectorId(null);
+    }
+  }
   const [tokenInputs, setTokenInputs] = useState<Record<string, string>>({});
   const [extraFieldInputs, setExtraFieldInputs] = useState<Record<string, Record<string, string>>>({});
 
@@ -623,6 +654,17 @@ export function ConnectionsPage({ scope, onUpgrade }: { scope: ConnectivityScope
                     <button type="button" className={styles.chip} disabled={busy} onClick={() => checkHealth(c.id, connection.id)}>
                       Check health
                     </button>
+                    {mcpStatus[c.id]?.auth === 'mcpSignIn' && mcpStatus[c.id].callableTools > 0 && (
+                      <button
+                        type="button"
+                        className={styles.chip}
+                        disabled={busy}
+                        title={`${mcpStatus[c.id].serverName} uses its own sign-in, separate from this connection.`}
+                        onClick={() => toggleMcpAccess(c.id, mcpStatus[c.id].mcpSignedIn)}
+                      >
+                        {mcpStatus[c.id].mcpSignedIn ? 'Turn off MCP access' : 'Enable MCP access'}
+                      </button>
+                    )}
                     <button type="button" className={styles.dangerButton} disabled={busy} onClick={() => disconnect(c.id, connection.id)}>
                       Disconnect
                     </button>

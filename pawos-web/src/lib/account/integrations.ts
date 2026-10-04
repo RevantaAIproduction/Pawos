@@ -41,6 +41,28 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
   { id: "railway", name: "Railway", description: "Deploy and check deployment status on your Railway projects.", group: "hosting" },
 ];
 
+/**
+ * How each connector's official MCP server is reached — mirrors `auth` in the desktop app's
+ * src/shared/connectivity/McpProviders.ts (account.test.ts fails if the two disagree). MCP calls
+ * themselves are made by the desktop app; the web only shows the state.
+ *  - existingCredential: MCP uses this same connection, no second sign-in.
+ *  - mcpSignIn: the provider's MCP server has its own sign-in, enabled from the desktop app.
+ *  - providerSetup: the provider has to approve PawOS's app before MCP can be used.
+ */
+export type IntegrationMcpAccess = "existingCredential" | "mcpSignIn" | "providerSetup";
+
+export const INTEGRATION_MCP_ACCESS: Record<string, IntegrationMcpAccess> = {
+  linear: "existingCredential",
+  github: "existingCredential",
+  vercel: "existingCredential",
+  railway: "existingCredential",
+  gitlab: "mcpSignIn",
+  jira: "mcpSignIn",
+  bitbucket: "mcpSignIn",
+  netlify: "mcpSignIn",
+  slack: "providerSetup",
+};
+
 export function getIntegration(id: string): IntegrationDefinition | undefined {
   return INTEGRATIONS.find((integration) => integration.id === id);
 }
@@ -55,6 +77,8 @@ export interface IntegrationState extends IntegrationDefinition {
   /** The connected account/workspace name the connector recorded, when it recorded one. */
   accountLabel: string | null;
   connectedAt: string | null;
+  /** How this connector's MCP server is reached, or null when the provider has none. */
+  mcp: IntegrationMcpAccess | null;
 }
 
 export function isIntegrationEntitled(account: Pick<AccountContext, "tier">, connectorId: string): boolean {
@@ -110,6 +134,7 @@ export async function listIntegrations(account: AccountContext): Promise<Integra
       connection,
       accountLabel: connection === "notConnected" ? null : accountLabelOf(row?.metadata ?? null),
       connectedAt: connection === "notConnected" ? null : (row?.created_at ?? null),
+      mcp: INTEGRATION_MCP_ACCESS[integration.id] ?? null,
     };
   });
 }

@@ -146,6 +146,29 @@ export default function CompanionExperience() {
     });
   }, [ipc, conversation.open, conversation.submitTranscript]);
 
+  // Windows jump-list tasks (Start / taskbar): "New Chat" and "New Code Session". The main process
+  // holds the requested action until this window takes it, so a task that launched PawOS cold is
+  // not lost while this window was still loading.
+  const startNewChatRef = useRef(conversation.startNewChat);
+  startNewChatRef.current = conversation.startNewChat;
+  const openConversationRef = useRef(conversation.open);
+  openConversationRef.current = conversation.open;
+  useEffect(() => {
+    const runJumpAction = async () => {
+      const action = await ipc.consumeJumpAction().catch(() => null);
+      if (!action) return;
+      openConversationRef.current();
+      if (action === 'new-chat') {
+        startNewChatRef.current(null);
+      } else if (action === 'new-code-session') {
+        const folder = await ipc.selectFolder();
+        if (folder) startNewChatRef.current(folder);
+      }
+    };
+    ipc.onUiJumpAction(() => void runJumpAction());
+    void runJumpAction();
+  }, [ipc]);
+
   useEffect(() => {
     ipc.onUiOpenSettings(() => setSettingsOpen(true));
     ipc.onSettingsUpdated((s) => {

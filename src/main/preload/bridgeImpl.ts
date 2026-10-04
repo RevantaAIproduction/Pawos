@@ -190,6 +190,10 @@ export function contextBridge() {
     },
 
     openUpgradeInDashboard: () => ipcRenderer.send("ui:open-upgrade"),
+    onUiJumpAction: (cb: () => void) => {
+      ipcRenderer.on("ui:jump-action", () => cb());
+    },
+    consumeJumpAction: () => ipcRenderer.invoke("ui:consume-jump-action") as Promise<'new-chat' | 'new-code-session' | null>,
     onUiNavigateUpgrade: (cb: () => void) => {
       ipcRenderer.on("ui:navigate-upgrade", () => cb());
     },
@@ -499,6 +503,11 @@ export function contextBridge() {
       ipcRenderer.invoke("connectivity:postJiraComment", input) as Promise<ConnectivityIpcResult<{ ok: boolean; reason?: string; commentId?: string }>>,
     connectivityPostLinearComment: (input: { runId: string; linearApiKey: string; issueId: string; comment: string }) =>
       ipcRenderer.invoke("connectivity:postLinearComment", input) as Promise<ConnectivityIpcResult<{ ok: boolean; reason?: string; commentId?: string }>>,
+    connectivityMcpStatus: () => ipcRenderer.invoke("connectivity:mcp:status") as Promise<ConnectivityIpcResult<Array<{ connectorId: string; serverName: string; auth: 'existingCredential' | 'mcpSignIn' | 'providerSetup'; entitled: boolean; mcpSignedIn: boolean; requirement?: string; callableTools: number }>>>,
+    connectivityMcpConnect: (connectorId: string, scope: ConnectivityScope) =>
+      ipcRenderer.invoke("connectivity:mcp:connect", connectorId, scope) as Promise<ConnectivityIpcResult<{ connected: boolean }>>,
+    connectivityMcpDisconnect: (connectorId: string, scope: ConnectivityScope) =>
+      ipcRenderer.invoke("connectivity:mcp:disconnect", connectorId, scope) as Promise<ConnectivityIpcResult<void>>,
     connectivityGetStoredCredential: (connectorId: string, scope: ConnectivityScope) =>
       ipcRenderer.invoke("connectivity:getStoredCredential", connectorId, scope) as Promise<ConnectivityIpcResult<{ secret: string; authMethod: string } | undefined>>,
     connectivityGetJiraMetadata: (scope: ConnectivityScope) =>

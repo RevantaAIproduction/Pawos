@@ -603,6 +603,11 @@ export type ActionRequest = {
   // client-supplied username. Queries every configured project-management connector, not just
   // one. Read-only, never gated, same as investigateTicket above.
   | { type: 'listMyTickets' }
+  // A connector's official MCP server, read-only: list the read tools it offers, or call one.
+  // Both go through ConnectorMcpGateway (entitlement + per-provider read-tool allowlist); neither
+  // can write to the provider. A failure means "use the connector's existing actions".
+  | { type: 'listConnectorMcpTools'; connectorId: string }
+  | { type: 'callConnectorMcpTool'; connectorId: string; tool: string; arguments: Record<string, unknown> }
   // "Fix production" / "Production is slow" / "Users cannot login" / "Payment
   // is failing" — the same real evidence-gathering pipeline as
   // investigateTicket, just without a ticket to read first. Read-only, never gated.

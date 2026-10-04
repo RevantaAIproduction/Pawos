@@ -61,6 +61,8 @@ export function useIpcBridge() {
       onSettingsUpdated: (cb: (s: SettingsState) => void) => ipc.onSettingsUpdated(cb),
       onUiOpenSettings: (cb: () => void) => ipc.onUiOpenSettings(cb),
       openUpgradeInDashboard: () => ipc.openUpgradeInDashboard(),
+      onUiJumpAction: (cb: () => void) => ipc.onUiJumpAction(cb),
+      consumeJumpAction: () => ipc.consumeJumpAction(),
       onUiNavigateUpgrade: (cb: () => void) => ipc.onUiNavigateUpgrade(cb),
       onTaskCreditsPurchased: (cb: (payload: { amountUsd?: number; organizationId?: string }) => void) =>
         ipc.onTaskCreditsPurchased(cb),

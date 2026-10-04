@@ -12,6 +12,9 @@ import { postGitHubCommentIdempotent, type IdempotentGitHubCommentInput, type Gi
 import { credentialVaultBridge, type StoredCredential } from '../connectivity/CredentialVaultBridge';
 import { jiraMetadataStore, type JiraMetadata } from '../connectivity/JiraMetadataStore';
 import { linearConnectorSDK } from '../connectivity/connectors/LinearConnectorSDK';
+import { connectorMcpGateway } from '../connectivity/mcp/ConnectorMcpGateway';
+import { mcpOAuthFlow } from '../connectivity/mcp/McpOAuthFlow';
+import { baseConnectorId, getMcpProvider } from '../../shared/connectivity/McpProviders';
 import { SlackConnector } from '../infrastructure/connectors/communication/SlackConnector';
 import type {
   ConnectivityScope,
@@ -164,7 +167,8 @@ export function registerConnectivityIpc(): void {
     if (!isConnectivityScope(scope)) {
       throw new Error("connectivity:restore requires a valid scope ({ userId, organizationId? }).");
     }
-    assertConnectorEntitled(connectorId);
+    // A connector's separate MCP credential (`<connector>:mcp`) is gated by that connector's own feature.
+    assertConnectorEntitled(baseConnectorId(connectorId));
     return connectivityRuntime.connections.restore(connectorId, scope, credential, evt.sender);
   });
 
@@ -363,6 +367,35 @@ export function registerConnectivityIpc(): void {
       throw new Error("connectivity:deploymentProfiles:hydrate requires a config object with a 'kind' field.");
     }
     return connectivityRuntime.deploymentProfiles.hydrateProfile(profile as DeploymentProfile);
+  });
+
+  // ── MCP ──────────────────────────────────────────────────────────────────────────────────────
+  // Per-connector MCP state for the Connections page. Never returns a credential.
+  safeHandle('connectivity:mcp:status', () => connectorMcpGateway.status());
+
+  // Starts a connector's separate MCP sign-in (only providers whose MCP server has its own
+  // authorization server). Gated by the connector's own entitlement, and only for a connector the
+  // user has already connected — MCP is an added transport for an existing connection.
+  safeHandleWithEvent<{ connected: boolean }>('connectivity:mcp:connect', async (evt, connectorId: unknown, scope: unknown) => {
+    if (!isNonEmptyString(connectorId)) throw new Error('connectivity:mcp:connect requires a non-empty connectorId string.');
+    if (!isConnectivityScope(scope)) throw new Error("connectivity:mcp:connect requires a valid scope ({ userId, organizationId? }).");
+    const provider = getMcpProvider(connectorId);
+    if (!provider || provider.auth !== 'mcpSignIn') throw new Error(`'${connectorId}' has no separate MCP sign-in.`);
+    assertConnectorEntitled(connectorId);
+    const status = await connectivityRuntime.connections.getConnectorStatus(connectorId, scope);
+    if (status.state !== 'connected') throw new Error(`Connect ${connectorId} first, then enable MCP access.`);
+    // The durable copy is written through this window (same route as every other credential).
+    connectivityRuntime.connections.rememberCredentialPersistSender(evt.sender);
+    await mcpOAuthFlow.connect(connectorId, scope);
+    return { connected: true };
+  });
+
+  safeHandleWithEvent<void>('connectivity:mcp:disconnect', async (evt, connectorId: unknown, scope: unknown) => {
+    if (!isNonEmptyString(connectorId)) throw new Error('connectivity:mcp:disconnect requires a non-empty connectorId string.');
+    if (!isConnectivityScope(scope)) throw new Error("connectivity:mcp:disconnect requires a valid scope ({ userId, organizationId? }).");
+    connectivityRuntime.connections.rememberCredentialPersistSender(evt.sender);
+    await mcpOAuthFlow.disconnect(connectorId, scope);
+    connectorMcpGateway.reset(connectorId);
   });
 
   // Autonomous Work credential resolution — gets stored OAuth/API credentials for external write-back

@@ -79,6 +79,16 @@ class CredentialVaultBridge {
     return this.credentials.get(credentialKey(connectorId, scope));
   }
 
+  /** The most recently written credential for a connector, whichever scope it was stored under —
+   *  for callers (the MCP gateway) that act for the signed-in user without being handed a scope. */
+  async readLatest(connectorId: string): Promise<StoredCredential | undefined> {
+    let latest: StoredCredential | undefined;
+    for (const credential of this.credentials.values()) {
+      if (credential.connectorId === connectorId && (!latest || credential.updatedAt >= latest.updatedAt)) latest = credential;
+    }
+    return latest;
+  }
+
   /**
    * `opts.refreshToken` is rotation-safe by construction, not just by caller discipline: an
    * absent/empty value here NEVER blanks out an existing stored refresh token. This matters

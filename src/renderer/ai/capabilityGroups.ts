@@ -228,6 +228,8 @@ export const TOOL_CAPABILITIES: Record<string, CapabilityGroup[]> = {
   set_infra_mode: G('infra'),
   investigate_ticket: G('tickets'),
   list_my_tickets: G('tickets'),
+  list_connector_mcp_tools: G('tickets', 'github', 'infra'),
+  call_connector_mcp_tool: G('tickets', 'github', 'infra'),
   investigate_production_issue: G('tickets'),
   start_autonomous_engineering_task: G('autonomous'),
   complete_autonomous_engineering_task: G('autonomous'),

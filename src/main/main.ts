@@ -73,6 +73,7 @@ import { startRatingPromptScheduler } from './feedback/RatingPromptScheduler';
 import { isStoreRuntime } from './platform/storeRuntime';
 import { registerUpdater } from './platform/updaterSetup';
 import { registerPawosProtocolClient } from './platform/protocolRegistration';
+import { extractJumpAction, installJumpList, isJumpProtocolUrl, type JumpAction } from './platform/jumpList';
 import { applyStartWithWindows } from './platform/startWithWindows';
 import { electronStartWithWindowsDeps } from './platform/startWithWindowsDeps';
 
@@ -131,6 +132,10 @@ console.error("[PAWOS START] before app.whenReady");
 // already running (and already holding the pending OAuth promise).
 // Request single-instance lock. On failure, we'll proceed anyway since this could be:
 app.setName('PawOS');
+// The direct-download build's shortcuts carry electron-builder's appId as their AppUserModelID;
+// the running process must claim the same one so its jump list and taskbar grouping attach to
+// that shortcut. The Store build's identity comes from its package and must not be overridden.
+if (process.platform === 'win32' && !isStoreRuntime()) app.setAppUserModelId('com.pawos.pet');
 
 // Settings must load from userData before anything reads them (the Start with Windows sync
 // below, IPC). userData is writable in every build; the working directory is not — for the
@@ -147,6 +152,12 @@ if (!gotSingleInstanceLock) {
   app.quit();
 } else {
   app.on('second-instance', (_event, argv) => {
+    // A jump-list task ("New Chat", …) relaunches PawOS with one argument — see platform/jumpList.ts.
+    const jump = extractJumpAction(argv);
+    if (jump) {
+      handleJumpAction(jump);
+      return;
+    }
     const url = extractProtocolUrlFromArgv(argv);
     if (url) handleOAuthProtocolUrl(url);
     if (mainWindow) {
@@ -319,6 +330,35 @@ function enableCompanion() {
   }
 }
 
+/** Set by a jump-list task until the companion window picks it up (it may still be loading). */
+let pendingJumpAction: JumpAction | null = null;
+
+/** Acts on a jump-list task. Chat actions are handed to the companion window, which owns chats. */
+function handleJumpAction(action: JumpAction) {
+  if (action === 'open-dashboard') {
+    if (!mainWindow) {
+      createMainWindow();
+    } else {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+    return;
+  }
+  enableCompanion();
+  overlayWindow?.focus();
+  if (action === 'continue') return; // the companion reopens on the chat that was active
+  pendingJumpAction = action;
+  overlayWindow?.webContents.send('ui:jump-action');
+}
+
+// The companion window takes the pending jump action (once) when it is ready for it.
+ipcMain.handle('ui:consume-jump-action', () => {
+  const action = pendingJumpAction;
+  pendingJumpAction = null;
+  return action;
+});
+
 function disableCompanion() {
   companionEnabled = false;
   overlayWindow?.hide();
@@ -390,7 +430,7 @@ app.whenReady().then(async () => {
   // never fires 'second-instance' (nothing was running to receive it) â€” only
   // this process's own process.argv has it.
   const coldStartUrl = extractProtocolUrlFromArgv(process.argv);
-  if (coldStartUrl) handleOAuthProtocolUrl(coldStartUrl);
+  if (coldStartUrl && !isJumpProtocolUrl(coldStartUrl)) handleOAuthProtocolUrl(coldStartUrl);
 
   // Without an explicit handler, Electron denies 'media' (microphone)
   // permission requests by default for file://-loaded content â€” which is
@@ -550,6 +590,17 @@ app.whenReady().then(async () => {
   console.error("[PAWOS START] before tray creation");
   createAppTray();
   console.error("[PAWOS START] tray creation complete");
+
+  // PawOS's own Start/taskbar task list (New Chat, Continue Current Work, New Code Session, Open
+  // Dashboard) — see platform/jumpList.ts for why it must be written by PawOS itself.
+  installJumpList(app, {
+    store: isStoreRuntime(),
+    execPath: process.execPath,
+    relaunchArgs: process.defaultApp && process.argv[1] ? [`"${path.resolve(process.argv[1])}"`] : [],
+  });
+  // PawOS was started by a jump-list task rather than already running.
+  const coldStartJump = extractJumpAction(process.argv);
+  if (coldStartJump) handleJumpAction(coldStartJump);
 
   // Start with Windows — applies the saved Settings > Preferences > General preference.
   // Direct download (NSIS): HKCU Run key, right away. Microsoft Store (MSIX): Windows controls the

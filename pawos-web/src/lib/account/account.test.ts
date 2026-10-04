@@ -3,7 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { CONNECTOR_REQUIRED_FEATURE, TIER_CONNECTOR_FEATURES, lowestTierWithFeature, type AccountTier } from "./entitlements";
 import { COMPANION_CATALOG, DEFAULT_COMPANION_ID } from "./companionCatalog";
-import { INTEGRATIONS, disconnectIntegration, listIntegrations } from "./integrations";
+import { INTEGRATIONS, INTEGRATION_MCP_ACCESS, disconnectIntegration, listIntegrations } from "./integrations";
 import { getMyProfile, getPublicProfile, parsePublicProfileInput, ProfileError } from "./profile";
 import { FakeBackend } from "./testing/fakeBackend";
 
@@ -49,6 +49,13 @@ describe("entitlement mirror stays identical to the desktop entitlement system",
     const main = read("src/main/main.ts");
     for (const integration of INTEGRATIONS) expect(main).toMatch(new RegExp(`${integration.id}ConnectorSDK`, "i"));
     expect(INTEGRATIONS.map((i) => i.id)).not.toContain("microsoftTeams");
+  });
+
+  it("shows the same MCP access model per connector as the desktop MCP provider definitions", () => {
+    const providers = read("src/shared/connectivity/McpProviders.ts");
+    const desktop = Object.fromEntries([...providers.matchAll(/connectorId: '(\w+)',[\s\S]*?auth: '(\w+)'/g)].map((m) => [m[1], m[2]]));
+    expect(INTEGRATION_MCP_ACCESS).toEqual(desktop);
+    for (const id of Object.keys(INTEGRATION_MCP_ACCESS)) expect(INTEGRATIONS.map((i) => i.id)).toContain(id);
   });
 
   it("names the lowest plan that unlocks a connector", () => {
