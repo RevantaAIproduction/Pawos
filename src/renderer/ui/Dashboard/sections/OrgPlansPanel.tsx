@@ -92,8 +92,7 @@ function PlanCard({ plan, current }: { plan: OrgPlan; current: boolean }) {
       className={styles.card}
       data-testid={`org-plan-${plan.id}`}
       style={{
-        flex: '1 1 320px',
-        maxWidth: 420,
+        flex: '1 1 340px',
         padding: 24,
         display: 'flex',
         flexDirection: 'column',
@@ -171,7 +170,7 @@ function PlanCard({ plan, current }: { plan: OrgPlan; current: boolean }) {
 export function OrgPlansPanel({ currentTier }: { currentTier: SubscriptionTierId }) {
   return (
     <div style={{ marginTop: 28, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 20, width: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 20, width: '100%', maxWidth: 860 }}>
         {PLANS.map((plan) => (
           <PlanCard key={plan.id} plan={plan} current={currentTier === plan.id} />
         ))}
