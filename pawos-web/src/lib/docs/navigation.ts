@@ -119,6 +119,7 @@ export const DOC_NAV: DocNavSection[] = [
       { slug: 'subscriptions', title: 'Subscriptions' },
       { slug: 'upgrades', title: 'Upgrades' },
       { slug: 'limits', title: 'Limits' },
+      { slug: 'web-and-desktop', title: 'Web, Mobile & Desktop' },
     ],
   },
   {

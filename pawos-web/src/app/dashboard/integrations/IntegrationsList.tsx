@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState, type ReactNode } from "react";
 import { INTEGRATION_GROUPS, type IntegrationGroup, type IntegrationState } from "../../../lib/account/integrations";
 import { SectionLabel, primaryButton, secondaryButton } from "../../../components/dashboard/ui";
 
@@ -75,7 +76,38 @@ function StatusBadge({ integration }: { integration: IntegrationState }) {
  * convenience, not the control.
  */
 export function IntegrationsList({ initial }: { initial: IntegrationState[] }) {
+  const router = useRouter();
   const [integrations, setIntegrations] = useState(initial);
+
+  // Returning from a provider's consent page — often in a new tab, or via the back button on a
+  // phone — must show the server's connection state, never a stale copy of this page.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("status")) {
+      // The outcome message has been shown; a reload shouldn't show it again.
+      url.searchParams.delete("status");
+      url.searchParams.delete("integration");
+      window.history.replaceState(window.history.state, "", url.pathname + url.search);
+    }
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) router.refresh();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") router.refresh();
+    };
+    window.addEventListener("pageshow", onPageShow);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pageshow", onPageShow);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [router]);
+  // A server refresh brings new rows; show them.
+  const [seenInitial, setSeenInitial] = useState(initial);
+  if (initial !== seenInitial) {
+    setSeenInitial(initial);
+    setIntegrations(initial);
+  }
   const [busy, setBusy] = useState<string | null>(null);
   const [managing, setManaging] = useState<string | null>(null);
   const [notices, setNotices] = useState<Record<string, RowNotice>>({});

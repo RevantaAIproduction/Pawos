@@ -218,7 +218,7 @@ describe("messages and chats", () => {
       ["user", "And on the web?"],
       ["assistant", "Reply 2"],
     ]);
-    expect(listed.allowance).toEqual({ messageLimit: 4, messagesUsed: 2, remaining: 2 });
+    expect(listed.allowance).toEqual({ messageLimit: 4, period: "lifetime", messagesUsed: 2, remaining: 2 });
   });
 
   it("one account cannot read or continue another account's chat", async () => {

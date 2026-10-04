@@ -15,6 +15,9 @@ import {
   surfaceOfUsageCategory,
   webCapabilityStatus,
   webMessageLimitFor,
+  webMessageWindowDaysFor,
+  isWebUsageMetered,
+  codeChangeScopeFor,
   type WebCapabilityId,
 } from "./webCapabilities";
 
@@ -30,6 +33,9 @@ vi.mock("../account/accountContext", async (importOriginal) => {
 });
 
 import { GET as getCapabilities } from "../../app/api/web/capabilities/route";
+import { WEB_MCP_READ_ALLOWLIST, authorizeWebMcpOperation } from "./webMcpPolicy";
+import { remoteWorkProvider } from "./remoteWork";
+import { DESKTOP_ONLY_CAPABILITIES } from "./webCapabilities";
 import { getUsageActivity } from "../account/usage";
 
 const TIERS: AccountTier[] = ["go", "pro", "proMax", "team", "enterprise", "build"];
@@ -41,10 +47,23 @@ beforeEach(() => {
 });
 
 describe("the policy", () => {
-  it("keeps Paw Go at exactly four lifetime Web messages and caps no other tier by message count", () => {
+  it("keeps Paw Go at exactly four lifetime Web messages, the admin-granted tier at 12 a week, and caps no other tier by message count", () => {
     expect(WEB_POLICY.goLifetimeWebMessages).toBe(4);
     expect(webMessageLimitFor({ tier: "go" })).toBe(4);
-    for (const tier of TIERS.filter((t) => t !== "go")) expect(webMessageLimitFor({ tier })).toBeNull();
+    expect(webMessageWindowDaysFor({ tier: "go" })).toBeNull();
+    expect(webMessageLimitFor({ tier: "build" })).toBe(12);
+    expect(webMessageWindowDaysFor({ tier: "build" })).toBe(7);
+    for (const tier of TIERS.filter((t) => t !== "go" && t !== "build")) expect(webMessageLimitFor({ tier })).toBeNull();
+  });
+
+  it("charges Web model calls to the usage allowance on every plan but Paw Go, and scopes code changes by plan", () => {
+    expect(isWebUsageMetered({ tier: "go" })).toBe(false);
+    for (const tier of TIERS.filter((t) => t !== "go")) {
+      expect(isWebUsageMetered({ tier })).toBe(true);
+      expect(codeChangeScopeFor({ tier })).toBe("full");
+    }
+    expect(codeChangeScopeFor({ tier: "go" })).toBe("small");
+    for (const tier of TIERS) expect(webCapabilityStatus({ tier }, "web.codeChanges")).toBe("available");
   });
 
   it("gives every tier chat and pasted-code review", () => {
@@ -63,7 +82,6 @@ describe("the policy", () => {
   it.each<[WebCapabilityId, string]>([
     ["web.integrationContext", "desktopOnly"],
     ["web.mcpRead", "desktopOnly"],
-    ["web.continueInDesktop", "future"],
     ["web.remoteWork", "future"],
     ["web.autonomousWork", "future"],
     ["web.browserWork", "future"],
@@ -72,6 +90,10 @@ describe("the policy", () => {
       expect(webCapabilityStatus({ tier }, id)).toBe(status);
       expect(() => requireWebCapability({ tier }, id)).toThrow(WebCapabilityError);
     }
+  });
+
+  it("offers Continue in PawOS Desktop on every tier", () => {
+    for (const tier of TIERS) expect(webCapabilityStatus({ tier }, "web.continueInDesktop")).toBe("available");
   });
 
   it("requireWebCapability refuses with 403 and says why", () => {
@@ -148,13 +170,17 @@ describe("boundaries the code must keep", () => {
   });
 
   it("every future or desktop-only capability has no Web API route", () => {
-    const routes = fs.readdirSync(path.join(SRC, "app", "api", "web"));
-    expect(routes).toEqual(["capabilities"]);
+    // Each /api/web route serves display (capabilities) or an available capability:
+    // handoff → web.continueInDesktop, github + changes → web.codeChanges.
+    const routes = fs.readdirSync(path.join(SRC, "app", "api", "web")).sort();
+    expect(routes).toEqual(["capabilities", "changes", "github", "handoff"]);
+    expect(webCapabilityStatus({ tier: "go" }, "web.continueInDesktop")).toBe("available");
+    expect(webCapabilityStatus({ tier: "go" }, "web.codeChanges")).toBe("available");
     for (const rule of WEB_CAPABILITY_RULES.filter((r) => r.availability !== "available")) expect(rule.tiers).toEqual([]);
   });
 
   it("the web-started OAuth flow never uses a loopback address", () => {
-    const flow = read("lib/account/webOAuth.ts") + read("app/api/connectors/bitbucket/oauth/callback/route.ts");
+    const flow = read("lib/account/webOAuth.ts") + read("lib/account/webOAuthCallback.ts") + read("app/api/connectors/bitbucket/oauth/callback/route.ts") + read("app/api/connectors/github/callback/route.ts");
     expect(flow).not.toMatch(/127\.0\.0\.1|localhost|51900|loopback/i);
   });
 
@@ -176,5 +202,63 @@ describe("boundaries the code must keep", () => {
     expect(shell).not.toMatch(/\b(100vh|min-h-screen|h-screen)\b/);
     expect(shell).toContain("env(safe-area-inset-top)");
     expect(read("app/app/layout.tsx")).toMatch(/viewportFit: "cover"/);
+  });
+});
+
+describe("MCP on the web", () => {
+  it("is refused for every tier and operation while MCP runs only in the desktop app", () => {
+    for (const tier of TIERS) {
+      for (const access of ["read", "write"] as const) {
+        expect(authorizeWebMcpOperation({ tier }, { provider: "github", tool: "get_issue", access })).toEqual({ ok: false, reason: "desktop_only" });
+      }
+    }
+    expect(WEB_MCP_READ_ALLOWLIST).toEqual({});
+  });
+
+  it("no browser-facing route exposes MCP", () => {
+    const api = fs.readdirSync(path.join(SRC, "app", "api"), { recursive: true }).map(String);
+    expect(api.filter((entry) => /mcp/i.test(entry))).toEqual([]);
+  });
+});
+
+describe("FUTURE capabilities are not faked", () => {
+  it("there is no remote-work runtime, and Autonomous/Remote/Browser work stay 'future' with no route", () => {
+    expect(remoteWorkProvider).toBeNull();
+    for (const id of ["web.remoteWork", "web.autonomousWork", "web.browserWork"] as const) {
+      for (const tier of TIERS) expect(webCapabilityStatus({ tier }, id)).toBe("future");
+    }
+    const api = fs.readdirSync(path.join(SRC, "app", "api"), { recursive: true }).map(String);
+    expect(api.filter((entry) => /remote-work|autonomous|browser-work/i.test(entry))).toEqual([]);
+  });
+
+  it("the Web chat tells the model everything only PawOS Desktop can do", () => {
+    const chat = fs.readFileSync(path.join(SRC, "lib", "webChat", "webChat.ts"), "utf8");
+    expect(chat).toContain("DESKTOP_ONLY_CAPABILITIES");
+    expect(DESKTOP_ONLY_CAPABILITIES.map((c) => c.id)).toEqual(expect.arrayContaining(["desktop.filesystem", "desktop.terminal", "desktop.tests", "desktop.autonomousWork"]));
+  });
+});
+
+describe("OAuth on the web and on phones", () => {
+  const read = (relative: string) => fs.readFileSync(path.join(SRC, relative), "utf8");
+
+  it("the web flow's redirect is the hosted HTTPS callback, never a desktop loopback", () => {
+    const oauth = read("lib/account/webOAuth.ts");
+    for (const uri of oauth.match(/redirectUri: "([^"]+)"/g) ?? []) expect(uri).toMatch(/redirectUri: "https:\/\/pawos\.revantaai\.com\//);
+    expect(oauth).not.toMatch(/127\.0\.0\.1|localhost/);
+  });
+
+  it("returning from the provider re-reads the server's connection state, including from the back/forward cache", () => {
+    const callback = read("lib/account/webOAuthCallback.ts");
+    expect(callback).toMatch(/\/dashboard\/integrations\?integration=\$\{connectorId\}&status=\$\{status\}/);
+    for (const route of ["app/api/connectors/bitbucket/oauth/callback/route.ts", "app/api/connectors/github/callback/route.ts"]) expect(read(route)).toContain("handleConnectorCallback");
+    const list = read("app/dashboard/integrations/IntegrationsList.tsx");
+    expect(list).toMatch(/pageshow/);
+    expect(list).toMatch(/router\.refresh\(\)/);
+    expect(read("app/dashboard/integrations/page.tsx")).toMatch(/export const dynamic|getAccountContext/);
+  });
+
+  it("the service worker never answers API requests from a cache", () => {
+    const sw = fs.readFileSync(path.join(SRC, "..", "public", "sw.js"), "utf8");
+    expect(sw).toMatch(/pathname\.startsWith\('\/api\/'\)/);
   });
 });

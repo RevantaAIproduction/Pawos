@@ -51,3 +51,13 @@ export function chatTitle(chat: Pick<ConversationSessionSummary, 'title' | 'last
   const title = chat.title.trim() || chat.lastMessage.trim();
   return title ? (title.length > 80 ? `${title.slice(0, 79)}…` : title) : 'Untitled chat';
 }
+
+/**
+ * Where a chat came from, when it wasn't this computer: chats are shared across PawOS Desktop, PawOS
+ * Web and phones in the same account. Null for this computer's own chats.
+ */
+export function chatOriginBadge(chat: Pick<ConversationSessionSummary, 'surface' | 'remote'>): string | null {
+  if (chat.surface === 'web') return 'Web';
+  if (chat.remote) return 'Other device';
+  return null;
+}

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { splitAttachment, splitMessage } from "./formatMessage";
-import { PENDING_SEND_KEY, newRequestId, readPendingSend, retryDelayMs, writePendingSend, type PendingSend } from "./pendingSend";
+import { PENDING_SEND_KEY, classifySendResponse, newRequestId, processingPollDelayMs, readPendingSend, retryDelayMs, writePendingSend, type PendingSend } from "./pendingSend";
+import { isImageFile, scaledDimensions } from "./imagePrep";
+import { WEB_POLICY } from "../webPolicy/webCapabilities";
 
 function memoryStore() {
   const values = new Map<string, string>();
@@ -88,5 +90,45 @@ describe("the pending-send note", () => {
   it("retries a few times with growing delays, then stops and asks", () => {
     expect([1, 2, 3].map(retryDelayMs)).toEqual([1500, 4000, 10_000]);
     expect(retryDelayMs(4)).toBeNull();
+  });
+});
+
+describe("what a send's answer means (pending UI reconciliation)", () => {
+  const delivered = { ok: true, reply: "hi", chatId: "c1" };
+  it.each([
+    ["no answer at all (connection dropped)", null, {}, false, "uncertain"],
+    ["a proxy's error page", 502, {}, false, "uncertain"],
+    ["our own server error", 500, { ok: false, code: "failed" }, false, "rejected"],
+    ["still being answered", 202, { ok: false, code: "processing" }, false, "processing"],
+    ["stored now", 200, delivered, false, "delivered"],
+    ["stored before (recovered)", 200, { ...delivered, recovered: true }, true, "delivered"],
+    ["never received", 404, { ok: false, code: "not_found" }, true, "notReceived"],
+    ["refused by the plan", 402, { ok: false, code: "message_limit_reached" }, false, "rejected"],
+    ["a chat that isn't yours", 404, { ok: false, code: "chat_not_found" }, false, "rejected"],
+  ] as const)("%s → %s", (_label, status, data, recoverOnly, outcome) => {
+    expect(classifySendResponse(status, data, recoverOnly)).toBe(outcome);
+  });
+
+  it("keeps asking about a send the server is answering for longer than the server's claim lease, then stops", () => {
+    let total = 0;
+    for (let attempt = 1; processingPollDelayMs(attempt) !== null; attempt++) total += processingPollDelayMs(attempt) as number;
+    expect(total / 1000).toBeGreaterThan(WEB_POLICY.requestLeaseSeconds);
+    expect(processingPollDelayMs(0)).toBeNull();
+    expect(processingPollDelayMs(41)).toBeNull();
+  });
+});
+
+describe("photo preparation", () => {
+  it("scales large photos down to 2048px on the long side and leaves small ones alone", () => {
+    expect(scaledDimensions(4032, 3024)).toEqual({ width: 2048, height: 1536 });
+    expect(scaledDimensions(3024, 4032)).toEqual({ width: 1536, height: 2048 });
+    expect(scaledDimensions(800, 600)).toEqual({ width: 800, height: 600 });
+    expect(scaledDimensions(0, 10)).toEqual({ width: 0, height: 0 });
+  });
+
+  it("treats camera photos as photos, including HEIC with no type", () => {
+    expect(isImageFile({ type: "image/jpeg", name: "IMG_0001.JPG" })).toBe(true);
+    expect(isImageFile({ type: "", name: "IMG_0002.HEIC" })).toBe(true);
+    expect(isImageFile({ type: "text/plain", name: "notes.txt" })).toBe(false);
   });
 });

@@ -15,6 +15,7 @@ import { handleOAuthProtocolUrl, extractProtocolUrlFromArgv } from './auth/OAuth
 import { emailService } from './mail/EmailService';
 import { getDevWindowIconPath } from './assets/AssetPathResolver';
 import { conversationSessionStore } from './conversation/ConversationSessionStore';
+import { accountChatSync } from './conversation/AccountChatSync';
 import { communicationRuntime } from './communication/CommunicationRuntime';
 import { workspaceMemoryStore } from './execution/WorkspaceMemoryStore';
 import { dependencyGraphCache } from './execution/dependencyGraph/DependencyGraphCache';
@@ -451,6 +452,9 @@ app.whenReady().then(async () => {
 
   // Electron's memory of every conversation — rooted at userData, like SettingsStore.
   conversationSessionStore.init();
+  // Same chats on Desktop, Web and mobile: sync this computer's chats to the signed-in account.
+  accountChatSync.onLinked = (sessionId, accountChatId) => conversationSessionStore.linkAccountChat(sessionId, accountChatId);
+  accountChatSync.init(app.getPath('userData'));
   workspaceMemoryStore.init();
   dependencyGraphCache.init();
   repositorySemanticIndexStore.init();

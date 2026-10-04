@@ -61,7 +61,20 @@ export type ConversationSession = {
   projectId?: string;
   /** The local project folder this chat belongs to (set by its first turn) — none for a plain chat. */
   projectFolder?: string;
+  /**
+   * The PawOS account this chat belongs to (the signed-in user when it started). Only chats that
+   * belong to the signed-in account are synced to it — never another account's, and never chats
+   * from before sign-in.
+   */
+  accountUserId?: string;
+  /** The chat's id in the account's chat store (shared with PawOS Web and mobile), once synced. */
+  accountChatId?: string;
+  /** Where the chat started: in this desktop app, or on PawOS Web / mobile. */
+  origin?: ChatSurface;
 };
+
+/** Where a conversation ran. Desktop has full capabilities; Web and mobile: chat and code changes. */
+export type ChatSurface = 'desktop' | 'web';
 
 /** List/search results omit full turn transcripts — the dashboard list view only needs this much. */
 export type ConversationSessionSummary = {
@@ -76,6 +89,10 @@ export type ConversationSessionSummary = {
   lastMessage: string;
   /** See ConversationSession.projectFolder. */
   projectFolder?: string;
+  /** Where the chat started (see ConversationSession.origin). */
+  surface?: ChatSurface;
+  /** A chat from the account that isn't stored on this computer (started on Web, mobile or another computer). */
+  remote?: boolean;
 };
 
 /**

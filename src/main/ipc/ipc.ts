@@ -88,6 +88,7 @@ function parseVerifiedRuntimeIds(value: string[]): RuntimeEntitlementId[] {
 import type { PawModelId } from '../../shared/ai/PawModelTypes';
 import { onboardingStore } from '../onboarding/OnboardingStore';
 import { conversationSessionStore } from '../conversation/ConversationSessionStore';
+import { accountChatSync, mergeChatLists } from '../conversation/AccountChatSync';
 import type { ConversationSessionTurn, SessionContinuationHint } from '../../shared/conversation/ConversationSessionTypes';
 import { executionMemoryStore } from '../execution/ExecutionMemoryStore';
 import type { ExecutionRecord } from '../../shared/actions/ExecutionRecordTypes';
@@ -486,6 +487,7 @@ export function registerIpc(opts: {
   onUsageLedgerRestored(broadcastEntitlementChanged);
   ipcMain.handle('billing:syncBuildAccess', async (_evt, accessToken: string) => {
     setServerAccessToken(accessToken);
+    accountChatSync.invalidate(); // send this account's queued chat turns; refresh the account's chat list
     // Server copy of the usage ledgers — deleting the local usage files can't reset limits.
     scheduleUsageLedgerSync(2000);
     const [result] = await Promise.all([
@@ -505,6 +507,7 @@ export function registerIpc(opts: {
   });
   ipcMain.handle('billing:clearBuildAccess', () => {
     setServerAccessToken(null);
+    accountChatSync.invalidate();
     buildUsageReporter.reset();
     buildAccessStore.clear();
   });
@@ -1492,20 +1495,45 @@ export function registerIpc(opts: {
   // ConversationRuntime finalizing a turn; every other channel here is
   // read/organize-only (search/pin/archive/rename/export/delete) — the
   // renderer never edits a turn's recorded content.
-  ipcMain.handle('sessions:list', () => conversationSessionStore.list());
-  ipcMain.handle('sessions:get', (_evt, id: string) => conversationSessionStore.get(id));
-  ipcMain.handle('sessions:search', (_evt, query: string) => conversationSessionStore.search(query));
-  ipcMain.handle('sessions:appendTurn', (_evt, turn: ConversationSessionTurn, hint?: SessionContinuationHint) => {
-    const session = conversationSessionStore.appendTurn(turn, hint);
+  //
+  // The same chats show on PawOS Web and on a phone: chats are synced to the signed-in account
+  // (AccountChatSync — text only, the account's own chats only), and the list also shows the
+  // account's chats from Web, mobile and other computers. Opening one of those and continuing it
+  // brings it onto this computer as the same chat.
+  const allSessions = () => conversationSessionStore.list().map((summary) => conversationSessionStore.get(summary.id)).filter((s): s is NonNullable<typeof s> => Boolean(s));
+  ipcMain.handle('sessions:list', async () => mergeChatLists(conversationSessionStore.list(), allSessions(), await accountChatSync.listRemote()));
+  ipcMain.handle('sessions:get', async (_evt, id: string) => conversationSessionStore.get(id) ?? (await accountChatSync.getRemote(id)));
+  ipcMain.handle('sessions:search', async (_evt, query: string) => {
+    const q = query.trim().toLowerCase();
+    const remote = (await accountChatSync.listRemote()).filter((chat) => !q || chat.title.toLowerCase().includes(q));
+    return mergeChatLists(conversationSessionStore.search(query), allSessions(), remote);
+  });
+  ipcMain.handle('sessions:appendTurn', async (_evt, turn: ConversationSessionTurn, hint?: SessionContinuationHint) => {
+    // Continuing a chat from the account that isn't on this computer yet: bring it here first.
+    if (hint?.type === 'continue' && !conversationSessionStore.get(hint.sessionId)) {
+      const remote = await accountChatSync.getRemote(hint.sessionId);
+      if (remote) conversationSessionStore.importSession(remote);
+    }
+    const session = conversationSessionStore.appendTurn(turn, hint, undefined, accountChatSync.currentAccount());
+    accountChatSync.queueTurn(session, turn);
     for (const win of BrowserWindow.getAllWindows()) win.webContents.send('sessions:updated');
     return session;
   });
-  ipcMain.handle('sessions:rename', (_evt, id: string, title: string) => conversationSessionStore.rename(id, title));
+  ipcMain.handle('sessions:rename', async (_evt, id: string, title: string) => {
+    const session = conversationSessionStore.rename(id, title);
+    if (session) accountChatSync.queueRename(session, session.title);
+    else accountChatSync.queueRename({ accountChatId: id }, title); // a chat from the account
+    return session;
+  });
   ipcMain.handle('sessions:setPinned', (_evt, id: string, pinned: boolean) => conversationSessionStore.setPinned(id, pinned));
   ipcMain.handle('sessions:setArchived', (_evt, id: string, archived: boolean) =>
     conversationSessionStore.setArchived(id, archived)
   );
-  ipcMain.handle('sessions:delete', (_evt, id: string) => conversationSessionStore.delete(id));
+  ipcMain.handle('sessions:delete', (_evt, id: string) => {
+    const session = conversationSessionStore.get(id);
+    accountChatSync.queueDelete(session ?? { accountChatId: id });
+    return conversationSessionStore.delete(id) || !session;
+  });
   ipcMain.handle('sessions:export', (_evt, id: string) => conversationSessionStore.export(id));
 
   // Work History — one already-finished ExecutionRecord per write, built by

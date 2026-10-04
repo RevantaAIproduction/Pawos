@@ -131,9 +131,10 @@ class ConversationSessionStore {
    * (no decision made upstream) falls back to the still-warm-session
    * heuristic. Voice and text turns call this identically — the session
    * doesn't know or care which input mode produced the turn. Optional projectId
-   * associates the session with a project (org_projects.id).
+   * associates the session with a project (org_projects.id). `accountUserId` is the signed-in account,
+   * recorded on a new session so it is only ever synced to that account (AccountChatSync).
    */
-  appendTurn(turn: ConversationSessionTurn, hint: SessionContinuationHint = { type: 'auto' }, projectId?: string): ConversationSession {
+  appendTurn(turn: ConversationSessionTurn, hint: SessionContinuationHint = { type: 'auto' }, projectId?: string, accountUserId?: string | null): ConversationSession {
     let session: ConversationSession | undefined;
     if (hint.type === 'continue') session = this.get(hint.sessionId);
     else if (hint.type === 'auto') session = this.findContinuableSession(turn.projectFolder);
@@ -155,6 +156,7 @@ class ConversationSessionStore {
         applicationsOpened: apps,
         projectId,
         ...(turn.projectFolder ? { projectFolder: turn.projectFolder } : {}),
+        ...(accountUserId ? { accountUserId, origin: 'desktop' as const } : {}),
       };
       this.sessions.push(session);
     } else {
@@ -167,6 +169,26 @@ class ConversationSessionStore {
 
     this.save();
     return session;
+  }
+
+  /**
+   * Brings a chat from the account (started on PawOS Web, a phone or another computer) onto this
+   * computer so it can be continued here as the same chat. A no-op if it is already here.
+   */
+  importSession(session: ConversationSession): ConversationSession {
+    const existing = this.sessions.find((s) => s.id === session.id || (session.accountChatId && s.accountChatId === session.accountChatId));
+    if (existing) return existing;
+    this.sessions.push(session);
+    this.save();
+    return session;
+  }
+
+  /** Remembers a session's id in the account's chat store, once it has been synced. */
+  linkAccountChat(id: string, accountChatId: string): void {
+    const session = this.get(id);
+    if (!session || session.accountChatId === accountChatId) return;
+    session.accountChatId = accountChatId;
+    this.save();
   }
 
   rename(id: string, title: string): ConversationSession | undefined {

@@ -141,7 +141,7 @@ function AccountMenu({ displayName, email, tierLabel, menuPosition }: Pick<Accou
     window.location.href = "/";
   };
 
-  const itemClasses = "block w-full rounded-md px-3 py-2 text-left text-sm text-neutral-300 hover:bg-neutral-800 hover:text-white";
+  const itemClasses = "block min-h-11 w-full rounded-md px-3 py-2.5 text-left text-sm text-neutral-300 hover:bg-neutral-800 hover:text-white md:min-h-0 md:py-2";
 
   return (
     <div ref={rootRef} className="relative">
@@ -151,7 +151,7 @@ function AccountMenu({ displayName, email, tierLabel, menuPosition }: Pick<Accou
         aria-expanded={open}
         aria-label="Account menu"
         onClick={() => setOpen((value) => !value)}
-        className="flex h-7 w-7 items-center justify-center rounded-md text-neutral-400 transition hover:bg-neutral-800 hover:text-white"
+        className="flex h-11 w-11 items-center justify-center rounded-md text-neutral-400 transition hover:bg-neutral-800 hover:text-white md:h-7 md:w-7"
       >
         <svg {...ICON} fill="currentColor" stroke="none">
           <circle cx="6" cy="12" r="1.5" />
@@ -199,12 +199,32 @@ function BrandLink() {
 
 /**
  * The signed-in dashboard frame: a fixed left sidebar on desktop — navigation on top, the upgrade
- * button and the account row at the bottom-left — which reflows into a top bar with a scrollable
- * tab row on small screens. It only ever renders inside the signed-in /dashboard layout, and every
- * account value shown here is passed down from the server.
+ * button and the account row at the bottom-left — which becomes a top bar with a slide-in drawer on
+ * phones and tablets (the same pattern as the /app workspace), so nothing needs sideways scrolling.
+ * It only ever renders inside the signed-in /dashboard layout, and every account value shown here
+ * is passed down from the server.
  */
 export function DashboardShell({ children, ...account }: AccountProps & { children: ReactNode }) {
   const pathname = usePathname();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+
+  // While the drawer is open: Escape closes it, and the page behind it does not scroll.
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setDrawerOpen(false);
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", onKeyDown);
+    const button = menuButtonRef.current;
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+      button?.focus();
+    };
+  }, [drawerOpen]);
 
   const navLink = (item: NavItem, compact: boolean) => {
     const active = isActive(pathname, item.href);
@@ -212,8 +232,9 @@ export function DashboardShell({ children, ...account }: AccountProps & { childr
       <Link
         key={item.href}
         href={item.href}
+        onClick={compact ? () => setDrawerOpen(false) : undefined}
         aria-current={active ? "page" : undefined}
-        className={`flex items-center gap-2.5 rounded-md px-2.5 text-sm transition ${compact ? "shrink-0 py-2" : "py-1.5"} ${
+        className={`flex items-center gap-2.5 rounded-md px-2.5 text-sm transition ${compact ? "min-h-11 py-2" : "py-1.5"} ${
           active ? "bg-neutral-800/80 font-medium text-white" : "text-neutral-300 hover:bg-neutral-800/50 hover:text-white"
         }`}
       >
@@ -224,7 +245,7 @@ export function DashboardShell({ children, ...account }: AccountProps & { childr
   };
 
   return (
-    <div className="min-h-screen bg-[#141414] text-neutral-100 md:flex">
+    <div className="min-h-dvh bg-[#141414] text-neutral-100 md:flex">
       {/* Desktop sidebar */}
       <aside className="hidden md:fixed md:inset-y-0 md:left-0 md:flex md:w-64 md:flex-col md:border-r md:border-neutral-800/80 md:bg-[#181818]">
         <div className="px-4 py-4">
@@ -261,18 +282,58 @@ export function DashboardShell({ children, ...account }: AccountProps & { childr
       </aside>
 
       {/* Mobile / tablet top bar */}
-      <header className="sticky top-0 z-40 border-b border-neutral-800/80 bg-[#181818]/95 backdrop-blur md:hidden">
-        <div className="flex items-center justify-between px-4 py-3">
-          <BrandLink />
-          <div className="flex items-center gap-2">
+      <header className="sticky top-0 z-40 border-b border-neutral-800/80 bg-[#181818]/95 pt-[env(safe-area-inset-top)] backdrop-blur md:hidden">
+        <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+          <div className="flex min-w-0 items-center gap-1">
+            <button
+              ref={menuButtonRef}
+              type="button"
+              aria-label="Open menu"
+              aria-expanded={drawerOpen}
+              onClick={() => setDrawerOpen(true)}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-neutral-300 hover:bg-neutral-800"
+            >
+              <svg {...ICON} width={20} height={20}>
+                <path d="M4 7h16M4 12h16M4 17h16" />
+              </svg>
+            </button>
+            <span className="truncate text-sm font-medium text-neutral-100">{NAV_ITEMS.find((item) => isActive(pathname, item.href))?.label ?? "Dashboard"}</span>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
             <Avatar name={account.displayName} url={account.avatarUrl} size={26} />
             <AccountMenu displayName={account.displayName} email={account.email} tierLabel={account.tierLabel} menuPosition="below" />
           </div>
         </div>
-        <nav aria-label="Dashboard" className="flex gap-1 overflow-x-auto px-3 pb-2">
-          {NAV_ITEMS.map((item) => navLink(item, true))}
-        </nav>
       </header>
+
+      {drawerOpen && (
+        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Dashboard menu">
+          <button type="button" aria-label="Close menu" className="absolute inset-0 bg-black/60" onClick={() => setDrawerOpen(false)} />
+          <aside className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col overflow-y-auto border-r border-neutral-800 bg-[#181818] pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)]">
+            <div className="px-4 py-4">
+              <BrandLink />
+            </div>
+            <nav aria-label="Dashboard" className="flex-1 space-y-4 px-2">
+              {NAV_GROUPS.map((group, index) => (
+                <div key={index} className="space-y-0.5">
+                  {group.map((item) => navLink(item, true))}
+                </div>
+              ))}
+            </nav>
+            {account.canUpgrade && (
+              <div className="p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                <Link
+                  href="/pricing"
+                  onClick={() => setDrawerOpen(false)}
+                  className="flex min-h-11 items-center justify-center gap-2 rounded-md border border-neutral-700 px-3 text-sm font-medium text-neutral-100 transition hover:bg-neutral-800"
+                >
+                  Upgrade plan
+                </Link>
+              </div>
+            )}
+          </aside>
+        </div>
+      )}
 
       <div className="min-w-0 flex-1 md:pl-64">
         <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-8 md:py-10">{children}</div>

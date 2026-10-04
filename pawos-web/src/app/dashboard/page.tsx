@@ -4,7 +4,7 @@ import { getAccountContext } from "../../lib/account/accountContext";
 import { listIntegrations } from "../../lib/account/integrations";
 import { getMyProfile } from "../../lib/account/profile";
 import { getCompanion } from "../../lib/account/companionCatalog";
-import { getUsageActivity, getUsageOverview } from "../../lib/account/usage";
+import { getRecentActivity, getUsageActivity, getUsageOverview } from "../../lib/account/usage";
 import { getAllowance } from "../../lib/webChat/webChat";
 import { Card, CardTitle, PageHeader, formatDate, primaryButton, secondaryButton } from "../../components/dashboard/ui";
 
@@ -20,9 +20,10 @@ export default async function DashboardOverviewPage() {
   const account = await getAccountContext();
   if (!account) redirect("/login");
 
-  const [usage, activity, webAllowance, integrations, profile] = await Promise.all([
+  const [usage, activity, recent, webAllowance, integrations, profile] = await Promise.all([
     getUsageOverview(account),
     getUsageActivity(account).catch(() => null),
+    getRecentActivity(account).catch(() => null),
     getAllowance(account).catch(() => null),
     listIntegrations(account).catch(() => null),
     getMyProfile(account.supabase).catch(() => null),
@@ -126,6 +127,7 @@ export default async function DashboardOverviewPage() {
             <p className="mt-4 text-base font-medium text-white">
               {webAllowance.messagesUsed} / {webAllowance.messageLimit} web messages used
             </p>
+            <p className="mt-0.5 text-sm text-neutral-300">{webAllowance.remaining} remaining</p>
             <p className="mt-1 text-sm text-neutral-400">{account.tierLabel} includes {webAllowance.messageLimit} messages on PawOS Web in total. Work in the desktop app is not counted here.</p>
           </>
         ) : !activity ? (
@@ -152,6 +154,25 @@ export default async function DashboardOverviewPage() {
         <Link href="/app" className={`${secondaryButton} mt-5`}>
           Open PawOS Web
         </Link>
+      </Card>
+
+      <Card className="mt-4">
+        <CardTitle>Recent activity</CardTitle>
+        {!recent ? (
+          <p className="mt-4 text-sm text-neutral-500">Activity isn&apos;t available right now.</p>
+        ) : recent.length === 0 ? (
+          <p className="mt-4 text-sm text-neutral-500">Nothing yet. Chats on PawOS Web and work in the desktop app show up here.</p>
+        ) : (
+          <ul className="mt-4 divide-y divide-neutral-800/80">
+            {recent.map((item, index) => (
+              <li key={`${item.at}-${index}`} className="flex min-w-0 items-center gap-3 py-2.5">
+                <span className="min-w-0 flex-1 truncate text-sm text-neutral-200">{item.label}</span>
+                <span className="shrink-0 rounded bg-neutral-800 px-1.5 py-0.5 text-[11px] text-neutral-400">{item.surface === "web" ? "Web" : "Desktop"}</span>
+                <span className="hidden shrink-0 text-xs text-neutral-500 sm:inline">{formatDate(item.at) ?? ""}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">

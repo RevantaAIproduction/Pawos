@@ -93,3 +93,44 @@ export async function getUsageOverview(account: AccountContext): Promise<UsageOv
     limitResetsAt: str(summary.limitResetsAt),
   };
 }
+
+export interface ActivityItem {
+  /** What happened, in plain words: a web chat's title, or the kind of desktop work. */
+  label: string;
+  surface: "web" | "desktop";
+  at: string;
+  /** Paw Compute charged, when the item was a charged usage event. */
+  pc: number | null;
+}
+
+function categoryLabel(category: string | null): string {
+  if (!category) return "PawOS work";
+  const words = category.replace(/[-_]+/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/**
+ * Recent activity across Web and Desktop, labelled by where it happened. Web items are the
+ * account's web chats (by title); Desktop items are its charged usage events (by kind of work —
+ * the desktop keeps its conversations on the machine, so there is no title to show). Display only;
+ * `surface` is never used to authorize anything.
+ */
+export async function getRecentActivity(account: AccountContext, limit = 8): Promise<ActivityItem[] | null> {
+  const [chats, history] = await Promise.all([
+    account.supabase.from("web_chats").select("title, updated_at").eq("user_id", account.user.id).order("updated_at", { ascending: false }).limit(limit),
+    account.supabase.rpc("get_my_usage_history", { p_limit: ACTIVITY_EVENTS }),
+  ]);
+  if (chats.error && history.error) return null;
+  const items: ActivityItem[] = [];
+  for (const chat of (chats.data ?? []) as { title: string; updated_at: string }[]) {
+    items.push({ label: chat.title, surface: "web", at: chat.updated_at, pc: null });
+  }
+  for (const event of (Array.isArray(history.data) ? history.data : []) as Record<string, unknown>[]) {
+    const category = str(event.category);
+    // Web chat usage is already represented by the chat itself.
+    if (surfaceOfUsageCategory(category) === "web") continue;
+    const at = str(event.at);
+    if (at) items.push({ label: categoryLabel(category), surface: "desktop", at, pc: num(event.pc) });
+  }
+  return items.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, limit);
+}

@@ -50,3 +50,31 @@ export function retryDelayMs(attempt: number): number | null {
   const delays = [1500, 4000, 10_000];
   return attempt >= 1 && attempt <= delays.length ? delays[attempt - 1] : null;
 }
+
+/**
+ * What a send's HTTP answer means for the pending message — the one decision table the chat uses
+ * after every attempt, so a dropped connection can never be mistaken for a refusal:
+ *  - delivered: the server has the exchange (now or from before) — show its reply;
+ *  - processing: the server has the message and is still answering — ask again shortly;
+ *  - notReceived: the server never stored it (asked with recoverOnly) — give the text back;
+ *  - rejected: the server answered and refused it (limit, validation…) — give the text back;
+ *  - uncertain: no answer, or a proxy error page — the server may or may not have it, so retry
+ *    with the same request id.
+ */
+export type SendOutcome = "delivered" | "processing" | "notReceived" | "rejected" | "uncertain";
+
+export function classifySendResponse(status: number | null, data: { ok?: boolean; code?: string; reply?: string; chatId?: string }, recoverOnly: boolean): SendOutcome {
+  if (status === null) return "uncertain";
+  if (status === 202 && data.code === "processing") return "processing";
+  // An error page from something in between (no code of ours) is as uncertain as no answer.
+  if (status >= 500 && !data.code) return "uncertain";
+  if (status >= 200 && status < 300 && data.ok && data.reply && data.chatId) return "delivered";
+  if (recoverOnly && status === 404 && data.code === "not_found") return "notReceived";
+  return "rejected";
+}
+
+/** Delay before asking again about a send the server is still answering, or null to stop asking automatically. */
+export function processingPollDelayMs(attempt: number): number | null {
+  if (attempt < 1 || attempt > 40) return null; // ~4 minutes, beyond the server's claim lease
+  return Math.min(6000, 1000 + attempt * 500);
+}

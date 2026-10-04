@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import styles from './chatsPanel.module.css';
 import { ipc } from '../services/ipc/ipcBridgeImplementation';
-import { chatTitle, groupChatsByProject } from './chatsPanelModel';
+import { chatOriginBadge, chatTitle, groupChatsByProject } from './chatsPanelModel';
 import type { ConversationSessionSummary } from '../../shared/conversation/ConversationSessionTypes';
 
 // The bridge's "sessions changed" event has no unsubscribe — subscribe once, fan out to open panels.
@@ -89,6 +89,11 @@ export function ChatsPanel({ activeChatId, openProject = null, onOpenChat, onNew
             <div key={chat.id} className={`${styles.row} ${chat.id === activeChatId ? styles.active : ''}`}>
               <button type="button" className={styles.open} onClick={() => onOpenChat(chat.id, chat.projectFolder ?? null)} title={chatTitle(chat)} aria-current={chat.id === activeChatId ? 'true' : undefined}>
                 {chatTitle(chat)}
+                {chatOriginBadge(chat) && (
+                  <span className={styles.origin} title={chat.surface === 'web' ? 'Started on PawOS Web or mobile — continue it here with full Desktop capabilities' : 'From another computer on your account'}>
+                    {chatOriginBadge(chat)}
+                  </span>
+                )}
               </button>
               {confirmDeleteId === chat.id ? (
                 <>

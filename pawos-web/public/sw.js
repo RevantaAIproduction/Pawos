@@ -30,6 +30,12 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  // Never answer for APIs or other origins: the server is the source of truth for chats and
+  // connections, and an offline API call must fail visibly rather than get a cached page.
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/')) return;
+  // Only /companion has an offline shell; other pages simply load from the network.
+  if (!url.pathname.startsWith('/companion')) return;
   event.respondWith(
     fetch(event.request).catch(() => caches.match(event.request).then((cached) => cached || caches.match('/companion')))
   );

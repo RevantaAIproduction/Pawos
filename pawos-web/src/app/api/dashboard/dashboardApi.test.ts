@@ -105,8 +105,15 @@ describe("authentication", () => {
 
 describe("entitlements are enforced by the API, not the page", () => {
   it("an entitled connector can be started; a locked one is refused even when called directly", async () => {
+    // GitHub can be connected from the web (its connector OAuth app must be configured).
+    process.env.CONNECTOR_GITHUB_CLIENT_ID = "gh-connector-id";
+    process.env.CONNECTOR_GITHUB_CLIENT_SECRET = "gh-connector-secret";
     state.session = goUser;
-    expect((await connect(request("POST"), connector("github"))).status).toBe(200);
+    const github = await connect(request("POST"), connector("github"));
+    expect(github.status).toBe(200);
+    expect(new URL((await github.json()).connect.url).origin).toBe("https://github.com");
+    delete process.env.CONNECTOR_GITHUB_CLIENT_ID;
+    delete process.env.CONNECTOR_GITHUB_CLIENT_SECRET;
 
     const locked = await connect(request("POST"), connector("linear"));
     expect(locked.status).toBe(403);

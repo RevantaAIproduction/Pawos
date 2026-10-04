@@ -1,16 +1,17 @@
-import { relayConnectivityToDesktop } from "../../../../../lib/desktopRelay";
+import { handleConnectorCallback } from "../../../../../lib/account/webOAuthCallback";
 
 /**
- * GitHub-as-a-connector needs its own dedicated OAuth app + callback — the existing
- * GITHUB_CLIENT_ID/GITHUB_REDIRECT_URI pair is Supabase's own sign-in integration
- * (see ../../../auth/github/callback/route.ts) and its registered redirect URL is a Supabase
- * session-code relay, not a real GitHub authorization code suitable for connector use. This path
- * (https://pawos.revantaai.com/api/connectors/github/callback) is what CONNECTOR_GITHUB_CALLBACK_URL
- * should be set to, registered on a separate GitHub OAuth App (CONNECTOR_GITHUB_CLIENT_ID/SECRET).
- * Thin relay only, see relayConnectivityToDesktop's own doc comment for why no exchange happens here.
+ * GET /api/connectors/github/callback — CONNECTOR_GITHUB_CALLBACK_URL, registered on the GitHub
+ * connector OAuth App (CONNECTOR_GITHUB_CLIENT_ID/SECRET). That app is deliberately separate from
+ * GITHUB_CLIENT_ID/GITHUB_REDIRECT_URI, which is Supabase's own sign-in integration (see
+ * ../../../auth/github/callback/route.ts).
+ *
+ * Two kinds of flow arrive here (see handleConnectorCallback):
+ *  - Started in the PawOS desktop app: relayed to the desktop app unchanged
+ *    (relayConnectivityToDesktop) — the desktop exchanges the code itself.
+ *  - Started on PawOS Web (state "web.…", e.g. from a phone): completed on the server; the tokens
+ *    go into the same vault-backed credential store the desktop app uses, never to the browser.
  */
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const error = searchParams.get("error_description") ?? searchParams.get("error");
-  return relayConnectivityToDesktop(searchParams.get("code"), error, searchParams.get("state"));
+  return handleConnectorCallback(request, "github");
 }

@@ -33,6 +33,15 @@ interface WebOAuthProvider {
 }
 
 const WEB_OAUTH_PROVIDERS: Record<string, WebOAuthProvider> = {
+  // The connector OAuth app (CONNECTOR_GITHUB_CLIENT_ID/SECRET) — the same one, the same scopes and
+  // the same registered callback the desktop app's GitHubConnectorSDK uses.
+  github: {
+    authorizationUrl: "https://github.com/login/oauth/authorize",
+    scopes: ["repo", "read:org"],
+    redirectUri: "https://pawos.revantaai.com/api/connectors/github/callback",
+    identityUrl: "https://api.github.com/user",
+    capabilities: ["readRepositories", "readPullRequests", "readIssues"],
+  },
   bitbucket: {
     authorizationUrl: "https://bitbucket.org/site/oauth2/authorize",
     scopes: ["account", "repository", "pullrequest:write"],
@@ -114,9 +123,10 @@ export async function completeWebOAuth(account: AccountContext, connectorId: str
   try {
     const identity = await fetch(provider.identityUrl, { headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" } });
     if (identity.ok) {
-      const user = (await identity.json()) as { username?: string; nickname?: string; display_name?: string };
-      username = user.username ?? user.nickname ?? null;
-      accountName = user.display_name ?? username;
+      // Bitbucket: username / display_name. GitHub: login / name.
+      const user = (await identity.json()) as { username?: string; nickname?: string; display_name?: string; login?: string; name?: string | null };
+      username = user.username ?? user.login ?? user.nickname ?? null;
+      accountName = user.display_name ?? user.name ?? username;
     }
   } catch {
     // leave the name empty

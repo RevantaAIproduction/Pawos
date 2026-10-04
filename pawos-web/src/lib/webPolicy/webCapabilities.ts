@@ -6,7 +6,7 @@ import { TIER_LABELS, type AccountTier } from "../account/entitlements";
  *
  * This sits on top of the existing account entitlement, not beside it: the only input is the
  * account's server-resolved tier (accountContext.ts — subscription, organization membership or
- * Build grant). There is no web plan, no web balance and no web wallet. A capability being
+ * Build grant). Web has no plan, allowance or wallet of its own. A capability being
  * "available" says the account may use it; what a use costs is still charged to the plan's
  * existing usage allowance through reserve_usage / settle_usage (see webChat.ts).
  *
@@ -27,6 +27,7 @@ export type WebCapabilityId =
   | "web.integrationContext"
   | "web.mcpRead"
   | "web.continueInDesktop"
+  | "web.codeChanges"
   | "web.remoteWork"
   | "web.autonomousWork"
   | "web.browserWork";
@@ -35,13 +36,50 @@ export type WebCapabilityAvailability = "available" | "desktopOnly" | "future";
 
 /** Numbers the web policy enforces. Change them here, nowhere else. */
 export const WEB_POLICY = {
-  /** Paw Go: total Web chat messages an account may ever send. Other tiers have no message cap. */
+  /**
+   * Paw Go: total Web chat messages an account may ever send. Other tiers have no message cap.
+   * The database enforces it (web_chat_begin_request / web_chat_append_exchange take it as the limit).
+   */
   goLifetimeWebMessages: 4,
   maxMessageChars: 4000,
   /** Largest text file that may be attached to a message, in UTF-8 bytes. */
   maxAttachmentBytes: 60_000,
   maxAttachmentNameChars: 120,
+  /** Largest photo that may be uploaded, in bytes — matches the 'web-chat-uploads' bucket limit. */
+  maxImageBytes: 5 * 1024 * 1024,
+  /** Photos one account may upload in 24 hours. */
+  maxImageUploadsPerDay: 50,
+  /** Input-size allowance added to a usage reservation for one attached photo. */
+  imageReservationInputTokens: 2_000,
+  /** How long a send's claim holds before an abandoned attempt may be retried, in seconds. */
+  requestLeaseSeconds: 150,
+  /** Most conversation text handed to PawOS Desktop by "Continue in PawOS Desktop". */
+  handoffTranscriptChars: 12_000,
+  /** Paw Go: the longest prompt PawOS Web accepts — small requests only. */
+  goMaxPromptLines: 2,
+  goMaxPromptChars: 200,
+  /** The admin-granted access tier: Web messages in a rolling week. */
+  adminTierWeeklyWebMessages: 12,
+  /**
+   * Code changes from the web, pushed to the selected GitHub repository. Paid plans make full
+   * changes (frontend and backend) on their usage allowance; Paw Go makes small frontend changes
+   * (text, headings, titles, buttons) within its four messages.
+   */
+  codeChange: {
+    small: { maxFilesRead: 3, maxFilesChanged: 2, maxChangedLines: 40, maxFileBytes: 60_000, maxContextBytes: 90_000, autoFixAttempts: 1 },
+    full: { maxFilesRead: 12, maxFilesChanged: 10, maxChangedLines: 2_000, maxFileBytes: 100_000, maxContextBytes: 300_000, autoFixAttempts: 2 },
+    /** Repository paths listed to the model when it picks files. */
+    maxTreeEntries: 2_000,
+    /** A change takes several model and GitHub calls: its claim holds longer than a chat message's. */
+    requestLeaseSeconds: 300,
+    /** How long to wait for a preview deployment or checks to report on a pushed commit. */
+    previewWaitSeconds: 300,
+  },
 } as const;
+
+/** Photo types PawOS Web accepts (the model reads all of them). */
+export const WEB_IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/heic", "image/heif"] as const;
+export type WebImageMimeType = (typeof WEB_IMAGE_MIME_TYPES)[number];
 
 const ALL_TIERS: readonly AccountTier[] = ["go", "pro", "proMax", "team", "enterprise", "build"];
 const PAID_TIERS: readonly AccountTier[] = ["pro", "proMax", "team", "enterprise", "build"];
@@ -58,14 +96,41 @@ interface WebCapabilityRule {
 export const WEB_CAPABILITY_RULES: readonly WebCapabilityRule[] = [
   { id: "web.chat", label: "Chat", description: "Talk with Paw: explain, plan, and answer questions.", availability: "available", tiers: ALL_TIERS },
   { id: "web.codeReview", label: "Code review", description: "Review code pasted into the conversation.", availability: "available", tiers: ALL_TIERS },
-  { id: "web.fileUpload", label: "File attachments", description: "Attach a text or code file to a message.", availability: "available", tiers: PAID_TIERS },
+  { id: "web.fileUpload", label: "File attachments", description: "Attach a photo, or a text or code file, to a message.", availability: "available", tiers: PAID_TIERS },
   { id: "web.integrationContext", label: "Integration context", description: "Use connected services as context for a conversation.", availability: "desktopOnly", tiers: [] },
   { id: "web.mcpRead", label: "MCP read access", description: "Read from connected services through their MCP servers.", availability: "desktopOnly", tiers: [] },
-  { id: "web.continueInDesktop", label: "Continue in PawOS Desktop", description: "Hand a web conversation over to the desktop app.", availability: "future", tiers: [] },
+  { id: "web.continueInDesktop", label: "Continue in PawOS Desktop", description: "Take a web conversation to the desktop app to do the work there.", availability: "available", tiers: ALL_TIERS },
+  {
+    id: "web.codeChanges",
+    label: "Code changes",
+    description: "Change code in a connected GitHub repository and push it. Paw Go: small frontend changes; paid plans: frontend and backend.",
+    availability: "available",
+    tiers: ALL_TIERS,
+  },
   { id: "web.remoteWork", label: "Remote work sessions", description: "Run work in an isolated remote workspace.", availability: "future", tiers: [] },
   { id: "web.autonomousWork", label: "Autonomous Work", description: "Resolve tickets end to end from the web.", availability: "future", tiers: [] },
   { id: "web.browserWork", label: "Browser work", description: "Drive a browser from the web.", availability: "future", tiers: [] },
 ];
+
+/**
+ * What only PawOS Desktop does — the other side of the boundary. PawOS Web never claims to do any
+ * of these; a request that needs one is answered with "this needs PawOS Desktop" and a
+ * Continue in PawOS Desktop action. The Web chat's instructions to the model are built from this list.
+ */
+export const DESKTOP_ONLY_CAPABILITIES = [
+  { id: "desktop.filesystem", label: "read or change files on your computer" },
+  { id: "desktop.terminal", label: "run commands in a terminal" },
+  { id: "desktop.browserAutomation", label: "drive a browser on your computer" },
+  { id: "desktop.codingRuntime", label: "open, build or run your projects" },
+  { id: "desktop.tests", label: "run your tests" },
+  { id: "desktop.devEnvironment", label: "install software or change your development environment" },
+  { id: "desktop.git", label: "work with Git in a local checkout (other branches, history, merges, local-only repositories)" },
+  { id: "desktop.autonomousWork", label: "resolve tickets end to end (Autonomous Work)" },
+  { id: "desktop.connectedServices", label: "read from or act in your connected services (Jira, Slack, …) beyond PawOS Web's code changes on GitHub" },
+  { id: "desktop.companionRuntime", label: "run the desktop Companion" },
+  { id: "desktop.offline", label: "work offline" },
+  { id: "desktop.os", label: "use operating-system features (notifications, windows, devices)" },
+] as const;
 
 export type WebCapabilityStatus = "available" | "locked" | "desktopOnly" | "future";
 
@@ -130,9 +195,39 @@ export function requireWebCapability(account: Pick<AccountContext, "tier">, id: 
   throw new WebCapabilityError(id, status, message);
 }
 
-/** The Web chat message cap for a tier: Paw Go is capped; every other tier runs on its usage allowance. */
+/**
+ * The Web message cap for a tier, or null when the plan's usage allowance alone governs:
+ * Paw Go — 4 messages ever; the admin-granted access tier — 12 in a rolling week; others — none.
+ */
 export function webMessageLimitFor(account: Pick<AccountContext, "tier">): number | null {
-  return account.tier === "go" ? WEB_POLICY.goLifetimeWebMessages : null;
+  if (account.tier === "go") return WEB_POLICY.goLifetimeWebMessages;
+  if (account.tier === "build") return WEB_POLICY.adminTierWeeklyWebMessages;
+  return null;
+}
+
+/** The window the cap counts over, in days, or null for a lifetime cap. */
+export function webMessageWindowDaysFor(account: Pick<AccountContext, "tier">): number | null {
+  return account.tier === "build" ? 7 : null;
+}
+
+/** Whether Web model calls are charged to the plan's usage allowance (every tier but Paw Go). */
+export function isWebUsageMetered(account: Pick<AccountContext, "tier">): boolean {
+  return account.tier !== "go";
+}
+
+export type CodeChangeScope = "small" | "full";
+
+/** Paw Go: small frontend changes. Every other plan: frontend and backend. */
+export function codeChangeScopeFor(account: Pick<AccountContext, "tier">): CodeChangeScope {
+  return account.tier === "go" ? "small" : "full";
+}
+
+/** Why a prompt is too long for the plan, or null. Paw Go accepts short prompts only. */
+export function promptTooLongFor(account: Pick<AccountContext, "tier">, text: string): string | null {
+  if (account.tier !== "go") return null;
+  const lines = text.trim().split(/\r?\n/).length;
+  if (lines <= WEB_POLICY.goMaxPromptLines && text.trim().length <= WEB_POLICY.goMaxPromptChars) return null;
+  return `On Paw Go, PawOS Web accepts short prompts only — up to ${WEB_POLICY.goMaxPromptLines} lines (${WEB_POLICY.goMaxPromptChars} characters). Try a small request like "change the heading to …", or upgrade for longer ones.`;
 }
 
 /**

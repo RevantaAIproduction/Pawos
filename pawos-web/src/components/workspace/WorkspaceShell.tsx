@@ -247,9 +247,11 @@ function SidebarContents({ account, chats, onNavigate }: { account: WorkspaceAcc
                       href={`/app?chat=${chat.id}`}
                       onClick={onNavigate}
                       aria-current={active ? "page" : undefined}
-                      className={`block truncate rounded-md px-2.5 py-2.5 text-sm transition md:py-1.5 ${active ? "bg-neutral-800/80 text-white" : "text-neutral-300 hover:bg-neutral-800/50 hover:text-white"}`}
+                      className={`flex min-w-0 items-center gap-2 rounded-md px-2.5 py-2.5 text-sm transition md:py-1.5 ${active ? "bg-neutral-800/80 text-white" : "text-neutral-300 hover:bg-neutral-800/50 hover:text-white"}`}
                     >
-                      {chat.title}
+                      <span className="min-w-0 flex-1 truncate">{chat.title}</span>
+                      {/* The account's chats are shared; this one started in the desktop app. */}
+                      {chat.surface === "desktop" && <span className="shrink-0 rounded bg-neutral-800 px-1.5 py-0.5 text-[11px] text-neutral-400">Desktop</span>}
                     </Link>
                   </li>
                 );
@@ -281,8 +283,10 @@ function SidebarContents({ account, chats, onNavigate }: { account: WorkspaceAcc
  */
 export function WorkspaceShell({ account, chats, children }: { account: WorkspaceAccount; chats: WebChatSummary[]; children: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
 
-  // While the drawer is open: Escape closes it, and the page behind it does not scroll.
+  // While the drawer is open: Escape closes it, and the page behind it does not scroll. Focus goes
+  // back to the menu button when it closes.
   useEffect(() => {
     if (!drawerOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -291,9 +295,11 @@ export function WorkspaceShell({ account, chats, children }: { account: Workspac
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     document.addEventListener("keydown", onKeyDown);
+    const button = menuButtonRef.current;
     return () => {
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", onKeyDown);
+      button?.focus();
     };
   }, [drawerOpen]);
 
@@ -306,7 +312,7 @@ export function WorkspaceShell({ account, chats, children }: { account: Workspac
       </aside>
 
       <header className="sticky top-0 z-30 box-content flex h-14 items-center justify-between border-b border-neutral-800/80 bg-[#181818]/95 px-2 pt-[env(safe-area-inset-top)] backdrop-blur md:hidden">
-        <button type="button" aria-label="Open menu" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)} className="flex h-11 w-11 items-center justify-center rounded-md text-neutral-300 hover:bg-neutral-800">
+        <button ref={menuButtonRef} type="button" aria-label="Open menu" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)} className="flex h-11 w-11 items-center justify-center rounded-md text-neutral-300 hover:bg-neutral-800">
           <svg {...ICON} width={20} height={20}>
             <path d="M4 7h16M4 12h16M4 17h16" />
           </svg>
