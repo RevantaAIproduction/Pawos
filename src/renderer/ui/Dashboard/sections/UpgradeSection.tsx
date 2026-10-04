@@ -14,6 +14,7 @@ import { NativeBillingCheckoutModal, type NativeBillingCheckoutIntent } from '..
 import { TierCheckoutPage } from '../../billing/TierCheckoutPage';
 import { TeamCheckoutPage } from '../../billing/TeamCheckoutPage';
 import { EnterpriseCheckoutPage } from '../../billing/EnterpriseCheckoutPage';
+import { OrgPlansPanel } from './OrgPlansPanel';
 
 const TIER_LABELS: Record<SubscriptionTierId, string> = {
   go: 'Go',
@@ -31,7 +32,7 @@ const PLAN_ICONS: Partial<Record<SubscriptionTierId, () => React.JSX.Element>> =
 };
 
 function formatPrice(plan: PricingPlan): string {
-  if (plan.id === 'team' || plan.id === 'enterprise') return 'Coming Soon';
+  if (plan.id === 'team' || plan.id === 'enterprise') return 'Contact sales';
   if (plan.seatBased) {
     const range = plan.maxSeats ? `${plan.minSeats}–${plan.maxSeats} members` : `${plan.minSeats}+ users`;
     return plan.priceCents === null ? `Custom pricing — ${range}` : `$${(plan.priceCents / 100).toFixed(2)}/seat/mo — ${range}`;
@@ -156,6 +157,9 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
         </div>
       </div>
 
+      {tab === 'team' ? (
+        <OrgPlansPanel currentTier={currentTier} />
+      ) : (
       <div
         style={{
           display: 'flex',
@@ -301,6 +305,7 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
           );
         })}
       </div>
+      )}
 
       {message && <p className={styles.cardBody} style={{ marginTop: 16, textAlign: 'center' }}>{message}</p>}
 

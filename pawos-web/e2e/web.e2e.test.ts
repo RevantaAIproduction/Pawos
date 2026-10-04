@@ -302,7 +302,8 @@ describe("unreliable connections (phone)", () => {
     });
     await sendText(page, "Lost reply question");
     await page.getByText("Reply to: Lost reply question").waitFor({ timeout: 30_000 });
-    expect(await page.getByText("Lost reply question", { exact: true }).count()).toBe(1);
+    // Visible on screen once (the chat list also names the new chat after it, in a sidebar hidden on a phone).
+    expect(await page.getByText("Lost reply question", { exact: true }).filter({ visible: true }).count()).toBe(1);
     expect(userMessages("e2e-net").filter((m) => m.content === "Lost reply question")).toHaveLength(1);
     expect(model.calls - callsBefore).toBe(1);
     await context.close();
@@ -316,7 +317,8 @@ describe("unreliable connections (phone)", () => {
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.getByText("Reply to: slow question for reload").waitFor({ timeout: 30_000 });
     // The restored pending message is replaced by the stored one — shown exactly once.
-    expect(await page.getByText("slow question for reload", { exact: true }).count()).toBe(1);
+    // Visible on screen once (the chat list also names the new chat after it, in a sidebar hidden on a phone).
+    expect(await page.getByText("slow question for reload", { exact: true }).filter({ visible: true }).count()).toBe(1);
     expect(userMessages("e2e-net").filter((m) => m.content === "slow question for reload")).toHaveLength(1);
     expect(model.calls - callsBefore).toBe(1);
     await context.close();

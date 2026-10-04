@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { OrgPlans } from "./OrgPlans";
 
 /**
  * Mirrors PawOS's own src/shared/billing/BillingTypes.ts PricingPlan.
@@ -73,49 +74,6 @@ const INDIVIDUAL_PLANS: Plan[] = [
   },
 ];
 
-const TEAM_ENTERPRISE_PLANS: Plan[] = [
-  {
-    id: "team",
-    label: "Paw Team",
-    tagline: "Predictable usage per seat",
-    priceCents: 2000,
-    period: "month",
-    seatBased: true,
-    minSeats: 2,
-    maxSeats: 150,
-    seatOptions: [
-      { seatTier: "standard", label: "Standard", priceCents: 2000, description: "Everything in Paw Pro Max, shared across your organization." },
-      { seatTier: "premium", label: "Premium", priceCents: 10000, description: "Same organization features, at Pro Max-equivalent usage headroom." },
-    ],
-    features: [
-      "Everything in Paw Pro Max",
-      "Shared Workspaces & Shared Companions",
-      "Organization Members & Admin Controls",
-      "Shared Credits (Credit Pool)",
-      "Task Management & Assignment",
-      "AI-Assisted Git Collaboration (PR Review)",
-      "Remote Assistance (Screen Share & Control)",
-      "CRM Projection",
-      "Credential Vault, Approval Queue & Audit Log",
-    ],
-  },
-  {
-    id: "enterprise",
-    label: "Paw Enterprise",
-    tagline: "Flexible pooled usage",
-    priceCents: 2000,
-    period: "month",
-    seatBased: true,
-    minSeats: 20,
-    features: [
-      "Everything in Paw Team",
-      "Uniform $20/seat base rate — no Standard/Premium split",
-      "Autonomous Ticket System usage billed at pass-through API rates instead of tiered Ticket Balance pricing",
-      "Additional RBAC roles: IT Administrator, Security Administrator, Department Manager",
-    ],
-  },
-];
-
 function formatPrice(plan: Plan): string {
   if (plan.seatBased) {
     const range = plan.maxSeats ? `${plan.minSeats}–${plan.maxSeats} members` : `${plan.minSeats}+ users`;
@@ -165,7 +123,6 @@ function PlanCard({ plan }: { plan: Plan }) {
 
 export function PricingPlans() {
   const [tab, setTab] = useState<"individual" | "team">("individual");
-  const plans = tab === "individual" ? INDIVIDUAL_PLANS : TEAM_ENTERPRISE_PLANS;
 
   return (
     <div>
@@ -190,11 +147,17 @@ export function PricingPlans() {
         </button>
       </div>
 
-      <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {plans.map((plan) => (
-          <PlanCard key={plan.id} plan={plan} />
-        ))}
-      </div>
+      {tab === "individual" ? (
+        <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {INDIVIDUAL_PLANS.map((plan) => (
+            <PlanCard key={plan.id} plan={plan} />
+          ))}
+        </div>
+      ) : (
+        <div className="mt-14">
+          <OrgPlans />
+        </div>
+      )}
     </div>
   );
 }

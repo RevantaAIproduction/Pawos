@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { ThemeToggle } from "./ThemeToggle";
 
 const NAV_ITEMS = [
   {
@@ -188,7 +189,7 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
           </div>
   
           <div className="hidden items-center gap-6 md:flex">
-            
+            <ThemeToggle />
             <Link href={userEmail ? "/app" : "/login"} className="text-sm font-medium text-neutral-400 hover:text-white transition">
               {userEmail ? "Open PawOS" : "Log in"}
             </Link>
@@ -197,6 +198,7 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
             </Link>
           </div>
 
+          <ThemeToggle className="ml-auto mr-1 md:hidden" />
           <button
             type="button"
             className="md:hidden text-white p-2"

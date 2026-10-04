@@ -6,6 +6,7 @@ import { Footer } from "../components/layout/Footer";
 import { Analytics } from "../components/analytics/Analytics";
 import { CookieConsent } from "../components/analytics/CookieConsent";
 import { createClient } from "../lib/supabase/server";
+import { THEME_INIT_SCRIPT } from "../components/layout/themeScript";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -91,8 +92,11 @@ export default async function RootLayout({
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      // data-theme is set before paint by THEME_INIT_SCRIPT from the visitor's saved choice.
+      suppressHydrationWarning
     >
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}

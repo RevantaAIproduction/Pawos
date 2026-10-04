@@ -34,7 +34,7 @@ const FAQS = [
   },
   {
     q: "Can I change plans anytime?",
-    a: "Yes. Upgrades, downgrades, and renewals are self-serve from inside the app for every plan, including Team and Enterprise — no sales call required.",
+    a: "Yes. Go, Pro and Pro Max upgrades, downgrades and renewals are self-serve from inside the app. Team and Enterprise are set up with our sales team — contact sales and we'll size seats and usage for your organization.",
   },
   {
     q: "What counts as a 'seat' on Team or Enterprise?",
