@@ -702,16 +702,19 @@ export function useConversationController(args?: {
       // Matching organizationUsageService's own documented contract for every other pooled capability:
       // call recordUsage() before dispatching, treat a throw as "blocked."
       if (current?.pooled) {
-        const organizationId = organizationIdRef.current;
-        if (!organizationId) {
-          // Org membership hasn't resolved yet this session — fail open rather than block a
-          // legitimate Enterprise user on a transient startup race.
-          lastInputSourceRef.current = finalContext?.source;
-          runtimeRef.current?.submitTranscript(text, finalContext);
-          return;
-        }
-        organizationUsageService
-          .recordUsage(organizationId, 'aiReasoning', 1)
+        // Every Enterprise turn is counted against the pool — including the first one after launch,
+        // before the organization id has loaded (it's fetched here instead of letting the turn
+        // through uncounted). A used-up pool stops the turn until the pool resets on the 1st.
+        const resolveOrganizationId = async (): Promise<string> => {
+          if (organizationIdRef.current) return organizationIdRef.current;
+          const orgs = await organizationService.getMyOrganizations();
+          const id = (orgs.find((org) => org.tier === 'enterprise') ?? orgs[0])?.id ?? null;
+          if (!id) throw new Error('no organization');
+          organizationIdRef.current = id;
+          return id;
+        };
+        resolveOrganizationId()
+          .then((organizationId) => organizationUsageService.recordUsage(organizationId, 'aiReasoning', 1))
           .then(() => {
             lastInputSourceRef.current = finalContext?.source;
             runtimeRef.current?.submitTranscript(text, finalContext);

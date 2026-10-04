@@ -476,23 +476,36 @@ describe("usage is counted where PawOS Desktop counts it", () => {
     expect(state.backend.usageCalls.filter((c) => c.name === "reserve_usage")).toHaveLength(0);
   });
 
-  it("Team / Enterprise: one unit of the organization's pool per message, never the member's own buckets", async () => {
+  it("Team: each message is charged to the member's own seat usage — never an organization pool", async () => {
     state.backend.addUser("team-member");
     state.backend.joinOrganization("team-member", { id: "org-team", name: "Team", tier: "team" }, "member");
     state.session = { id: "team-member", email: "t@example.com", user_metadata: {} } as unknown as User;
+    expect((await send(post({ content: "one" }))).status).toBe(200);
+    expect(state.backend.usageCalls.filter((c) => c.name === "reserve_usage").length).toBeGreaterThan(0);
+    expect(state.backend.usageCalls.filter((c) => c.name === "increment_organization_usage")).toHaveLength(0);
+    expect(state.backend.organizationUsage.size).toBe(0);
+    // When the seat's usage is used up, the member is refused — nobody else's usage is borrowed.
+    state.backend.reserveResult = { ok: false, reason: "plan_exhausted" };
+    expect((await send(post({ content: "two" }))).status).toBe(402);
+    expect(state.backend.organizationUsage.size).toBe(0);
+  });
+
+  it("Enterprise: one unit of the organization's pool per message, never the member's own buckets", async () => {
+    state.backend.addUser("ent-member-2");
+    state.backend.joinOrganization("ent-member-2", { id: "org-ent-2", name: "Ent", tier: "enterprise" }, "member");
+    state.session = { id: "ent-member-2", email: "e2@example.com", user_metadata: {} } as unknown as User;
     state.backend.organizationLimit = 2;
     expect((await send(post({ content: "one" }))).status).toBe(200);
     expect((await send(post({ content: "two" }))).status).toBe(200);
-    expect(state.backend.organizationUsage.get("org-team")).toBe(2);
+    expect(state.backend.organizationUsage.get("org-ent-2")).toBe(2);
     const refused = await send(post({ content: "three" }));
     expect(refused.status).toBe(402);
     expect((await refused.json()).message).toMatch(/organization's shared usage/);
     expect(state.backend.usageCalls.filter((c) => c.name === "reserve_usage")).toHaveLength(0);
-    // The refused message was released: nothing stored, and it can be sent once the pool allows.
     expect(state.backend.tables.web_chat_messages.filter((m) => m.content === "three")).toHaveLength(0);
   });
 
-  it("Team / Enterprise: a code change is one unit of the pool, whatever model calls it makes", async () => {
+  it("Enterprise: a code change is one unit of the pool, whatever model calls it makes", async () => {
     state.backend.addUser("ent-member");
     state.backend.joinOrganization("ent-member", { id: "org-ent", name: "Ent", tier: "enterprise" }, "member");
     state.session = { id: "ent-member", email: "e@example.com", user_metadata: {} } as unknown as User;

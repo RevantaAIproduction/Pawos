@@ -23,7 +23,7 @@ interface OrgPlan {
 const TEAM: OrgPlan = {
   id: "team",
   name: "Team",
-  summary: "Predictable usage per seat, with shared workspaces and admin controls.",
+  summary: "Each member gets their own seat’s usage — no shared pool — with shared workspaces and admin controls.",
   audience: "2–150 members",
   price: "$20",
   priceUnit: "per seat / month",
@@ -40,7 +40,7 @@ const TEAM: OrgPlan = {
     },
     {
       title: "Billing",
-      items: ["Team billing with Standard and Premium seats", "Shared credits (credit pool)", "CRM projection"],
+      items: ["Team billing with Standard and Premium seats", "CRM projection"],
     },
   ],
 };
@@ -59,6 +59,8 @@ const ENTERPRISE: OrgPlan = {
     {
       title: "Usage and billing",
       items: [
+        "Pooled usage shared across the organization",
+        "Shared credit pool",
         "Uniform seat rate — no Standard / Premium split",
         "Autonomous Ticket System billed at pass-through API rates",
         "Charged only for completed tasks — never failed, cancelled or denied runs",
@@ -72,8 +74,8 @@ const ENTERPRISE: OrgPlan = {
 };
 
 const SEATS = [
-  { name: "Standard", price: "$20", detail: "Everything in Pro Max for each member" },
-  { name: "Premium", price: "$100", detail: "Pro Max-equivalent usage headroom" },
+  { name: "Standard", price: "$20", detail: "2,000 PC a month per member (Pro-level)" },
+  { name: "Premium", price: "$100", detail: "10,000 PC a month per member (Pro Max 5x-level)" },
 ];
 
 function Check() {

@@ -13,7 +13,7 @@ import { WEB_MODEL, type ModelUsage } from "./model";
 export const ORGANIZATION_TURN_CAPABILITY = "aiReasoning";
 
 /**
- * Team / Enterprise: takes one unit of the organization's shared monthly pool for this message,
+ * Enterprise: takes one unit of the organization's shared monthly pool for this message,
  * through the same function PawOS Desktop calls before each turn (increment_organization_usage, as
  * the signed-in user — it checks membership and the limit itself, atomically). Refused → the
  * message is not answered.

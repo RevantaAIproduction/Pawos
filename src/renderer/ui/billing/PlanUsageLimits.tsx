@@ -45,7 +45,7 @@ function PurchasedBuckets({ buckets }: { buckets: CustomerUsageBucket[] }) {
 }
 
 function formatPlanHeading(entitlement: EntitlementSnapshot): string {
-  if (entitlement.tier === 'team') return `Team ${entitlement.seatTier === 'premium' ? 'Premium' : 'Standard'} (pooled)`;
+  if (entitlement.tier === 'team') return `Team ${entitlement.seatTier === 'premium' ? 'Premium' : 'Standard'} seat`;
   if (entitlement.tier === 'enterprise') return 'Enterprise (pooled)';
   return formatPlanName(entitlement).replace(/^Paw /, '');
 }
@@ -113,7 +113,7 @@ function LimitActions({ entitlement, onUpgrade, onBuyCompute }: { entitlement: E
  * limit (5-hour PC, weekly PC, 5-hour and weekly active hours) straight from the EntitlementSnapshot
  * the real gate uses. Paw Go sees only a status (working / limit reached) — no meters. Once included
  * capacity is used up, the tier's Upgrade / Buy Paw Compute actions appear (when handlers are given).
- * Pooled (Team/Enterprise) usage lives in the organization pool, so only the heading is shown.
+ * Pooled (Enterprise) usage lives in the organization pool, so only the heading is shown.
  */
 export function PlanUsageLimits({
   entitlement,

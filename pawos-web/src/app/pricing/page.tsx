@@ -12,10 +12,11 @@ export const metadata: Metadata = {
 
 const COMPARISON_ROWS: { feature: string; go: string; pro: string; proMax: string; team: string; enterprise: string }[] = [
   { feature: "Companion Studio & Desktop Companion", go: "✓", pro: "✓", proMax: "✓", team: "✓", enterprise: "✓" },
-  { feature: "Paw Compute (PC) included", go: "500 PC every 14 days", pro: "2,000 PC per billing period", proMax: "10,000 PC (5x) or 25,000 PC (20x) per billing period", team: "Shared organization pool", enterprise: "Shared organization pool" },
+  { feature: "Paw Compute (PC) included", go: "500 PC every 14 days", pro: "2,000 PC per billing period", proMax: "10,000 PC (5x) or 25,000 PC (20x) per billing period", team: "Per seat: 2,000 PC (Standard) or 10,000 PC (Premium) a month", enterprise: "Shared organization pool" },
   { feature: "AI models & reasoning runtimes", go: "—", pro: "✓", proMax: "✓", team: "✓", enterprise: "✓" },
   { feature: "Autonomous Ticket System billing", go: "—", pro: "—", proMax: "Ticket Balance", team: "Ticket Balance (shared)", enterprise: "Seat fee + usage at API rates" },
-  { feature: "Shared Workspaces, Companions & Credit Pool", go: "—", pro: "—", proMax: "—", team: "✓", enterprise: "✓" },
+  { feature: "Shared Workspaces & Companions", go: "—", pro: "—", proMax: "—", team: "✓", enterprise: "✓" },
+  { feature: "Shared credit pool", go: "—", pro: "—", proMax: "—", team: "—", enterprise: "✓" },
   { feature: "Task Management & Git Collaboration (PR Review)", go: "—", pro: "—", proMax: "—", team: "✓", enterprise: "✓" },
   { feature: "Remote Assistance & CRM Projection", go: "—", pro: "—", proMax: "—", team: "✓", enterprise: "✓" },
   { feature: "Credential Vault, Approval Queue & Audit Log", go: "—", pro: "—", proMax: "—", team: "✓", enterprise: "✓" },
@@ -38,7 +39,7 @@ const FAQS = [
   },
   {
     q: "What counts as a 'seat' on Team or Enterprise?",
-    a: "One seat is one member of your organization workspace. Team seats come in two rates — Standard ($20/seat/mo) and Premium ($100/seat/mo) — mixed freely across your 2–150 members. Enterprise seats are uniform at a $20/seat/mo base fee (20+ seats), with Autonomous Ticket System usage billed separately through the same volume-tiered Ticket Balance.",
+    a: "One seat is one member of your organization workspace. Team seats come in two rates — Standard ($20/seat/mo, 2,000 PC a month) and Premium ($100/seat/mo, 10,000 PC a month) — mixed freely across your 2–150 members. Each Team member uses their own seat's usage; there is no shared pool. Enterprise seats are uniform at a $20/seat/mo base fee (20+ seats), with Autonomous Ticket System usage billed separately through the same volume-tiered Ticket Balance.",
   },
   {
     q: "Does an unused Ticket Balance roll over?",

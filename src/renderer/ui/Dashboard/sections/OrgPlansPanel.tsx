@@ -30,7 +30,7 @@ const PLANS: OrgPlan[] = [
   {
     id: 'team',
     name: 'Team',
-    summary: 'Predictable usage per seat, with shared workspaces and admin controls.',
+    summary: 'Each member gets their own seat’s usage — no shared pool — with shared workspaces and admin controls.',
     audience: '2–150 members',
     price: '$20',
     priceUnit: 'per seat / month',
@@ -39,7 +39,7 @@ const PLANS: OrgPlan[] = [
     groups: [
       { title: 'Collaboration', items: ['Shared workspaces and companions', 'Task management and assignment', 'AI-assisted Git collaboration (PR review)', 'Remote assistance (screen share and control)'] },
       { title: 'Administration and security', items: ['Organization members and admin controls', 'Credential vault and approval queue', 'Audit log', 'SSO configuration (policy-level)'] },
-      { title: 'Billing', items: ['Team billing with Standard and Premium seats', 'Shared credits (credit pool)', 'CRM projection'] },
+      { title: 'Billing', items: ['Team billing with Standard and Premium seats', 'CRM projection'] },
     ],
   },
   {
@@ -56,7 +56,9 @@ const PLANS: OrgPlan[] = [
       {
         title: 'Usage and billing',
         items: [
-          'Uniform seat rate — no Standard / Premium split',
+          'Pooled usage shared across the organization',
+        'Shared credit pool',
+        'Uniform seat rate — no Standard / Premium split',
           'Autonomous Ticket System billed at pass-through API rates',
           'Charged only for completed tasks — never failed, cancelled or denied runs',
         ],
@@ -67,8 +69,8 @@ const PLANS: OrgPlan[] = [
 ];
 
 const SEATS = [
-  { name: 'Standard', price: '$20', detail: 'Everything in Pro Max for each member' },
-  { name: 'Premium', price: '$100', detail: 'Pro Max-equivalent usage headroom' },
+  { name: 'Standard', price: '$20', detail: '2,000 PC a month per member (Pro-level)' },
+  { name: 'Premium', price: '$100', detail: '10,000 PC a month per member (Pro Max 5x-level)' },
 ];
 
 const border = '1px solid rgba(var(--pawos-overlay-rgb), 0.12)';

@@ -29,8 +29,9 @@ describe('Rolling limits — exact approved values', () => {
     ['Pro', 'pro', undefined, undefined, 1_250, 5_000, 5, 20, false],
     ['Pro Max 5x', 'proMax', undefined, '5x', 4_166.6667, 25_000, 5, 30, false],
     ['Pro Max 20x', 'proMax', undefined, '20x', 12_500, 100_000, 5, 40, false],
-    ['Team Standard', 'team', undefined, undefined, 1_250, 5_000, null, 20, true],
-    ['Team Premium', 'team', 'premium', undefined, 4_166.6667, 25_000, null, 30, true],
+    // Paw Team is never pooled: each member uses their own purchased seat.
+    ['Team Standard', 'team', undefined, undefined, 1_250, 5_000, null, 20, false],
+    ['Team Premium', 'team', 'premium', undefined, 4_166.6667, 25_000, null, 30, false],
     ['Enterprise', 'enterprise', undefined, undefined, null, null, null, null, true],
   ] as const)('%s', (_label, tier, seatTier, variant, pc5h, pcWeek, h5h, hWeek, pooled) => {
     const cap = pawComputeCapacityStore.resolve(tier, seatTier, variant);

@@ -135,10 +135,8 @@ const TEAM_FEATURES: FeatureId[] = [
   'sharedWorkspaces',
   'organizationMembers',
   'sharedCompanions',
-  'sharedCredits',
   'adminControls',
   'teamBilling',
-  'creditPool',
   'taskManagement',
   'gitCollaboration',
   'remoteAssistance',
@@ -164,7 +162,9 @@ const TEAM_FEATURES: FeatureId[] = [
  * rate) is a PricingConfigStore concern, not a FeatureId — autonomousTaskBilling (the Ticket
  * Balance wallet itself) is now shared with Pro Max/Team, not Enterprise-exclusive.
  */
-const ENTERPRISE_FEATURES: FeatureId[] = [...TEAM_FEATURES, 'organizationCrossDeviceAlerts'];
+// Shared credits / the credit pool are Enterprise-only: Paw Team is never pooled — each member uses
+// their own purchased seat (and their own credits).
+const ENTERPRISE_FEATURES: FeatureId[] = [...TEAM_FEATURES, 'organizationCrossDeviceAlerts', 'sharedCredits', 'creditPool'];
 
 /**
  * PawOS Build — the private, admin-granted student tier (see BuildAccessStore.ts). Listed explicitly
@@ -451,10 +451,13 @@ class EntitlementService {
   }
 
   /**
-   * Organization billing (Team / Enterprise) — its own pooled path, unchanged. Decided by
-   * configuration: a seat-based plan in the plan catalog, or pooled usage/capacity config.
+   * Organization pool — Enterprise only. Decided by configuration: a seat-based plan in the plan
+   * catalog, or pooled usage/capacity config. Paw Team is never pooled: each member has their own
+   * seat's usage on the server buckets (Standard = Pro, Premium = Pro Max 5x; see
+   * supabase/migrations/20261004070000_team_seat_usage.sql), metered like Pro.
    */
   isPooledUsage(): boolean {
+    if (this.effectiveTier() === 'team') return false;
     if (this.isComputePooled()) return true;
     if (pricingConfigStore.get().plans.some((plan) => plan.id === this.baseTier() && plan.seatBased === true)) return true;
     return pawComputeCapacityStore.resolve(this.effectiveTier(), this.getSeatTier(), this.currentProMaxVariant()).pooled;
@@ -506,7 +509,8 @@ class EntitlementService {
   /**
    * The single generation-admission decision used by the real chat/voice gate
    * (billing:canStartGeneration), turn recording, the career tools and the snapshot. Rules:
-   *  - Pooled tiers (Enterprise/Team) defer to the organization pool (server-side).
+   *  - Enterprise (pooled) defers to the organization pool (server-side). Team members are metered
+   *    on their own seat's buckets, like Pro.
    *  - Paw Fable is gated purely on purchased-credit headroom — and is not part of PawOS Build.
    *  - Otherwise the effective tier's four rolling limits apply (RollingUsageGate).
    *  - Purchased Compute Credits may continue past exhausted included capacity

@@ -8,7 +8,8 @@ import { usageLimitMessage, type ModelCallReservation, type ModelCallReservation
  * tool continuations, background calls, career/meeting tools). It never looks at tier names — the
  * server's product configuration decides, through the customer-safe summary:
  *
- *  - Organization-pooled usage (Team / Enterprise): unchanged — no reservation here.
+ *  - Organization-pooled usage (Enterprise only): no reservation here. Team members are metered on
+ *    their own seat's buckets, like Pro.
  *  - A current plan bucket funds the account (summary.bucketFunded): a server reservation, scope
  *    'standard' (plan → extra usage → credits). Paw Fable uses credits only.
  *  - An active paid subscription without a current plan bucket: credits only. If the summary can't

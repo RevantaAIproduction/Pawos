@@ -411,7 +411,7 @@ export async function sendMessage(account: AccountContext, input: SendInput): Pr
   };
 
   try {
-    // Team / Enterprise: one unit of the organization's shared pool, as Desktop counts a turn.
+    // Enterprise: one unit of the organization's shared pool, as Desktop counts a turn.
     if (usageSource === "organizationPool") await takeOrganizationTurn(account);
     const image = wantsImage ? await loadAttachmentForSend(account, input.imageId) : null;
     let replyText: string;

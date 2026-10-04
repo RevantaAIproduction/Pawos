@@ -220,22 +220,23 @@ export function webMessageWindowDaysFor(account: Pick<AccountContext, "tier">): 
 
 /**
  * Where a Web message's usage is counted — the same place PawOS Desktop counts that plan's usage:
- *  - "planBuckets" (Pro, Pro Max): every model call is reserved and settled on the account's usage
- *    buckets (reserve_usage → settle_usage), the one allowance Desktop also draws on;
- *  - "organizationPool" (Team, Enterprise): one unit of the organization's shared monthly
- *    'aiReasoning' pool per message (increment_organization_usage), exactly as Desktop counts a turn;
+ *  - "planBuckets" (Pro, Pro Max, Team): every model call is reserved and settled on the account's
+ *    usage buckets (reserve_usage → settle_usage), the one allowance Desktop also draws on. A Team
+ *    member's bucket is their own purchased seat (Standard = Pro, Premium = Pro Max 5x) — never pooled;
+ *  - "organizationPool" (Enterprise): one unit of the organization's shared monthly 'aiReasoning'
+ *    pool per message (increment_organization_usage), exactly as Desktop counts a turn;
  *  - "messageCap" (Paw Go, and the admin-granted access tier): the Web message cap only — never
  *    charged to a bucket, as Desktop never charges these tiers' included allowance to one.
  */
 export type WebUsageSource = "planBuckets" | "organizationPool" | "messageCap";
 
 export function webUsageSourceFor(account: Pick<AccountContext, "tier">): WebUsageSource {
-  if (account.tier === "pro" || account.tier === "proMax") return "planBuckets";
-  if (account.tier === "team" || account.tier === "enterprise") return "organizationPool";
+  if (account.tier === "pro" || account.tier === "proMax" || account.tier === "team") return "planBuckets";
+  if (account.tier === "enterprise") return "organizationPool";
   return "messageCap";
 }
 
-/** Whether Web model calls are reserved and settled on the account's usage buckets (Pro, Pro Max). */
+/** Whether Web model calls are reserved and settled on the account's usage buckets (Pro, Pro Max, Team). */
 export function isWebUsageMetered(account: Pick<AccountContext, "tier">): boolean {
   return webUsageSourceFor(account) === "planBuckets";
 }

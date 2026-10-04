@@ -32,8 +32,10 @@ function defaultConfig(): RollingCapacityConfig {
       go:          { window5hPc: 500,         windowWeeklyPc: 500,    window5hActiveHours: null, windowWeeklyActiveHours: 5,   pooled: false },
       pro:         { window5hPc: 1_250,       windowWeeklyPc: 5_000,  window5hActiveHours: 5,    windowWeeklyActiveHours: 20,  pooled: false },
       proMax:      { window5hPc: 4_166.6667,  windowWeeklyPc: 25_000, window5hActiveHours: 5,    windowWeeklyActiveHours: 30,  pooled: false }, // 5x variant; 20x is 100k/40h
-      team:        { window5hPc: 1_250,       windowWeeklyPc: 5_000,  window5hActiveHours: null, windowWeeklyActiveHours: 20,  pooled: true  }, // Handled server-side usually, but defining limits here
-      teamPremium: { window5hPc: 4_166.6667,  windowWeeklyPc: 25_000, window5hActiveHours: null, windowWeeklyActiveHours: 30,  pooled: true  },
+      // Paw Team: per-member seat usage on the server buckets (not pooled). These local limits apply only
+      // if a member has no seat bucket yet; the server's seat allowance is otherwise what decides.
+      team:        { window5hPc: 1_250,       windowWeeklyPc: 5_000,  window5hActiveHours: null, windowWeeklyActiveHours: 20,  pooled: false },
+      teamPremium: { window5hPc: 4_166.6667,  windowWeeklyPc: 25_000, window5hActiveHours: null, windowWeeklyActiveHours: 30,  pooled: false },
       enterprise:  { window5hPc: null,    windowWeeklyPc: null,   window5hActiveHours: null, windowWeeklyActiveHours: null, pooled: true  },
       // PawOS Build (admin-granted student tier): 1,500 PC per week in total, of which at most 500 PC
       // may be used inside any one 5-hour window — the window cap is part of the weekly total, not extra.

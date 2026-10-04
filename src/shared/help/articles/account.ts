@@ -97,7 +97,7 @@ export const ACCOUNT_ARTICLES: HelpArticle[] = [
     troubleshooting: [],
     requirements: [],
     permissions: [],
-    billing: 'Paw Go: 500 PC every 14 days. Pro: 2,000 PC per billing period (weekly limit 1,000 PC). Pro Max 5x: 10,000 PC (weekly limit 5,000 PC). Pro Max 20x: 25,000 PC (weekly limit 12,500 PC). Team and Enterprise: shared organization pool. Credits: $1 per 100 PC, never expire.',
+    billing: 'Paw Go: 500 PC every 14 days. Pro: 2,000 PC per billing period (weekly limit 1,000 PC). Pro Max 5x: 10,000 PC (weekly limit 5,000 PC). Pro Max 20x: 25,000 PC (weekly limit 12,500 PC). Team: per seat — Standard 2,000 PC, Premium 10,000 PC a month (no shared pool). Enterprise: shared organization pool. Credits: $1 per 100 PC, never expire.',
     relatedArticleIds: ['analytics-ai-usage', 'paw-go'],
     relatedSettings: ['Usage'],
     relatedApps: ['settings', 'analytics'],

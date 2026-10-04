@@ -34,8 +34,8 @@ signed-in user (`auth.uid()`); the client can never choose the user, the bucket 
 | Tier | What limits Web chat | Where it's enforced |
 |---|---|---|
 | Paw Go | `WEB_POLICY.goLifetimeWebMessages` = **4 lifetime Web messages** (chat and code changes together), across all chats; prompts of **at most 2 lines** (`goMaxPromptLines`, `goMaxPromptChars`) | Database: `web_chat_begin_request` / `web_chat_append_exchange`; prompt length: `promptTooLongFor()` on the server, shown live in the composer |
-| Pro, Pro Max | The plan's existing AI usage allowance | `reserve_usage` / `settle_usage`, categories `web-chat`, `web-code-change` |
-| Team, Enterprise | The organization's shared monthly pool — one unit per Web message (a code change is one message), exactly as Desktop counts one per turn | `increment_organization_usage(org, 'aiReasoning', 1)` as the signed-in member, after the request is claimed (`lib/webChat/sharedUsage.ts`) |
+| Pro, Pro Max, Team | The plan's existing AI usage allowance — for a Team member, their own seat (Standard = Pro, Premium = Pro Max 5x; never pooled) | `reserve_usage` / `settle_usage`, categories `web-chat`, `web-code-change` |
+| Enterprise | The organization's shared monthly pool — one unit per Web message (a code change is one message), exactly as Desktop counts one per turn | `increment_organization_usage(org, 'aiReasoning', 1)` as the signed-in member, after the request is claimed (`lib/webChat/sharedUsage.ts`) |
 
 Go messages are not charged to a bucket (Go Desktop usage policy is untouched). A failed reply never
 consumes a Go message and never charges a paid plan.
@@ -93,9 +93,10 @@ same plan, with the same usage, on both. Web differs only in what it can do (§4
 Web usage is counted **where Desktop counts that plan's usage** (`webUsageSourceFor()` in
 `webCapabilities.ts`), through the **same functions**, as the **same user**:
 
-* Pro / Pro Max — the account's usage buckets (`reserve_usage` → `settle_usage`).
-* Team / Enterprise — the organization's shared pool (`increment_organization_usage`); never the
-  member's own buckets or credits.
+* Pro / Pro Max / Team — the account's usage buckets (`reserve_usage` → `settle_usage`); a Team
+  member's bucket is their own seat (`20261004070000_team_seat_usage.sql`).
+* Enterprise — the organization's shared pool (`increment_organization_usage`); never the member's
+  own buckets or credits.
 * Paw Go — its Web message cap only.
 
 Desktop activity can exhaust the allowance for Web and vice versa. Web activity is told
@@ -195,7 +196,7 @@ repository and **pushes it to the default branch**, then shows the repository's 
 | Mode name | "Small change" | "Change code" |
 | What it may touch | Small frontend changes — text, headings, titles, labels, buttons, styles (`isFrontendPath`), ≤ 2 files, ≤ 40 changed lines; **existing files only** (`new_file`) and **no assets** — no images, icons, SVGs, fonts, media or `data:` URLs added (`adds_asset`); `.svg` files are not editable | Frontend **and** backend source (`isFullScopePath`), ≤ 10 files |
 | Prompt | ≤ 2 lines | No line limit |
-| Counts as | One of its 4 lifetime Web messages (a refused or no-op change does not count) | Pro / Pro Max: model calls on the plan's usage allowance (`web-code-change`). Team / Enterprise: one unit of the organization pool |
+| Counts as | One of its 4 lifetime Web messages (a refused or no-op change does not count) | Pro / Pro Max / Team: model calls on the plan's (or seat's) usage allowance (`web-code-change`). Enterprise: one unit of the organization pool |
 | Automatic fixes | 1 | 2 |
 | Photos / file attachments | No | Yes |
 
@@ -283,7 +284,8 @@ what differs between plans is **how much** — and only Paw Go has a separate We
 | Pro | 2,000 PC per billing period, weekly limit 1,000 PC | Same allowance | **Yes** — one pool |
 | Pro Max 5x | 10,000 PC per billing period, weekly limit 5,000 PC | Same allowance | **Yes** |
 | Pro Max 20x | 25,000 PC per billing period, weekly limit 12,500 PC | Same allowance | **Yes** |
-| Team / Enterprise | The organization's shared monthly pool, one unit per turn | Same pool, one unit per Web message (a code change is one) | **Yes** — one pool |
+| Team | Each member's own seat: Standard 2,000 PC / Premium 10,000 PC a month (weekly limit half) | Same seat allowance | **Yes** — one allowance per member, no shared pool |
+| Enterprise | The organization's shared monthly pool, one unit per turn | Same pool, one unit per Web message (a code change is one) | **Yes** — one pool |
 
 * Pro / Pro Max: every Web model call is reserved and settled on the **same** usage buckets as
   Desktop (`reserve_usage` → `settle_usage`, categories `web-chat` / `web-code-change`). Team /

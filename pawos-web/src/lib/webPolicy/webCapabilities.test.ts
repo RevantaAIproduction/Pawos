@@ -60,11 +60,11 @@ describe("the policy", () => {
   it("counts Web usage where Desktop counts that plan's usage, and scopes code changes by plan", () => {
     expect(webUsageSourceFor({ tier: "pro" })).toBe("planBuckets");
     expect(webUsageSourceFor({ tier: "proMax" })).toBe("planBuckets");
-    expect(webUsageSourceFor({ tier: "team" })).toBe("organizationPool");
+    expect(webUsageSourceFor({ tier: "team" })).toBe("planBuckets"); // each member's own seat, never pooled
     expect(webUsageSourceFor({ tier: "enterprise" })).toBe("organizationPool");
     expect(webUsageSourceFor({ tier: "go" })).toBe("messageCap");
     expect(webUsageSourceFor({ tier: "build" })).toBe("messageCap");
-    for (const tier of TIERS) expect(isWebUsageMetered({ tier })).toBe(tier === "pro" || tier === "proMax");
+    for (const tier of TIERS) expect(isWebUsageMetered({ tier })).toBe(tier === "pro" || tier === "proMax" || tier === "team");
     for (const tier of TIERS.filter((t) => t !== "go")) expect(codeChangeScopeFor({ tier })).toBe("full");
     expect(codeChangeScopeFor({ tier: "go" })).toBe("small");
     for (const tier of TIERS) expect(webCapabilityStatus({ tier }, "web.codeChanges")).toBe("available");

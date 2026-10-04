@@ -83,13 +83,13 @@ function defaultConfig(): PricingConfig {
             seatTier: 'standard',
             label: 'Standard',
             priceCents: 2000,
-            description: 'Everything in Pro Max, shared across your organization.',
+            description: 'Everything in Pro Max, with Pro-level usage for each member: 2,000 PC a month.',
           },
           {
             seatTier: 'premium',
             label: 'Premium',
             priceCents: 10000,
-            description: 'Same organization features as Standard, at Pro Max-equivalent usage headroom.',
+            description: 'Same organization features as Standard, with Pro Max 5x usage for each member: 10,000 PC a month.',
           },
         ],
         features: [
@@ -97,7 +97,6 @@ function defaultConfig(): PricingConfig {
           'Shared Workspaces',
           'Organization Members',
           'Shared Companions',
-          'Shared Credits (Credit Pool)',
           'Admin Controls',
           'Team Billing',
           'Task Management & Assignment',
@@ -127,6 +126,7 @@ function defaultConfig(): PricingConfig {
         features: [
           'Everything in Team',
           'Uniform $20/seat base rate — no Standard/Premium split',
+          'Pooled organization usage and a shared credit pool',
           'Autonomous Ticket System usage billed at pass-through API rates instead of tiered Ticket Balance pricing',
           'Additional RBAC roles: IT Administrator, Security Administrator, Department Manager',
         ],

@@ -45,7 +45,7 @@ export const ANALYTICS_ARTICLES: HelpArticle[] = [
     troubleshooting: ['If you hit your limit, you’ll see a real, friendly notice rather than a silent failure'],
     requirements: [],
     permissions: [],
-    billing: 'Paw Go: 500 PC every 14 days. Pro: 2,000 PC per billing period. Pro Max 5x: 10,000 PC. Pro Max 20x: 25,000 PC. Pro and Pro Max have a weekly limit of half the plan’s PC. Team and Enterprise: shared organization pool.',
+    billing: 'Paw Go: 500 PC every 14 days. Pro: 2,000 PC per billing period. Pro Max 5x: 10,000 PC. Pro Max 20x: 25,000 PC. Pro and Pro Max have a weekly limit of half the plan’s PC. Team: per seat — Standard 2,000 PC, Premium 10,000 PC a month (no shared pool). Enterprise: shared organization pool.',
     relatedArticleIds: ['analytics-productivity', 'paw-go', 'paw-pro'],
     relatedSettings: ['Usage', 'Billing'],
     relatedApps: ['analytics', 'settings'],
