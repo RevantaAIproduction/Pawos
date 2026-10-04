@@ -145,7 +145,7 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
     : [];
   const pathname = usePathname();
 
-  if (pathname?.startsWith("/docs")) return null;
+  if (pathname?.startsWith("/docs") || pathname?.startsWith("/dashboard")) return null;
   const isCompanionMode = pathname === "/companion";
   if (isCompanionMode || pathname === "/auth/desktop-success") return null;
 

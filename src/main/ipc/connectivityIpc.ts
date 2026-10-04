@@ -11,6 +11,7 @@ import { postLinearCommentIdempotent, type IdempotentLinearCommentInput } from '
 import { postGitHubCommentIdempotent, type IdempotentGitHubCommentInput, type GitHubWriteBackResult } from '../execution/plugins/infrastructure/GitHubWriteBackIdempotent';
 import { credentialVaultBridge, type StoredCredential } from '../connectivity/CredentialVaultBridge';
 import { jiraMetadataStore, type JiraMetadata } from '../connectivity/JiraMetadataStore';
+import { linearConnectorSDK } from '../connectivity/connectors/LinearConnectorSDK';
 import { SlackConnector } from '../infrastructure/connectors/communication/SlackConnector';
 import type {
   ConnectivityScope,
@@ -156,7 +157,7 @@ export function registerConnectivityIpc(): void {
   // reconnect. Deliberately the same isConnectorEntitled() check as connect()/apiTokens:save()/
   // oauth:begin() — one source of truth for "is this connector currently allowed," not a second,
   // parallel rule for the restore path.
-  safeHandle<ConnectorStatus>('connectivity:restore', (connectorId: unknown, scope: unknown, credential: unknown) => {
+  safeHandleWithEvent<ConnectorStatus>('connectivity:restore', (evt, connectorId: unknown, scope: unknown, credential: unknown) => {
     if (!isNonEmptyString(connectorId)) {
       throw new Error('connectivity:restore requires a non-empty connectorId string.');
     }
@@ -164,7 +165,7 @@ export function registerConnectivityIpc(): void {
       throw new Error("connectivity:restore requires a valid scope ({ userId, organizationId? }).");
     }
     assertConnectorEntitled(connectorId);
-    return connectivityRuntime.connections.restore(connectorId, scope, credential);
+    return connectivityRuntime.connections.restore(connectorId, scope, credential, evt.sender);
   });
 
   safeHandleWithEvent<void>('connectivity:disconnect', (evt, connectionId: unknown) => {
@@ -367,12 +368,19 @@ export function registerConnectivityIpc(): void {
   // Autonomous Work credential resolution — gets stored OAuth/API credentials for external write-back
   // (GitHub PR creation, Jira/Linear ticket updates). Validates scope and returns the raw credential
   // or undefined if not connected. Used by AutonomousOrchestrator to perform external updates.
-  safeHandle<StoredCredential | undefined>('connectivity:getStoredCredential', (connectorId: unknown, scope: unknown) => {
+  safeHandle<StoredCredential | undefined>('connectivity:getStoredCredential', async (connectorId: unknown, scope: unknown) => {
     if (!isNonEmptyString(connectorId)) {
       throw new Error('connectivity:getStoredCredential requires a non-empty connectorId string.');
     }
     if (!isConnectivityScope(scope)) {
       throw new Error("connectivity:getStoredCredential requires a valid scope ({ userId, organizationId? }).");
+    }
+    if (connectorId === linearConnectorSDK.definition.id) {
+      // Linear access tokens expire: refresh first so write-back never receives a lapsed token, and
+      // keep the refresh token in the main process — the renderer only needs the access token.
+      await linearConnectorSDK.getFreshAccessToken();
+      const stored = await credentialVaultBridge.read(connectorId, scope);
+      return stored ? { ...stored, refreshToken: undefined } : undefined;
     }
     return credentialVaultBridge.read(connectorId, scope);
   });

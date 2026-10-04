@@ -1,138 +1,138 @@
-import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import Image from "next/image";
-import { createClient } from "../../lib/supabase/server";
-import { SignOutButton } from "./SignOutButton";
-import { Button, buttonClasses } from "../../components/ui/Button";
-import { DownloadWindowsButton } from "../../components/DownloadWindowsButton";
+import { getAccountContext } from "../../lib/account/accountContext";
+import { listIntegrations } from "../../lib/account/integrations";
+import { getMyProfile } from "../../lib/account/profile";
+import { getCompanion } from "../../lib/account/companionCatalog";
+import { getUsageOverview } from "../../lib/account/usage";
+import { Card, CardTitle, PageHeader, formatDate, primaryButton, secondaryButton } from "../../components/dashboard/ui";
 
-export const dynamic = "force-dynamic";
-
-export const metadata: Metadata = {
-  title: "Dashboard",
-  robots: { index: false, follow: false },
-};
-
-function displayName(user: { email?: string; user_metadata?: Record<string, unknown> }): string {
-  const meta = user.user_metadata ?? {};
+function UsageBar({ percent }: { percent: number }) {
   return (
-    (typeof meta.full_name === "string" && meta.full_name) ||
-    (typeof meta.name === "string" && meta.name) ||
-    (typeof meta.user_name === "string" && meta.user_name) ||
-    user.email ||
-    "PawOS user"
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-800" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
+      <div className={`h-full rounded-full ${percent >= 100 ? "bg-amber-400" : "bg-neutral-200"}`} style={{ width: `${percent}%` }} />
+    </div>
   );
 }
 
-function avatarUrl(user: { user_metadata?: Record<string, unknown> }): string | null {
-  const meta = user.user_metadata ?? {};
-  return (typeof meta.avatar_url === "string" && meta.avatar_url) || (typeof meta.picture === "string" && meta.picture) || null;
-}
+export default async function DashboardOverviewPage() {
+  const account = await getAccountContext();
+  if (!account) redirect("/login");
 
-export default async function DashboardPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
-
-  const [{ data: creditsRow }, { data: purchases }] = await Promise.all([
-    supabase.from("user_task_credits").select("balance, updated_at").eq("user_id", user.id).maybeSingle(),
-    supabase
-      .from("task_credit_purchases")
-      .select("id, credits, amount_usd, purchased_at")
-      .eq("user_id", user.id)
-      .order("purchased_at", { ascending: false })
-      .limit(10),
+  const [usage, integrations, profile] = await Promise.all([
+    getUsageOverview(account),
+    listIntegrations(account).catch(() => null),
+    getMyProfile(account.supabase).catch(() => null),
   ]);
 
-  const name = displayName(user);
-  const avatar = avatarUrl(user);
-  const memberSince = new Date(user.created_at).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  const companion = profile ? getCompanion(profile.companionId) : undefined;
+  const companionName = companion?.displayName ?? profile?.customCompanionName ?? null;
+  const connected = integrations?.filter((integration) => integration.connection === "connected") ?? [];
+  const canUpgrade = account.tier === "go" || account.tier === "pro" || account.tier === "build";
+  const planEnds = formatDate(account.subscriptionExpiresAt);
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-16">
+    <>
+      <PageHeader title="Overview" description={`Signed in as ${account.displayName}`} />
 
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          {avatar ? (
-            <Image src={avatar} alt="" width={56} height={56} className="rounded-full" unoptimized />
-          ) : (
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-neutral-800 text-lg font-semibold text-neutral-300">
-              {name.slice(0, 1).toUpperCase()}
-            </div>
-          )}
-          <div>
-            <h1 className="text-2xl font-bold">{name}</h1>
-            <p className="text-sm text-neutral-400">{user.email}</p>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-1">
+          <CardTitle>Plan</CardTitle>
+          <p className="mt-3 text-2xl font-semibold text-white">
+            {account.tierLabel}
+            {account.proMaxVariant && <span className="ml-2 text-base font-normal text-neutral-400">{account.proMaxVariant}</span>}
+          </p>
+          <p className="mt-1 text-sm text-neutral-500">
+            {planEnds ? `Current period ends ${planEnds}.` : account.tier === "go" ? "The free PawOS plan." : "Managed through your organization or PawOS."}
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            {canUpgrade && (
+              <Link href="/pricing" className={primaryButton}>
+                Upgrade
+              </Link>
+            )}
+            <Link href="/dashboard/spending" className={secondaryButton}>
+              Spending
+            </Link>
           </div>
-        </div>
-        <SignOutButton />
-      </div>
+        </Card>
 
-      <div className="mt-10 grid gap-6 sm:grid-cols-2">
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-6">
-          <h2 className="text-sm font-medium text-neutral-400">Account</h2>
-          <dl className="mt-3 space-y-2 text-sm">
-            <div className="flex items-center justify-between gap-4">
-              <dt className="text-neutral-500">Account ID</dt>
-              <dd className="font-mono text-xs text-neutral-300">{user.id}</dd>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <dt className="text-neutral-500">Member since</dt>
-              <dd className="text-neutral-300">{memberSince}</dd>
-            </div>
-          </dl>
-        </div>
+        <Card className="lg:col-span-2">
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle>Usage</CardTitle>
+            {usage?.limitReached && <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-300">Limit reached</span>}
+          </div>
+          {!usage ? (
+            <p className="mt-3 text-sm text-neutral-500">Usage isn&apos;t available right now. Try again in a moment.</p>
+          ) : usage.buckets.length === 0 ? (
+            <p className="mt-3 text-sm text-neutral-500">No usage allowance is active on this account yet.</p>
+          ) : (
+            <ul className="mt-4 space-y-5">
+              {usage.buckets.map((bucket) => {
+                const reset = formatDate(bucket.resetsAt);
+                const expires = formatDate(bucket.expiresAt);
+                return (
+                  <li key={bucket.id}>
+                    <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                      <span className="text-sm font-medium text-neutral-200">{bucket.label}</span>
+                      <span className="text-sm text-neutral-400">
+                        {bucket.pcUsed.toLocaleString("en-US")} of {bucket.pcTotal.toLocaleString("en-US")} PC used
+                      </span>
+                    </div>
+                    <UsageBar percent={bucket.percentUsed} />
+                    <p className="mt-1.5 text-xs text-neutral-500">
+                      {bucket.percentUsed}% used
+                      {reset ? ` · resets ${reset}` : expires ? ` · expires ${expires}` : ""}
+                    </p>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {usage?.weeklyPacing && (
+            <p className="mt-4 border-t border-neutral-800 pt-4 text-xs text-neutral-500">
+              Weekly pacing: {usage.weeklyPacing.percentUsed}% used
+              {formatDate(usage.weeklyPacing.resetsAt) ? ` · resets ${formatDate(usage.weeklyPacing.resetsAt)}` : ""}
+            </p>
+          )}
+        </Card>
 
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-6">
-          <h2 className="text-sm font-medium text-neutral-400">Autonomous Task Credits</h2>
-          <p className="mt-3 text-3xl font-bold">{creditsRow?.balance ?? 0}</p>
-          <p className="mt-1 text-xs text-neutral-500">
-            Prepaid credits for Autonomous Engineering Tasks, shared with your PawOS desktop app.
+        <Card className="lg:col-span-1">
+          <CardTitle>Companion</CardTitle>
+          <p className="mt-3 text-lg font-medium text-white">{companionName ?? "Not available"}</p>
+          <p className="mt-1 text-sm text-neutral-500">
+            {!profile
+              ? "Companion settings aren't available right now."
+              : companion
+                ? "Your PawOS desktop companion."
+                : "A custom companion made in the desktop app."}
           </p>
-        </div>
-      </div>
+          <Link href="/dashboard/companion" className={`${secondaryButton} mt-5`}>
+            Manage companion
+          </Link>
+        </Card>
 
-      <div className="mt-6 rounded-2xl border border-neutral-800 bg-neutral-900/50 p-6">
-        <h2 className="text-sm font-medium text-neutral-400">Purchase history</h2>
-        {purchases && purchases.length > 0 ? (
-          <ul className="mt-3 divide-y divide-neutral-800 text-sm">
-            {purchases.map((p) => (
-              <li key={p.id} className="flex items-center justify-between py-2">
-                <span className="text-neutral-300">{p.credits} credits</span>
-                <span className="text-neutral-500">${Number(p.amount_usd).toFixed(2)}</span>
-                <span className="text-neutral-500">{new Date(p.purchased_at).toLocaleDateString()}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-3 text-sm text-neutral-500">No purchases yet.</p>
-        )}
+        <Card className="lg:col-span-2">
+          <CardTitle>Integrations</CardTitle>
+          {!integrations ? (
+            <p className="mt-3 text-sm text-neutral-500">Connection state isn&apos;t available right now.</p>
+          ) : (
+            <>
+              <p className="mt-3 text-lg font-medium text-white">
+                {connected.length === 0 ? "No integrations connected" : `${connected.length} connected`}
+              </p>
+              <p className="mt-1 text-sm text-neutral-500">
+                {connected.length > 0
+                  ? connected.map((integration) => integration.name).join(", ")
+                  : `${integrations.filter((integration) => integration.entitled).length} of ${integrations.length} available on ${account.tierLabel}.`}
+              </p>
+            </>
+          )}
+          <Link href="/dashboard/integrations" className={`${secondaryButton} mt-5`}>
+            View integrations
+          </Link>
+        </Card>
       </div>
-
-      <div className="mt-10 flex flex-wrap items-center gap-3 rounded-2xl border border-neutral-800 bg-neutral-900/50 p-6">
-        <div className="flex-1">
-          <h2 className="font-semibold">Your plan and companion live in the PawOS desktop app</h2>
-          <p className="mt-1 text-sm text-neutral-400">
-            Subscription tier, companion settings, and conversations are managed there — this dashboard covers
-            your account and task credits.
-          </p>
-        </div>
-        <DownloadWindowsButton source="dashboard" className={buttonClasses("secondary")}>
-          Download PawOS
-        </DownloadWindowsButton>
-        <Button href="/pricing" variant="primary">
-          View plans
-        </Button>
-      </div>
-    </div>
+    </>
   );
 }

@@ -30,6 +30,9 @@ function scopeKey(scope: ConnectivityScope): string {
  */
 class ConnectionManager {
   private connections = new Map<string, ConnectorConnection>();
+  /** The app window that last connected or restored a credential — the only route to the durable
+   *  store (see RendererConnectivityCredentialBridge), reused when a refreshed token needs persisting. */
+  private credentialPersistSender: WebContents | undefined;
 
   private connectionId(connectorId: string, scope: ConnectivityScope): string {
     return `${connectorId}::${scopeKey(scope)}`;
@@ -56,23 +59,40 @@ class ConnectionManager {
     if (!sdk) {
       throw new Error(`Cannot connect — no connector registered with id '${connectorId}'.`);
     }
+    if (sender) this.credentialPersistSender = sender;
     const connection = await sdk.connect(scope, opts);
     this.connections.set(this.connectionId(connectorId, scope), connection);
 
     if (sender && !sender.isDestroyed()) {
-      const stored = await credentialVaultBridge.read(connectorId, scope);
-      if (stored) {
-        const result = await persistCredentialViaRenderer(sender, scope, connectorId, stored.authMethod, stored.secret, {
-          refreshToken: stored.refreshToken,
-          expiresAt: stored.expiresAt,
-        });
-        if (!result.ok) {
-          console.error(`[ConnectionManager] Failed to durably persist credential for '${connectorId}': ${result.message}`);
-        }
-      }
+      await this.persistStoredCredential(connectorId, scope);
     }
 
     return connection;
+  }
+
+  /**
+   * Writes whatever the Credential Vault currently holds for this connector back to the durable
+   * store (Supabase Vault, through the renderer — the same round trip connect() uses). A connector
+   * calls this after a token refresh so a new access token, expiry and rotated refresh token
+   * survive an app restart. Best-effort and never throws: the in-memory connection keeps working
+   * either way, and a failure is logged (message only — never the credential).
+   */
+  async persistStoredCredential(connectorId: string, scope: ConnectivityScope): Promise<boolean> {
+    const sender = this.credentialPersistSender;
+    if (!sender || sender.isDestroyed()) {
+      console.error(`[ConnectionManager] No app window available to durably persist the credential for '${connectorId}'.`);
+      return false;
+    }
+    const stored = await credentialVaultBridge.read(connectorId, scope);
+    if (!stored) return false;
+    const result = await persistCredentialViaRenderer(sender, scope, connectorId, stored.authMethod, stored.secret, {
+      refreshToken: stored.refreshToken,
+      expiresAt: stored.expiresAt,
+    });
+    if (!result.ok) {
+      console.error(`[ConnectionManager] Failed to durably persist credential for '${connectorId}': ${result.message}`);
+    }
+    return result.ok;
   }
 
   async disconnect(connectionId: string, sender?: WebContents): Promise<void> {
@@ -126,11 +146,13 @@ class ConnectionManager {
    * getStatus() below reports whatever state refresh() left behind (including `expired`/
    * `requiresReauth` if the refresh token itself was rejected).
    */
-  async restore(connectorId: string, scope: ConnectivityScope, credential: unknown): Promise<ConnectorStatus> {
+  async restore(connectorId: string, scope: ConnectivityScope, credential: unknown, sender?: WebContents): Promise<ConnectorStatus> {
     const sdk = connectorRegistry.get(connectorId);
     if (!sdk) {
       throw new Error(`Cannot restore — no connector registered with id '${connectorId}'.`);
     }
+    // The window that restored this credential is the one that can persist a refreshed copy of it.
+    if (sender) this.credentialPersistSender = sender;
     await sdk.authenticate(scope, credential);
     await sdk.refresh(scope).catch(() => {});
     const status = await sdk.getStatus(scope);

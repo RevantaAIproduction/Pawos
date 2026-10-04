@@ -14,6 +14,7 @@ import { BillingSettingsPage } from './BillingSettingsPage';
 import { DevelopersSettingsPage } from './DevelopersSettingsPage';
 import { ConnectionsPage } from './ConnectionsPage';
 import { useConnectivityBootstrap } from '../../../connectivity/useConnectivityBootstrap';
+import { useCompanionAccountSync } from '../../../companion/manager/useCompanionAccountSync';
 import type { AuthUser } from '../../../auth/AuthTypes';
 
 const SETTINGS_TABS = [
@@ -66,6 +67,9 @@ export function SettingsSection({
   // see useConnectivityBootstrap's own doc comment. Deliberately not inside ConnectionsPage.tsx,
   // which is pure status discovery and must never itself trigger authentication.
   useConnectivityBootstrap({ userId: user.id });
+  // Keeps this device's active Companion in step with the account's canonical selection (shared
+  // with PawOS Web) — see CompanionAccountSync's own doc comment.
+  useCompanionAccountSync(user.id);
 
   const goToAccount = () => setTab('Account');
   const goToDevices = () => setTab('Devices');

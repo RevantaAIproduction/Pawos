@@ -37,6 +37,9 @@ export const PUBLIC_ENV_DEFAULTS: Record<string, string> = {
   // same values as the desktop .env (a mismatch here is what made them fail only in installed builds).
   CONNECTOR_GITHUB_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectivity/oauth/callback/github',
   LINEAR_REDIRECT_URL: 'https://pawos.revantaai.com/api/connectors/linear/callback',
+  // Bitbucket Cloud. CONNECTOR_BITBUCKET_CLIENT_ID (the OAuth consumer's public Key) is not set yet —
+  // add it below once the consumer exists; until then Connect reports the missing variable.
+  CONNECTOR_BITBUCKET_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectors/bitbucket/oauth/callback',
   CONNECTOR_JIRA_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectors/jira/callback',
   CONNECTOR_SLACK_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectivity/oauth/callback/slack',
   // Unset in the desktop .env, so the connector has always used OAuthManager's default redirect.

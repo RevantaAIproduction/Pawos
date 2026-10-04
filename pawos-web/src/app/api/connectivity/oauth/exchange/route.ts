@@ -31,7 +31,10 @@ export async function POST(request: Request) {
     return jsonError(`Connector '${connectorId}' is not configured on this server (missing client id/secret).`, 500);
   }
 
-  const params = new URLSearchParams({ grant_type: grantType, client_id: config.clientId, client_secret: config.clientSecret });
+  const basicAuth = config.clientAuth === 'basic';
+  const params = new URLSearchParams(basicAuth ? { grant_type: grantType } : { grant_type: grantType, client_id: config.clientId, client_secret: config.clientSecret });
+  const headers: Record<string, string> = { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" };
+  if (basicAuth) headers.Authorization = `Basic ${Buffer.from(`${config.clientId}:${config.clientSecret}`).toString("base64")}`;
   if (typeof body.code === "string") params.set("code", body.code);
   if (typeof body.redirect_uri === "string") params.set("redirect_uri", body.redirect_uri);
   if (typeof body.code_verifier === "string") params.set("code_verifier", body.code_verifier);
@@ -40,7 +43,7 @@ export async function POST(request: Request) {
   try {
     const tokenResponse = await fetch(config.tokenUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+      headers,
       body: params,
     });
     const payload = (await tokenResponse.json().catch(() => ({}))) as Record<string, unknown>;
@@ -68,7 +71,8 @@ export async function POST(request: Request) {
       access_token: accessToken,
       refresh_token: typeof payload.refresh_token === "string" ? payload.refresh_token : undefined,
       expires_in: typeof payload.expires_in === "number" ? payload.expires_in : undefined,
-      scope: typeof payload.scope === "string" ? payload.scope : undefined,
+      // Bitbucket names this field `scopes`.
+      scope: typeof payload.scope === "string" ? payload.scope : typeof payload.scopes === "string" ? payload.scopes : undefined,
     });
   } catch (e) {
     return jsonError(e instanceof Error ? e.message : "Token exchange failed.", 502);

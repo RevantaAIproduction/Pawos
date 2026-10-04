@@ -10,6 +10,7 @@ import styles from "./authorized.module.css";
 const CONNECTOR_NAMES: Record<string, string> = {
   github: "GitHub",
   gitlab: "GitLab",
+  bitbucket: "Bitbucket",
   jira: "Jira",
   linear: "Linear",
   slack: "Slack",

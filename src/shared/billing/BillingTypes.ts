@@ -271,6 +271,7 @@ export type FeatureId =
   | 'connectMicrosoft'
   | 'connectGithub'
   | 'connectGitlab'
+  | 'connectBitbucket'
   | 'connectVercel'
   | 'connectNetlify'
   | 'connectRailway'

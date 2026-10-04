@@ -63,6 +63,7 @@ import { connectorRegistry } from './connectivity/ConnectorRegistry';
 import { jiraConnectorSDK } from './connectivity/connectors/JiraConnectorSDK';
 import { gitHubConnectorSDK } from './connectivity/connectors/GitHubConnectorSDK';
 import { gitLabConnectorSDK } from './connectivity/connectors/GitLabConnectorSDK';
+import { bitbucketConnectorSDK } from './connectivity/connectors/BitbucketConnectorSDK';
 import { linearConnectorSDK } from './connectivity/connectors/LinearConnectorSDK';
 import { vercelConnectorSDK } from './connectivity/connectors/VercelConnectorSDK';
 import { netlifyConnectorSDK } from './connectivity/connectors/NetlifyConnectorSDK';
@@ -468,6 +469,7 @@ app.whenReady().then(async () => {
   const oauthConnectorSDKs = [
     gitHubConnectorSDK,
     gitLabConnectorSDK,
+    bitbucketConnectorSDK,
     linearConnectorSDK,
     vercelConnectorSDK,
     netlifyConnectorSDK,

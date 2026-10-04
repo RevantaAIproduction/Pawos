@@ -76,6 +76,7 @@ const PRO_FEATURES: FeatureId[] = [
   'connectMicrosoft',
   'connectGithub',
   'connectGitlab',
+  'connectBitbucket',
   'connectVercel',
   'connectNetlify',
   'connectRailway',

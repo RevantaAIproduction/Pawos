@@ -16,6 +16,9 @@ export interface ConnectivityOAuthProviderConfig {
   tokenUrl: string;
   clientId: string | undefined;
   clientSecret: string | undefined;
+  /** How the client authenticates to the token endpoint. Default 'body' (client_id/client_secret
+   *  form fields); 'basic' sends them as an HTTP Basic Authorization header instead. */
+  clientAuth?: 'body' | 'basic';
 }
 
 function provider(clientIdEnvVar: string, clientSecretEnvVar: string, tokenUrl: string): ConnectivityOAuthProviderConfig {
@@ -36,6 +39,9 @@ export function getConnectivityOAuthProviderConfig(connectorId: string): Connect
       // Supabase session code, not a real GitHub authorization code (see
       // pawos-web/src/app/auth/github/callback/route.ts's doc comment).
       return provider('CONNECTOR_GITHUB_CLIENT_ID', 'CONNECTOR_GITHUB_CLIENT_SECRET', 'https://github.com/login/oauth/access_token');
+    case 'bitbucket':
+      // Bitbucket Cloud authenticates the OAuth consumer with HTTP Basic (Key:Secret).
+      return { ...provider('CONNECTOR_BITBUCKET_CLIENT_ID', 'CONNECTOR_BITBUCKET_CLIENT_SECRET', 'https://bitbucket.org/site/oauth2/access_token'), clientAuth: 'basic' };
     case 'gitlab':
       return provider('GITLAB_CLIENT_ID', 'GITLAB_CLIENT_SECRET', `${(process.env.GITLAB_URL ?? 'https://gitlab.com').replace(/\/+$/, '')}/oauth/token`);
     case 'linear':

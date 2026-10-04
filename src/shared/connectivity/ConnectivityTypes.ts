@@ -24,6 +24,7 @@ export const CONNECTOR_REQUIRED_FEATURE: Partial<Record<string, FeatureId>> = {
   microsoft: 'connectMicrosoft',
   github: 'connectGithub',
   gitlab: 'connectGitlab',
+  bitbucket: 'connectBitbucket',
   vercel: 'connectVercel',
   netlify: 'connectNetlify',
   railway: 'connectRailway',
