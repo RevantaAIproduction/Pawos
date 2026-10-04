@@ -54,7 +54,7 @@ export const gettingStartedPages: DocPage[] = [
       {
         type: 'steps',
         items: [
-          { title: 'Start with the desktop app', detail: 'PawOS is desktop-first. The website documents the product, but everyday work happens in the desktop app beside your files, browser, terminal, and companion.' },
+          { title: 'Start with the desktop app', detail: 'PawOS Desktop is where the full product lives — beside your files, browser, terminal, and companion. Away from your computer, continue on PawOS Web from any browser or phone: the same account, chats and usage, and code changes through your connected GitHub repository.' },
           { title: 'Think in tasks', detail: 'Ask for outcomes: "explain this repo", "add dark mode", "run the tests", or "prepare this ticket." PawOS groups each request into a task with its own evidence.' },
           { title: 'Select a workspace', detail: 'For coding and file work, point PawOS at an explicit folder. That folder becomes the normal filesystem and command boundary for the task.' },
           { title: 'Use read-only questions first', detail: 'Ask what the project does, what framework it uses, or which files a feature might touch. Project understanding is available before execution.' },
@@ -225,5 +225,57 @@ export const gettingStartedPages: DocPage[] = [
       },
     ],
     related: ['coding/overview', 'concepts/entitlements', 'billing/plans'],
+  },
+  {
+    section: 'getting-started',
+    slug: 'web-and-mobile',
+    title: 'PawOS on the Web and your Phone',
+    description: 'Continue from any browser or phone: chat with Paw and change code in your GitHub repository, without your computer.',
+    keywords: ['web', 'mobile', 'phone', 'browser', 'pawos web', 'github', 'repository', 'change code', 'preview', 'continue in desktop'],
+    blocks: [
+      {
+        type: 'lead',
+        text: 'PawOS Web is PawOS in your browser — on a computer or your phone. Sign in with your PawOS account and you have the same plan, the same usage and the same chats as in PawOS Desktop. Connect GitHub and Paw can change code in your repository from wherever you are.',
+      },
+      { type: 'heading', level: 2, text: 'Get started', id: 'get-started' },
+      {
+        type: 'steps',
+        items: [
+          { title: 'Sign in', detail: 'Open pawos.revantaai.com/app in any browser and sign in with your PawOS account. On a phone you can add it to your home screen.' },
+          { title: 'Chat with Paw', detail: 'Ask Paw to explain, plan or review — paste code, or (on paid plans) attach a photo or a file. Your chats from PawOS Desktop are already here, labelled "Desktop".' },
+          { title: 'Connect GitHub', detail: 'To change code, connect GitHub (you can do it from your phone) and choose the repository Paw works in.' },
+          { title: 'Change code', detail: 'Switch the composer to "Change code" (Paw Go: "Small change") and describe the change. A task panel shows each step as Paw reads the repository, writes the change, checks it and pushes it.' },
+          { title: 'See it live', detail: 'When your repository has preview deployments (Vercel, Netlify and others), the preview opens in a new tab. If a check or deployment fails, Paw tries to fix it automatically.' },
+          { title: 'Continue on your computer', detail: 'Need your files, terminal or tests? Use Continue in PawOS Desktop — the chat is already there.' },
+        ],
+      },
+      { type: 'heading', level: 2, text: 'What Web and mobile can do', id: 'capabilities' },
+      {
+        type: 'table',
+        headers: ['', 'PawOS Web and mobile', 'PawOS Desktop'],
+        rows: [
+          ['Chat, explain, plan and review code', 'Yes', 'Yes'],
+          ['Change code in a GitHub repository', 'Yes — pushed to the default branch (a pull request if it is protected)', 'Yes — in your local project'],
+          ['Live preview and automatic fixes', 'Yes, from your repository’s preview deployments', 'Runs and tests locally'],
+          ['Files, terminal, tests, installing packages', 'No', 'Yes (paid plans)'],
+          ['Autonomous Work, browser automation, Jira, Linear, Slack', 'No', 'Yes, as your plan allows'],
+          ['Meetings, Companion, working offline', 'No', 'Yes'],
+        ],
+      },
+      { type: 'heading', level: 2, text: 'Plans and usage', id: 'plans' },
+      {
+        type: 'list',
+        items: [
+          'Pro, Pro Max and Team: Web uses the same allowance as Desktop — a Team member’s own seat. There is no separate Web balance.',
+          'Enterprise: Web messages count against your organization’s shared pool, like Desktop messages.',
+          'Paw Go: 4 Web messages in total, prompts of up to 2 lines, no attachments; code changes are small edits to existing frontend files.',
+        ],
+      },
+      {
+        type: 'warning',
+        text: 'For your safety, PawOS Web never edits environment files (.env), keys or certificates, CI workflows or lockfiles, and never asks for your GitHub password — you connect GitHub through GitHub’s own sign-in, and the token stays on PawOS’s servers.',
+      },
+    ],
+    related: ['billing/web-and-desktop', 'getting-started/first-coding-task', 'connectors/github'],
   },
 ];

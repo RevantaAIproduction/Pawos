@@ -86,6 +86,73 @@ export default function Home() {
         </div>
       </section>
 
+      {/* 4b. CODE FROM THE WEB (Text Left, Task card Right) */}
+      <section className="py-32 px-6 bg-neutral-950 border-t border-neutral-900 relative z-10" aria-labelledby="continue-from-web">
+        <div className="mx-auto max-w-7xl">
+          <div className="grid md:grid-cols-2 gap-16 items-center">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wider text-blue-400 mb-4">PawOS Web</p>
+              <h2 id="continue-from-web" className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-6">
+                Select your repo and start coding from the web.
+              </h2>
+              <p className="text-lg text-neutral-400 leading-relaxed">
+                Away from your desk? Open PawOS in any browser or on your phone, connect your GitHub and pick a repository. Describe the change — Paw writes it, pushes it, opens the preview and fixes failing checks. Your conversation is waiting in PawOS Desktop when you&apos;re back.
+              </p>
+              <ol className="mt-8 space-y-3">
+                {[
+                  ["Connect GitHub", "Sign in with GitHub — from your computer or your phone."],
+                  ["Pick a repository", "Choose the repo Paw should work in."],
+                  ["Describe the change", "Watch each step, then open the live preview."],
+                ].map(([title, detail], index) => (
+                  <li key={title} className="flex gap-4">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-neutral-700 text-xs font-semibold text-neutral-300">{index + 1}</span>
+                    <span>
+                      <span className="block text-base font-medium text-white">{title}</span>
+                      <span className="block text-sm text-neutral-400">{detail}</span>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+              <div className="mt-10 flex flex-wrap items-center gap-4">
+                <Link href="/app" className="px-6 py-3 text-sm font-medium bg-white text-black rounded-full hover:bg-neutral-200 transition">
+                  Open PawOS Web
+                </Link>
+                <Link href="/docs/getting-started/web-and-mobile" className="text-sm font-medium text-neutral-300 hover:text-white transition">
+                  How it works &rarr;
+                </Link>
+              </div>
+            </div>
+
+            {/* An illustration of a code change from the web, drawn in markup so it follows the site theme. */}
+            <div className="mx-auto w-full max-w-md rounded-2xl border border-neutral-800 bg-black p-5 shadow-2xl" aria-hidden="true">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-neutral-500">acme/storefront · main</span>
+                <span className="rounded-full border border-neutral-800 px-2 py-0.5 text-[11px] text-neutral-400">Change code</span>
+              </div>
+              <div className="mt-4 rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm text-neutral-200">
+                Make the checkout button say &ldquo;Place order&rdquo;
+              </div>
+              <ul className="mt-5 space-y-3">
+                {["Read the repository", "Write the change", "Check for problems", "Commit and push to main"].map((step) => (
+                  <li key={step} className="flex items-center gap-3 text-sm text-neutral-300">
+                    <svg viewBox="0 0 16 16" className="h-4 w-4 shrink-0 text-emerald-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 8.5l3 3 6-7" /></svg>
+                    {step}
+                  </li>
+                ))}
+                <li className="flex items-center gap-3 text-sm text-neutral-300">
+                  <span className="h-4 w-4 shrink-0 rounded-full border-2 border-blue-400 border-t-transparent animate-spin" />
+                  Preview and checks
+                </li>
+              </ul>
+              <div className="mt-5 flex items-center justify-between rounded-xl border border-neutral-800 px-4 py-3">
+                <span className="text-sm text-neutral-400">Preview ready</span>
+                <span className="text-sm font-medium text-blue-400">Open &#8599;</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* 5. INSTALL SOFTWARE (Image Left, Text Right) */}
       <section className="py-32 px-6 bg-neutral-950 relative z-10">
         <div className="mx-auto max-w-7xl">

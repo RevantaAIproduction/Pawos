@@ -172,9 +172,9 @@ export const billingPages: DocPage[] = [
         headers: ['Plan', 'PawOS Desktop', 'PawOS Web and mobile browser', 'Shared?'],
         rows: [
           ['Go', '500 PC every 14 days. Planning and analysis only.', '4 Web messages in total (chat and code changes together, across all chats). Prompts of up to 2 lines.', 'No — separate. Desktop use never counts toward your 4 Web messages.'],
-          ['Pro', '2,000 PC per billing period, weekly limit 1,000 PC', 'The same allowance', 'Yes — one pool'],
-          ['Pro Max 5x', '10,000 PC per billing period, weekly limit 5,000 PC', 'The same allowance', 'Yes — one pool'],
-          ['Pro Max 20x', '25,000 PC per billing period, weekly limit 12,500 PC', 'The same allowance', 'Yes — one pool'],
+          ['Pro', '2,000 PC per billing period, weekly limit 1,000 PC', 'The same allowance', 'Yes — one allowance'],
+          ['Pro Max 5x', '10,000 PC per billing period, weekly limit 5,000 PC', 'The same allowance', 'Yes — one allowance'],
+          ['Pro Max 20x', '25,000 PC per billing period, weekly limit 12,500 PC', 'The same allowance', 'Yes — one allowance'],
           ['Team', 'Your seat: Standard 2,000 PC or Premium 10,000 PC a month', 'The same seat allowance', 'Yes — one allowance per member'],
           ['Enterprise', 'Your organization’s shared pool', 'The same pool — each Web message counts once, like a Desktop message', 'Yes — one pool'],
         ],
@@ -219,7 +219,7 @@ export const billingPages: DocPage[] = [
         text: 'Need your computer for something? Use Continue in PawOS Desktop — the chat is already there, labelled with where each message ran.',
       },
     ],
-    related: ['billing/plans', 'billing/limits', 'billing/usage'],
+    related: ['getting-started/web-and-mobile', 'billing/plans', 'billing/limits', 'billing/usage'],
   },
   {
     section: 'billing',

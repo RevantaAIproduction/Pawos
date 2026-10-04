@@ -60,10 +60,15 @@ export const connectorsPages: DocPage[] = [
           'Read issues',
           'List and verify pull requests',
           'Comment on a pull request',
+          'On PawOS Web and your phone: choose a repository and let Paw change code in it — every plan, Paw Go included (small changes)',
         ],
       },
+      {
+        type: 'tip',
+        text: 'You can connect GitHub from PawOS Desktop or from the web, including on your phone (Dashboard → Integrations). It is the same connection everywhere.',
+      },
     ],
-    related: ['autonomous-work/connectors', 'connectors/gitlab'],
+    related: ['autonomous-work/connectors', 'connectors/gitlab', 'getting-started/web-and-mobile'],
   },
   {
     section: 'connectors',
