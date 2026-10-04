@@ -90,7 +90,7 @@ describe("authentication", () => {
     expect(body.plan).toEqual({ tier: "pro", label: "Paw Pro", proMaxVariant: null, expiresAt: "2026-11-01T00:00:00Z" });
     expect(body.usage.buckets[0]).toMatchObject({ label: "Paw Pro", pcTotal: 1000, pcUsed: 250, percentUsed: 25, resetsAt: "2026-11-01T00:00:00Z" });
     expect(body.companion).toEqual({ companionId: "paw-default", displayName: "Paw", custom: false });
-    expect(body.integrations).toEqual({ connected: ["github"], available: 7, total: 9 });
+    expect(body.integrations).toEqual({ connected: ["github"], available: 6, total: 9 }); // Pro: everything but Linear, Jira and Bitbucket
   });
 
   it("a cross-site request is rejected before anything is changed", async () => {

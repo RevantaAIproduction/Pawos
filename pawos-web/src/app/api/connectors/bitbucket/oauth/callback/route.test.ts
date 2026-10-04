@@ -38,7 +38,9 @@ beforeEach(() => {
   process.env.BITBUCKET_CLIENT_SECRET = "bb-secret";
   state.backend = new FakeBackend();
   state.cookie = undefined;
-  proUser = state.backend.addUser("pro-user", { subscription: { active: true, tier: "pro" } });
+  // Bitbucket is Team / Enterprise only: the connecting account is a Team member.
+  proUser = state.backend.addUser("team-user");
+  state.backend.joinOrganization("team-user", { id: "org-1", name: "Acme", tier: "team" }, "member");
   goUser = state.backend.addUser("go-user");
   state.session = proUser;
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -95,6 +97,15 @@ describe("starting a Bitbucket connection from the web", () => {
     state.session = goUser;
     expect((await startConnect(startRequest(), bitbucket)).status).toBe(403);
 
+    // Pro and Pro Max don't include Bitbucket — only Team and Enterprise do.
+    state.session = state.backend.addUser("pro-user", { subscription: { active: true, tier: "pro" } });
+    expect((await startConnect(startRequest(), bitbucket)).status).toBe(403);
+    state.session = state.backend.addUser("promax-user", { subscription: { active: true, tier: "proMax", proMaxVariant: "20x" } });
+    expect((await startConnect(startRequest(), bitbucket)).status).toBe(403);
+    state.session = state.backend.addUser("ent-user");
+    state.backend.joinOrganization("ent-user", { id: "org-2", name: "Big", tier: "enterprise" }, "member");
+    expect((await startConnect(startRequest(), bitbucket)).status).not.toBe(403);
+
     state.session = proUser;
     delete process.env.BITBUCKET_CLIENT_SECRET;
     expect((await startConnect(startRequest(), bitbucket)).status).toBe(503);
@@ -116,10 +127,10 @@ describe("GET /api/connectors/bitbucket/oauth/callback — web flow", () => {
     expect(Object.fromEntries(sent)).toEqual({ grant_type: "authorization_code", code: "good-code", redirect_uri: CALLBACK });
 
     expect(state.backend.tables.connectivity_credentials).toEqual([
-      expect.objectContaining({ user_id: "pro-user", connector_id: "bitbucket", auth_method: "oauth2", secret: "bb-access", refresh_token: "bb-refresh", expires_at: expect.any(String) }),
+      expect.objectContaining({ user_id: "team-user", connector_id: "bitbucket", auth_method: "oauth2", secret: "bb-access", refresh_token: "bb-refresh", expires_at: expect.any(String) }),
     ]);
     expect(state.backend.tables.connectivity_connections).toEqual([
-      expect.objectContaining({ user_id: "pro-user", connector_id: "bitbucket", status: "connected", metadata: { accountName: "Octo Cat", username: "octo" } }),
+      expect.objectContaining({ user_id: "team-user", connector_id: "bitbucket", status: "connected", metadata: { accountName: "Octo Cat", username: "octo" } }),
     ]);
   });
 

@@ -46,16 +46,18 @@ export const CONNECTOR_REQUIRED_FEATURE: Record<string, ConnectorFeatureId> = {
 };
 
 const GO: ConnectorFeatureId[] = ["connectGithub"];
-const PRO: ConnectorFeatureId[] = [...GO, "connectSlack", "connectGitlab", "connectBitbucket", "connectVercel", "connectNetlify", "connectRailway"];
+const PRO: ConnectorFeatureId[] = [...GO, "connectSlack", "connectGitlab", "connectVercel", "connectNetlify", "connectRailway"];
 const PRO_MAX: ConnectorFeatureId[] = [...PRO, "connectLinear", "connectJira"];
+/** Bitbucket is an organization connector: Team and Enterprise only, as on Desktop (TEAM_FEATURES). */
+const TEAM: ConnectorFeatureId[] = [...PRO_MAX, "connectBitbucket"];
 
 /** The connector features each tier holds — the connector slice of the desktop's TIER_ENTITLEMENTS. */
 export const TIER_CONNECTOR_FEATURES: Record<AccountTier, readonly ConnectorFeatureId[]> = {
   go: GO,
   pro: PRO,
   proMax: PRO_MAX,
-  team: PRO_MAX,
-  enterprise: PRO_MAX,
+  team: TEAM,
+  enterprise: TEAM,
   build: ["connectGithub", "connectVercel"],
 };
 

@@ -181,7 +181,7 @@ describe('BitbucketConnectorSDK', () => {
     expect((await live().listRepositories()).ok).toBe(false);
   });
 
-  it('is gated by the connectBitbucket feature: Pro and above, not Go', () => {
+  it('is gated by the connectBitbucket feature: Team and Enterprise only', () => {
     const feature = vi.spyOn(entitlementService, 'isFeatureAvailable');
     feature.mockReturnValue(false);
     expect(isConnectorEntitled('bitbucket')).toBe(false);

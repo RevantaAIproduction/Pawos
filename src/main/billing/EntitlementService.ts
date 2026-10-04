@@ -76,7 +76,6 @@ const PRO_FEATURES: FeatureId[] = [
   'connectMicrosoft',
   'connectGithub',
   'connectGitlab',
-  'connectBitbucket',
   'connectVercel',
   'connectNetlify',
   'connectRailway',
@@ -131,6 +130,8 @@ const PRO_MAX_FEATURES: FeatureId[] = [
  */
 const TEAM_FEATURES: FeatureId[] = [
   ...PRO_MAX_FEATURES,
+  // Bitbucket is an organization connector: Team and Enterprise only (not Go, Pro, Pro Max or Build).
+  'connectBitbucket',
   'sharedWorkspaces',
   'organizationMembers',
   'sharedCompanions',
