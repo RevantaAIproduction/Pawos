@@ -1,10 +1,10 @@
 @import "tailwindcss";
 
 /* Website theme. Dark by default — the site is designed dark (the root layout's body is bg-black /
-   text-neutral-100): white text on a dark page. Light: black text on a light page. Visitors switch
-   with the header's ThemeToggle (<html data-theme="light|dark">, remembered in their browser);
-   without a choice the site follows the device's setting. These rules are unlayered, so they win
-   over Tailwind's own theme values. */
+   text-neutral-100): white text on a dark page, always, whatever the device's setting. Light (black
+   text on a light page) applies only when a visitor switches to it with the header's ThemeToggle
+   (<html data-theme="light">, remembered in their browser). These rules are unlayered, so they
+   win over Tailwind's own theme values. */
 :root {
   --background: #000000;
   --foreground: #ededed;
@@ -45,44 +45,6 @@
   --color-amber-200: oklch(55.5% 0.163 48.998);
   --color-amber-300: oklch(55.5% 0.163 48.998);
   --color-amber-400: oklch(66.6% 0.179 58.318);
-}
-
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
-  --background: #ffffff;
-  --foreground: #0a0a0a;
-  color-scheme: light;
-  /* Mirror the grey scale and swap white / black, so every dark-designed class reads correctly on a
-     light page: text-white → near-black, bg-black → white, neutral-900 surfaces → light greys,
-     neutral-400 secondary text → dark grey. */
-  --color-white: #0a0a0a;
-  --color-black: #ffffff;
-  --color-neutral-50: oklch(14.5% 0 none);
-  --color-neutral-100: oklch(20.5% 0 none);
-  --color-neutral-200: oklch(26.9% 0 none);
-  --color-neutral-300: oklch(37.1% 0 none);
-  --color-neutral-400: oklch(43.9% 0 none);
-  --color-neutral-500: oklch(52% 0 none);
-  --color-neutral-600: oklch(70.8% 0 none);
-  --color-neutral-700: oklch(85% 0 none);
-  --color-neutral-800: oklch(90.5% 0 none);
-  --color-neutral-900: oklch(96% 0 none);
-  --color-neutral-950: oklch(98.5% 0 none);
-  /* Light accents that are made for dark backgrounds, darkened enough to read on white. */
-  --color-indigo-300: oklch(45.7% 0.24 277.023);
-  --color-indigo-400: oklch(51.1% 0.262 276.966);
-  --color-blue-200: oklch(42.4% 0.199 265.638);
-  --color-blue-300: oklch(48.8% 0.243 264.376);
-  --color-blue-400: oklch(54.6% 0.245 262.881);
-  --color-red-300: oklch(50.5% 0.213 27.518);
-  --color-red-400: oklch(57.7% 0.245 27.325);
-  --color-emerald-300: oklch(50.8% 0.118 165.612);
-  --color-emerald-400: oklch(59.6% 0.145 163.225);
-  --color-green-400: oklch(62.7% 0.194 149.214);
-  --color-amber-200: oklch(55.5% 0.163 48.998);
-  --color-amber-300: oklch(55.5% 0.163 48.998);
-  --color-amber-400: oklch(66.6% 0.179 58.318);
-  }
 }
 
 @theme inline {

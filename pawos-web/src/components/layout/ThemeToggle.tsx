@@ -5,8 +5,8 @@ import { THEME_STORAGE_KEY } from "./themeScript";
 
 /**
  * Light / dark switch for the website. The choice is stored in this browser only
- * (localStorage "pawos-theme") and applied as <html data-theme="light|dark">; with no choice the
- * site follows the device's light / dark setting. THEME_INIT_SCRIPT (themeScript.ts) applies a
+ * (localStorage "pawos-theme") and applied as <html data-theme="light|dark">. Dark is the default
+ * for everyone; light applies only after a visitor switches to it. THEME_INIT_SCRIPT (themeScript.ts) applies a
  * stored choice before the page paints. The colours themselves live in app/globals.css.
  */
 
@@ -14,20 +14,14 @@ type Theme = "light" | "dark";
 
 function currentTheme(): Theme {
   const set = document.documentElement.getAttribute("data-theme");
-  if (set === "light" || set === "dark") return set;
-  return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  return set === "light" ? "light" : "dark";
 }
 
-/** Re-renders when the theme attribute or the device setting changes. */
+/** Re-renders when the theme attribute changes. */
 function subscribe(onChange: () => void): () => void {
   const observer = new MutationObserver(onChange);
   observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-  const media = window.matchMedia?.("(prefers-color-scheme: light)");
-  media?.addEventListener?.("change", onChange);
-  return () => {
-    observer.disconnect();
-    media?.removeEventListener?.("change", onChange);
-  };
+  return () => observer.disconnect();
 }
 
 export function ThemeToggle({ className = "" }: { className?: string }) {
