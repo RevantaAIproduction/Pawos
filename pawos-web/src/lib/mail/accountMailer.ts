@@ -1,13 +1,21 @@
+import { randomUUID } from "crypto";
 import { getFrom, getTransporter } from "./waitlistMailer";
 
 /** PawOS account emails (password reset link, sign-up code), sent from PawOS's SMTP — never Supabase's mail service. */
 
-/** The PawOS "Reset your password" email (same design as supabase/email-templates/reset-password.html). */
-export function passwordResetEmail(email: string, link: string): { subject: string; html: string; text: string } {
+/**
+ * The PawOS "Reset your password" email (same design as supabase/email-templates/reset-password.html).
+ *
+ * Each email carries its request time in the subject and body. Requesting a new link invalidates
+ * every earlier one, and identical emails get threaded and collapsed by Gmail — so the link people
+ * clicked was often an older, already-dead one ("This link has expired" on the 2nd and 3rd try).
+ */
+export function passwordResetEmail(email: string, link: string, requestedAt: Date = new Date()): { subject: string; html: string; text: string } {
   const safeEmail = email.replace(/[<>&"]/g, "");
   const safeLink = link.replace(/"/g, "%22");
+  const when = `${requestedAt.toLocaleString("en-US", { timeZone: "UTC", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })} UTC`;
   return {
-    subject: "Reset your PawOS password",
+    subject: `Reset your PawOS password (requested ${when})`,
     html: `<!doctype html>
 <html>
   <body style="margin:0;padding:32px 16px;background:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
@@ -17,7 +25,7 @@ export function passwordResetEmail(email: string, link: string): { subject: stri
         <p style="margin:0 0 8px;color:#ffffff;font-size:20px;font-weight:600;">Reset your password</p>
         <p style="margin:0 0 24px;">We received a request to reset the password for your PawOS account (${safeEmail}). Click the button below to create a new one.</p>
         <a href="${safeLink}" style="display:inline-block;padding:12px 22px;border-radius:8px;background:#ffffff;color:#0a0a0a;font-size:14px;font-weight:600;text-decoration:none;">Reset password</a>
-        <p style="margin:24px 0 0;color:#a3a3a3;font-size:13px;">This link works once and expires soon. If you didn't ask to reset your password, you can safely ignore this email — your password won't change.</p>
+        <p style="margin:24px 0 0;color:#a3a3a3;font-size:13px;">Requested ${when}. This link works once and expires soon, and only the newest reset email works — requesting another link turns this one off. If you didn't ask to reset your password, you can safely ignore this email — your password won't change.</p>
       </td></tr>
       <tr><td style="padding-top:20px;color:#737373;font-size:12px;line-height:1.5;">
         PawOS · Powered by Revanta AI · pawos.revantaai.com<br />
@@ -26,7 +34,7 @@ export function passwordResetEmail(email: string, link: string): { subject: stri
     </table>
   </body>
 </html>`,
-    text: `Reset your password\n\nWe received a request to reset the password for your PawOS account (${safeEmail}). Open this link to create a new one:\n\n${link}\n\nThe link works once and expires soon. If you didn't ask for this, ignore this email — your password won't change.\n\nPawOS · Powered by Revanta AI · pawos.revantaai.com`,
+    text: `Reset your password\n\nWe received a request to reset the password for your PawOS account (${safeEmail}). Open this link to create a new one:\n\n${link}\n\nRequested ${when}. The link works once and expires soon, and only the newest reset email works. If you didn't ask for this, ignore this email — your password won't change.\n\nPawOS · Powered by Revanta AI · pawos.revantaai.com`,
   };
 }
 
@@ -35,7 +43,8 @@ export async function sendPasswordResetEmail(email: string, link: string): Promi
   if (!transporter) return false;
   const { subject, html, text } = passwordResetEmail(email, link);
   try {
-    await transporter.sendMail({ from: getFrom(), to: email, subject, html, text });
+    // A unique X-Entity-Ref-ID keeps Gmail from threading reset emails together and hiding the newest link.
+    await transporter.sendMail({ from: getFrom(), to: email, subject, html, text, headers: { "X-Entity-Ref-ID": randomUUID() } });
     return true;
   } catch (e) {
     const err = e as { code?: string; responseCode?: number };

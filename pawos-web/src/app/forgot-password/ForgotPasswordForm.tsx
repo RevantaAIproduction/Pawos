@@ -54,7 +54,7 @@ export function ForgotPasswordForm() {
             />
             <p className="text-sm leading-relaxed text-neutral-400">
               If there&apos;s a PawOS account for this email, we sent it a <span className="text-neutral-200">Reset password</span> link.
-              Open it to create a new password. The link works once.
+              Open it to create a new password. The link works once, and sending it again turns off the earlier link, so always open the newest email.
             </p>
             {message && <p className="text-sm text-red-400" role="alert">{message}</p>}
             <button type="button" onClick={() => void sendLink()} disabled={loading} className={primaryButtonClass}>

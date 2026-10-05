@@ -35,7 +35,8 @@ describe("forgot password — sent by PawOS, not Supabase", () => {
     expect(state.generateLink).toHaveBeenCalledWith({ type: "recovery", email: "ada@example.com", options: { redirectTo: "https://pawos.revantaai.com/reset-password" } });
     const mail = state.sendMail.mock.calls[0][0];
     expect(mail.from).toBe("PawOS <team@example.com>");
-    expect(mail.subject).toBe("Reset your PawOS password");
+    expect(mail.subject).toMatch(/^Reset your PawOS password \(requested .+ UTC\)$/);
+    expect(mail.headers["X-Entity-Ref-ID"]).toMatch(/^[0-9a-f-]{36}$/);
     expect(mail.html).toContain("Powered by Revanta AI");
     expect(mail.html).not.toMatch(/supabase ⚡|Opt out/i);
     expect(mail.html).toContain("https://x.supabase.co/auth/v1/verify?token=t&type=recovery");
@@ -53,6 +54,15 @@ describe("forgot password — sent by PawOS, not Supabase", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ ok: true });
     expect(state.sendMail).not.toHaveBeenCalled();
+  });
+
+  it("each email is distinct so mail apps don't thread them and hide the newest link", async () => {
+    state.generateLink.mockResolvedValue({ data: { properties: { action_link: "https://x/verify" } }, error: null });
+    await POST(request("dee@example.com"));
+    await POST(request("dee@example.com"));
+    const [first, second] = state.sendMail.mock.calls.map((c) => c[0]);
+    expect(first.headers["X-Entity-Ref-ID"]).not.toBe(second.headers["X-Entity-Ref-ID"]);
+    expect(first.html).toContain("only the newest reset email works");
   });
 
   it("rejects a bad email", async () => {

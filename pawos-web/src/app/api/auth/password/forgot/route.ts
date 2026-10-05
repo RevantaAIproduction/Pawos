@@ -36,6 +36,9 @@ export async function POST(request: Request) {
 
   const { data, error } = await createServiceClient().auth.admin.generateLink({ type: "recovery", email, options: { redirectTo: RESET_PAGE } });
   const link = data?.properties?.action_link;
+  // Logged (never shown) so a failure that silently sends nothing — e.g. Supabase refusing a link —
+  // is visible in the server logs instead of looking like a sent email.
+  if (error && !/not found/i.test(error.message)) console.error("[password-reset] generateLink failed:", error.message);
   if (!error && link) {
     const sent = await sendPasswordResetEmail(email, link);
     if (!sent) return NextResponse.json({ ok: false, error: "We couldn't send the email right now. Please try again." }, { status: 503 });
