@@ -12,6 +12,7 @@ import { startForegroundWindowWatcher, getForegroundWindowInfo } from './system/
 import { startGoogleSignIn } from './auth/GoogleOAuthFlow';
 import { waitForGitHubOAuthCallback } from './auth/GitHubOAuthFlow';
 import { startMicrosoftSignIn, type MicrosoftOAuthConfig } from './auth/MicrosoftOAuthFlow';
+import { cancelWebSignIn, startWebSignIn } from './auth/WebSignInFlow';
 import { handleOAuthProtocolUrl, extractProtocolUrlFromArgv } from './auth/OAuthProtocolBridge';
 import { emailService } from './mail/EmailService';
 import { getDevWindowIconPath } from './assets/AssetPathResolver';
@@ -660,6 +661,9 @@ app.whenReady().then(async () => {
       }
       return waitForGitHubOAuthCallback(envVars.GITHUB_REDIRECT_URI, authorizeUrl);
     },
+    // "Continue with browser": the account signed in on PawOS Web (WebSignInFlow.ts).
+    startWebSignIn: () => startWebSignIn(),
+    cancelWebSignIn: () => cancelWebSignIn(),
     isMicrosoftSignInConfigured: () => Boolean(envVars.MICROSOFT_CLIENT_ID && envVars.MICROSOFT_CLIENT_SECRET && envVars.MICROSOFT_TENANT_ID),
     startMicrosoftSignIn: () => {
       if (!envVars.MICROSOFT_CLIENT_ID || !envVars.MICROSOFT_CLIENT_SECRET || !envVars.MICROSOFT_TENANT_ID || !envVars.MICROSOFT_REDIRECT_URI) {

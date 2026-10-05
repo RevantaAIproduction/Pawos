@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { createClient } from "../../lib/supabase/client";
 import type { WebChatSummary } from "../../lib/webChat/webChat";
+import { useSignedOutElsewhere } from "../../lib/auth/useSignedOutElsewhere";
 
 const ICON = {
   width: 16,
@@ -282,6 +283,7 @@ function SidebarContents({ account, chats, onNavigate }: { account: WorkspaceAcc
  * signed-in /app layout; the chat list and account values come from the server.
  */
 export function WorkspaceShell({ account, chats, children }: { account: WorkspaceAccount; chats: WebChatSummary[]; children: ReactNode }) {
+  useSignedOutElsewhere();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
 

@@ -1,245 +1,266 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "../../lib/supabase/client";
-import { GoogleGlyph, GitHubGlyph } from "../login/GoogleGitHubIcons";
+import {
+  AuthHeading,
+  EmailChip,
+  ProviderRow,
+  Spinner,
+  inputClass,
+  labelClass,
+  primaryButtonClass,
+  rememberAuthMethod,
+  safeNextPath,
+  startOAuth,
+} from "../login/AuthPieces";
 
+/**
+ * Sign up: Google or GitHub in one click, or email — first and last name and the email first
+ * ("Continue"), then a password and the Terms/Privacy acceptance. The same account signs in to
+ * PawOS Desktop.
+ */
 export function SignupForm() {
-  const [intent] = useState<string | null>(() =>
-    typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("intent") : null
-  );
-  const [name, setName] = useState("");
+  const params = useSearchParams();
+  const next = safeNextPath(params.get("next"));
+  const isDesktopWaitlist = params.get("intent") === "pawos-desktop-waitlist";
+
+  const [step, setStep] = useState<"details" | "password">("details");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
-  const [status, setStatus] = useState<"idle" | "loading" | "error" | "confirm">("idle");
+  const [status, setStatus] = useState<"idle" | "loading" | "confirm">("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [oauthPending, setOauthPending] = useState<"google" | "github" | null>(null);
-  const isDesktopWaitlist = intent === "pawos-desktop-waitlist";
+  const firstNameRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    (step === "password" ? passwordRef : firstNameRef).current?.focus();
+  }, [step]);
+
+  const continueToPassword = (e: React.FormEvent) => {
     e.preventDefault();
+    setMessage(null);
+    setStep("password");
+  };
 
-    // Validate legal acceptance
+  const createAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!agreedToTerms || !agreedToPrivacy) {
-      setMessage("Please accept both the Terms of Service and Privacy Policy.");
+      setMessage("Please accept the Terms of Service and the Privacy Policy.");
       return;
     }
-
     setStatus("loading");
     setMessage(null);
     try {
-      const supabase = createClient();
-      const { data, error } = await supabase.auth.signUp({
-        email,
+      const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
+      const callback = new URL("/auth/callback", window.location.origin);
+      if (next !== "/dashboard") callback.searchParams.set("next", next);
+      const { data, error } = await createClient().auth.signUp({
+        email: email.trim(),
         password,
         options: {
-          data: { full_name: name },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          data: { full_name: fullName, first_name: firstName.trim(), last_name: lastName.trim() },
+          emailRedirectTo: callback.toString(),
         },
       });
       if (error) {
-        setStatus("error");
+        setStatus("idle");
         setMessage(error.message);
         return;
       }
 
-      // If account was created, record legal acceptance in the database
-      if (data.user) {
-        try {
-          // Get the new session token if available
-          const token = data.session?.access_token;
-          if (token) {
-            await fetch("/api/auth/accept-legal", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${token}`,
-              },
-              body: JSON.stringify({
-                documentSlugs: ["terms", "privacy-policy"],
-              }),
-            });
-          }
-        } catch (acceptanceError) {
-          console.warn("Failed to record legal acceptance:", acceptanceError);
-          // Don't fail signup if acceptance recording fails — the user can accept later
-        }
+      // Record the legal acceptance now that the account exists (it can be accepted later if this fails).
+      const token = data.session?.access_token;
+      if (data.user && token) {
+        await fetch("/api/auth/accept-legal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ documentSlugs: ["terms", "privacy-policy"] }),
+        }).catch((acceptanceError) => console.warn("Failed to record legal acceptance:", acceptanceError));
       }
 
+      rememberAuthMethod("email");
       if (data.session) {
-        // Email confirmation is off for this project — already signed in.
-        window.location.href = "/dashboard";
+        window.location.href = next;
         return;
       }
       setStatus("confirm");
     } catch (err) {
-      setStatus("error");
+      setStatus("idle");
       setMessage(err instanceof Error ? err.message : "Something went wrong signing up.");
     }
   };
 
-  const handleOAuth = async (provider: "google" | "github") => {
+  const oauth = async (provider: "google" | "github") => {
     setOauthPending(provider);
     setMessage(null);
-    try {
-      const supabase = createClient();
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: { redirectTo: `${window.location.origin}/auth/callback` },
-      });
-      if (error) {
-        setOauthPending(null);
-        setMessage(error.message);
-      }
-    } catch (err) {
+    const error = await startOAuth(provider, next);
+    if (error) {
       setOauthPending(null);
-      setMessage(err instanceof Error ? err.message : "Could not start sign-in.");
+      setMessage(error);
     }
   };
 
   if (status === "confirm") {
     return (
-      <div className="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-8 text-center">
-        <h1 className="text-2xl font-bold">Check your email</h1>
-        <p className="mt-3 text-sm text-neutral-400">
-          We sent a confirmation link to <span className="text-neutral-200">{email}</span>. Click it to
-          finish creating your PawOS account.
+      <div className="w-full" data-testid="signup-confirm">
+        <AuthHeading title="Check your email" subtitle="One more step" />
+        <p className="mt-6 text-sm leading-relaxed text-neutral-400">
+          We sent a confirmation link to <span className="text-neutral-200">{email}</span>. Open it to finish creating your PawOS
+          account.
         </p>
       </div>
     );
   }
 
+  const loginHref = next === "/dashboard" ? "/login" : `/login?next=${encodeURIComponent(next)}`;
+
   return (
-    <div className="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-8">
-      <h1 className="text-2xl font-bold">
-        {isDesktopWaitlist ? "Join the PawOS Desktop launch list" : "Create your PawOS account"}
-      </h1>
-      <p className="mt-2 text-sm text-neutral-400">
-        {isDesktopWaitlist
-          ? "Create an account to explore PawOS now and receive launch updates when public installers are available."
-          : "Same account works on the desktop app."}
-      </p>
+    <div className="w-full" data-testid="signup-form">
+      <AuthHeading
+        title={isDesktopWaitlist ? "Join the PawOS Desktop launch list" : "Welcome to PawOS"}
+        subtitle={isDesktopWaitlist ? "Get launch updates" : "One account for Web and Desktop"}
+      />
 
-      <div className="mt-6 flex flex-col gap-3">
-        <button
-          type="button"
-          onClick={() => handleOAuth("google")}
-          disabled={oauthPending !== null || status === "loading"}
-          className="flex items-center justify-center gap-2 rounded-lg border border-neutral-700 bg-neutral-950 px-4 py-2.5 text-sm font-medium text-neutral-100 transition hover:bg-neutral-900 disabled:opacity-50"
-        >
-          <GoogleGlyph size={18} />
-          {oauthPending === "google" ? "Opening Google…" : "Continue with Google"}
-        </button>
-        <button
-          type="button"
-          onClick={() => handleOAuth("github")}
-          disabled={oauthPending !== null || status === "loading"}
-          className="flex items-center justify-center gap-2 rounded-lg border border-neutral-700 bg-neutral-950 px-4 py-2.5 text-sm font-medium text-neutral-100 transition hover:bg-neutral-900 disabled:opacity-50"
-        >
-          <GitHubGlyph size={18} />
-          {oauthPending === "github" ? "Opening GitHub…" : "Continue with GitHub"}
-        </button>
+      <div className="mt-8">
+        <ProviderRow pending={oauthPending} disabled={oauthPending !== null || status === "loading"} lastUsed={null} onSelect={oauth} />
       </div>
 
-      <div className="my-6 flex items-center gap-3 text-xs text-neutral-500">
-        <div className="h-px flex-1 bg-neutral-800" />
-        or
-        <div className="h-px flex-1 bg-neutral-800" />
-      </div>
-
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <div>
-          <label htmlFor="name" className="mb-1 block text-xs font-medium text-neutral-400">
-            Name
-          </label>
-          <input
-            id="name"
-            type="text"
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-sm text-neutral-100 outline-none focus:border-blue-400"
-            placeholder="Ada Lovelace"
-          />
-        </div>
-        <div>
-          <label htmlFor="email" className="mb-1 block text-xs font-medium text-neutral-400">
-            Email
-          </label>
-          <input
-            id="email"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-sm text-neutral-100 outline-none focus:border-blue-400"
-            placeholder="you@example.com"
-          />
-        </div>
-        <div>
-          <label htmlFor="password" className="mb-1 block text-xs font-medium text-neutral-400">
-            Password
-          </label>
-          <input
-            id="password"
-            type="password"
-            required
-            minLength={8}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-sm text-neutral-100 outline-none focus:border-blue-400"
-            placeholder="At least 8 characters"
-          />
-        </div>
-
-        <div className="flex flex-col gap-3 rounded-lg bg-neutral-950/50 p-3">
-          <label className="flex items-start gap-2 text-xs text-neutral-400">
+      {step === "details" ? (
+        <form onSubmit={continueToPassword} className="mt-6 flex flex-col gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="firstName" className={labelClass}>
+                First name
+              </label>
+              <input
+                ref={firstNameRef}
+                id="firstName"
+                type="text"
+                autoComplete="given-name"
+                required
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                className={inputClass}
+                placeholder="Your first name"
+              />
+            </div>
+            <div>
+              <label htmlFor="lastName" className={labelClass}>
+                Last name
+              </label>
+              <input
+                id="lastName"
+                type="text"
+                autoComplete="family-name"
+                required
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                className={inputClass}
+                placeholder="Your last name"
+              />
+            </div>
+          </div>
+          <div>
+            <label htmlFor="email" className={labelClass}>
+              Email
+            </label>
             <input
-              type="checkbox"
-              checked={agreedToTerms}
-              onChange={(e) => setAgreedToTerms(e.target.checked)}
-              className="mt-1 rounded border border-neutral-600 bg-neutral-900 text-blue-500 focus:ring-blue-400"
+              id="email"
+              type="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className={inputClass}
+              placeholder="Your email address"
             />
-            <span>
-              I agree to the{" "}
-              <Link href="/terms" target="_blank" className="text-blue-400 hover:underline">
-                Terms of Service
-              </Link>
-            </span>
-          </label>
-          <label className="flex items-start gap-2 text-xs text-neutral-400">
+          </div>
+          {message && <p className="text-sm text-red-400" role="alert">{message}</p>}
+          <button type="submit" disabled={oauthPending !== null} className={primaryButtonClass}>
+            Continue
+          </button>
+        </form>
+      ) : (
+        <form onSubmit={createAccount} className="mt-6 flex flex-col gap-4">
+          <EmailChip
+            email={email}
+            onChange={() => {
+              setPassword("");
+              setMessage(null);
+              setStep("details");
+            }}
+          />
+          <div>
+            <label htmlFor="password" className={labelClass}>
+              Password
+            </label>
             <input
-              type="checkbox"
-              checked={agreedToPrivacy}
-              onChange={(e) => setAgreedToPrivacy(e.target.checked)}
-              className="mt-1 rounded border border-neutral-600 bg-neutral-900 text-blue-500 focus:ring-blue-400"
+              ref={passwordRef}
+              id="password"
+              type="password"
+              autoComplete="new-password"
+              required
+              minLength={8}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className={inputClass}
+              placeholder="At least 8 characters"
             />
-            <span>
-              I acknowledge the{" "}
-              <Link href="/privacy" target="_blank" className="text-blue-400 hover:underline">
-                Privacy Policy
-              </Link>
-            </span>
-          </label>
-        </div>
+          </div>
 
-        {message && <p className="text-sm text-red-400">{message}</p>}
+          <div className="flex flex-col gap-2.5">
+            <label className="flex items-start gap-2.5 text-sm text-neutral-400">
+              <input
+                type="checkbox"
+                checked={agreedToTerms}
+                onChange={(e) => setAgreedToTerms(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border border-neutral-600 bg-neutral-900"
+              />
+              <span>
+                I agree to the{" "}
+                <Link href="/terms" target="_blank" className="text-neutral-200 underline-offset-2 hover:underline">
+                  Terms of Service
+                </Link>
+              </span>
+            </label>
+            <label className="flex items-start gap-2.5 text-sm text-neutral-400">
+              <input
+                type="checkbox"
+                checked={agreedToPrivacy}
+                onChange={(e) => setAgreedToPrivacy(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border border-neutral-600 bg-neutral-900"
+              />
+              <span>
+                I acknowledge the{" "}
+                <Link href="/privacy" target="_blank" className="text-neutral-200 underline-offset-2 hover:underline">
+                  Privacy Policy
+                </Link>
+              </span>
+            </label>
+          </div>
 
-        <button
-          type="submit"
-          disabled={status === "loading" || oauthPending !== null || !agreedToTerms || !agreedToPrivacy}
-          className="mt-2 rounded-full bg-gradient-to-r from-indigo-500 to-blue-400 px-6 py-2.5 text-sm font-semibold text-black transition hover:opacity-90 disabled:opacity-50"
-        >
-          {status === "loading" ? "Creating account…" : "Create account"}
-        </button>
-      </form>
+          {message && <p className="text-sm text-red-400" role="alert">{message}</p>}
+          <button
+            type="submit"
+            disabled={status === "loading" || oauthPending !== null || !agreedToTerms || !agreedToPrivacy}
+            className={primaryButtonClass}
+          >
+            {status === "loading" ? <Spinner /> : "Create account"}
+          </button>
+        </form>
+      )}
 
       <p className="mt-6 text-center text-sm text-neutral-400">
         Already have an account?{" "}
-        <Link href="/login" className="text-blue-400 hover:underline">
+        <Link href={loginHref} className="text-neutral-200 underline-offset-2 hover:underline">
           Log in
         </Link>
       </p>

@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
+import { getSupabaseClient } from './supabaseClient';
 import { authService } from './AuthenticationProvider';
 import type { AuthUser, EmailCreateAccountOptions, EmailSignInOptions } from './AuthTypes';
+
+/** How often a signed-in app re-checks that its session wasn't ended on PawOS Web. */
+const SESSION_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 
 export function useAuth() {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -25,6 +29,44 @@ export function useAuth() {
 
   const signInWithGoogle = useCallback(async () => {
     const signedInUser = await authService.signInWithGoogle();
+    setUser(signedInUser);
+    return signedInUser;
+  }, []);
+
+  // One account across PawOS Desktop and PawOS Web: signing out on the web (or switching account
+  // there, which signs the old one out) ends this app's session too. supabase-js reports it when a
+  // token refresh is refused; checking on focus and every few minutes notices it sooner.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const endIfSignedOutElsewhere = async () => {
+      if (cancelled || (await authService.isSessionStillValid())) return;
+      await authService.clearLocalSession();
+      if (!cancelled) setUser(null);
+    };
+    let unsubscribe = () => {};
+    getSupabaseClient()
+      .then((supabase) => {
+        const { data } = supabase.auth.onAuthStateChange((event) => {
+          if (event === 'SIGNED_OUT') setTimeout(() => void endIfSignedOutElsewhere(), 0);
+        });
+        unsubscribe = () => data.subscription.unsubscribe();
+        if (cancelled) unsubscribe();
+      })
+      .catch(() => {});
+    const onFocus = () => void endIfSignedOutElsewhere();
+    window.addEventListener('focus', onFocus);
+    const interval = window.setInterval(onFocus, SESSION_CHECK_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      unsubscribe();
+      window.removeEventListener('focus', onFocus);
+      window.clearInterval(interval);
+    };
+  }, [user]);
+
+  const signInWithBrowser = useCallback(async () => {
+    const signedInUser = await authService.signInWithBrowser();
     setUser(signedInUser);
     return signedInUser;
   }, []);
@@ -87,6 +129,7 @@ export function useAuth() {
     isLoadingUser,
     signInWithGoogle,
     signInWithGithub,
+    signInWithBrowser,
     signInWithMicrosoft,
     signInWithEmail,
     createEmailAccount,

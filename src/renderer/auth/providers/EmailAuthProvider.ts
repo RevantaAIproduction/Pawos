@@ -87,9 +87,13 @@ export class EmailAuthProvider {
     return data.session?.user ? toAuthUser(data.session.user) : null;
   }
 
-  async signOut(): Promise<void> {
+  /**
+   * 'global' (the default) ends every session of the account — PawOS Web and other devices too, so
+   * signing out anywhere signs out everywhere. 'local' only forgets this device's session.
+   */
+  async signOut(scope: 'global' | 'local' = 'global'): Promise<void> {
     const supabase = await getSupabaseClient().catch(() => null);
-    await supabase?.auth.signOut();
+    await supabase?.auth.signOut({ scope });
   }
 
   /**

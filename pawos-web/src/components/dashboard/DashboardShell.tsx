@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createClient } from "../../lib/supabase/client";
+import { useSignedOutElsewhere } from "../../lib/auth/useSignedOutElsewhere";
 
 const ICON = {
   width: 16,
@@ -205,6 +206,7 @@ function BrandLink() {
  * is passed down from the server.
  */
 export function DashboardShell({ children, ...account }: AccountProps & { children: ReactNode }) {
+  useSignedOutElsewhere();
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);

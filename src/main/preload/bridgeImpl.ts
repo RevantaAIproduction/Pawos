@@ -219,6 +219,8 @@ export function contextBridge() {
     authIsGithubSignInConfigured: () => ipcRenderer.invoke("auth:isGithubSignInConfigured") as Promise<boolean>,
     authStartGithubSignIn: (authorizeUrl: string) =>
       ipcRenderer.invoke("auth:startGithubSignIn", authorizeUrl) as Promise<{ code: string }>,
+    authStartWebSignIn: () => ipcRenderer.invoke("auth:startWebSignIn") as Promise<{ tokenHash: string; email: string }>,
+    authCancelWebSignIn: () => ipcRenderer.invoke("auth:cancelWebSignIn") as Promise<void>,
     authIsMicrosoftSignInConfigured: () => ipcRenderer.invoke("auth:isMicrosoftSignInConfigured") as Promise<boolean>,
     authStartMicrosoftSignIn: () =>
       ipcRenderer.invoke("auth:startMicrosoftSignIn") as Promise<{ profile: any; idToken: string; accessToken: string }>,

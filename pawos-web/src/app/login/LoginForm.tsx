@@ -1,139 +1,159 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "../../lib/supabase/client";
-import { GoogleGlyph, GitHubGlyph } from "./GoogleGitHubIcons";
+import {
+  AuthHeading,
+  EmailChip,
+  ProviderRow,
+  Spinner,
+  inputClass,
+  labelClass,
+  primaryButtonClass,
+  safeNextPath,
+  rememberAuthMethod,
+  startOAuth,
+  useLastUsedMethod,
+} from "./AuthPieces";
 
+/**
+ * Log in: Google or GitHub in one click, or email — the email first ("Continue with email"), then the
+ * password. `?next=` (a same-origin path) is where the browser goes afterwards, e.g. back to the
+ * PawOS Desktop sign-in page.
+ */
 export function LoginForm() {
+  const [step, setStep] = useState<"email" | "password">("email");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
-  const [message, setMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [oauthPending, setOauthPending] = useState<"google" | "github" | null>(null);
+  const params = useSearchParams();
+  const next = safeNextPath(params.get("next"));
+  const [message, setMessage] = useState<string | null>(params.get("error"));
+  const lastUsed = useLastUsedMethod();
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    (step === "password" ? passwordRef : emailRef).current?.focus();
+  }, [step]);
+
+  const continueWithEmail = (e: React.FormEvent) => {
     e.preventDefault();
-    setStatus("loading");
+    setMessage(null);
+    setStep("password");
+  };
+
+  const logIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
     setMessage(null);
     try {
-      const supabase = createClient();
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await createClient().auth.signInWithPassword({ email: email.trim(), password });
       if (error) {
-        setStatus("error");
-        setMessage(error.message);
+        setLoading(false);
+        setMessage(error.message === "Invalid login credentials" ? "That email and password don't match." : error.message);
         return;
       }
-      window.location.href = "/dashboard";
+      rememberAuthMethod("email");
+      window.location.href = next;
     } catch (err) {
-      setStatus("error");
+      setLoading(false);
       setMessage(err instanceof Error ? err.message : "Something went wrong signing in.");
     }
   };
 
-  const handleOAuth = async (provider: "google" | "github") => {
+  const oauth = async (provider: "google" | "github") => {
     setOauthPending(provider);
     setMessage(null);
-    try {
-      const supabase = createClient();
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: { redirectTo: `${window.location.origin}/auth/callback` },
-      });
-      if (error) {
-        setOauthPending(null);
-        setMessage(error.message);
-      }
-      // On success Supabase navigates the browser away — nothing else to do here.
-    } catch (err) {
+    const error = await startOAuth(provider, next);
+    if (error) {
       setOauthPending(null);
-      setMessage(err instanceof Error ? err.message : "Could not start sign-in.");
+      setMessage(error);
     }
   };
 
+  const signupHref = next === "/dashboard" ? "/signup" : `/signup?next=${encodeURIComponent(next)}`;
+
   return (
-    <div className="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-8">
-      <h1 className="text-2xl font-bold">Log in to PawOS</h1>
-      <p className="mt-2 text-sm text-neutral-400">
-        Manage your account, plan, and task credits from the web.
-      </p>
+    <div className="w-full" data-testid="login-form">
+      <AuthHeading title="Welcome back to PawOS" subtitle="Pick up where you left off" />
 
-      <div className="mt-6 flex flex-col gap-3">
-        <button
-          type="button"
-          onClick={() => handleOAuth("google")}
-          disabled={oauthPending !== null || status === "loading"}
-          className="flex items-center justify-center gap-2 rounded-lg border border-neutral-700 bg-neutral-950 px-4 py-2.5 text-sm font-medium text-neutral-100 transition hover:bg-neutral-900 disabled:opacity-50"
-        >
-          <GoogleGlyph size={18} />
-          {oauthPending === "google" ? "Opening Google…" : "Continue with Google"}
-        </button>
-        <button
-          type="button"
-          onClick={() => handleOAuth("github")}
-          disabled={oauthPending !== null || status === "loading"}
-          className="flex items-center justify-center gap-2 rounded-lg border border-neutral-700 bg-neutral-950 px-4 py-2.5 text-sm font-medium text-neutral-100 transition hover:bg-neutral-900 disabled:opacity-50"
-        >
-          <GitHubGlyph size={18} />
-          {oauthPending === "github" ? "Opening GitHub…" : "Continue with GitHub"}
-        </button>
+      <div className="mt-8">
+        <ProviderRow pending={oauthPending} disabled={oauthPending !== null || loading} lastUsed={lastUsed} onSelect={oauth} />
       </div>
 
-      <div className="my-6 flex items-center gap-3 text-xs text-neutral-500">
-        <div className="h-px flex-1 bg-neutral-800" />
-        or
-        <div className="h-px flex-1 bg-neutral-800" />
-      </div>
-
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <div>
-          <label htmlFor="email" className="mb-1 block text-xs font-medium text-neutral-400">
-            Email
-          </label>
-          <input
-            id="email"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-sm text-neutral-100 outline-none focus:border-blue-400"
-            placeholder="you@example.com"
-          />
-        </div>
-        <div>
-          <div className="mb-1 flex items-center justify-between">
-            <label htmlFor="password" className="block text-xs font-medium text-neutral-400">
-              Password
+      {step === "email" ? (
+        <form onSubmit={continueWithEmail} className="mt-6 flex flex-col gap-4">
+          <div className="relative">
+            {lastUsed === "email" && (
+              <span className="absolute -top-2.5 right-2 rounded-md border border-neutral-700 bg-neutral-950 px-1.5 py-0.5 text-[11px] font-medium text-neutral-200">
+                Last used
+              </span>
+            )}
+            <label htmlFor="email" className={labelClass}>
+              Email
             </label>
-            <Link href="/forgot-password" className="text-xs text-blue-400 hover:underline">
-              Forgot password?
-            </Link>
+            <input
+              ref={emailRef}
+              id="email"
+              type="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className={inputClass}
+              placeholder="Your email address"
+            />
           </div>
-          <input
-            id="password"
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-sm text-neutral-100 outline-none focus:border-blue-400"
-            placeholder="••••••••"
+          {message && <p className="text-sm text-red-400" role="alert">{message}</p>}
+          <button type="submit" disabled={oauthPending !== null} className={primaryButtonClass}>
+            Continue with email
+          </button>
+        </form>
+      ) : (
+        <form onSubmit={logIn} className="mt-6 flex flex-col gap-4">
+          <EmailChip
+            email={email}
+            onChange={() => {
+              setPassword("");
+              setMessage(null);
+              setStep("email");
+            }}
           />
-        </div>
-
-        {message && <p className="text-sm text-red-400">{message}</p>}
-
-        <button
-          type="submit"
-          disabled={status === "loading" || oauthPending !== null}
-          className="mt-2 rounded-full bg-gradient-to-r from-indigo-500 to-blue-400 px-6 py-2.5 text-sm font-semibold text-black transition hover:opacity-90 disabled:opacity-50"
-        >
-          {status === "loading" ? "Logging in…" : "Log in"}
-        </button>
-      </form>
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <label htmlFor="password" className="block text-sm font-medium text-neutral-400">
+                Password
+              </label>
+              <Link href="/forgot-password" className="text-sm text-neutral-400 hover:text-white hover:underline">
+                Forgot password?
+              </Link>
+            </div>
+            <input
+              ref={passwordRef}
+              id="password"
+              type="password"
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className={inputClass}
+              placeholder="Your password"
+            />
+          </div>
+          {message && <p className="text-sm text-red-400" role="alert">{message}</p>}
+          <button type="submit" disabled={loading || oauthPending !== null} className={primaryButtonClass}>
+            {loading ? <Spinner /> : "Log in"}
+          </button>
+        </form>
+      )}
 
       <p className="mt-6 text-center text-sm text-neutral-400">
         Don&apos;t have an account?{" "}
-        <Link href="/signup" className="text-blue-400 hover:underline">
+        <Link href={signupHref} className="text-neutral-200 underline-offset-2 hover:underline">
           Sign up
         </Link>
       </p>

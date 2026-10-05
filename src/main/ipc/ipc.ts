@@ -136,6 +136,8 @@ export function registerIpc(opts: {
   startGoogleSignIn: () => Promise<GoogleSignInResult>;
   isGithubSignInConfigured: () => boolean;
   startGithubSignIn: (authorizeUrl: string) => Promise<{ code: string }>;
+  startWebSignIn: () => Promise<{ tokenHash: string; email: string }>;
+  cancelWebSignIn: () => void;
   isMicrosoftSignInConfigured: () => boolean;
   startMicrosoftSignIn: () => Promise<{ profile: any; idToken: string; accessToken: string }>;
   getEmailSigningSecret: () => string | undefined;
@@ -413,6 +415,8 @@ export function registerIpc(opts: {
   ipcMain.handle('auth:startGoogleSignIn', () => opts.startGoogleSignIn());
   ipcMain.handle('auth:isGithubSignInConfigured', () => opts.isGithubSignInConfigured());
   ipcMain.handle('auth:startGithubSignIn', (_evt, authorizeUrl: string) => opts.startGithubSignIn(authorizeUrl));
+  ipcMain.handle('auth:startWebSignIn', () => opts.startWebSignIn());
+  ipcMain.handle('auth:cancelWebSignIn', () => opts.cancelWebSignIn());
   ipcMain.handle('auth:isMicrosoftSignInConfigured', () => opts.isMicrosoftSignInConfigured());
   ipcMain.handle('auth:startMicrosoftSignIn', () => opts.startMicrosoftSignIn());
 

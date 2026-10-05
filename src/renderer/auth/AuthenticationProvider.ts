@@ -8,6 +8,7 @@ import { EmailAuthProvider } from './providers/EmailAuthProvider';
 import { GoogleAuthProvider } from './providers/GoogleAuthProvider';
 import { GitHubAuthProvider } from './providers/GitHubAuthProvider';
 import { MicrosoftAuthProvider } from './providers/MicrosoftAuthProvider';
+import { BrowserAuthProvider } from './providers/BrowserAuthProvider';
 import { ipc } from '../services/ipc/ipcBridgeImplementation';
 import { getSupabaseClient } from './supabaseClient';
 import type { SharedAuthSession } from '../../shared/auth/AuthSessionSync';
@@ -67,6 +68,7 @@ export class AuthenticationProvider implements AuthService {
   private googleProvider = new GoogleAuthProvider();
   private githubProvider = new GitHubAuthProvider();
   private microsoftProvider = new MicrosoftAuthProvider();
+  private browserProvider = new BrowserAuthProvider();
 
   private setSession(user: AuthUser, rememberMe = true): void {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
@@ -112,6 +114,40 @@ export class AuthenticationProvider implements AuthService {
     this.setSession(user);
     await this.saveSupabaseSession();
     return user;
+  }
+
+  /** "Continue with browser": the account already signed in on PawOS Web. */
+  async signInWithBrowser(): Promise<AuthUser> {
+    const user = await this.browserProvider.signIn();
+    await this.reconcileSubscriptionFor(user);
+    this.setSession(user);
+    await this.saveSupabaseSession();
+    return user;
+  }
+
+  /**
+   * Whether this app's session is still valid on the server. Signing out on PawOS Web (or any other
+   * device) ends every session of the account, so this returns false once that has happened — and
+   * supabase-js has already dropped the local session. A network failure is not a sign-out: true.
+   */
+  async isSessionStillValid(): Promise<boolean> {
+    const supabase = await getSupabaseClient().catch(() => null);
+    if (!supabase) return true;
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) return false;
+    const { error } = await supabase.auth.getUser();
+    if (!error) return true;
+    return !(error.name === 'AuthSessionMissingError' || error.status === 401 || error.status === 403);
+  }
+
+  /** Clears this app's local sign-in after the session ended elsewhere (the server already ended it). */
+  async clearLocalSession(): Promise<void> {
+    window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(REMEMBER_KEY);
+    const supabase = await getSupabaseClient().catch(() => null);
+    await supabase?.auth.signOut({ scope: 'local' }).catch(() => {});
+    await ipc.billingClearBuildAccess().catch(() => {});
+    await ipc.billingResetSubscription().catch(() => {});
   }
 
   async signInWithMicrosoft(): Promise<AuthUser> {
@@ -162,7 +198,8 @@ export class AuthenticationProvider implements AuthService {
   async signOut(): Promise<void> {
     window.localStorage.removeItem(STORAGE_KEY);
     window.localStorage.removeItem(REMEMBER_KEY);
-    await this.emailProvider.signOut(); // clears the real Supabase session too, not just the local mirror
+    // Global: ends the account's session on PawOS Web and every other device too, not just here.
+    await this.emailProvider.signOut('global');
     
     // Drop PawOS Build access so it can never carry over to the next account on this device.
     await ipc.billingClearBuildAccess().catch((err) => console.error('[PawOS Build] Clearing Build access on sign-out failed:', err));
@@ -187,7 +224,8 @@ export class AuthenticationProvider implements AuthService {
       // "Remember Me" was off last time â€” require signing in again, and
       // make sure a real Supabase session doesn't linger unused.
       window.localStorage.removeItem(STORAGE_KEY);
-      await this.emailProvider.signOut().catch(() => {});
+      // Only this device: "Remember me" off must not sign PawOS Web out too.
+      await this.emailProvider.signOut('local').catch(() => {});
       return null;
     }
 

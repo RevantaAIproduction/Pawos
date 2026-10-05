@@ -25,6 +25,8 @@ export type EmailCreateAccountOptions = { name: string; email: string; password:
 export interface AuthService {
   signInWithGoogle(): Promise<AuthUser>;
   signInWithGithub(): Promise<AuthUser>;
+  /** "Continue with browser": the account already signed in on PawOS Web. */
+  signInWithBrowser(): Promise<AuthUser>;
   signInWithEmail(options: EmailSignInOptions): Promise<AuthUser>;
   createEmailAccount(options: EmailCreateAccountOptions): Promise<AuthUser>;
   /** Sends a real 6-digit password-reset code to the given email (independent OTP namespace from sendVerificationCode). */

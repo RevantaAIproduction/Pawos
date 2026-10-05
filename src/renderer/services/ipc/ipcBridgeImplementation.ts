@@ -271,6 +271,12 @@ export const ipc = {
   async authStartGithubSignIn(authorizeUrl: string): Promise<{ code: string }> {
     return getBridge().authStartGithubSignIn(authorizeUrl);
   },
+  async authStartWebSignIn(): Promise<{ tokenHash: string; email: string }> {
+    return getBridge().authStartWebSignIn();
+  },
+  async authCancelWebSignIn(): Promise<void> {
+    return getBridge().authCancelWebSignIn();
+  },
   async authIsMicrosoftSignInConfigured(): Promise<boolean> {
     return getBridge().authIsMicrosoftSignInConfigured();
   },

@@ -111,6 +111,11 @@ function modelReply(prompt: string, system: string): string {
   return `Reply to: ${prompt.slice(0, 80)}`;
 }
 
+/** Accounts whose sessions were ended elsewhere (a global sign-out in PawOS Desktop). */
+export const revokedUsers = new Set<string>();
+/** Users a one-time sign-in token was generated for. */
+export const generatedLinks: string[] = [];
+
 export function startMockSupabase(backend: FakeBackend, model: MockModel, port: number, github?: FakeGitHub): Promise<http.Server> {
   const server = http.createServer(async (req, res) => {
     // The browser's own Supabase client only signs out; allow it.
@@ -144,10 +149,19 @@ export function startMockSupabase(backend: FakeBackend, model: MockModel, port: 
       // ── Auth ──
       if (url.pathname === "/auth/v1/user") {
         const user = userId ? backend.users.get(userId) : undefined;
+        if (userId && revokedUsers.has(userId)) return reply(res, 403, { code: "session_not_found", error_code: "session_not_found", msg: "Session from session_id claim in JWT does not exist" });
         if (!userId || !user) return reply(res, 401, { message: "invalid token" });
         return reply(res, 200, { id: userId, aud: "authenticated", role: "authenticated", email: user.email ?? `${userId}@example.com`, user_metadata: user.meta ?? {}, app_metadata: {}, created_at: "2026-01-01T00:00:00Z" });
       }
       if (url.pathname === "/auth/v1/logout") return reply(res, 204, undefined);
+      // Admin: a one-time sign-in token (PawOS Desktop "Continue with browser"). No email is sent.
+      if (url.pathname === "/auth/v1/admin/generate_link" && service) {
+        const { email } = JSON.parse(body.toString("utf8")) as { email?: string };
+        const entry = [...backend.users.entries()].find(([id, u]) => (u.email ?? `${id}@example.com`) === email);
+        if (!entry) return reply(res, 404, { code: "user_not_found", msg: "User not found" });
+        generatedLinks.push(entry[0]);
+        return reply(res, 200, { id: entry[0], aud: "authenticated", email, action_link: "http://localhost/verify", email_otp: "000000", hashed_token: `hashed-${entry[0]}`, redirect_to: "", verification_type: "magiclink" });
+      }
 
       // ── Storage ──
       const storage = url.pathname.match(/^\/storage\/v1\/object\/([^/]+)(?:\/(.*))?$/);

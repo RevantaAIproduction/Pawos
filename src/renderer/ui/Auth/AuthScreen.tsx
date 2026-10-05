@@ -40,6 +40,8 @@ const FEATURES = [
 export function AuthScreen({
   onSignInWithGoogle,
   onSignInWithGithub,
+  onSignInWithBrowser,
+  onCancelBrowserSignIn,
   onSignInWithEmail,
   onCreateEmailAccount,
   onRequestPasswordReset,
@@ -52,6 +54,9 @@ export function AuthScreen({
 }: {
   onSignInWithGoogle: () => Promise<unknown>;
   onSignInWithGithub: () => Promise<unknown>;
+  /** "Continue with browser": the account already signed in on PawOS Web. */
+  onSignInWithBrowser?: () => Promise<unknown>;
+  onCancelBrowserSignIn?: () => Promise<void>;
   onSignInWithEmail: (options: EmailSignInOptions) => Promise<unknown>;
   onCreateEmailAccount: (options: EmailCreateAccountOptions) => Promise<unknown>;
   onRequestPasswordReset: (email: string) => Promise<{ expiresInMinutes: number }>;
@@ -74,7 +79,7 @@ export function AuthScreen({
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState<'google' | 'github' | 'email' | null>(null);
+  const [pending, setPending] = useState<'google' | 'github' | 'browser' | 'email' | null>(null);
   const [googleAvailable, setGoogleAvailable] = useState(true);
   const [githubAvailable, setGithubAvailable] = useState(true);
 
@@ -116,6 +121,7 @@ export function AuthScreen({
 
   const handleGoogle = () => runGuarded('google', onSignInWithGoogle);
   const handleGithub = () => runGuarded('github', onSignInWithGithub);
+  const handleBrowser = () => onSignInWithBrowser && runGuarded('browser', onSignInWithBrowser);
 
   /** Sends (or resends) the verification code and moves to the code-entry step. Doesn't create the account yet — that only happens once the code is proven. */
   const requestVerificationCode = async () => {
@@ -459,6 +465,29 @@ export function AuthScreen({
             </form>
           ) : (
             <>
+              {onSignInWithBrowser && (
+                <>
+                  <button type="button" className={styles.providerButton} onClick={handleBrowser} disabled={busy} data-testid="continue-with-browser">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z" />
+                    </svg>
+                    {pending === 'browser' ? 'Waiting for your browser…' : 'Continue with browser'}
+                  </button>
+                  <p className={styles.hint}>
+                    {pending === 'browser' ? (
+                      <>
+                        Finish in the browser window that opened — log in or sign up there if you need to.{' '}
+                        <button type="button" className={styles.linkButton} onClick={() => void onCancelBrowserSignIn?.()}>
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      'Already signed in on the PawOS website? Use that account here.'
+                    )}
+                  </p>
+                </>
+              )}
               <button type="button" className={styles.providerButton} onClick={handleGoogle} disabled={busy}>
                 <GoogleGlyph size={18} />
                 {pending === 'google' ? 'Opening Google sign-in…' : 'Continue with Google'}
