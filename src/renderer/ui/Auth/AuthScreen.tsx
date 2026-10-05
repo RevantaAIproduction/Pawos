@@ -126,7 +126,9 @@ export function AuthScreen({
       return;
     }
     setError(null);
-    setEmailStep('password');
+    // Creating an account: verify the email with a 6-digit code before choosing a password.
+    if (mode === 'create') void requestVerificationCode();
+    else setEmailStep('password');
   };
 
   const handleEmailSubmit = (e: React.FormEvent) => {
@@ -152,7 +154,8 @@ export function AuthScreen({
         setError("Please accept both the Terms of Service and Privacy Policy.");
         return;
       }
-      void requestVerificationCode();
+      // The email was verified in the previous step.
+      void runGuarded('email', () => onCreateEmailAccount({ name, email, password }));
     } else {
       void runGuarded('email', () => onSignInWithEmail({ email, password, rememberMe }));
     }
@@ -172,7 +175,10 @@ export function AuthScreen({
         setVerifyError(result.reason ?? 'Incorrect code.');
         return;
       }
-      await onCreateEmailAccount({ name, email, password });
+      // Email verified — now choose the password.
+      setStep('form');
+      setEmailStep('password');
+      setOtpCode('');
     } catch (err) {
       setVerifyError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
     } finally {
@@ -300,7 +306,9 @@ export function AuthScreen({
         ? ['Set a new password', 'Almost done']
         : mode === 'signin'
           ? ['Welcome back to PawOS', 'Pick up where you left off']
-          : ['Welcome to PawOS', 'One account for Desktop and Web'];
+          : emailStep === 'password'
+            ? ['Choose a password', 'Your email is verified']
+            : ['Welcome to PawOS', 'One account for Desktop and Web'];
 
   const passwordField = (
     value: string,
@@ -411,13 +419,13 @@ export function AuthScreen({
         ) : verifying ? (
           <form className={styles.form} onSubmit={handleVerifySubmit}>
             <p className={styles.verifyIntro}>
-              Enter the code to finish creating your account
+              Enter the code to verify your email
               {codeExpiresInMinutes ? ` — it expires in ${codeExpiresInMinutes} minutes.` : '.'}
             </p>
             <OtpInput value={otpCode} onChange={setOtpCode} disabled={busy} />
             {verifyError && <p className={styles.errorText}>{verifyError}</p>}
             <button type="submit" className={styles.primaryButton} disabled={busy}>
-              {pending === 'email' ? 'Verifying…' : 'Verify and create account'}
+              {pending === 'email' ? 'Verifying…' : 'Verify email'}
             </button>
             <div className={styles.resendRow}>
               <button type="button" className={styles.linkButton} onClick={handleBackToForm} disabled={busy}>
@@ -430,6 +438,8 @@ export function AuthScreen({
           </form>
         ) : (
           <>
+{emailStep === 'email' && (
+              <>
             <div className={styles.providerRow}>
               <button
                 type="button"
@@ -453,6 +463,8 @@ export function AuthScreen({
               </button>
             </div>
             {(pending === 'google' || pending === 'github') && <p className={styles.hint}>Finish signing in in your browser.</p>}
+              </>
+            )}
 
             {emailStep === 'email' ? (
               <form className={styles.form} onSubmit={handleContinue}>
@@ -504,7 +516,7 @@ export function AuthScreen({
                 </div>
                 {error && <p className={styles.errorText}>{error}</p>}
                 <button type="submit" className={styles.primaryButton} disabled={busy}>
-                  {mode === 'signin' ? 'Continue with email' : 'Continue'}
+                  {pending === 'email' ? 'Sending code…' : mode === 'signin' ? 'Continue with email' : 'Continue'}
                 </button>
               </form>
             ) : (
@@ -560,7 +572,7 @@ export function AuthScreen({
                 {resetDone && <p className={styles.hint}>Your password was reset — log in with your new password.</p>}
                 {error && <p className={styles.errorText}>{error}</p>}
                 <button type="submit" className={styles.primaryButton} disabled={busy || (mode === 'create' && (!agreedToTerms || !agreedToPrivacy))}>
-                  {pending === 'email' ? 'Please wait…' : mode === 'create' ? 'Send verification code' : 'Log in'}
+                  {pending === 'email' ? 'Please wait…' : mode === 'create' ? 'Create account' : 'Log in'}
                 </button>
               </form>
             )}

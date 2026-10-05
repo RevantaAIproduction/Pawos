@@ -152,6 +152,8 @@ export function startMockSupabase(backend: FakeBackend, model: MockModel, port: 
         return reply(res, 200, { id: userId, aud: "authenticated", role: "authenticated", email: user.email ?? `${userId}@example.com`, user_metadata: user.meta ?? {}, app_metadata: {}, created_at: "2026-01-01T00:00:00Z" });
       }
       if (url.pathname === "/auth/v1/logout") return reply(res, 204, undefined);
+      // Email codes (sign-up and forgot password): accept the send; the e2e tests stop at the code step.
+      if (url.pathname === "/auth/v1/otp" || url.pathname === "/auth/v1/recover") return reply(res, 200, {});
 
       // ── Storage ──
       const storage = url.pathname.match(/^\/storage\/v1\/object\/([^/]+)(?:\/(.*))?$/);

@@ -135,3 +135,26 @@ export function EmailChip({ email, onChange }: { email: string; onChange: () => 
     </div>
   );
 }
+
+
+/** The 6-digit email code: one field, numbers only, fills from the keyboard's one-time-code suggestion. */
+export function CodeInput({ value, onChange, autoFocus = true }: { value: string; onChange: (value: string) => void; autoFocus?: boolean }) {
+  return (
+    <input
+      id="code"
+      type="text"
+      inputMode="numeric"
+      autoComplete="one-time-code"
+      pattern="[0-9]{6}"
+      maxLength={6}
+      required
+      autoFocus={autoFocus}
+      value={value}
+      onChange={(e) => onChange(e.target.value.replace(/\D/g, "").slice(0, 6))}
+      className={`${inputClass} text-center font-mono text-xl tracking-[0.5em]`}
+      placeholder="000000"
+      aria-label="6-digit code"
+      data-testid="code-input"
+    />
+  );
+}

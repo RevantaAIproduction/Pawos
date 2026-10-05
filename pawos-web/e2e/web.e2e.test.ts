@@ -208,18 +208,30 @@ describe("log in and sign up", () => {
     await context.close();
   });
 
-  it.each(Object.keys(VIEWPORTS) as ViewportName[])("sign up at %s size: names and email, then the password", async (viewport) => {
+  it.each(Object.keys(VIEWPORTS) as ViewportName[])("sign up at %s size: names and email, then the emailed code (before any password)", async (viewport) => {
     const { context, page } = await open(null, viewport, "/signup");
     await expect(page.getByText("Microsoft").count()).resolves.toBe(0);
+    await expect(page.getByLabel("Password").count()).resolves.toBe(0);
     await page.getByLabel("First name").fill("Ada");
     await page.getByLabel("Last name").fill("Lovelace");
     await page.getByLabel("Email").fill("ada@example.com");
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
     await shot(page, `signup-${viewport}`);
     await page.getByRole("button", { name: "Continue", exact: true }).click();
-    await page.getByLabel("Password").waitFor();
-    await expect(page.getByRole("button", { name: "Create account" }).isDisabled()).resolves.toBe(true);
-    await shot(page, `signup-password-${viewport}`);
+    await page.getByTestId("code-input").waitFor();
+    await expect(page.getByLabel("Password").count()).resolves.toBe(0);
+    await expect(page.getByRole("button", { name: "Verify" }).isDisabled()).resolves.toBe(true);
+    await shot(page, `signup-code-${viewport}`);
+    await context.close();
+  });
+
+  it("forgot password: the email, then the emailed code (before the new password)", async () => {
+    const { context, page } = await open(null, "mobile", "/forgot-password?email=ada%40example.com");
+    await expect(page.getByLabel("Email").inputValue()).resolves.toBe("ada@example.com");
+    await page.getByRole("button", { name: "Send code" }).click();
+    await page.getByTestId("code-input").waitFor();
+    await expect(page.getByLabel("New password").count()).resolves.toBe(0);
+    await shot(page, "forgot-password-code-mobile");
     await context.close();
   });
 });
