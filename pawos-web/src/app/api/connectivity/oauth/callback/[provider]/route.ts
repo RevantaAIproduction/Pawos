@@ -3,9 +3,10 @@ import { handleConnectorCallback } from "../../../../../../lib/account/webOAuthC
 import { isWebOAuthState, supportsWebOAuth } from "../../../../../../lib/account/webOAuth";
 
 /**
- * Legacy connector OAuth callback at https://pawos.revantaai.com/api/connectivity/oauth/callback/<provider>.
- * Every connector now uses /api/connectors/<provider>/callback; this path is kept only for PawOS
- * Desktop versions installed before the move (they still send it for GitHub and Slack).
+ * Connector OAuth callback at https://pawos.revantaai.com/api/connectivity/oauth/callback/<provider>.
+ * GitHub's connector OAuth app is registered with this URL (CONNECTOR_GITHUB_CALLBACK_URL), so both
+ * Desktop and Web send GitHub here; other connectors use /api/connectors/<provider>/callback, and
+ * this path still serves Slack for Desktop versions installed before that move.
  *
  *  - Started in the PawOS desktop app: the same thin relay back to the desktop app as
  *    /api/connectors/<p>/callback — forwards code/state to Electron's local listener, no exchange

@@ -27,7 +27,7 @@ describe('PUBLIC_ENV_DEFAULTS (the packaged app has no .env)', () => {
   });
 
   it('every website callback is under /api/connectors (the URLs the provider apps are registered with)', () => {
-    expect(PUBLIC_ENV_DEFAULTS.CONNECTOR_GITHUB_CALLBACK_URL).toBe('https://pawos.revantaai.com/api/connectors/github/callback');
+    expect(PUBLIC_ENV_DEFAULTS.CONNECTOR_GITHUB_CALLBACK_URL).toBe('https://pawos.revantaai.com/api/connectivity/oauth/callback/github');
     expect(PUBLIC_ENV_DEFAULTS.CONNECTOR_SLACK_CALLBACK_URL).toBe('https://pawos.revantaai.com/api/connectors/slack/callback');
     expect(PUBLIC_ENV_DEFAULTS.CONNECTOR_MICROSOFT_CALLBACK_URL).toBe('pawos://connectivity-oauth-callback');
     for (const [key, value] of Object.entries(PUBLIC_ENV_DEFAULTS)) {

@@ -237,7 +237,7 @@ tab is in the background and notifications are allowed.
 **Credentials**: the GitHub token is the account's existing connector credential, read on the server
 with `read_connectivity_credential()` under the user's own session; never returned, logged or put in a
 URL. GitHub can be connected **from Web/mobile** (same connector OAuth app, scopes `repo read:org`,
-hosted callback `/api/connectors/github/callback`, same credential store as the desktop app).
+hosted callback `/api/connectivity/oauth/callback/github`, same credential store as the desktop app).
 
 **Mobile safety**: a change is one request under the same request ledger as chat (lease 300 s); the
 task panel and preview tab poll the server, so a phone can lock, switch networks or reload and pick up
