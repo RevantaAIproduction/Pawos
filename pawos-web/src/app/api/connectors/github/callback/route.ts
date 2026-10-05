@@ -1,8 +1,9 @@
 import { handleConnectorCallback } from "../../../../../lib/account/webOAuthCallback";
 
 /**
- * GET /api/connectors/github/callback — CONNECTOR_GITHUB_CALLBACK_URL, registered on the GitHub
- * connector OAuth App (CONNECTOR_GITHUB_CLIENT_ID/SECRET). That app is deliberately separate from
+ * GET /api/connectors/github/callback — kept as an alias. The GitHub connector OAuth App
+ * (CONNECTOR_GITHUB_CLIENT_ID/SECRET) is registered with /api/connectivity/oauth/callback/github
+ * (CONNECTOR_GITHUB_CALLBACK_URL), which is what Desktop and Web send. That app is deliberately separate from
  * GITHUB_CLIENT_ID/GITHUB_REDIRECT_URI, which is Supabase's own sign-in integration (see
  * ../../../auth/github/callback/route.ts).
  *

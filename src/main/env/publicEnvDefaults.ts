@@ -33,11 +33,11 @@ export const PUBLIC_ENV_DEFAULTS: Record<string, string> = {
   // OAuthManager.ts's "Missing environment variable '..._CALLBACK_URL'"
   // error, regardless of whether the user has ever heard of these vars.
   // GitLab's callback lives at /auth/gitlab/callback (same thin relay back to Electron).
-  // Every website callback lives under /api/connectors/<provider>/callback. The provider apps must be
-  // registered with exactly these URLs (a mismatch is what made GitHub fail with "redirect_uri is not
-  // associated with this application"). /api/connectivity/oauth/callback/<provider> is still served
-  // for installed builds from before the move.
-  CONNECTOR_GITHUB_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectors/github/callback',
+  // Website callbacks live under /api/connectors/<provider>/callback, except GitHub: its connector
+  // OAuth app is registered with /api/connectivity/oauth/callback/github, and a GitHub OAuth App
+  // refuses any other redirect_uri ("The redirect_uri is not associated with this application").
+  // The provider apps must be registered with exactly these URLs.
+  CONNECTOR_GITHUB_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectivity/oauth/callback/github',
   LINEAR_REDIRECT_URL: 'https://pawos.revantaai.com/api/connectors/linear/callback',
   // Bitbucket Cloud OAuth consumer: the Key is public (it appears in every authorize URL); the
   // consumer Secret stays on pawos-web only.

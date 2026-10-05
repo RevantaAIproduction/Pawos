@@ -32,7 +32,7 @@ GITHUB_REDIRECT_URI: https://pawos.revantaai.com/auth/github/callback
 MICROSOFT_REDIRECT_URI: https://pawos.revantaai.com/auth/microsoft/callback
 SUPABASE_URL: https://krqdxdguqaoehrxhmggz.supabase.co
 SUPABASE_PUBLISHABLE_KEY: sb_publishable_E3vh2q3V3Sj-h7TY341D6Q_EmEneDwQ
-CONNECTOR_GITHUB_CALLBACK_URL: https://pawos.revantaai.com/api/connectors/github/callback
+CONNECTOR_GITHUB_CALLBACK_URL: https://pawos.revantaai.com/api/connectivity/oauth/callback/github
 LINEAR_REDIRECT_URL: https://pawos.revantaai.com/api/connectors/linear/callback
 CONNECTOR_JIRA_CALLBACK_URL: https://pawos.revantaai.com/api/connectors/jira/callback
 CONNECTOR_SLACK_CALLBACK_URL: https://pawos.revantaai.com/api/connectors/slack/callback

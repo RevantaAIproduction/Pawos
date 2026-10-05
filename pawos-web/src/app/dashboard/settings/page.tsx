@@ -7,6 +7,7 @@ import { getMyProfile, publicProfileUrl, type AccountProfile } from "../../../li
 import { PageHeader, Panel, Row, SectionLabel, formatDate, secondaryButton } from "../../../components/dashboard/ui";
 import { SignOutButton } from "../SignOutButton";
 import { PublicProfileForm } from "./PublicProfileForm";
+import { DeleteAccountPanel } from "./DeleteAccountPanel";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -102,6 +103,13 @@ export default async function DashboardSettingsPage() {
             </Row>
           </Panel>
         </section>
+
+        {account.user.email && (
+          <section aria-label="Delete account">
+            <SectionLabel>Danger zone</SectionLabel>
+            <DeleteAccountPanel email={account.user.email} />
+          </section>
+        )}
       </div>
     </>
   );
