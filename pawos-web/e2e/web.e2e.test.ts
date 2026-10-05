@@ -225,13 +225,13 @@ describe("log in and sign up", () => {
     await context.close();
   });
 
-  it("forgot password: the email, then the emailed code (before the new password)", async () => {
+  it("forgot password: the email, then a reset link by email (no password asked here)", async () => {
     const { context, page } = await open(null, "mobile", "/forgot-password?email=ada%40example.com");
     await expect(page.getByLabel("Email").inputValue()).resolves.toBe("ada@example.com");
-    await page.getByRole("button", { name: "Send code" }).click();
-    await page.getByTestId("code-input").waitFor();
+    await page.getByRole("button", { name: "Send reset link" }).click();
+    await page.getByText("Check your email").waitFor();
     await expect(page.getByLabel("New password").count()).resolves.toBe(0);
-    await shot(page, "forgot-password-code-mobile");
+    await shot(page, "forgot-password-sent-mobile");
     await context.close();
   });
 });
