@@ -24,7 +24,7 @@ export const PRIVACY_ARTICLES: HelpArticle[] = [
       'stored in Supabase, protected by row-level security so only you (or your own organization’s members) can ' +
       'read that data.',
     bestPractices: ['Review what’s genuinely local vs. cloud before assuming any feature syncs data you didn’t expect', 'Use account deletion if you want your cloud-side account data removed entirely'],
-    examples: [{ title: 'Deleting your account', steps: ['Open Settings → Account', 'Choose to delete your account', 'Confirm the deletion', 'Receive a confirmation email once it’s complete'] }],
+    examples: [{ title: 'Deleting your account', steps: ['Sign in at pawos.revantaai.com and open Dashboard → Settings', 'Under Danger zone, choose Delete account (unpaid payments must be paid first)', 'Enter the code we email you and type your email to confirm', 'Receive a confirmation email once it’s complete'] }],
     troubleshooting: [],
     requirements: [],
     permissions: [],

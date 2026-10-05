@@ -87,3 +87,68 @@ export async function sendSignupCodeEmail(email: string, code: string): Promise<
     return false;
   }
 }
+
+function accountEmailShell(title: string, bodyHtml: string): string {
+  return `<!doctype html>
+<html>
+  <body style="margin:0;padding:32px 16px;background:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;margin:0 auto;">
+      <tr><td style="padding-bottom:24px;color:#f5f5f5;font-size:18px;font-weight:700;">PawOS</td></tr>
+      <tr><td style="background:#141414;border:1px solid #262626;border-radius:16px;padding:32px;color:#d4d4d4;font-size:14px;line-height:1.6;">
+        <p style="margin:0 0 8px;color:#ffffff;font-size:20px;font-weight:600;">${title}</p>
+        ${bodyHtml}
+      </td></tr>
+      <tr><td style="padding-top:20px;color:#737373;font-size:12px;line-height:1.5;">PawOS · Powered by Revanta AI · pawos.revantaai.com</td></tr>
+    </table>
+  </body>
+</html>`;
+}
+
+/** The code that confirms "Delete my PawOS account" (Settings → Delete account on PawOS Web). */
+export async function sendAccountDeleteCodeEmail(email: string, code: string): Promise<boolean> {
+  const transporter = getTransporter();
+  if (!transporter) return false;
+  const safeCode = code.replace(/\D/g, "");
+  try {
+    await transporter.sendMail({
+      from: getFrom(),
+      to: email,
+      subject: `${safeCode} is your code to delete your PawOS account`,
+      headers: { "X-Entity-Ref-ID": randomUUID() },
+      html: accountEmailShell(
+        "Confirm account deletion",
+        `<p style="margin:0 0 20px;">Someone signed in to your PawOS account asked to delete it. Enter this code in Settings to confirm.</p>
+        <p style="margin:0 0 20px;color:#ffffff;font-size:32px;font-weight:700;letter-spacing:8px;">${safeCode}</p>
+        <p style="margin:0;color:#a3a3a3;font-size:13px;">The code expires in 10 minutes. Deleting your account can't be undone. If this wasn't you, don't share the code and change your password.</p>`
+      ),
+      text: `Confirm account deletion\n\nYour code: ${safeCode}\n\nIt expires in 10 minutes. Deleting your account can't be undone. If this wasn't you, don't share the code and change your password.\n\nPawOS · Powered by Revanta AI · pawos.revantaai.com`,
+    });
+    return true;
+  } catch (e) {
+    const err = e as { code?: string; responseCode?: number };
+    console.error("[account-delete] SMTP send failed:", err?.code, err?.responseCode);
+    return false;
+  }
+}
+
+/** Sent after the account is deleted. Best effort: the deletion already happened either way. */
+export async function sendAccountDeletedEmail(email: string): Promise<void> {
+  const transporter = getTransporter();
+  if (!transporter) return;
+  try {
+    await transporter.sendMail({
+      from: getFrom(),
+      to: email,
+      subject: "Your PawOS account has been deleted",
+      html: accountEmailShell(
+        "Your account has been deleted",
+        `<p style="margin:0 0 12px;">Your PawOS account and its data have been deleted, and any subscription was cancelled so you won't be charged again.</p>
+        <p style="margin:0;color:#a3a3a3;font-size:13px;">If you didn't do this, contact pawos@revantaai.com right away.</p>`
+      ),
+      text: `Your account has been deleted\n\nYour PawOS account and its data have been deleted, and any subscription was cancelled so you won't be charged again.\n\nIf you didn't do this, contact pawos@revantaai.com right away.\n\nPawOS · Powered by Revanta AI · pawos.revantaai.com`,
+    });
+  } catch (e) {
+    const err = e as { code?: string; responseCode?: number };
+    console.error("[account-delete] confirmation email failed:", err?.code, err?.responseCode);
+  }
+}

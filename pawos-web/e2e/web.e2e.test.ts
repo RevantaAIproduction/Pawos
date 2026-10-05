@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { spawn, execSync, type ChildProcess } from "node:child_process";
+import { createHash, createHmac } from "node:crypto";
 import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
@@ -50,8 +51,10 @@ const model: MockModel = { calls: 0, delayMs: 0 };
 let mock: http.Server;
 let next: ChildProcess;
 let browser: Any;
-let users: Record<"pro" | "go" | "goFull" | "net" | "builder" | "deskBuilder", User>;
+let users: Record<"pro" | "go" | "goFull" | "net" | "builder" | "deskBuilder" | "deleter" | "owes", User>;
 const GITHUB_TOKEN = "gho_e2e_builder_token";
+// Supabase's admin deleteUser() only accepts a real (UUID) user id.
+const DELETER_ID = "00000000-0000-4000-8000-00000000de1e";
 const github = new FakeGitHub(GITHUB_TOKEN);
 let codeChatId: string;
 let desktopChatId: string;
@@ -111,8 +114,12 @@ beforeAll(async () => {
     net: backend.addUser("e2e-net", { subscription: { active: true, tier: "proMax" }, meta: { full_name: "Network Tester" } }),
     builder: backend.addUser("e2e-builder", { subscription: { active: true, tier: "pro" }, meta: { full_name: "Frontend Builder" } }),
     deskBuilder: backend.addUser("e2e-desk-builder", { subscription: { active: true, tier: "proMax" }, meta: { full_name: "Desk Builder" } }),
+    deleter: backend.addUser(DELETER_ID, { email: "leaving@example.com", meta: { full_name: "Leaving Person" } }),
+    owes: backend.addUser("e2e-owes", { email: "owes@example.com", meta: { full_name: "Owes Money" } }),
     revoked: backend.addUser("e2e-revoked", { subscription: { active: true, tier: "pro" }, meta: { full_name: "Signed Out Elsewhere" } }),
   };
+  // An unpaid invoice-billing case: this account can't be deleted until it's paid.
+  backend.tables.billing_cases = [{ id: "CASE-E2E-1", user_id: "e2e-owes", usd_total: 1200, payment_status: "pending", validation_status: "awaiting_review" }];
   // Already connected, with a repository chosen earlier.
   backend.addConnection("e2e-desk-builder", "github", "connected", { username: "builder" });
   Object.assign(backend.tables.connectivity_credentials.at(-1) ?? {}, { secret: GITHUB_TOKEN, refresh_token: null, expires_at: null });
@@ -309,6 +316,54 @@ describe.each(Object.keys(VIEWPORTS) as ViewportName[])("layout at %s size", (vi
       }
       await context.close();
     }
+  });
+});
+
+describe("delete account", () => {
+  /** The emailed code can't be read here, so sign a known one the way the server does (accountDeletion.ts). */
+  function deleteCodeCookie(userId: string, code: string) {
+    const expiresAt = Date.now() + 5 * 60 * 1000;
+    const key = createHash("sha256").update(`pawos-account-delete:${SERVICE_KEY}`).digest();
+    const mac = createHmac("sha256", key).update(`${userId}:${code}:${expiresAt}`).digest("hex");
+    return { name: "pawos_account_delete", value: `${expiresAt}.${mac}`, domain: "localhost", path: "/api/dashboard/account", httpOnly: true, sameSite: "Strict" as const };
+  }
+
+  it("an account with an unpaid payment can't be deleted; it says why and stays", async () => {
+    const { context, page } = await open(users.owes, "mobile", "/dashboard/settings");
+    await page.getByTestId("delete-account-start").tap();
+    const blockers = page.getByTestId("delete-account-blockers");
+    await blockers.waitFor();
+    await expect(blockers.textContent()).resolves.toContain("CASE-E2E-1");
+    expect(await page.getByTestId("delete-account-confirm").count()).toBe(0);
+    expect(backend.users.has("e2e-owes")).toBe(true);
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
+    await shot(page, "delete-account-blocked-mobile");
+    await context.close();
+  });
+
+  it("delete: code, then the email typed back, then the account is gone and the browser is signed out", async () => {
+    const { context, page } = await open(users.deleter, "desktop", "/dashboard/settings");
+    await page.getByTestId("delete-account-start").click();
+    const form = page.getByTestId("delete-account-confirm");
+    await form.waitFor();
+    await expect(page.getByText("We sent a 6-digit code to leaving@example.com").isVisible()).resolves.toBe(true);
+    await shot(page, "delete-account-confirm-desktop");
+    // "Keep my account" backs out without deleting anything.
+    await page.getByRole("button", { name: "Keep my account" }).click();
+    await form.waitFor({ state: "detached" });
+    expect(backend.users.has(DELETER_ID)).toBe(true);
+
+    await page.getByTestId("delete-account-start").click();
+    await form.waitFor();
+    await context.addCookies([deleteCodeCookie(DELETER_ID, "424242")]);
+    await page.getByLabel("Code from the email").fill("424242");
+    const submit = page.getByTestId("delete-account-submit");
+    await expect(submit.isDisabled()).resolves.toBe(true); // the email isn't typed yet
+    await page.getByLabel(/to confirm/).fill("leaving@example.com");
+    await submit.click();
+    await page.waitForURL(/\/\?account=deleted$/);
+    expect(backend.users.has(DELETER_ID)).toBe(false);
+    await context.close();
   });
 });
 

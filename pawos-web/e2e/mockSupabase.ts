@@ -77,6 +77,7 @@ function matches(row: Row, params: URLSearchParams): boolean {
     if (op === "eq" && String(cell ?? "") !== value) return false;
     if (op === "is" && value === "null" && cell !== null && cell !== undefined) return false;
     if (op === "gte" && !(String(cell ?? "") >= value)) return false;
+    if (op === "in" && !value.replace(/^\(|\)$/g, "").split(",").includes(String(cell ?? ""))) return false;
   }
   return true;
 }
@@ -156,6 +157,14 @@ export function startMockSupabase(backend: FakeBackend, model: MockModel, port: 
       if (url.pathname === "/auth/v1/admin/generate_link" && service) {
         const { email } = JSON.parse(body.toString("utf8")) as { email?: string };
         return reply(res, 200, { id: `new-${email}`, email, aud: "authenticated", email_otp: "123456", hashed_token: "h", action_link: "http://localhost/verify", redirect_to: "", verification_type: "signup" });
+      }
+
+      // Account deletion (Settings → Delete account): the service role deletes the auth user.
+      const adminUser = url.pathname.match(/^\/auth\/v1\/admin\/users\/([^/]+)$/);
+      if (adminUser && req.method === "DELETE" && service) {
+        const id = decodeURIComponent(adminUser[1]);
+        if (!backend.users.delete(id)) return reply(res, 404, { message: "User not found" });
+        return reply(res, 200, { id });
       }
 
       // ── Storage ──
