@@ -1,0 +1,77 @@
+name: Desktop MSIX (Microsoft Store)
+
+# Builds the PawOS Desktop Microsoft Store package on a Windows runner — MSIX can only be made on
+# Windows (electron-builder uses the Windows SDK's makeappx). Run it from Actions → "Desktop MSIX
+# (Microsoft Store)" → Run workflow. The .msix and the Windows App Certification Kit report are
+# attached to the run as the "pawos-msix" artifact.
+#
+# The package is unsigned: the Store signs it on upload. Identity values come from
+# electron-builder.yml (appx section) and must match Partner Center.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Package version (major.minor.patch, higher than the version already in the Store). Empty = package.json's version."
+        required: false
+        default: ""
+
+jobs:
+  msix:
+    name: Build and certify MSIX
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Set the package version
+        if: ${{ inputs.version != '' }}
+        shell: pwsh
+        run: |
+          if ('${{ inputs.version }}' -notmatch '^\d+\.\d+\.\d+$') { throw "Version must look like 1.0.2" }
+          npm version '${{ inputs.version }}' --no-git-tag-version --allow-same-version
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Package MSIX
+        run: npx electron-builder --win appx --x64 --publish never
+
+      - name: Windows App Certification Kit
+        id: wack
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $msix = Get-ChildItem dist -Filter *.msix | Select-Object -First 1
+          if (-not $msix) { throw "No .msix was produced" }
+          "Package: $($msix.FullName) ($([math]::Round($msix.Length / 1MB, 1)) MB)"
+          $kit = "C:\Program Files (x86)\Windows Kits\10\App Certification Kit\appcert.exe"
+          if (-not (Test-Path $kit)) { "App Certification Kit isn't installed on this runner; run it locally."; exit 0 }
+          & $kit reset
+          & $kit test -appxpackagepath $msix.FullName -reportoutputpath "$PWD\dist\wack-report.xml"
+          if (Test-Path dist\wack-report.xml) {
+            [xml]$report = Get-Content dist\wack-report.xml
+            "Overall result: $($report.REPORT.OVERALL_RESULT)"
+            $failed = Select-String -Path dist\wack-report.xml -Pattern 'RESULT="FAIL"' -Context 0,4
+            if ($failed) { "Failed checks:"; $failed | ForEach-Object { $_.Line; $_.Context.PostContext } }
+          }
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: pawos-msix
+          path: |
+            dist/*.msix
+            dist/wack-report.xml
+          if-no-files-found: error
+          retention-days: 30
