@@ -19,6 +19,8 @@ function cleanEnv(value: string | undefined): string | undefined {
 }
 
 export function getTransporter() {
+  // Tests and local runs without a mail server: MAIL_TRANSPORT=json builds the email but sends nothing.
+  if (process.env.MAIL_TRANSPORT === "json") return nodemailer.createTransport({ jsonTransport: true });
   const host = cleanEnv(process.env.SMTP_HOST);
   const port = cleanEnv(process.env.SMTP_PORT);
   const user = cleanEnv(process.env.SMTP_USER);

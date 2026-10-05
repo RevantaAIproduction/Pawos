@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { createClient } from "../../lib/supabase/client";
 import { AuthHeading, EmailChip, Spinner, inputClass, labelClass, primaryButtonClass } from "../login/AuthPieces";
 
 /**
@@ -21,21 +20,22 @@ export function ForgotPasswordForm() {
     setLoading(true);
     setMessage(null);
     try {
-      // 'implicit', not the app's usual 'pkce' default — see createClient()'s own doc comment.
-      // A PKCE reset link only works in the same browser that requested it, which isn't true for
-      // email in general; implicit flow puts the session directly in the link.
-      const { error } = await createClient("implicit").auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${window.location.origin}/reset-password`,
+      // PawOS sends the email (api/auth/password/forgot) — not Supabase.
+      const response = await fetch("/api/auth/password/forgot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
       });
+      const data = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       setLoading(false);
-      if (error) {
-        setMessage(error.message);
+      if (!response.ok || !data.ok) {
+        setMessage(data.error ?? "We couldn't send the email. Please try again.");
         return;
       }
       setSent(true);
-    } catch (err) {
+    } catch {
       setLoading(false);
-      setMessage(err instanceof Error ? err.message : "We couldn't send the email. Please try again.");
+      setMessage("Couldn't reach PawOS. Check your connection and try again.");
     }
   };
 

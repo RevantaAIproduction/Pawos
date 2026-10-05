@@ -25,8 +25,8 @@ type Step = "details" | "code" | "password";
  *  1. first and last name and email → Continue (a 6-digit code is emailed);
  *  2. the code → Verify;
  *  3. a password and the Terms/Privacy acceptance → Create account (and you're logged in).
- * The same steps as PawOS Desktop. The code is Supabase's own email code (signInWithOtp →
- * verifyOtp), so the email is proven before a password is ever set (updateUser).
+ * The same steps as PawOS Desktop. PawOS emails the code (/api/auth/signup/code); the browser checks
+ * it (verifyOtp), so the email is proven before a password is ever set (updateUser).
  */
 export function SignupForm() {
   const params = useSearchParams();
@@ -38,6 +38,7 @@ export function SignupForm() {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
+  const [verifyType, setVerifyType] = useState<"signup" | "email">("signup");
   const [password, setPassword] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
@@ -50,23 +51,24 @@ export function SignupForm() {
     setLoading(true);
     setMessage(null);
     try {
-      const { error } = await createClient().auth.signInWithOtp({
-        email: email.trim(),
-        options: {
-          shouldCreateUser: true,
-          data: { full_name: `${firstName.trim()} ${lastName.trim()}`.trim(), first_name: firstName.trim(), last_name: lastName.trim() },
-        },
+      // PawOS emails the code (api/auth/signup/code) — not Supabase.
+      const response = await fetch("/api/auth/signup/code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), firstName: firstName.trim(), lastName: lastName.trim() }),
       });
+      const data = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string; verifyType?: "signup" | "email" };
       setLoading(false);
-      if (error) {
-        setMessage(error.message);
+      if (!response.ok || !data.ok) {
+        setMessage(data.error ?? "We couldn't send your code. Please try again.");
         return false;
       }
+      setVerifyType(data.verifyType === "email" ? "email" : "signup");
       setNotice(`We sent a 6-digit code to ${email.trim()}.`);
       return true;
-    } catch (err) {
+    } catch {
       setLoading(false);
-      setMessage(err instanceof Error ? err.message : "We couldn't send your code. Please try again.");
+      setMessage("Couldn't reach PawOS. Check your connection and try again.");
       return false;
     }
   };
@@ -83,7 +85,7 @@ export function SignupForm() {
     e.preventDefault();
     setLoading(true);
     setMessage(null);
-    const { data, error } = await createClient().auth.verifyOtp({ email: email.trim(), token: code, type: "email" });
+    const { data, error } = await createClient().auth.verifyOtp({ email: email.trim(), token: code, type: verifyType });
     setLoading(false);
     if (error || !data.session) {
       setMessage(error?.message === "Token has expired or is invalid" ? "That code isn't right or has expired. Check the email or send a new one." : (error?.message ?? "That code didn't work."));

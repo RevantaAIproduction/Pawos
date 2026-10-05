@@ -148,6 +148,7 @@ beforeAll(async () => {
       WEB_CHAT_MODEL_BASE_URL: `http://localhost:${SUPABASE_PORT}/v1beta`,
       WEB_GITHUB_API_BASE_URL: `http://localhost:${SUPABASE_PORT}/github-api`,
       NEXT_TELEMETRY_DISABLED: "1",
+      MAIL_TRANSPORT: "json",
     },
     stdio: process.env.E2E_VERBOSE ? "inherit" : "ignore",
     detached: true,
