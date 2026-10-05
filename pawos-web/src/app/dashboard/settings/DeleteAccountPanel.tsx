@@ -89,7 +89,7 @@ export function DeleteAccountPanel({ email }: { email: string }) {
     <Panel className="border-red-500/30">
       <Row
         label="Delete account"
-        hint="Permanently deletes your PawOS account and its data, and cancels your subscription. This can't be undone. Accounts with unpaid payments can't be deleted until they're paid."
+        hint="Permanently deletes your PawOS account and everything in it: your email, chats, history, files, connections, credits, and your payment and invoice records. Your subscription is cancelled. This can't be undone. Accounts with unpaid payments can't be deleted until they're paid."
         align="start"
       >
         {step === "idle" && (

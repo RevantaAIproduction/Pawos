@@ -54,7 +54,7 @@ export async function DELETE(request: Request) {
     if (blockers.length > 0) {
       return NextResponse.json({ ok: false, code: "blocked", message: "Your account can't be deleted yet.", blockers }, { status: 409 });
     }
-    await deleteAccount(service, user.id, credentials);
+    await deleteAccount(service, user.id, user.email, credentials);
   } catch (e) {
     if (!(e instanceof DeletionCheckError)) console.error("[account-delete] delete failed:", e);
     const message = e instanceof DeletionCheckError ? e.message : "Something went wrong.";

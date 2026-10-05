@@ -118,6 +118,9 @@ beforeAll(async () => {
     owes: backend.addUser("e2e-owes", { email: "owes@example.com", meta: { full_name: "Owes Money" } }),
     revoked: backend.addUser("e2e-revoked", { subscription: { active: true, tier: "pro" }, meta: { full_name: "Signed Out Elsewhere" } }),
   };
+  // History for the account that deletes itself: all of it must be gone afterwards.
+  backend.tables.web_chats.push({ id: "00000000-0000-4000-8000-00000000de10", user_id: DELETER_ID, title: "My private chat", surface: "web", updated_at: "2026-10-01T00:00:00Z" });
+  backend.tables.desktop_waitlist = [{ id: "wl-1", email: "Leaving@Example.com" }];
   // An unpaid invoice-billing case: this account can't be deleted until it's paid.
   backend.tables.billing_cases = [{ id: "CASE-E2E-1", user_id: "e2e-owes", usd_total: 1200, payment_status: "pending", validation_status: "awaiting_review" }];
   // Already connected, with a repository chosen earlier.
@@ -363,6 +366,8 @@ describe("delete account", () => {
     await submit.click();
     await page.waitForURL(/\/\?account=deleted$/);
     expect(backend.users.has(DELETER_ID)).toBe(false);
+    expect(backend.tables.web_chats.some((row) => row.user_id === DELETER_ID)).toBe(false);
+    expect(backend.tables.desktop_waitlist).toEqual([]);
     await context.close();
   });
 });

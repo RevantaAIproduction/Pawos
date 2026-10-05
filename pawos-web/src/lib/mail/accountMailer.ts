@@ -142,10 +142,10 @@ export async function sendAccountDeletedEmail(email: string): Promise<void> {
       subject: "Your PawOS account has been deleted",
       html: accountEmailShell(
         "Your account has been deleted",
-        `<p style="margin:0 0 12px;">Your PawOS account and its data have been deleted, and any subscription was cancelled so you won't be charged again.</p>
+        `<p style="margin:0 0 12px;">Your PawOS account and all of its data — your chats, history, files, connections, credits, and payment and invoice records — have been deleted, and any subscription was cancelled so you won't be charged again. PawOS no longer has your email address; this is the last email you'll get from us.</p>
         <p style="margin:0;color:#a3a3a3;font-size:13px;">If you didn't do this, contact pawos@revantaai.com right away.</p>`
       ),
-      text: `Your account has been deleted\n\nYour PawOS account and its data have been deleted, and any subscription was cancelled so you won't be charged again.\n\nIf you didn't do this, contact pawos@revantaai.com right away.\n\nPawOS · Powered by Revanta AI · pawos.revantaai.com`,
+      text: `Your account has been deleted\n\nYour PawOS account and all of its data — your chats, history, files, connections, credits, and payment and invoice records — have been deleted, and any subscription was cancelled so you won't be charged again. PawOS no longer has your email address; this is the last email you'll get from us.\n\nIf you didn't do this, contact pawos@revantaai.com right away.\n\nPawOS · Powered by Revanta AI · pawos.revantaai.com`,
     });
   } catch (e) {
     const err = e as { code?: string; responseCode?: number };

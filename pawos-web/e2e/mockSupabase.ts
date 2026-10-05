@@ -167,6 +167,22 @@ export function startMockSupabase(backend: FakeBackend, model: MockModel, port: 
         return reply(res, 200, { id });
       }
 
+      // Account deletion lists the person's folder in each bucket (POST /object/list/<bucket>).
+      const storageList = url.pathname.match(/^\/storage\/v1\/object\/list\/([^/]+)$/);
+      if (storageList && req.method === "POST") return reply(res, 200, []);
+      // Account deletion: purge_account_data() removes every row that is the person's or has their email.
+      if (url.pathname === "/rest/v1/rpc/purge_account_data" && service) {
+        const { p_user_id, p_email } = JSON.parse(body.toString("utf8")) as { p_user_id: string; p_email: string };
+        const email = String(p_email ?? "").trim().toLowerCase();
+        let removed = 0;
+        for (const [name, rows] of Object.entries(backend.tables)) {
+          const kept = rows.filter((row) => !(row.user_id === p_user_id || (email && Object.entries(row).some(([k, v]) => /email$/.test(k) && String(v ?? "").trim().toLowerCase() === email))));
+          removed += rows.length - kept.length;
+          backend.tables[name] = kept;
+        }
+        return reply(res, 200, removed);
+      }
+
       // ── Storage ──
       const storage = url.pathname.match(/^\/storage\/v1\/object\/([^/]+)(?:\/(.*))?$/);
       if (storage) {

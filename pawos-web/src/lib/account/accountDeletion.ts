@@ -12,10 +12,20 @@ import { listRazorpayInvoices, razorpayAuthHeader } from "../billing/razorpay";
  * whose renewal charge failed (pending / halted), or an unpaid invoice-billing case. The person pays
  * first, then deletes. Nor while it owns an organization (other people's workspace hangs off it).
  *
- * When nothing blocks it: paid-up subscriptions are cancelled at Razorpay (so nothing renews), then
- * the auth user is deleted, which removes the account's data through the foreign keys' ON DELETE
- * rules (supabase/migrations/20261005000000_account_deletion_fk_rules.sql).
+ * When nothing blocks it, everything about the person is removed — not kept, not anonymised:
+ *  1. paid-up subscriptions are cancelled at Razorpay, so nothing renews;
+ *  2. their files in Storage (web chat uploads, ticket evidence — stored under "<userId>/...");
+ *  3. every database row that is theirs or carries their email — chats, usage, credits,
+ *     subscriptions, payments, top-ups, invoices / billing cases, devices, referrals, waitlist and
+ *     early-access sign-ups, organization memberships and invites (purge_account_data(),
+ *     supabase/migrations/20261005000100_purge_account_data.sql);
+ *  4. the auth user itself (email, identities, sessions). Anything still pointing at it is cleared
+ *     by the ON DELETE rules of 20261005000000_account_deletion_fk_rules.sql.
+ * Razorpay keeps its own copy of payments and invoices; PawOS can't delete those through its API.
  */
+
+/** Buckets that keep a person's files under a "<userId>/" folder. */
+export const USER_FILE_BUCKETS = ["web-chat-uploads", "ticket-evidence"];
 
 export const DELETE_CODE_COOKIE = "pawos_account_delete";
 export const DELETE_CODE_TTL_SECONDS = 10 * 60;
@@ -143,17 +153,48 @@ async function cancelRazorpaySubscription(id: string, credentials: RazorpayCrede
   return /cancel|complete/i.test(body?.error?.description ?? "");
 }
 
+/** Every file under "<userId>/" in a bucket, however deeply nested. */
+async function listUserFiles(service: SupabaseClient, bucket: string, prefix: string, depth = 0): Promise<string[]> {
+  if (depth > 5) return [];
+  const paths: string[] = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await service.storage.from(bucket).list(prefix, { limit: 1000, offset });
+    if (error) throw new Error(`Could not list ${bucket}/${prefix}: ${error.message}`);
+    for (const item of data ?? []) {
+      const path = `${prefix}/${item.name}`;
+      // Folders come back without an id.
+      if (item.id) paths.push(path);
+      else paths.push(...(await listUserFiles(service, bucket, path, depth + 1)));
+    }
+    if (!data || data.length < 1000) break;
+  }
+  return paths;
+}
+
+async function removeUserFiles(service: SupabaseClient, userId: string): Promise<void> {
+  for (const bucket of USER_FILE_BUCKETS) {
+    const paths = await listUserFiles(service, bucket, userId);
+    for (let i = 0; i < paths.length; i += 100) {
+      const { error } = await service.storage.from(bucket).remove(paths.slice(i, i + 100));
+      if (error) throw new Error(`Could not remove files from ${bucket}: ${error.message}`);
+    }
+  }
+}
+
 /**
- * Cancels the account's renewing subscriptions, then deletes the auth user (and with it the
- * account's data). Call only after findDeletionBlockers() returned nothing. If a cancellation fails
- * nothing is deleted, so the account is never gone while still being billed.
+ * Cancels the account's renewing subscriptions, removes their files and every row of their data,
+ * then deletes the auth user. Call only after findDeletionBlockers() returned nothing. If a
+ * cancellation fails nothing is deleted, so the account is never gone while still being billed.
  */
-export async function deleteAccount(service: SupabaseClient, userId: string, credentials: RazorpayCredentials | null): Promise<void> {
+export async function deleteAccount(service: SupabaseClient, userId: string, email: string, credentials: RazorpayCredentials | null): Promise<void> {
   const renewing = (await readSubscriptions(service, userId)).filter((s) => RENEWING.includes(s.status));
   if (renewing.length > 0 && !credentials) throw new DeletionCheckError("Your subscription can't be cancelled right now.");
   for (const sub of renewing) {
     if (!(await cancelRazorpaySubscription(sub.id, credentials!))) throw new DeletionCheckError("Your subscription couldn't be cancelled, so your account wasn't deleted.");
   }
+  await removeUserFiles(service, userId);
+  const { error: purgeError } = await service.rpc("purge_account_data", { p_user_id: userId, p_email: email });
+  if (purgeError) throw new Error(`purge_account_data failed: ${purgeError.message}`);
   const { error } = await service.auth.admin.deleteUser(userId);
   if (error) throw new Error(`deleteUser failed: ${error.message}`);
 }

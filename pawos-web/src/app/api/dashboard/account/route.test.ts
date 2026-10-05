@@ -16,6 +16,9 @@ const state = vi.hoisted(() => ({
   deletedEmails: [] as string[],
   razorpay: { invoices: [] as Row[], cancelOk: true, cancelled: [] as string[] },
   signedOut: false,
+  files: {} as Record<string, string[]>,
+  removedFiles: [] as string[],
+  purged: [] as { p_user_id: string; p_email: string }[],
 }));
 
 function query(table: string) {
@@ -32,6 +35,17 @@ function query(table: string) {
 vi.mock("../../../../lib/supabase/serviceClient", () => ({
   createServiceClient: () => ({
     from: query,
+    rpc: async (name: string, args: { p_user_id: string; p_email: string }) => (name === "purge_account_data" && state.purged.push(args), { error: null }),
+    storage: {
+      from: (bucket: string) => ({
+        list: async (prefix: string) => {
+          const inFolder = (state.files[bucket] ?? []).filter((p) => p.startsWith(`${prefix}/`)).map((p) => p.slice(prefix.length + 1));
+          const names = [...new Set(inFolder.map((rest) => rest.split("/")[0]))];
+          return { data: names.map((name) => (inFolder.includes(name) ? { name, id: `id-${name}` } : { name, id: null })), error: null };
+        },
+        remove: async (paths: string[]) => (state.removedFiles.push(...paths.map((p) => `${bucket}/${p}`)), { data: [], error: null }),
+      }),
+    },
     auth: { admin: { deleteUser: async (id: string) => (state.deletedUsers.push(id), { error: null }) } },
   }),
 }));
@@ -72,7 +86,7 @@ beforeEach(() => {
   process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-key";
   process.env.RAZORPAY_KEY_ID = "rzp_test";
   process.env.RAZORPAY_KEY_SECRET = "rzp_secret";
-  Object.assign(state, { signedIn: true, tables: { organizations: [], billing_cases: [], pawos_subscriptions: [] }, deletedUsers: [], cookie: undefined, sentCodes: [], deletedEmails: [], signedOut: false });
+  Object.assign(state, { signedIn: true, tables: { organizations: [], billing_cases: [], pawos_subscriptions: [] }, deletedUsers: [], cookie: undefined, sentCodes: [], deletedEmails: [], signedOut: false, files: {}, removedFiles: [], purged: [] });
   state.razorpay = { invoices: [], cancelOk: true, cancelled: [] };
   vi.stubGlobal("fetch", async (input: unknown, init?: RequestInit) => {
     const url = String(input);
@@ -95,12 +109,18 @@ describe("delete account", () => {
     expect(state.deletedUsers).toEqual([]);
   });
 
-  it("free account: code → confirm → deleted, confirmation emailed, signed out", async () => {
+  it("free account: code → confirm → files, every row (by id and email) and the user are removed; confirmation emailed; signed out", async () => {
+    state.files = {
+      "web-chat-uploads": [`${state.userId}/photo-1`, "someone-else/photo-2"],
+      "ticket-evidence": [`${state.userId}/run-1/shot.png`, `${state.userId}/run-2/a/b.png`],
+    };
     const code = await getCode();
     expect(code).toMatch(/^\d{6}$/);
     const response = await deleteAccountRoute(req("DELETE", { code, confirmEmail: "ada@example.com" }));
     expect(response.status).toBe(200);
     expect(state.deletedUsers).toEqual([state.userId]);
+    expect(state.purged).toEqual([{ p_user_id: state.userId, p_email: "Ada@Example.com" }]);
+    expect(state.removedFiles.sort()).toEqual([`ticket-evidence/${state.userId}/run-1/shot.png`, `ticket-evidence/${state.userId}/run-2/a/b.png`, `web-chat-uploads/${state.userId}/photo-1`]);
     expect(state.deletedEmails).toEqual(["Ada@Example.com"]);
     expect(state.signedOut).toBe(true);
   });
@@ -121,6 +141,7 @@ describe("delete account", () => {
     const response = await deleteAccountRoute(req("DELETE", { code, confirmEmail: "ada@example.com" }));
     expect(response.status).toBe(503);
     expect(state.deletedUsers).toEqual([]);
+    expect(state.purged).toEqual([]);
   });
 
   it("unpaid invoice: no code is sent, the reason is listed, the account stays", async () => {
