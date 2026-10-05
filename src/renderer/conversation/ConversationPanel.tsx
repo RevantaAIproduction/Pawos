@@ -249,8 +249,8 @@ function readImageAsDataUrl(file: File): Promise<string> {
 
 function getTierAppropriateConnectors(tier?: string): string[] {
   const freeConnectors: string[] = [];
-  const proConnectors = ['Gmail', 'Google Drive', 'Slack', 'Google Calendar'];
-  const proMaxConnectors = [...proConnectors, 'Jira', 'Linear', 'GitHub', 'GitLab', 'Notion'];
+  const proConnectors = ['GitHub', 'GitLab', 'Slack'];
+  const proMaxConnectors = [...proConnectors, 'Jira', 'Linear'];
 
   switch (tier) {
     case 'pro':
@@ -268,29 +268,6 @@ function getConnectorIcon(name: string): JSX.Element {
   const iconProps = { width: 14, height: 14, viewBox: '0 0 24 24', style: { flexShrink: 0 } };
 
   switch (name) {
-    case 'Gmail':
-      return (
-        <svg {...iconProps} xmlns="http://www.w3.org/2000/svg" fill="none">
-          <rect x="2" y="4" width="20" height="16" rx="2" fill="#EA4335"/>
-          <path d="M22 4l-10 8L2 4" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-        </svg>
-      );
-    case 'Google Drive':
-      return (
-        <svg {...iconProps} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-          <path d="M8 2l7 12-7 12H2l7-12L2 2h6z" fill="#0F9D58"/>
-          <path d="M16 2l7 12-7 12h6l7-12-7-12h-6z" fill="#4285F4"/>
-          <path d="M8 14l8-12 8 12-8 12-8-12z" fill="#FBBC04"/>
-        </svg>
-      );
-    case 'Google Calendar':
-      return (
-        <svg {...iconProps} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-          <rect x="3" y="4" width="18" height="18" rx="2" fill="#4285F4"/>
-          <rect x="3" y="4" width="18" height="4" fill="#1F73E7"/>
-          <circle cx="12" cy="14" r="3" fill="white"/>
-        </svg>
-      );
     case 'Slack':
       return (
         <svg {...iconProps} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
@@ -323,13 +300,6 @@ function getConnectorIcon(name: string): JSX.Element {
         <svg {...iconProps} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
           <path d="M12 2l7.5 22.5H4.5L12 2z" fill="#FC6D26"/>
           <path d="M12 2L4.5 24.5h3.75L12 2z" fill="#E24329"/>
-        </svg>
-      );
-    case 'Notion':
-      return (
-        <svg {...iconProps} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-          <rect x="2" y="2" width="20" height="20" fill="#000"/>
-          <text x="12" y="16" fontSize="14" fontWeight="bold" fill="white" textAnchor="middle">N</text>
         </svg>
       );
     default:

@@ -370,7 +370,7 @@ function WelcomeScreen({ tier, onNext }: { tier: Exclude<SubscriptionTierId, 'go
       headline: '5 things PawOS Team can do for your team',
       features: [
         '[done] Shared workflows — All team members use the same automations',
-        '[done] Connected tools — Gmail, Slack, Linear, Jira, and more',
+        '[done] Connected tools — GitHub, Slack, Linear, Jira, and more',
         '[done] Team analytics — Track work across your entire team',
         '[done] Consistent standards — Apply team policies and processes',
         '[done] Knowledge base — Centralized team documentation and context',
@@ -419,10 +419,10 @@ function WelcomeScreen({ tier, onNext }: { tier: Exclude<SubscriptionTierId, 'go
 
 function ConnectToolsScreen({ onNext, onSkip }: { onNext: () => void; onSkip: () => void }) {
   const tools = [
-    { name: 'Gmail', icon: '📧', description: 'Email management' },
-    { name: 'Google Drive', icon: '📁', description: 'File storage' },
+    { name: 'GitHub', icon: '🐙', description: 'Repositories and pull requests' },
     { name: 'Slack', icon: '💬', description: 'Team communication' },
-    { name: 'Google Calendar', icon: '📅', description: 'Scheduling' },
+    { name: 'Linear', icon: '📋', description: 'Issues and projects' },
+    { name: 'Jira', icon: '🎫', description: 'Tickets and workflows' },
   ];
 
   return (

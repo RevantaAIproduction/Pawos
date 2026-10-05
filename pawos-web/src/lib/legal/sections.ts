@@ -48,7 +48,7 @@ export const DEFINITIONS_SECTION = {
     '"Autonomous Ticket System" (or "Autonomous Engineering Task") means PawOS\'s workflow for autonomously investigating, planning, implementing, testing, and delivering a real engineering ticket, billed only on genuine completion (a real pull request opened and the originating ticket updated) — never for a failed, cancelled, retry-limit-reached, or approval-denied run.',
     '"Companion Runtime" means PawOS\'s 3D animated companion feature (default character "Paw," or a companion you upload or customize), including its voice, personality, and memory features.',
     '"Browser Automation" and "Desktop Automation" mean PawOS runtimes that, with your confirmation, control a real browser session or take actions on your device (files, applications, processes, terminals) on your behalf.',
-    '"Connector" means an integration (for example, Google Workspace, GitHub, GitLab, Linear, Jira, or a hosting/cloud provider) that you explicitly authorize, typically via OAuth or an API token you supply, to let PawOS take actions on a connected third-party account.',
+    '"Connector" means an integration (for example, GitHub, GitLab, Slack, Linear, Jira, or a hosting/cloud provider) that you explicitly authorize, typically via OAuth or an API token you supply, to let PawOS take actions on a connected third-party account.',
     '"Confirmation Gate" means the approval prompt PawOS shows before a destructive or production-impacting action runs, requiring your explicit confirmation before it proceeds.',
   ],
 };

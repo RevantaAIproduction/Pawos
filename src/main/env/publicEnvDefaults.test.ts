@@ -26,13 +26,18 @@ describe('PUBLIC_ENV_DEFAULTS (the packaged app has no .env)', () => {
     expect(missing).toEqual([]);
   });
 
-  it('uses the callback URLs the provider apps are registered with (same as the desktop .env)', () => {
-    expect(PUBLIC_ENV_DEFAULTS.CONNECTOR_GITHUB_CALLBACK_URL).toBe('https://pawos.revantaai.com/api/connectivity/oauth/callback/github');
-    expect(PUBLIC_ENV_DEFAULTS.CONNECTOR_SLACK_CALLBACK_URL).toBe('https://pawos.revantaai.com/api/connectivity/oauth/callback/slack');
+  it('every website callback is under /api/connectors (the URLs the provider apps are registered with)', () => {
+    expect(PUBLIC_ENV_DEFAULTS.CONNECTOR_GITHUB_CALLBACK_URL).toBe('https://pawos.revantaai.com/api/connectors/github/callback');
+    expect(PUBLIC_ENV_DEFAULTS.CONNECTOR_SLACK_CALLBACK_URL).toBe('https://pawos.revantaai.com/api/connectors/slack/callback');
     expect(PUBLIC_ENV_DEFAULTS.CONNECTOR_MICROSOFT_CALLBACK_URL).toBe('pawos://connectivity-oauth-callback');
-    // The website serves /api/connectivity/oauth/callback/<provider> as the relay back to Electron.
-    const route = path.join(__dirname, '../../../pawos-web/src/app/api/connectivity/oauth/callback/[provider]/route.ts');
-    expect(fs.readFileSync(route, 'utf8')).toContain('relayConnectivityToDesktop');
+    for (const [key, value] of Object.entries(PUBLIC_ENV_DEFAULTS)) {
+      if (/CALLBACK_URL$|REDIRECT_URL$/.test(key)) expect(value).not.toContain('/api/connectivity/');
+    }
+    // The website serves each of them and relays desktop flows back to Electron.
+    for (const provider of ['github', 'slack']) {
+      const route = path.join(__dirname, `../../../pawos-web/src/app/api/connectors/${provider}/callback/route.ts`);
+      expect(fs.readFileSync(route, 'utf8')).toMatch(/relayConnectivityToDesktop|handleConnectorCallback/);
+    }
   });
 
   it('GitLab uses the production app (callback https://pawos.revantaai.com/auth/gitlab/callback), not the localhost dev app', () => {

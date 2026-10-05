@@ -128,10 +128,10 @@ function ConnectionCard({
 /**
  * Connections — PawOS v1's exact provider list, grouped by what it is (Cloud Services /
  * Infrastructure / Runtime) instead of one flat list. Real data only: every Cloud Services
- * provider (GitHub, GitLab, Jira, Slack, Linear, Google Workspace, Vercel, Netlify, Railway) is a
+ * provider (GitHub, GitLab, Bitbucket, Jira, Slack, Linear, Vercel, Netlify, Railway) is a
  * real, registered OAuth2 `ConnectorSDK`, discovered generically via `connectivityListConnectors()`
  * — a new connector needs zero edits here. Every connector requires at least Pro (none free on Go):
- * GitHub/GitLab/Vercel/Netlify/Railway/Google Workspace/Slack require Pro; Jira/Linear require Pro
+ * GitHub/GitLab/Vercel/Netlify/Railway/Slack require Pro; Jira/Linear require Pro
  * Max — gating comes from `ipc.entitlementGetSnapshot()`'s real `features` list (see
  * CONNECTOR_REQUIRED_FEATURE), never a hardcoded plan-name check in this component.
  * Docker/Kubernetes come from the existing `listConfiguredInfraConnectors` action;

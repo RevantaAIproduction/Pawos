@@ -165,7 +165,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         heading: "Connectors and third-party services",
         paragraphs: [
-          "PawOS's Connectors let you authorize PawOS to act on third-party services (for example, Google Workspace, GitHub, or a hosting provider) on your behalf. Your use of a connected third-party service remains subject to that service's own terms. We are not responsible for the availability, accuracy, or acts of any third-party service a Connector connects to.",
+          "PawOS's Connectors let you authorize PawOS to act on third-party services (for example, GitHub, Slack, or a hosting provider) on your behalf. Your use of a connected third-party service remains subject to that service's own terms. We are not responsible for the availability, accuracy, or acts of any third-party service a Connector connects to.",
         ],
       },
       {

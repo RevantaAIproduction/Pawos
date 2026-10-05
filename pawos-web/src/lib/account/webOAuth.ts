@@ -42,7 +42,7 @@ const WEB_OAUTH_PROVIDERS: Record<string, WebOAuthProvider> = {
   github: {
     authorizationUrl: "https://github.com/login/oauth/authorize",
     scopes: ["repo", "read:org"],
-    redirectUri: "https://pawos.revantaai.com/api/connectivity/oauth/callback/github",
+    redirectUri: "https://pawos.revantaai.com/api/connectors/github/callback",
     identityUrl: "https://api.github.com/user",
     capabilities: ["readRepositories", "readPullRequests", "readIssues"],
   },

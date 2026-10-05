@@ -33,16 +33,18 @@ export const PUBLIC_ENV_DEFAULTS: Record<string, string> = {
   // OAuthManager.ts's "Missing environment variable '..._CALLBACK_URL'"
   // error, regardless of whether the user has ever heard of these vars.
   // GitLab's callback lives at /auth/gitlab/callback (same thin relay back to Electron).
-  // GitHub, Slack and Microsoft use the callback URLs their provider apps are registered with — the
-  // same values as the desktop .env (a mismatch here is what made them fail only in installed builds).
-  CONNECTOR_GITHUB_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectivity/oauth/callback/github',
+  // Every website callback lives under /api/connectors/<provider>/callback. The provider apps must be
+  // registered with exactly these URLs (a mismatch is what made GitHub fail with "redirect_uri is not
+  // associated with this application"). /api/connectivity/oauth/callback/<provider> is still served
+  // for installed builds from before the move.
+  CONNECTOR_GITHUB_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectors/github/callback',
   LINEAR_REDIRECT_URL: 'https://pawos.revantaai.com/api/connectors/linear/callback',
   // Bitbucket Cloud OAuth consumer: the Key is public (it appears in every authorize URL); the
   // consumer Secret stays on pawos-web only.
   BITBUCKET_CLIENT_ID: 'vqPbHn6Bp0hCNUIdDBXQTMuQeCSlmJer',
   BITBUCKET_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectors/bitbucket/oauth/callback',
   CONNECTOR_JIRA_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectors/jira/callback',
-  CONNECTOR_SLACK_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectivity/oauth/callback/slack',
+  CONNECTOR_SLACK_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectors/slack/callback',
   // Unset in the desktop .env, so the connector has always used OAuthManager's default redirect.
   CONNECTOR_MICROSOFT_CALLBACK_URL: 'pawos://connectivity-oauth-callback',
   CONNECTOR_VERCEL_CALLBACK_URL: 'https://pawos.revantaai.com/api/connectors/vercel/callback',

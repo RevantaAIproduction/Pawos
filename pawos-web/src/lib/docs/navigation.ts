@@ -78,7 +78,6 @@ export const DOC_NAV: DocNavSection[] = [
       { slug: 'github', title: 'GitHub' },
       { slug: 'gitlab', title: 'GitLab' },
       { slug: 'slack', title: 'Slack' },
-      { slug: 'google-workspace', title: 'Google Workspace' },
       { slug: 'vercel', title: 'Vercel' },
       { slug: 'other-connectors', title: 'Other Connectors' },
     ],

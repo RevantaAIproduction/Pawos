@@ -17,8 +17,6 @@ const CONNECTOR_NAMES: Record<string, string> = {
   vercel: "Vercel",
   netlify: "Netlify",
   railway: "Railway",
-  microsoft: "Microsoft 365",
-  googleWorkspace: "Google Workspace",
 };
 
 const PawOSLogo = () => (

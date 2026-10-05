@@ -96,23 +96,6 @@ export const connectorsPages: DocPage[] = [
   },
   {
     section: 'connectors',
-    slug: 'google-workspace',
-    title: 'Google Workspace',
-    description: 'Real Google OAuth with incremental scope requests.',
-    blocks: [
-      {
-        type: 'paragraph',
-        text: 'Uses real PKCE OAuth with incremental authorization — PawOS requests only the specific scope a capability needs (Drive, Gmail compose, Calendar, Contacts) at the point it’s actually needed, not one broad upfront grant.',
-      },
-      {
-        type: 'note',
-        text: 'Email sending is never automatic — PawOS opens a prefilled compose window; you send it yourself from your own account.',
-      },
-    ],
-    related: ['connectors/overview', 'security/credentials'],
-  },
-  {
-    section: 'connectors',
     slug: 'vercel',
     title: 'Vercel',
     description: 'Real hosting connector for deploy status and deployments.',

@@ -76,7 +76,7 @@ export default function PrivacyPage() {
               <li>Supabase for authentication and database services</li>
               <li>Payment processors for billing</li>
               <li>Cloud infrastructure providers</li>
-              <li>OAuth providers (Google, GitHub, Microsoft)</li>
+              <li>OAuth providers (Google, GitHub)</li>
             </ul>
             <p className="mt-4 text-neutral-300">
               These services are governed by their own privacy policies. We encourage you to review their policies before providing information.
