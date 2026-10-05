@@ -226,33 +226,6 @@
   background: #404040;
 }
 
-.browserBlock {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid #1f1f1f;
-}
-
-.browserButton {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  height: 42px;
-  border-radius: 8px;
-  border: 1px solid #262626;
-  background: transparent;
-  color: #e5e5e5;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.browserButton:hover:not(:disabled) {
-  background: #171717;
-}
-
 .linkButton,
 .inlineLink,
 .switchModeLink {

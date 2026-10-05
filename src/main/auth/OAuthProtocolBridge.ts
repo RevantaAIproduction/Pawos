@@ -14,8 +14,7 @@
  * second-instance argv on Windows/Linux) into handleOAuthProtocolUrl below.
  */
 
-/** 'web' is "Continue with browser" (WebSignInFlow.ts): the account signed in on PawOS Web. */
-export type OAuthProvider = 'google' | 'github' | 'microsoft' | 'web';
+export type OAuthProvider = 'google' | 'github' | 'microsoft';
 
 type PendingResolver = { resolve: (code: string) => void; reject: (error: Error) => void };
 
@@ -35,7 +34,6 @@ const PROTOCOL_HOST_TO_PROVIDER: Record<string, OAuthProvider> = {
   'google-auth-callback': 'google',
   'github-auth-callback': 'github',
   'microsoft-auth-callback': 'microsoft',
-  'web-auth-callback': 'web',
 };
 
 /**

@@ -7,8 +7,7 @@ import type http from "node:http";
 import type { User } from "@supabase/supabase-js";
 import { FakeBackend } from "../src/lib/account/testing/fakeBackend";
 import { FakeGitHub } from "../src/lib/account/testing/fakeGitHub";
-import { createHash } from "node:crypto";
-import { ANON_KEY, SERVICE_KEY, generatedLinks, revokedUsers, sessionCookie, startMockSupabase, type MockModel } from "./mockSupabase";
+import { ANON_KEY, SERVICE_KEY, revokedUsers, sessionCookie, startMockSupabase, type MockModel } from "./mockSupabase";
 
 /**
  * PawOS Web in a real browser: the real Next.js dev server, real Chromium (Playwright), a mock
@@ -112,7 +111,6 @@ beforeAll(async () => {
     net: backend.addUser("e2e-net", { subscription: { active: true, tier: "proMax" }, meta: { full_name: "Network Tester" } }),
     builder: backend.addUser("e2e-builder", { subscription: { active: true, tier: "pro" }, meta: { full_name: "Frontend Builder" } }),
     deskBuilder: backend.addUser("e2e-desk-builder", { subscription: { active: true, tier: "proMax" }, meta: { full_name: "Desk Builder" } }),
-    handoff: backend.addUser("e2e-handoff", { subscription: { active: true, tier: "pro" }, meta: { full_name: "Handoff Person" } }),
     revoked: backend.addUser("e2e-revoked", { subscription: { active: true, tier: "pro" }, meta: { full_name: "Signed Out Elsewhere" } }),
   };
   // Already connected, with a repository chosen earlier.
@@ -227,53 +225,6 @@ describe("log in and sign up", () => {
 });
 
 describe("one account across PawOS Desktop and PawOS Web", () => {
-  const verifier = "e2e-verifier-0123456789-abcdefghijklmnopqrstu";
-  const challenge = createHash("sha256").update(verifier).digest("base64url");
-
-  it("signed out: the Desktop sign-in page sends the browser to log in first, and back afterwards", async () => {
-    const { context, page } = await open(null, "desktop", `/auth/desktop?challenge=${challenge}`);
-    const url = new URL(page.url());
-    expect(url.pathname).toBe("/login");
-    expect(url.searchParams.get("next")).toBe(`/auth/desktop?challenge=${challenge}`);
-    await context.close();
-  });
-
-  it("signed in: confirming hands PawOS Desktop a one-time code that only its verifier can redeem, once", async () => {
-    const { context, page } = await open(users.handoff, "desktop", `/auth/desktop?challenge=${challenge}`);
-    await expect(page.getByTestId("desktop-account").textContent()).resolves.toContain("Handoff Person");
-    await shot(page, "desktop-sign-in-confirm");
-
-    const response = await page.request.post(`${APP}/api/auth/desktop/start`, { form: { challenge }, headers: { origin: APP } });
-    expect(response.status()).toBe(200);
-    const html = await response.text();
-    const code = html.match(/pawos:\/\/web-auth-callback\?code=([A-Za-z0-9_-]+)/)?.[1];
-    expect(code).toBeTruthy();
-    expect(generatedLinks).toContain(users.handoff.id);
-    expect(html).not.toContain("hashed-");
-
-    const wrong = await page.request.post(`${APP}/api/auth/desktop/consume`, { data: { code, verifier: "x".repeat(43) } });
-    expect(wrong.status()).toBe(400);
-    // The wrong attempt burned the code.
-    const late = await page.request.post(`${APP}/api/auth/desktop/consume`, { data: { code, verifier } });
-    expect(late.status()).toBe(400);
-
-    const again = await page.request.post(`${APP}/api/auth/desktop/start`, { form: { challenge }, headers: { origin: APP } });
-    const code2 = (await again.text()).match(/web-auth-callback\?code=([A-Za-z0-9_-]+)/)?.[1];
-    const ok = await page.request.post(`${APP}/api/auth/desktop/consume`, { data: { code: code2, verifier } });
-    expect(ok.status()).toBe(200);
-    await expect(ok.json()).resolves.toMatchObject({ ok: true, tokenHash: `hashed-${users.handoff.id}` });
-    const replay = await page.request.post(`${APP}/api/auth/desktop/consume`, { data: { code: code2, verifier } });
-    expect(replay.status()).toBe(400);
-    await context.close();
-  });
-
-  it("another site can't start the handoff", async () => {
-    const { context, page } = await open(users.handoff, "desktop", `/auth/desktop?challenge=${challenge}`);
-    const response = await page.request.post(`${APP}/api/auth/desktop/start`, { form: { challenge }, headers: { origin: "https://evil.example" } });
-    expect(response.status()).toBe(403);
-    await context.close();
-  });
-
   it("signing out in PawOS Desktop sends an open PawOS Web page to the login page", async () => {
     const { context, page } = await open(users.revoked, "desktop", "/app");
     expect(new URL(page.url()).pathname).toBe("/app");

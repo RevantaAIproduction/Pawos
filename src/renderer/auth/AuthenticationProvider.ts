@@ -8,7 +8,6 @@ import { EmailAuthProvider } from './providers/EmailAuthProvider';
 import { GoogleAuthProvider } from './providers/GoogleAuthProvider';
 import { GitHubAuthProvider } from './providers/GitHubAuthProvider';
 import { MicrosoftAuthProvider } from './providers/MicrosoftAuthProvider';
-import { BrowserAuthProvider } from './providers/BrowserAuthProvider';
 import { ipc } from '../services/ipc/ipcBridgeImplementation';
 import { getSupabaseClient } from './supabaseClient';
 import type { SharedAuthSession } from '../../shared/auth/AuthSessionSync';
@@ -68,7 +67,6 @@ export class AuthenticationProvider implements AuthService {
   private googleProvider = new GoogleAuthProvider();
   private githubProvider = new GitHubAuthProvider();
   private microsoftProvider = new MicrosoftAuthProvider();
-  private browserProvider = new BrowserAuthProvider();
 
   private setSession(user: AuthUser, rememberMe = true): void {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
@@ -110,15 +108,6 @@ export class AuthenticationProvider implements AuthService {
 
   async signInWithGithub(): Promise<AuthUser> {
     const user = await this.githubProvider.signIn();
-    await this.reconcileSubscriptionFor(user);
-    this.setSession(user);
-    await this.saveSupabaseSession();
-    return user;
-  }
-
-  /** "Continue with browser": the account already signed in on PawOS Web. */
-  async signInWithBrowser(): Promise<AuthUser> {
-    const user = await this.browserProvider.signIn();
     await this.reconcileSubscriptionFor(user);
     this.setSession(user);
     await this.saveSupabaseSession();

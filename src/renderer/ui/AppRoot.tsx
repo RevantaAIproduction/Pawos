@@ -145,8 +145,6 @@ export default function AppRoot() {
         <AuthScreen
           onSignInWithGoogle={() => goToDashboardAfter(auth.signInWithGoogle())}
           onSignInWithGithub={() => goToDashboardAfter(auth.signInWithGithub())}
-          onSignInWithBrowser={() => goToDashboardAfter(auth.signInWithBrowser())}
-          onCancelBrowserSignIn={() => ipc.authCancelWebSignIn()}
           onSignInWithMicrosoft={() => goToDashboardAfter(auth.signInWithMicrosoft())}
           onSignInWithEmail={(options) => goToDashboardAfter(auth.signInWithEmail(options))}
           onCreateEmailAccount={(options) => goToDashboardAfter(auth.createEmailAccount(options))}

@@ -65,12 +65,6 @@ export function useAuth() {
     };
   }, [user]);
 
-  const signInWithBrowser = useCallback(async () => {
-    const signedInUser = await authService.signInWithBrowser();
-    setUser(signedInUser);
-    return signedInUser;
-  }, []);
-
   const signInWithGithub = useCallback(async () => {
     const signedInUser = await authService.signInWithGithub();
     setUser(signedInUser);
@@ -129,7 +123,6 @@ export function useAuth() {
     isLoadingUser,
     signInWithGoogle,
     signInWithGithub,
-    signInWithBrowser,
     signInWithMicrosoft,
     signInWithEmail,
     createEmailAccount,
