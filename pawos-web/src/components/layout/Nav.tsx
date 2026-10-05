@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { ThemeToggle } from "./ThemeToggle";
+import { isAuthPagePath } from "../auth/AuthLayout";
 
 const NAV_ITEMS = [
   {
@@ -148,7 +149,7 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
 
   if (pathname?.startsWith("/docs") || pathname?.startsWith("/dashboard") || pathname === "/app" || pathname?.startsWith("/app/")) return null;
   const isCompanionMode = pathname === "/companion";
-  if (isCompanionMode || pathname === "/auth/desktop-success") return null;
+  if (isCompanionMode || pathname === "/auth/desktop-success" || isAuthPagePath(pathname)) return null;
 
   return (
     <div className="fixed top-0 left-0 right-0 z-50 group" onMouseLeave={() => setActiveMenu(null)}>

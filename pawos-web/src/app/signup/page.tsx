@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AuthLayout } from "../../components/auth/AuthLayout";
 import { Suspense } from "react";
 import { SignupForm } from "./SignupForm";
 
@@ -9,10 +10,10 @@ export const metadata: Metadata = {
 
 export default function SignupPage() {
   return (
-    <div className="mx-auto flex min-h-[calc(100dvh-140px)] w-full max-w-[440px] flex-col justify-center px-4 py-16">
+    <AuthLayout>
       <Suspense fallback={null}>
         <SignupForm />
       </Suspense>
-    </div>
+    </AuthLayout>
   );
 }

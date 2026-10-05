@@ -39,7 +39,12 @@ export function getTransporter() {
 }
 
 export function getFrom(): string {
-  return cleanEnv(process.env.EMAIL_FROM) ?? "PawOS <no-reply@revantaai.com>";
+  // EMAIL_FROM if set; otherwise the SMTP account itself (most providers, Gmail included, only send
+  // as the signed-in address), shown as "PawOS".
+  const from = cleanEnv(process.env.EMAIL_FROM);
+  if (from) return from;
+  const user = cleanEnv(process.env.SMTP_USER);
+  return user && user.includes("@") ? `PawOS <${user}>` : "PawOS";
 }
 
 export function wrapEmail(bodyHtml: string): string {

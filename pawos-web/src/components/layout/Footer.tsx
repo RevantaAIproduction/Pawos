@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { isAuthPagePath } from "../auth/AuthLayout";
 
 const GROUPS = [
   {
@@ -64,7 +65,7 @@ const GROUPS = [
 
 export function Footer() {
   const pathname = usePathname();
-  if (pathname?.startsWith("/docs") || pathname?.startsWith("/dashboard") || pathname === "/app" || pathname?.startsWith("/app/") || pathname === "/auth/desktop-success") return null;
+  if (pathname?.startsWith("/docs") || pathname?.startsWith("/dashboard") || pathname === "/app" || pathname?.startsWith("/app/") || pathname === "/auth/desktop-success" || isAuthPagePath(pathname)) return null;
 
   return (
     <footer className="border-t border-neutral-900 bg-black text-sm relative z-10">
