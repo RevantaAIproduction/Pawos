@@ -1,15 +1,13 @@
 import React from 'react';
 import styles from '../dashboard.module.css';
-import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import type { SubscriptionTierId } from '../../../../shared/billing/BillingTypes';
 
 /**
- * Upgrade > Team and Enterprise. Both plans are sold through sales: "Contact sales" opens the
- * website's sales page for that plan (pawos.revantaai.com/support/sales), the same page the
- * website's pricing links to. Plan facts mirror PricingConfigStore.ts and the website's pricing.
+ * Upgrade > Team and Enterprise. Both plans are sold through sales: each card's "Contact sales" —
+ * the only place it appears — opens the in-app sales page for that plan (ContactSalesPage.tsx, the
+ * same as the website's /support/sales). Plan facts mirror PricingConfigStore.ts and the website's
+ * pricing.
  */
-
-const SALES_URL = 'https://pawos.revantaai.com/support/sales';
 
 type FeatureGroup = { title: string; items: string[] };
 
@@ -76,10 +74,6 @@ const SEATS = [
 const border = '1px solid rgba(var(--pawos-overlay-rgb), 0.12)';
 const muted = { fontSize: 12, opacity: 0.6 } as const;
 
-function contactSales(plan?: OrgPlan['id']) {
-  void ipc.actionExecute({ type: 'openUrl', url: plan ? `${SALES_URL}?plan=${plan}` : SALES_URL });
-}
-
 function Check() {
   return (
     <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" style={{ flexShrink: 0, marginTop: 3, color: '#60a5fa' }}>
@@ -88,7 +82,7 @@ function Check() {
   );
 }
 
-function PlanCard({ plan, current }: { plan: OrgPlan; current: boolean }) {
+function PlanCard({ plan, current, onContactSales }: { plan: OrgPlan; current: boolean; onContactSales: (plan: OrgPlan['id']) => void }) {
   return (
     <div
       className={styles.card}
@@ -122,7 +116,7 @@ function PlanCard({ plan, current }: { plan: OrgPlan; current: boolean }) {
           type="button"
           className={styles.primaryButton}
           style={{ marginTop: 18, width: '100%', textAlign: 'center' }}
-          onClick={() => contactSales(plan.id)}
+          onClick={() => onContactSales(plan.id)}
           data-testid={`contact-sales-${plan.id}`}
         >
           Contact sales
@@ -169,25 +163,13 @@ function PlanCard({ plan, current }: { plan: OrgPlan; current: boolean }) {
   );
 }
 
-export function OrgPlansPanel({ currentTier }: { currentTier: SubscriptionTierId }) {
+export function OrgPlansPanel({ currentTier, onContactSales }: { currentTier: SubscriptionTierId; onContactSales: (plan: OrgPlan['id']) => void }) {
   return (
     <div style={{ marginTop: 28, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 20, width: '100%', maxWidth: 860 }}>
         {PLANS.map((plan) => (
-          <PlanCard key={plan.id} plan={plan} current={currentTier === plan.id} />
+          <PlanCard key={plan.id} plan={plan} current={currentTier === plan.id} onContactSales={onContactSales} />
         ))}
-      </div>
-      <div
-        className={styles.card}
-        style={{ width: '100%', maxWidth: 860, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', padding: '16px 20px' }}
-      >
-        <div>
-          <div style={{ fontSize: 13.5, fontWeight: 600 }}>Not sure which plan fits?</div>
-          <div style={{ ...muted, fontSize: 12.5, marginTop: 2 }}>We&apos;ll help you size seats and usage and plan the rollout for your organization.</div>
-        </div>
-        <button type="button" className={styles.chip} onClick={() => contactSales()}>
-          Talk to sales →
-        </button>
       </div>
     </div>
   );

@@ -552,6 +552,15 @@ export function ConversationPanel({
   const [removedTaskIds, setRemovedTaskIds] = useState<ReadonlySet<string>>(() => new Set());
   const taskPanelEntries = useMemo(() => buildTaskPanelEntries(snapshot.taskHistory, removedTaskIds), [snapshot.taskHistory, removedTaskIds]);
   const runningTaskCount = countRunning(taskPanelEntries);
+  // A task starting shows the Tasks list on the right (once per task, and never over another open
+  // panel), so running and finished work is visible next to the chat.
+  const autoOpenedTaskIdsRef = useRef<Set<string>>(new Set());
+  const newestRunningTaskId = taskPanelEntries.find((entry) => entry.status === 'running')?.id ?? null;
+  useEffect(() => {
+    if (!newestRunningTaskId || autoOpenedTaskIdsRef.current.has(newestRunningTaskId)) return;
+    autoOpenedTaskIdsRef.current.add(newestRunningTaskId);
+    setActiveWorkspacePanel((current) => current ?? 'tasks');
+  }, [newestRunningTaskId]);
   const [directoryEntries, setDirectoryEntries] = useState<CodingWorkspaceDirEntry[]>([]);
   const [directoryError, setDirectoryError] = useState<string | null>(null);
   const [selectedWorkspaceFile, setSelectedWorkspaceFile] = useState<string | null>(null);

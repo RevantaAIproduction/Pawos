@@ -15,6 +15,7 @@ import { TierCheckoutPage } from '../../billing/TierCheckoutPage';
 import { TeamCheckoutPage } from '../../billing/TeamCheckoutPage';
 import { EnterpriseCheckoutPage } from '../../billing/EnterpriseCheckoutPage';
 import { OrgPlansPanel } from './OrgPlansPanel';
+import { ContactSalesPage, type SalesPlanId } from './ContactSalesPage';
 
 const TIER_LABELS: Record<SubscriptionTierId, string> = {
   go: 'Go',
@@ -60,6 +61,7 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
   const [tierCheckoutOptions, setTierCheckoutOptions] = useState<any>(null);
   const [teamCheckoutSeatTier, setTeamCheckoutSeatTier] = useState<'standard' | 'premium' | null>(null);
   const [showEnterpriseCheckout, setShowEnterpriseCheckout] = useState(false);
+  const [salesPlan, setSalesPlan] = useState<SalesPlanId | null>(null);
   useEffect(() => {
     ipc.billingGetPricing().then(setPricing).catch(() => {});
     ipc.billingGetSubscription().then(setSubscription).catch(() => {});
@@ -81,6 +83,8 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
   const individualPlans = (pricing?.plans ?? []).filter((p) => !p.seatBased && p.id !== 'go');
   const teamPlans = (pricing?.plans ?? []).filter((p) => p.seatBased);
   const plans = tab === 'individual' ? individualPlans : teamPlans;
+
+  if (salesPlan) return <ContactSalesPage plan={salesPlan} onBack={() => setSalesPlan(null)} />;
 
   // Show Enterprise checkout page (inquiry form) when enterprise is selected
   if (showEnterpriseCheckout) {
@@ -158,7 +162,7 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
       </div>
 
       {tab === 'team' ? (
-        <OrgPlansPanel currentTier={currentTier} />
+        <OrgPlansPanel currentTier={currentTier} onContactSales={setSalesPlan} />
       ) : (
       <div
         style={{

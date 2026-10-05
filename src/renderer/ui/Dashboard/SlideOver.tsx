@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import styles from './dashboard.module.css';
+import { ResizeHandle, useResizableWidth } from '../components/ResizablePanel';
 
 /**
  * A right-side sliding drawer — the replacement for "expand a big form
@@ -17,6 +18,13 @@ export function SlideOver({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const { width, startResize, reset, nudge } = useResizableWidth({
+    storageKey: 'pawos:slideOverWidth',
+    defaultWidth: 420,
+    minWidth: 340,
+    maxWidth: (viewport) => viewport - 120,
+  });
+
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose();
@@ -28,7 +36,8 @@ export function SlideOver({
   return (
     <>
       <div className={styles.slideOverBackdrop} onClick={onClose} />
-      <div className={styles.slideOverPanel} role="dialog" aria-modal="true" aria-label={title}>
+      <div className={styles.slideOverPanel} style={{ width }} role="dialog" aria-modal="true" aria-label={title}>
+        <ResizeHandle onPointerDown={startResize} onReset={reset} onNudge={nudge} />
         <div className={styles.slideOverHeader}>
           <div>
             <h3 className={styles.slideOverTitle}>{title}</h3>

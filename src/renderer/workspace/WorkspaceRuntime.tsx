@@ -38,6 +38,7 @@ import {
 import { summarizeCodingRuntimeTask } from './CodingRuntimeCompletion';
 import { getIpcBridge } from '../services/ipc/ipcBridge';
 import { autonomousTaskBillingService } from '../organization/AutonomousTaskBillingService';
+import { ResizeHandle, useResizableWidth } from '../ui/components/ResizablePanel';
 
 /**
  * Action types that mark a task as a coding task — shape-based detection
@@ -338,6 +339,8 @@ export function WorkspaceRuntime({
   ) => Promise<{ ok: boolean; message?: string }> | void;
   onPlanDecision?: (planId: string, decision: 'approved' | 'rejected', message: string) => void;
 }) {
+  // The right-hand context column can be dragged wider or narrower (remembered).
+  const contextPanel = useResizableWidth({ storageKey: 'pawos:workspaceContextWidth', defaultWidth: 300, minWidth: 240, maxWidth: (viewport) => Math.max(240, viewport - 560) });
   const codingTask = isCodingTask(task);
   const [codingMode, setCodingMode] = useState<'go' | 'pro' | null>(null);
 
@@ -1622,7 +1625,7 @@ export function WorkspaceRuntime({
 
     return (
       <div className={styles.workspaceBorder}>
-        <div className={styles.codingWorkspaceShell}>
+        <div className={styles.codingWorkspaceShell} style={{ gridTemplateColumns: `minmax(190px, 240px) minmax(260px, 1fr) ${contextPanel.width}px` }}>
           <aside className={styles.workspaceExplorer}>
             <div className={styles.panelHeader}>
               <div>
@@ -2045,7 +2048,8 @@ export function WorkspaceRuntime({
             )}
           </main>
 
-          <aside className={styles.workspaceContext}>
+          <aside className={styles.workspaceContext} style={{ position: 'relative' }}>
+            <ResizeHandle label="Resize context panel" onPointerDown={contextPanel.startResize} onReset={contextPanel.reset} onNudge={contextPanel.nudge} />
             <div className={styles.contextScroll}>
               {renderRegion('liveExecution')}
               {contextRegions.map((id) => {

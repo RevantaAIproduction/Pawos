@@ -326,15 +326,9 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
           Team and Enterprise are designed for organizations — use your company email address. Personal
           email providers (Gmail, Outlook, Yahoo, etc.) aren't supported for organization workspaces.
         </p>
-        {/* Team and Enterprise are sold through sales — the same page as Upgrade > Team and Enterprise. */}
-        <button
-          type="button"
-          className={styles.primaryButton}
-          style={{ marginTop: 14 }}
-          onClick={() => void ipc.actionExecute({ type: 'openUrl', url: 'https://pawos.revantaai.com/support/sales' })}
-        >
-          Contact sales
-        </button>
+        <p className={styles.cardBody} style={{ marginTop: 10, fontSize: 12 }}>
+          See Team and Enterprise under Billing › Upgrade › Team and Enterprise.
+        </p>
       </div>
     );
   }

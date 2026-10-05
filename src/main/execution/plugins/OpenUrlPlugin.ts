@@ -3,6 +3,11 @@ import type { ActionRequest, ActionResult } from '../../../shared/actions/Action
 import { BasePlugin } from '../BasePlugin';
 import { describeFailure } from '../describeFailure';
 
+/** An email to PawOS itself (e.g. Contact sales → sales@revantaai.com) — never any other address. */
+export function isPawosMailto(url: string): boolean {
+  return /^mailto:[a-z0-9._-]+@revantaai\.com(\?[^\s]*)?$/i.test(url);
+}
+
 export class OpenUrlPlugin extends BasePlugin {
   id = 'openUrl';
 
@@ -12,7 +17,7 @@ export class OpenUrlPlugin extends BasePlugin {
 
   async execute(request: ActionRequest): Promise<ActionResult> {
     if (request.type !== 'openUrl') return { ok: false, reason: 'failed', message: 'Mismatched request.' };
-    if (!/^https?:\/\//i.test(request.url)) {
+    if (!/^https?:\/\//i.test(request.url) && !isPawosMailto(request.url)) {
       return { ok: false, reason: 'failed', message: 'Only http(s) URLs are allowed.' };
     }
     await shell.openExternal(request.url);

@@ -2,40 +2,15 @@ import React, { useEffect, useState } from 'react';
 import styles from './authScreen.module.css';
 import { isValidEmail, isValidPassword, MIN_PASSWORD_LENGTH } from '../../auth/validation';
 import type { EmailCreateAccountOptions, EmailSignInOptions } from '../../auth/AuthTypes';
-import signInCat from './assets/sign-in-cat.png';
-import createAccountCat from './assets/create-account-cat.png';
 import { OtpInput } from './OtpInput';
 import { Toggle } from '../Dashboard/Toggle';
-import {
-  MailIcon,
-  LockIcon,
-  PersonIcon,
-  EyeIcon,
-  EyeOffIcon,
-  ArrowRightIcon,
-  ShieldCheckIcon,
-  BoltIcon,
-  CloudIcon,
-  HeartIcon,
-  PawIcon,
-  GoogleGlyph,
-  AppleGlyph,
-  GitHubGlyph,
-} from './icons';
+import { EyeIcon, EyeOffIcon, PawIcon, GoogleGlyph, GitHubGlyph } from './icons';
 
 type Mode = 'signin' | 'create';
 type Step = 'form' | 'verify' | 'reset-code' | 'reset-new';
 const RESEND_COOLDOWN_SECONDS = 30;
 const OTP_LENGTH = 6;
 
-const COMING_SOON: { label: string; icon: React.ReactNode }[] = [];
-
-const FEATURES = [
-  { icon: <ShieldCheckIcon />, title: 'Secure & Private', body: 'Your data stays yours.' },
-  { icon: <BoltIcon />, title: 'Smart Automation', body: 'Work smarter, not harder.' },
-  { icon: <CloudIcon />, title: 'Always in Sync', body: 'Across all your devices.' },
-  { icon: <HeartIcon />, title: 'Built for You', body: 'Made with care.' },
-];
 
 export function AuthScreen({
   onSignInWithGoogle,
@@ -69,7 +44,11 @@ export function AuthScreen({
 }) {
   const [mode, setMode] = useState<Mode>('signin');
   const [step, setStep] = useState<Step>('form');
-  const [name, setName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  /** Email first ("Continue"), then the password — like PawOS Web. */
+  const [emailStep, setEmailStep] = useState<'email' | 'password'>('email');
+  const name = `${firstName.trim()} ${lastName.trim()}`.trim();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -141,6 +120,21 @@ export function AuthScreen({
     }
   };
 
+  /** Step one: the email (and the name, when creating an account). */
+  const handleContinue = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (mode === 'create' && !firstName.trim()) {
+      setError('Enter your first name.');
+      return;
+    }
+    if (!isValidEmail(email)) {
+      setError('Enter a valid email address.');
+      return;
+    }
+    setError(null);
+    setEmailStep('password');
+  };
+
   const handleEmailSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!isValidEmail(email)) {
@@ -152,8 +146,8 @@ export function AuthScreen({
       return;
     }
     if (mode === 'create') {
-      if (!name.trim()) {
-        setError('Enter your name.');
+      if (!firstName.trim()) {
+        setError('Enter your first name.');
         return;
       }
       if (password !== confirmPassword) {
@@ -294,6 +288,9 @@ export function AuthScreen({
     setOtpCode('');
     setVerifyError(null);
     setMode((m) => (m === 'signin' ? 'create' : 'signin'));
+    setEmailStep('email');
+    setPassword('');
+    setConfirmPassword('');
   };
 
   const busy = pending !== null;
@@ -301,295 +298,238 @@ export function AuthScreen({
   const resettingCode = step === 'reset-code';
   const resettingNew = step === 'reset-new';
 
+  const [title, subtitle] = verifying
+    ? ['Check your email', `We sent a ${OTP_LENGTH}-digit code to ${email}`]
+    : resettingCode
+      ? ['Reset your password', `We sent a ${OTP_LENGTH}-digit code to ${email}`]
+      : resettingNew
+        ? ['Set a new password', 'Almost done']
+        : mode === 'signin'
+          ? ['Welcome back to PawOS', 'Pick up where you left off']
+          : ['Welcome to PawOS', 'One account for Desktop and Web'];
+
+  const passwordField = (
+    value: string,
+    onChange: (value: string) => void,
+    shown: boolean,
+    toggle: () => void,
+    { id, label, placeholder, autoComplete, autoFocus }: { id: string; label: string; placeholder: string; autoComplete: string; autoFocus?: boolean }
+  ) => (
+    <div className={styles.field}>
+      <label htmlFor={id} className={styles.label}>
+        {label}
+      </label>
+      <div className={styles.inputWrap}>
+        <input
+          id={id}
+          type={shown ? 'text' : 'password'}
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={styles.input}
+          autoComplete={autoComplete}
+          autoFocus={autoFocus}
+        />
+        <button type="button" className={styles.passwordToggle} onClick={toggle} aria-label={shown ? 'Hide password' : 'Show password'}>
+          {shown ? <EyeOffIcon /> : <EyeIcon />}
+        </button>
+      </div>
+    </div>
+  );
+
+  const emailChip = (
+    <div className={styles.emailChip}>
+      <span className={styles.emailChipText}>{email}</span>
+      <button
+        type="button"
+        className={styles.linkButton}
+        onClick={() => {
+          setError(null);
+          setPassword('');
+          setConfirmPassword('');
+          setEmailStep('email');
+        }}
+        disabled={busy}
+      >
+        Change
+      </button>
+    </div>
+  );
+
   return (
     <div className={styles.screen}>
-      <div className={styles.shell}>
-        <div className={styles.visualPane}>
-          <div className={styles.speechBubble}>
-            <div className={styles.speechTitle}>
-              {verifying || resettingCode
-                ? 'Check your email!'
-                : resettingNew
-                  ? 'Almost done!'
-                  : mode === 'signin'
-                    ? 'Welcome back!'
-                    : "Let's get started!"}
+      <div className={styles.brand}>
+        <span className={styles.logoBox}>
+          <PawIcon size={16} />
+        </span>
+        PawOS
+      </div>
+
+      <main className={styles.column}>
+        <h1 className={styles.title}>{title}</h1>
+        <p className={styles.subtitle}>{subtitle}</p>
+
+        {resettingCode ? (
+          <form className={styles.form} onSubmit={handleResetCodeSubmit}>
+            <p className={styles.verifyIntro}>
+              Enter the code we sent to <strong>{email}</strong>
+              {codeExpiresInMinutes ? ` — it expires in ${codeExpiresInMinutes} minutes.` : '.'}
+            </p>
+            <OtpInput value={otpCode} onChange={setOtpCode} disabled={busy} />
+            {verifyError && <p className={styles.errorText}>{verifyError}</p>}
+            <button type="submit" className={styles.primaryButton} disabled={busy}>
+              {pending === 'email' ? 'Verifying…' : 'Verify code'}
+            </button>
+            <div className={styles.resendRow}>
+              <button type="button" className={styles.linkButton} onClick={handleBackToForm} disabled={busy}>
+                Back
+              </button>
+              <button type="button" className={styles.linkButton} onClick={handleResendResetCode} disabled={busy || resendCooldown > 0}>
+                {resendCooldown > 0 ? `Resend code (${resendCooldown}s)` : 'Resend code'}
+              </button>
             </div>
-            <div className={styles.speechBody}>
-              {verifying || resettingCode
-                ? `We sent a ${OTP_LENGTH}-digit code to ${email}.`
-                : resettingNew
-                  ? 'Choose a new password to finish resetting your account.'
-                  : mode === 'signin'
-                    ? "Good to see you again. Let's continue our journey."
-                    : 'Create your account and unlock everything.'}
+          </form>
+        ) : resettingNew ? (
+          <form className={styles.form} onSubmit={handleSetNewPassword}>
+            {passwordField(newPassword, setNewPassword, showPassword, () => setShowPassword((v) => !v), {
+              id: 'new-password',
+              label: 'New password',
+              placeholder: `At least ${MIN_PASSWORD_LENGTH} characters`,
+              autoComplete: 'new-password',
+              autoFocus: true,
+            })}
+            {passwordField(confirmNewPassword, setConfirmNewPassword, showConfirmPassword, () => setShowConfirmPassword((v) => !v), {
+              id: 'confirm-new-password',
+              label: 'Confirm new password',
+              placeholder: 'Type it again',
+              autoComplete: 'new-password',
+            })}
+            {verifyError && <p className={styles.errorText}>{verifyError}</p>}
+            <button type="submit" className={styles.primaryButton} disabled={busy}>
+              {pending === 'email' ? 'Saving…' : 'Set new password'}
+            </button>
+            <div className={styles.resendRow}>
+              <button type="button" className={styles.linkButton} onClick={handleBackToForm} disabled={busy}>
+                Cancel
+              </button>
             </div>
-          </div>
-          <div className={styles.mascotWrap}>
-            <div className={styles.mascotGlow} />
-            <img
-              src={mode === 'signin' ? signInCat : createAccountCat}
-              alt="Paw, your PawOS companion"
-              className={styles.mascotImg}
-            />
-          </div>
-        </div>
-
-        <div className={styles.formPane}>
-          <div className={styles.brand}>
-            <span className={styles.logoBox}>
-              <PawIcon size={18} />
-            </span>
-            Paw<span className={styles.brandOs}>OS</span>
-          </div>
-          <p className={styles.tagline}>
-            {verifying
-              ? 'Verify your email'
-              : resettingCode
-                ? 'Reset your password'
-                : resettingNew
-                  ? 'Set a new password'
-                  : mode === 'signin'
-                    ? 'Your companion. Your workspace. Your world.'
-                    : 'Create your account'}
-          </p>
-
-          {resettingCode ? (
-            <form className={styles.emailForm} onSubmit={handleResetCodeSubmit}>
-              <p className={styles.verifyIntro}>
-                Enter the code we sent to <strong>{email}</strong>
-                {codeExpiresInMinutes ? ` — it expires in ${codeExpiresInMinutes} minutes.` : '.'}
-              </p>
-
-              <OtpInput value={otpCode} onChange={setOtpCode} disabled={busy} />
-
-              {verifyError && <p className={styles.errorText}>{verifyError}</p>}
-
-              <button type="submit" className={styles.primaryButton} disabled={busy}>
-                {pending === 'email' ? 'Verifying…' : 'Verify Code'}
-                {!busy && <ArrowRightIcon />}
+          </form>
+        ) : verifying ? (
+          <form className={styles.form} onSubmit={handleVerifySubmit}>
+            <p className={styles.verifyIntro}>
+              Enter the code to finish creating your account
+              {codeExpiresInMinutes ? ` — it expires in ${codeExpiresInMinutes} minutes.` : '.'}
+            </p>
+            <OtpInput value={otpCode} onChange={setOtpCode} disabled={busy} />
+            {verifyError && <p className={styles.errorText}>{verifyError}</p>}
+            <button type="submit" className={styles.primaryButton} disabled={busy}>
+              {pending === 'email' ? 'Verifying…' : 'Verify and create account'}
+            </button>
+            <div className={styles.resendRow}>
+              <button type="button" className={styles.linkButton} onClick={handleBackToForm} disabled={busy}>
+                Back
               </button>
-
-              <div className={styles.resendRow}>
-                <button type="button" className={styles.linkButton} onClick={handleBackToForm} disabled={busy}>
-                  Back
-                </button>
-                <button type="button" className={styles.linkButton} onClick={handleResendResetCode} disabled={busy || resendCooldown > 0}>
-                  {resendCooldown > 0 ? `Resend code (${resendCooldown}s)` : 'Resend code'}
-                </button>
-              </div>
-            </form>
-          ) : resettingNew ? (
-            <form className={styles.emailForm} onSubmit={handleSetNewPassword}>
-              <div className={styles.inputGroup}>
-                <span className={styles.inputIcon}>
-                  <LockIcon />
-                </span>
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="New password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className={styles.emailInput}
-                  autoComplete="new-password"
-                />
-                <button
-                  type="button"
-                  className={styles.passwordToggle}
-                  onClick={() => setShowPassword((v) => !v)}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                >
-                  {showPassword ? <EyeOffIcon /> : <EyeIcon />}
-                </button>
-              </div>
-
-              <div className={styles.inputGroup}>
-                <span className={styles.inputIcon}>
-                  <LockIcon />
-                </span>
-                <input
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  placeholder="Confirm new password"
-                  value={confirmNewPassword}
-                  onChange={(e) => setConfirmNewPassword(e.target.value)}
-                  className={styles.emailInput}
-                  autoComplete="new-password"
-                />
-                <button
-                  type="button"
-                  className={styles.passwordToggle}
-                  onClick={() => setShowConfirmPassword((v) => !v)}
-                  aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
-                >
-                  {showConfirmPassword ? <EyeOffIcon /> : <EyeIcon />}
-                </button>
-              </div>
-
-              {verifyError && <p className={styles.errorText}>{verifyError}</p>}
-
-              <button type="submit" className={styles.primaryButton} disabled={busy}>
-                {pending === 'email' ? 'Saving…' : 'Set New Password'}
-                {!busy && <ArrowRightIcon />}
+              <button type="button" className={styles.linkButton} onClick={handleResend} disabled={busy || resendCooldown > 0}>
+                {resendCooldown > 0 ? `Resend code (${resendCooldown}s)` : 'Resend code'}
               </button>
-
-              <div className={styles.resendRow}>
-                <button type="button" className={styles.linkButton} onClick={handleBackToForm} disabled={busy}>
-                  Cancel
-                </button>
-              </div>
-            </form>
-          ) : verifying ? (
-            <form className={styles.emailForm} onSubmit={handleVerifySubmit}>
-              <p className={styles.verifyIntro}>
-                Enter the code we sent to <strong>{email}</strong>
-                {codeExpiresInMinutes ? ` — it expires in ${codeExpiresInMinutes} minutes.` : '.'}
-              </p>
-
-              <OtpInput value={otpCode} onChange={setOtpCode} disabled={busy} />
-
-              {verifyError && <p className={styles.errorText}>{verifyError}</p>}
-
-              <button type="submit" className={styles.primaryButton} disabled={busy}>
-                {pending === 'email' ? 'Verifying…' : 'Verify & Create Account'}
-                {!busy && <ArrowRightIcon />}
+            </div>
+          </form>
+        ) : (
+          <>
+            <div className={styles.providerRow}>
+              <button
+                type="button"
+                className={styles.providerButton}
+                onClick={handleGoogle}
+                disabled={busy}
+                aria-label="Continue with Google"
+                title={googleAvailable ? 'Continue with Google' : 'Google sign-in isn’t configured on this build'}
+              >
+                {pending === 'google' ? <span className={styles.spinner} aria-hidden="true" /> : <GoogleGlyph size={18} />}
               </button>
-
-              <div className={styles.resendRow}>
-                <button type="button" className={styles.linkButton} onClick={handleBackToForm} disabled={busy}>
-                  Back
-                </button>
-                <button type="button" className={styles.linkButton} onClick={handleResend} disabled={busy || resendCooldown > 0}>
-                  {resendCooldown > 0 ? `Resend code (${resendCooldown}s)` : 'Resend code'}
-                </button>
-              </div>
-            </form>
-          ) : (
-            <>
-              {onSignInWithBrowser && (
-                <>
-                  <button type="button" className={styles.providerButton} onClick={handleBrowser} disabled={busy} data-testid="continue-with-browser">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
-                      <circle cx="12" cy="12" r="9" />
-                      <path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z" />
-                    </svg>
-                    {pending === 'browser' ? 'Waiting for your browser…' : 'Continue with browser'}
-                  </button>
-                  <p className={styles.hint}>
-                    {pending === 'browser' ? (
-                      <>
-                        Finish in the browser window that opened — log in or sign up there if you need to.{' '}
-                        <button type="button" className={styles.linkButton} onClick={() => void onCancelBrowserSignIn?.()}>
-                          Cancel
-                        </button>
-                      </>
-                    ) : (
-                      'Already signed in on the PawOS website? Use that account here.'
-                    )}
-                  </p>
-                </>
-              )}
-              <button type="button" className={styles.providerButton} onClick={handleGoogle} disabled={busy}>
-                <GoogleGlyph size={18} />
-                {pending === 'google' ? 'Opening Google sign-in…' : 'Continue with Google'}
+              <button
+                type="button"
+                className={styles.providerButton}
+                onClick={handleGithub}
+                disabled={busy}
+                aria-label="Continue with GitHub"
+                title={githubAvailable ? 'Continue with GitHub' : 'GitHub sign-in isn’t configured on this build'}
+              >
+                {pending === 'github' ? <span className={styles.spinner} aria-hidden="true" /> : <GitHubGlyph size={18} />}
               </button>
-              {!googleAvailable && (
-                <p className={styles.hint}>
-                  Google sign-in needs a GOOGLE_CLIENT_ID configured in .env before this will work.
-                </p>
-              )}
+            </div>
+            {(pending === 'google' || pending === 'github') && <p className={styles.hint}>Finish signing in in your browser.</p>}
 
-              <button type="button" className={styles.providerButton} onClick={handleGithub} disabled={busy}>
-                <GitHubGlyph size={18} />
-                {pending === 'github' ? 'Opening GitHub sign-in…' : 'Continue with GitHub'}
-              </button>
-              {!githubAvailable && (
-                <p className={styles.hint}>
-                  GitHub sign-in needs GITHUB_REDIRECT_URI configured in .env before this will work.
-                </p>
-              )}
-
-              <div className={styles.divider}>
-                <span />
-                OR
-                <span />
-              </div>
-
-              <form className={styles.emailForm} onSubmit={handleEmailSubmit}>
+            {emailStep === 'email' ? (
+              <form className={styles.form} onSubmit={handleContinue}>
                 {mode === 'create' && (
-                  <div className={styles.inputGroup}>
-                    <span className={styles.inputIcon}>
-                      <PersonIcon />
-                    </span>
-                    <input
-                      type="text"
-                      placeholder="Full name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className={styles.emailInput}
-                      autoComplete="name"
-                    />
+                  <div className={styles.nameRow}>
+                    <div className={styles.field}>
+                      <label htmlFor="first-name" className={styles.label}>
+                        First name
+                      </label>
+                      <input
+                        id="first-name"
+                        type="text"
+                        placeholder="Your first name"
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        className={styles.input}
+                        autoComplete="given-name"
+                      />
+                    </div>
+                    <div className={styles.field}>
+                      <label htmlFor="last-name" className={styles.label}>
+                        Last name
+                      </label>
+                      <input
+                        id="last-name"
+                        type="text"
+                        placeholder="Your last name"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        className={styles.input}
+                        autoComplete="family-name"
+                      />
+                    </div>
                   </div>
                 )}
-
-                <div className={styles.inputGroup}>
-                  <span className={styles.inputIcon}>
-                    <MailIcon />
-                  </span>
+                <div className={styles.field}>
+                  <label htmlFor="email" className={styles.label}>
+                    Email
+                  </label>
                   <input
+                    id="email"
                     type="email"
-                    placeholder="Email address"
+                    placeholder="Your email address"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className={styles.emailInput}
+                    className={styles.input}
                     autoComplete="email"
                   />
                 </div>
-
-                <div className={styles.inputGroup}>
-                  <span className={styles.inputIcon}>
-                    <LockIcon />
-                  </span>
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className={styles.emailInput}
-                    autoComplete={mode === 'create' ? 'new-password' : 'current-password'}
-                  />
-                  <button
-                    type="button"
-                    className={styles.passwordToggle}
-                    onClick={() => setShowPassword((v) => !v)}
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showPassword ? <EyeOffIcon /> : <EyeIcon />}
-                  </button>
-                </div>
-
-                {mode === 'create' && (
-                  <div className={styles.inputGroup}>
-                    <span className={styles.inputIcon}>
-                      <LockIcon />
-                    </span>
-                    <input
-                      type={showConfirmPassword ? 'text' : 'password'}
-                      placeholder="Confirm password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className={styles.emailInput}
-                      autoComplete="new-password"
-                    />
-                    <button
-                      type="button"
-                      className={styles.passwordToggle}
-                      onClick={() => setShowConfirmPassword((v) => !v)}
-                      aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
-                    >
-                      {showConfirmPassword ? <EyeOffIcon /> : <EyeIcon />}
-                    </button>
-                  </div>
-                )}
+                {error && <p className={styles.errorText}>{error}</p>}
+                <button type="submit" className={styles.primaryButton} disabled={busy}>
+                  {mode === 'signin' ? 'Continue with email' : 'Continue'}
+                </button>
+              </form>
+            ) : (
+              <form className={styles.form} onSubmit={handleEmailSubmit}>
+                {emailChip}
+                {passwordField(password, setPassword, showPassword, () => setShowPassword((v) => !v), {
+                  id: 'password',
+                  label: 'Password',
+                  placeholder: mode === 'create' ? `At least ${MIN_PASSWORD_LENGTH} characters` : 'Your password',
+                  autoComplete: mode === 'create' ? 'new-password' : 'current-password',
+                  autoFocus: true,
+                })}
+                {mode === 'create' &&
+                  passwordField(confirmPassword, setConfirmPassword, showConfirmPassword, () => setShowConfirmPassword((v) => !v), {
+                    id: 'confirm-password',
+                    label: 'Confirm password',
+                    placeholder: 'Type it again',
+                    autoComplete: 'new-password',
+                  })}
 
                 {mode === 'signin' ? (
                   <div className={styles.rowBetween}>
@@ -597,21 +537,17 @@ export function AuthScreen({
                       <Toggle size="sm" checked={rememberMe} onChange={setRememberMe} />
                       Remember me
                     </label>
-                    <button type="button" className={styles.linkButton} onClick={handleForgotPassword}>
+                    <button type="button" className={styles.linkButton} onClick={handleForgotPassword} disabled={busy}>
                       Forgot password?
                     </button>
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div className={styles.legal}>
                     <label className={styles.checkboxLabel}>
                       <Toggle size="sm" checked={agreedToTerms} onChange={setAgreedToTerms} />
                       <span>
                         I agree to the{' '}
-                        <button
-                          type="button"
-                          style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}
-                          onClick={() => window.open('https://pawos.revantaai.com/terms', '_blank')}
-                        >
+                        <button type="button" className={styles.inlineLink} onClick={() => window.open('https://pawos.revantaai.com/terms', '_blank')}>
                           Terms of Service
                         </button>
                       </span>
@@ -620,83 +556,68 @@ export function AuthScreen({
                       <Toggle size="sm" checked={agreedToPrivacy} onChange={setAgreedToPrivacy} />
                       <span>
                         I acknowledge the{' '}
-                        <button
-                          type="button"
-                          style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}
-                          onClick={() => window.open('https://pawos.revantaai.com/privacy', '_blank')}
-                        >
+                        <button type="button" className={styles.inlineLink} onClick={() => window.open('https://pawos.revantaai.com/privacy', '_blank')}>
                           Privacy Policy
                         </button>
                       </span>
                     </label>
                   </div>
                 )}
-                {resetDone && (
-                  <p className={styles.hint}>Your password was reset — sign in with your new password.</p>
-                )}
-
+                {resetDone && <p className={styles.hint}>Your password was reset — log in with your new password.</p>}
+                {error && <p className={styles.errorText}>{error}</p>}
                 <button type="submit" className={styles.primaryButton} disabled={busy || (mode === 'create' && (!agreedToTerms || !agreedToPrivacy))}>
-                  {pending === 'email' ? 'Please wait…' : mode === 'create' ? 'Send Verification Code' : 'Sign In'}
-                  {!busy && <ArrowRightIcon />}
+                  {pending === 'email' ? 'Please wait…' : mode === 'create' ? 'Send verification code' : 'Log in'}
                 </button>
               </form>
+            )}
 
-              <p className={styles.switchModeText}>
-                {mode === 'signin' ? (
-                  <>
-                    New to PawOS?{' '}
-                    <button type="button" className={styles.switchModeLink} onClick={switchMode}>
-                      Create an account
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    Already have an account?{' '}
-                    <button type="button" className={styles.switchModeLink} onClick={switchMode}>
-                      Sign in
-                    </button>
-                  </>
-                )}
-              </p>
-
-              {error && <p className={styles.errorText}>{error}</p>}
-
-              {mode === 'create' && (
-                <>
-                  <div className={styles.divider}>
-                    <span />
-                    Or sign up with
-                    <span />
-                  </div>
-                  <div className={styles.socialRow}>
-                    {COMING_SOON.map(({ label, icon }) => (
-                      <button key={label} type="button" className={styles.comingSoonButton} disabled>
-                        {icon}
-                        <span>{label}</span>
-                        <span className={styles.badge}>Coming Soon</span>
+            {onSignInWithBrowser && (
+              <div className={styles.browserBlock}>
+                <button type="button" className={styles.browserButton} onClick={handleBrowser} disabled={busy} data-testid="continue-with-browser">
+                  {pending === 'browser' ? (
+                    <span className={styles.spinner} aria-hidden="true" />
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z" />
+                    </svg>
+                  )}
+                  {pending === 'browser' ? 'Waiting for your browser…' : 'Continue with browser'}
+                </button>
+                <p className={styles.hint}>
+                  {pending === 'browser' ? (
+                    <>
+                      Finish in the browser window that opened — log in or sign up there if you need to.{' '}
+                      <button type="button" className={styles.linkButton} onClick={() => void onCancelBrowserSignIn?.()}>
+                        Cancel
                       </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </>
-          )}
-        </div>
-      </div>
+                    </>
+                  ) : (
+                    'Already signed in on the PawOS website? Use that account here.'
+                  )}
+                </p>
+              </div>
+            )}
 
-      <div className={styles.featureBar}>
-        {FEATURES.map((f) => (
-          <div key={f.title} className={styles.featureItem}>
-            <span className={styles.featureIcon}>{f.icon}</span>
-            <div>
-              <div className={styles.featureTitle}>{f.title}</div>
-              <div className={styles.featureBody}>{f.body}</div>
-            </div>
-          </div>
-        ))}
-      </div>
+            <p className={styles.switchModeText}>
+              {mode === 'signin' ? 'Don’t have an account?' : 'Already have an account?'}{' '}
+              <button type="button" className={styles.switchModeLink} onClick={switchMode} disabled={busy}>
+                {mode === 'signin' ? 'Sign up' : 'Log in'}
+              </button>
+            </p>
+          </>
+        )}
+      </main>
 
-      <p className={styles.copyright}>© {new Date().getFullYear()} PawOS. All rights reserved.</p>
+      <p className={styles.footer}>
+        <button type="button" className={styles.inlineLink} onClick={() => window.open('https://pawos.revantaai.com/terms', '_blank')}>
+          Terms of Service
+        </button>{' '}
+        and{' '}
+        <button type="button" className={styles.inlineLink} onClick={() => window.open('https://pawos.revantaai.com/privacy', '_blank')}>
+          Privacy Policy
+        </button>
+      </p>
     </div>
   );
 }
