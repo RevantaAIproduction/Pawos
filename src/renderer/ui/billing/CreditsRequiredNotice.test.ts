@@ -80,4 +80,13 @@ describe('getExhaustionPrimaryActions — exactly two (or fewer) tier-determined
       }
     }
   });
+
+  it('a Team or Enterprise member who is not an admin can only contact their admin', () => {
+    expect(getExhaustionPrimaryActions('team', 'standard', false, true, undefined, false, true)).toEqual([
+      { id: 'contactAdmin', label: 'Contact Organization Administrator' },
+    ]);
+    expect(getExhaustionPrimaryActions('enterprise', undefined, true, true, undefined, false, true).map((a) => a.id)).toEqual(['contactAdmin']);
+    // Admins still see the purchase path.
+    expect(getExhaustionPrimaryActions('team', 'standard', false, true).map((a) => a.id)).toEqual(['upgrade', 'buyCompute']);
+  });
 });

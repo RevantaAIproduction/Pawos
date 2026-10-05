@@ -22,8 +22,13 @@ export function getExhaustionPrimaryActions(
   pooled: boolean,
   enterpriseContactAvailable: boolean,
   proMaxVariant?: '5x' | '20x',
-  buildFinalWeek = false
+  buildFinalWeek = false,
+  /** Team / Enterprise member (not an admin): their admins buy, so the only way on is asking them. */
+  purchasesByAdmin = false
 ): PrimaryAction[] {
+  if (purchasesByAdmin && (tier === 'team' || tier === 'enterprise')) {
+    return [{ id: 'contactAdmin', label: 'Contact Organization Administrator' }];
+  }
   if (pooled) {
     // Enterprise: no personal purchase flow, no upgrade (already the top tier) — the org's pool is
     // shared and administrator-controlled.
@@ -96,6 +101,7 @@ export function CreditsRequiredNotice({
   buildFinalWeek = false,
   pooled,
   enterpriseContactAvailable = true,
+  purchasesByAdmin = false,
   onDismiss,
   onUpgrade,
   onBuyCompute,
@@ -114,6 +120,8 @@ export function CreditsRequiredNotice({
   pooled: boolean;
   /** Whether the Pro Max → Enterprise "Contact Sales" path is reachable from this screen. Defaults to true (the real pawos-web /enterprise page). */
   enterpriseContactAvailable?: boolean;
+  /** Team / Enterprise member (not an admin): only "Contact Organization Administrator". */
+  purchasesByAdmin?: boolean;
   onDismiss: () => void;
   /** Opens the in-app upgrade flow for the next tier up. Omit where there's no real navigation target yet. */
   onUpgrade?: () => void;
@@ -137,7 +145,7 @@ export function CreditsRequiredNotice({
       ? "You've used this week's included Paw Compute. Wait for your weekly reset or buy Paw Compute to keep going — everything else keeps working."
       : "You've used this week's included Paw Compute. Wait for your weekly reset, buy Paw Compute, or upgrade your plan to keep going — everything else keeps working.";
 
-  const actions = getExhaustionPrimaryActions(tier, seatTier, pooled, enterpriseContactAvailable, proMaxVariant, buildFinalWeek);
+  const actions = getExhaustionPrimaryActions(tier, seatTier, pooled, enterpriseContactAvailable, proMaxVariant, buildFinalWeek, purchasesByAdmin);
   const handlers: Record<PrimaryActionId, (() => void) | undefined> = {
     upgrade: onUpgrade,
     buyCompute: onBuyCompute,

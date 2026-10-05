@@ -210,6 +210,7 @@ export function Sidebar({
   onProfileAction,
   onOpenUrl,
   isAdmin = false,
+  purchasesByAdmin = false,
 }: {
   active: SectionId;
   onSelect: (id: SectionId) => void;
@@ -224,6 +225,8 @@ export function Sidebar({
   onOpenUrl: (url: string) => void;
   /** Signed in with a PawOS admin email — shows the Admin entry (actions are still server-authorized). */
   isAdmin?: boolean;
+  /** Team / Enterprise member: their admins buy, so "Upgrade plan" becomes "Plan & usage". */
+  purchasesByAdmin?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -366,6 +369,7 @@ export function Sidebar({
           onAction={onProfileAction}
           onOpenUrl={onOpenUrl}
           compact={collapsed}
+          purchasesByAdmin={purchasesByAdmin}
         />
       </div>
     </aside>

@@ -33,6 +33,8 @@ import { ipc as ipcBridge } from '../../services/ipc/ipcBridgeImplementation';
 import { useEntitlementSnapshot } from '../../billing/useEntitlementSnapshot';
 import { BuildAccessBanner } from '../billing/BuildAccessBanner';
 import { formatPlanName } from '../../billing/EntitlementDisplay';
+import { useOrganizationBilling } from '../../organization/useOrganizationBilling';
+import { OrganizationMemberBilling } from '../billing/OrganizationMemberBilling';
 
 const TIER_LABELS: Record<EffectiveTierId, string> = {
   build: 'PawOS Build',
@@ -57,6 +59,9 @@ export function Dashboard({
   onCompletePasswordReset: (resetToken: string, newPassword: string) => Promise<{ ok: boolean; reason?: string }>;
 }) {
   const ipc = useIpcBridge();
+  // Team / Enterprise members don't buy: their organization's owner or billing admins do.
+  const { billing: orgBilling } = useOrganizationBilling(user);
+  const purchasesByAdmin = !!orgBilling && !orgBilling.isAdmin;
   const [active, setActive] = useState<SectionId>('home');
   // Real navigation history (not a fabricated stack) — every section change goes through
   // navigateTo() below, which pushes the section being left onto this before switching, so Back
@@ -202,7 +207,8 @@ export function Dashboard({
         openSettingsTab('Home');
         break;
       case 'upgrade':
-        navigateTo('upgrade');
+        if (purchasesByAdmin) openSettingsTab('Billing');
+        else navigateTo('upgrade');
         break;
       case 'logout':
         onSignOut();
@@ -234,6 +240,7 @@ export function Dashboard({
         onProfileAction={handleProfileAction}
         onOpenUrl={openUrl}
         isAdmin={isAdmin}
+        purchasesByAdmin={purchasesByAdmin}
       />
       <main className={styles.main}>
         <div className={styles.topBar}>
@@ -295,7 +302,12 @@ export function Dashboard({
               onOpenSupportMessages={openSupportMessages}
             />
           )}
-          {active === 'upgrade' && <UpgradeSection onBack={() => openSettingsTab('Billing')} />}
+          {active === 'upgrade' &&
+            (purchasesByAdmin && orgBilling ? (
+              <OrganizationMemberBilling billing={orgBilling} />
+            ) : (
+              <UpgradeSection onBack={() => openSettingsTab('Billing')} />
+            ))}
         </div>
       </main>
       {!helpWidgetOpen && (

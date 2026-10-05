@@ -5,6 +5,7 @@ import type { ConversationSnapshot, ConversationTaskAction, ConversationTaskReco
 import { conversationStateLabels } from './ConversationTypes';
 import { getLatestDevBrowserConsole, getLatestScreenshot } from './TaskCard';
 import { ProjectPlanCard } from './ProjectPlanCard';
+import { useCurrentUserOrganizationBilling } from '../organization/useOrganizationBilling';
 import { isProjectPlanMessage } from './ProjectPlanningUX';
 import { SupportPersonaIndicator, useSupportPersona } from './SupportPersonaIndicator';
 import { isSupportRequest } from '../../shared/support/SupportTrigger';
@@ -477,6 +478,8 @@ export function ConversationPanel({
   const [hamburgerMenuOpen, setHamburgerMenuOpen] = useState(false);
   const [threeDotsMenuOpen, setThreeDotsMenuOpen] = useState(false);
   const [userEmail, setUserEmail] = useState<string>('');
+  // Team / Enterprise members can't buy — their admins do (see CreditsRequiredNotice).
+  const orgBilling = useCurrentUserOrganizationBilling();
   const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [permissionsOpen, setPermissionsOpen] = useState(false);
@@ -1702,6 +1705,7 @@ export function ConversationPanel({
       <CreditsRequiredNotice
         tier={creditsNoticeTier}
         seatTier={creditsNoticeSeatTier}
+        purchasesByAdmin={!!orgBilling && !orgBilling.isAdmin}
         proMaxVariant={entitlement?.proMaxVariant}
         buildFinalWeek={entitlement?.buildFinalWeek ?? false}
         pooled={creditsNoticePooled ?? false}

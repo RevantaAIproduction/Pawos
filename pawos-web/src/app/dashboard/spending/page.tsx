@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAccountContext } from "../../../lib/account/accountContext";
 import { PageHeader, Panel, Row, SectionLabel, formatDate, primaryButton, secondaryButton } from "../../../components/dashboard/ui";
+import { orgBilling } from "../../../lib/account/orgBilling";
 
 export const metadata: Metadata = { title: "Spending" };
 
@@ -27,6 +28,7 @@ export default async function DashboardSpendingPage() {
 
   const planEnds = formatDate(account.subscriptionExpiresAt);
   const canUpgrade = account.tier === "go" || account.tier === "pro" || account.tier === "build";
+  const org = orgBilling(account);
 
   return (
     <>
@@ -43,11 +45,21 @@ export default async function DashboardSpendingPage() {
                   {account.proMaxVariant && <span className="ml-2 font-normal text-neutral-500">{account.proMaxVariant}</span>}
                 </>
               }
-              hint={planEnds ? `Current period ends ${planEnds}.` : "No paid subscription period on this account."}
+              hint={
+                org
+                  ? org.isAdmin
+                    ? `${org.organization.name} · ${org.roleLabel}. You manage purchases for your organization.`
+                    : `${org.organization.name} · ${org.roleLabel}. Your organization's admins handle purchases — ask them if you need more usage.`
+                  : planEnds
+                    ? `Current period ends ${planEnds}.`
+                    : "No paid subscription period on this account."
+              }
             >
-              <Link href="/pricing" className={canUpgrade ? primaryButton : secondaryButton}>
-                {canUpgrade ? "Upgrade plan" : "View plans"}
-              </Link>
+              {org && !org.isAdmin ? null : (
+                <Link href="/pricing" className={canUpgrade ? primaryButton : secondaryButton}>
+                  {canUpgrade ? "Upgrade plan" : "View plans"}
+                </Link>
+              )}
             </Row>
           </Panel>
         </section>

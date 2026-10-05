@@ -7,6 +7,7 @@ import { getCompanion } from "../../lib/account/companionCatalog";
 import { getRecentActivity, getUsageActivity, getUsageOverview } from "../../lib/account/usage";
 import { getAllowance } from "../../lib/webChat/webChat";
 import { Card, CardTitle, PageHeader, formatDate, primaryButton, secondaryButton } from "../../components/dashboard/ui";
+import { orgBilling } from "../../lib/account/orgBilling";
 
 function UsageBar({ percent }: { percent: number }) {
   return (
@@ -33,6 +34,7 @@ export default async function DashboardOverviewPage() {
   const companionName = companion?.displayName ?? profile?.customCompanionName ?? null;
   const connected = integrations?.filter((integration) => integration.connection === "connected") ?? [];
   const canUpgrade = account.tier === "go" || account.tier === "pro" || account.tier === "build";
+  const org = orgBilling(account);
   const planEnds = formatDate(account.subscriptionExpiresAt);
 
   // The plan's own allowance leads the page; purchased or bonus allowances are listed under it.
@@ -76,10 +78,21 @@ export default async function DashboardOverviewPage() {
             {account.proMaxVariant && <span className="text-sm text-neutral-500">{account.proMaxVariant}</span>}
           </div>
           <p className="mt-3 text-sm text-neutral-300">
-            {planEnds ? `Current period ends ${planEnds}.` : account.tier === "go" ? "The free PawOS plan." : "Managed through your organization or PawOS."}
+            {org
+              ? `${org.organization.name} · ${org.roleLabel}`
+              : planEnds
+                ? `Current period ends ${planEnds}.`
+                : account.tier === "go"
+                  ? "The free PawOS plan."
+                  : "Managed through PawOS."}
           </p>
+          {org && !org.isAdmin && (
+            <p className="mt-2 text-sm text-neutral-500" data-testid="org-member-billing">
+              Your organization&apos;s admins handle purchases. Ask them if you need more usage.
+            </p>
+          )}
           <div className="mt-5 flex flex-wrap gap-2">
-            {canUpgrade ? (
+            {org && !org.isAdmin ? null : canUpgrade ? (
               <Link href="/pricing" className={primaryButton}>
                 Upgrade plan
               </Link>

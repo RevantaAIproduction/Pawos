@@ -29,6 +29,7 @@ export function ProfileMenu({
   onAction,
   onOpenUrl,
   compact,
+  purchasesByAdmin = false,
 }: {
   userName: string;
   tierLabel: string;
@@ -37,6 +38,8 @@ export function ProfileMenu({
   onOpenUrl: (url: string) => void;
   /** Sidebar is collapsed to icons-only — show just the avatar in the trigger, no name/tier text. */
   compact?: boolean;
+  /** Team / Enterprise member: their admins buy, so the item opens their plan and usage instead. */
+  purchasesByAdmin?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<PanelView>('main');
@@ -106,7 +109,7 @@ export function ProfileMenu({
 
               <div className={styles.profileMenuDivider} />
               <button type="button" role="menuitem" className={styles.profileMenuItem} onClick={() => { close(); onAction('upgrade'); }}>
-                {isGuest ? 'Create free account' : 'Upgrade plan'}
+                {isGuest ? 'Create free account' : purchasesByAdmin ? 'Plan & usage' : 'Upgrade plan'}
               </button>
               <button type="button" role="menuitem" className={styles.profileMenuItem} onClick={() => setView('learnMore')}>
                 <span className={styles.profileMenuItemIcon}><InfoIcon /></span>

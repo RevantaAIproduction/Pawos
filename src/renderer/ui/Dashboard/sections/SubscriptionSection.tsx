@@ -13,6 +13,8 @@ import {
 import { useEntitlementSnapshot } from '../../../billing/useEntitlementSnapshot';
 import { PendingBillingNotice, isPendingBilling } from '../../billing/PendingBillingNotice';
 import { describeBuildAccess, formatDate, formatPlanName, formatTierLabel } from '../../../billing/EntitlementDisplay';
+import { useOrganizationBilling } from '../../../organization/useOrganizationBilling';
+import { OrganizationMemberBilling } from '../../billing/OrganizationMemberBilling';
 
 const TIER_LABELS: Record<SubscriptionTierId, string> = {
   go: 'Go',
@@ -51,6 +53,8 @@ export function SubscriptionSection({
   const [pendingBillingHidden, setPendingBillingHidden] = useState(false);
   const currentTier: SubscriptionTierId = subscription?.tier ?? 'go';
   const billingEmail = user.email ?? '';
+  // Team / Enterprise: only the organization's owner or billing admins buy; members see plan + usage.
+  const { loading: orgLoading, billing: orgBilling } = useOrganizationBilling(user);
 
   const refresh = async () => {
     ipc.billingGetPricing().then(setPricing).catch(() => {});
@@ -73,8 +77,16 @@ export function SubscriptionSection({
     refresh();
   }, []);
 
+  if (orgLoading) return <p style={{ opacity: 0.6, fontSize: '0.9em' }}>Loading your plan…</p>;
+  if (orgBilling && !orgBilling.isAdmin) return <OrganizationMemberBilling billing={orgBilling} />;
+
   return (
     <div>
+      {orgBilling?.isAdmin && (
+        <p style={{ margin: '0 0 12px', fontSize: '0.85em', opacity: 0.7 }} data-testid="org-admin-billing">
+          You manage purchases for {orgBilling.organization.name} ({orgBilling.roleLabel}) — plans, seats and credits for your members.
+        </p>
+      )}
       <div style={{
         background: "rgba(255, 255, 255, 0.03)",
         borderRadius: 8,
