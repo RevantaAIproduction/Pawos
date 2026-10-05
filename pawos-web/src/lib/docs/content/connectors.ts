@@ -68,7 +68,7 @@ export const connectorsPages: DocPage[] = [
         text: 'You can connect GitHub from PawOS Desktop or from the web, including on your phone (Dashboard → Integrations). It is the same connection everywhere.',
       },
     ],
-    related: ['autonomous-work/connectors', 'connectors/gitlab', 'getting-started/web-and-mobile'],
+    related: ['autonomous-work/connectors', 'connectors/gitlab', 'connectors/bitbucket', 'getting-started/web-and-mobile'],
   },
   {
     section: 'connectors',
@@ -85,6 +85,34 @@ export const connectorsPages: DocPage[] = [
       },
     ],
     related: ['autonomous-work/connectors', 'connectors/github'],
+  },
+  {
+    section: 'connectors',
+    slug: 'bitbucket',
+    title: 'Bitbucket Cloud',
+    description: 'Connect your Bitbucket Cloud workspaces for repositories and pull requests.',
+    blocks: [
+      {
+        type: 'list',
+        items: [
+          'List and read repositories in your Bitbucket Cloud workspaces',
+          'List and read pull requests, including AI PR review',
+        ],
+      },
+      {
+        type: 'note',
+        text: 'Bitbucket Cloud is available on Paw Team and Paw Enterprise.',
+      },
+      {
+        type: 'tip',
+        text: 'You can connect Bitbucket Cloud from PawOS Desktop (Settings → Connections) or from the web, including on your phone (Dashboard → Integrations). It is the same connection everywhere, and you can disconnect it from either.',
+      },
+      {
+        type: 'paragraph',
+        text: 'Changing code from PawOS Web and your phone (Code mode) works with GitHub repositories. Bitbucket Cloud is used for reading repositories and pull requests.',
+      },
+    ],
+    related: ['autonomous-work/connectors', 'connectors/github', 'connectors/gitlab'],
   },
   {
     section: 'connectors',

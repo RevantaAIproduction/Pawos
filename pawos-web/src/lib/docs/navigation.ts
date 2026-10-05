@@ -77,6 +77,7 @@ export const DOC_NAV: DocNavSection[] = [
       { slug: 'linear', title: 'Linear' },
       { slug: 'github', title: 'GitHub' },
       { slug: 'gitlab', title: 'GitLab' },
+      { slug: 'bitbucket', title: 'Bitbucket Cloud' },
       { slug: 'slack', title: 'Slack' },
       { slug: 'vercel', title: 'Vercel' },
       { slug: 'other-connectors', title: 'Other Connectors' },
