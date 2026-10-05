@@ -184,7 +184,7 @@ describe("boundaries the code must keep", () => {
   });
 
   it("the web-started OAuth flow never uses a loopback address", () => {
-    const flow = read("lib/account/webOAuth.ts") + read("lib/account/webOAuthCallback.ts") + read("app/api/connectors/bitbucket/oauth/callback/route.ts") + read("app/api/connectors/github/callback/route.ts");
+    const flow = read("lib/account/webOAuth.ts") + read("lib/account/webOAuthCallback.ts") + read("app/api/connectors/bitbucket/oauth/callback/route.ts") + read("app/api/connectors/github/callback/route.ts") + read("app/api/connectivity/oauth/callback/[provider]/route.ts");
     expect(flow).not.toMatch(/127\.0\.0\.1|localhost|51900|loopback/i);
   });
 
@@ -254,7 +254,7 @@ describe("OAuth on the web and on phones", () => {
   it("returning from the provider re-reads the server's connection state, including from the back/forward cache", () => {
     const callback = read("lib/account/webOAuthCallback.ts");
     expect(callback).toMatch(/\/dashboard\/integrations\?integration=\$\{connectorId\}&status=\$\{status\}/);
-    for (const route of ["app/api/connectors/bitbucket/oauth/callback/route.ts", "app/api/connectors/github/callback/route.ts"]) expect(read(route)).toContain("handleConnectorCallback");
+    for (const route of ["app/api/connectors/bitbucket/oauth/callback/route.ts", "app/api/connectors/github/callback/route.ts", "app/api/connectivity/oauth/callback/[provider]/route.ts"]) expect(read(route)).toContain("handleConnectorCallback");
     const list = read("app/dashboard/integrations/IntegrationsList.tsx");
     expect(list).toMatch(/pageshow/);
     expect(list).toMatch(/router\.refresh\(\)/);

@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { relayConnectivityToDesktop } from "../desktopRelay";
 import { getAccountContext } from "./accountContext";
 import { isIntegrationEntitled } from "./integrations";
-import { WEB_OAUTH_STATE_COOKIE, completeWebOAuth, isWebOAuthState, webOAuthCookieValue } from "./webOAuth";
+import { WEB_OAUTH_STATE_COOKIE, WEB_OAUTH_STATE_COOKIE_PATH, completeWebOAuth, isWebOAuthState, webOAuthCookieValue } from "./webOAuth";
 
 /** Same reasoning as auth/callback/route.ts: behind the reverse proxy, request.url's origin is not the public one. */
 function resolveOrigin(request: Request): string {
@@ -37,7 +37,7 @@ export async function handleConnectorCallback(request: Request, connectorId: str
   const origin = resolveOrigin(request);
   const finish = (status: "connected" | "denied" | "failed" | "expired" | "not_entitled" | "not_configured") => {
     const response = NextResponse.redirect(`${origin}/dashboard/integrations?integration=${connectorId}&status=${status}`);
-    response.cookies.set(WEB_OAUTH_STATE_COOKIE, "", { path: "/api/connectors", maxAge: 0 });
+    response.cookies.set(WEB_OAUTH_STATE_COOKIE, "", { path: WEB_OAUTH_STATE_COOKIE_PATH, maxAge: 0 });
     return response;
   };
 
@@ -51,7 +51,7 @@ export async function handleConnectorCallback(request: Request, connectorId: str
   const account = await getAccountContext();
   if (!account) {
     const response = NextResponse.redirect(`${origin}/login`);
-    response.cookies.set(WEB_OAUTH_STATE_COOKIE, "", { path: "/api/connectors", maxAge: 0 });
+    response.cookies.set(WEB_OAUTH_STATE_COOKIE, "", { path: WEB_OAUTH_STATE_COOKIE_PATH, maxAge: 0 });
     return response;
   }
   if (!isIntegrationEntitled(account, connectorId)) return finish("not_entitled");

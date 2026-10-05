@@ -21,6 +21,8 @@ import { getConnectivityOAuthProviderConfig } from "../connectivityOAuthProvider
 
 export const WEB_OAUTH_STATE_COOKIE = "pawos_connector_oauth";
 export const WEB_OAUTH_STATE_MAX_AGE_SECONDS = 600;
+/** Wide enough to reach every connector callback (/api/connectors/… and /api/connectivity/oauth/callback/…). */
+export const WEB_OAUTH_STATE_COOKIE_PATH = "/api";
 const WEB_STATE_PREFIX = "web.";
 
 interface WebOAuthProvider {
@@ -34,11 +36,13 @@ interface WebOAuthProvider {
 
 const WEB_OAUTH_PROVIDERS: Record<string, WebOAuthProvider> = {
   // The connector OAuth app (CONNECTOR_GITHUB_CLIENT_ID/SECRET) — the same one, the same scopes and
-  // the same registered callback the desktop app's GitHubConnectorSDK uses.
+  // the same registered callback the desktop app's GitHubConnectorSDK uses
+  // (CONNECTOR_GITHUB_CALLBACK_URL in src/main/env/publicEnvDefaults.ts). A GitHub OAuth App accepts
+  // only its registered callback URL, so this must stay identical to it.
   github: {
     authorizationUrl: "https://github.com/login/oauth/authorize",
     scopes: ["repo", "read:org"],
-    redirectUri: "https://pawos.revantaai.com/api/connectors/github/callback",
+    redirectUri: "https://pawos.revantaai.com/api/connectivity/oauth/callback/github",
     identityUrl: "https://api.github.com/user",
     capabilities: ["readRepositories", "readPullRequests", "readIssues"],
   },

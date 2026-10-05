@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { rejectCrossOrigin, requireAccount } from "../../../../../lib/account/api";
 import { disconnectIntegration, getIntegration, isIntegrationEntitled, listIntegrations } from "../../../../../lib/account/integrations";
-import { WEB_OAUTH_STATE_COOKIE, WEB_OAUTH_STATE_MAX_AGE_SECONDS, beginWebOAuth, supportsWebOAuth, webOAuthCookieValue } from "../../../../../lib/account/webOAuth";
+import { WEB_OAUTH_STATE_COOKIE, WEB_OAUTH_STATE_COOKIE_PATH, WEB_OAUTH_STATE_MAX_AGE_SECONDS, beginWebOAuth, supportsWebOAuth, webOAuthCookieValue } from "../../../../../lib/account/webOAuth";
 
 type RouteProps = { params: Promise<{ connectorId: string }> };
 
@@ -48,7 +48,7 @@ export async function POST(request: Request, props: RouteProps) {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax", // the provider's redirect back is a top-level navigation
-      path: "/api/connectors",
+      path: WEB_OAUTH_STATE_COOKIE_PATH,
       maxAge: WEB_OAUTH_STATE_MAX_AGE_SECONDS,
     });
     return response;

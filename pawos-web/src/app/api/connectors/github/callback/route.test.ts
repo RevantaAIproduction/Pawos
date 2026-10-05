@@ -20,11 +20,15 @@ vi.mock("../../../../../lib/account/accountContext", async (importOriginal) => {
 });
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: (name: string) => (state.cookie ? { name, value: state.cookie } : undefined) }) }));
 
-import { GET as callback } from "./route";
+import { GET as legacyCallback } from "./route";
+import { GET as registeredCallback } from "../../../connectivity/oauth/callback/[provider]/route";
 import { POST as startConnect } from "../../../dashboard/integrations/[connectorId]/route";
 
 const HOST = "pawos.revantaai.com";
-const CALLBACK = `https://${HOST}/api/connectors/github/callback`;
+// The callback the GitHub connector OAuth app is registered with (CONNECTOR_GITHUB_CALLBACK_URL);
+// GitHub refuses any other redirect_uri ("The redirect_uri is not associated with this application").
+const CALLBACK = `https://${HOST}/api/connectivity/oauth/callback/github`;
+const callback = (request: Request) => registeredCallback(request, { params: Promise.resolve({ provider: "github" }) });
 const callbackRequest = (query: Record<string, string>) => new Request(`${CALLBACK}?${new URLSearchParams(query)}`, { headers: { host: HOST, "x-forwarded-proto": "https" } });
 const startRequest = () => new Request(`https://${HOST}/api/dashboard/integrations/github`, { method: "POST", headers: { host: HOST, origin: `https://${HOST}` } });
 const github = { params: Promise.resolve({ connectorId: "github" }) };
@@ -95,5 +99,10 @@ describe("connecting GitHub from PawOS Web", () => {
     const html = await (await callback(callbackRequest({ code: "desktop-code", state: "desktop-request-id" }))).text();
     expect(html).toContain("http://127.0.0.1:51900/callback?code=desktop-code&amp;state=desktop-request-id");
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("the old /api/connectors/github/callback path still relays desktop flows", async () => {
+    const request = new Request(`https://${HOST}/api/connectors/github/callback?code=desktop-code&state=desktop-request-id`, { headers: { host: HOST } });
+    expect(await (await legacyCallback(request)).text()).toContain("http://127.0.0.1:51900/callback?code=desktop-code&amp;state=desktop-request-id");
   });
 });

@@ -74,7 +74,7 @@ async function start(): Promise<{ state: string; authorizeUrl: URL }> {
   const setCookie = response.headers.get("set-cookie") ?? "";
   state.cookie = decodeURIComponent(setCookie.split(";")[0].split("=").slice(1).join("="));
   expect(setCookie).toMatch(/HttpOnly/i);
-  expect(setCookie).toMatch(/Path=\/api\/connectors/i);
+  expect(setCookie).toMatch(/Path=\/api;/i);
   return { state: authorizeUrl.searchParams.get("state") ?? "", authorizeUrl };
 }
 
