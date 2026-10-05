@@ -253,7 +253,7 @@ export function promptTooLongFor(account: Pick<AccountContext, "tier">, text: st
   if (account.tier !== "go") return null;
   const lines = text.trim().split(/\r?\n/).length;
   if (lines <= WEB_POLICY.goMaxPromptLines && text.trim().length <= WEB_POLICY.goMaxPromptChars) return null;
-  return `On Paw Go, PawOS Web accepts short prompts only — up to ${WEB_POLICY.goMaxPromptLines} lines (${WEB_POLICY.goMaxPromptChars} characters). Try a small request like "change the heading to …", or upgrade for longer ones.`;
+  return `On Paw Go, PawOS Web accepts short prompts only — up to ${WEB_POLICY.goMaxPromptLines} lines (${WEB_POLICY.goMaxPromptChars} characters). Upgrade for longer ones.`;
 }
 
 /**

@@ -844,7 +844,7 @@ export function WorkspaceChat({
 
         {promptTooLong && promptLimit && (
           <p role="alert" className="mt-3 text-sm text-amber-300" data-testid="prompt-limit">
-            On Paw Go, PawOS Web accepts short prompts only — up to {promptLimit.lines} lines ({promptLimit.chars} characters). Try a small request like &ldquo;change the heading to …&rdquo;.{" "}
+            On Paw Go, PawOS Web accepts short prompts only — up to {promptLimit.lines} lines ({promptLimit.chars} characters).{" "}
             <Link href="/pricing" className="font-medium text-amber-200 underline underline-offset-2">
               Upgrade
             </Link>{" "}
