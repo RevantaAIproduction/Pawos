@@ -24,8 +24,7 @@ import { OrganizationTasksCard } from './OrganizationTasksCard';
 import { SsoSettingsCard } from './SsoSettingsCard';
 import { AutonomousTaskBillingCard } from './AutonomousTaskBillingCard';
 import { OrganizationRolesCard } from './OrganizationRolesCard';
-import { MemberCreditRequestPanel } from '../../components/MemberCreditRequestPanel';
-import { AdminCreditManagementPanel } from '../../components/AdminCreditManagementPanel';
+import { GivePawComputePanel, GivenToYouCard } from '../../billing/GivePawComputePanel';
 import { AdminLogoManager } from '../../components/AdminLogoManager';
 import { OrganizationLogo } from '../../components/OrganizationLogo';
 import { credentialVaultService } from '../../../organization/CredentialVaultService';
@@ -62,7 +61,7 @@ const ORG_SECTION_TILES: SectionTileDef[] = [
   { id: 'temporaryPermissions', title: 'Temporary Permissions', description: 'Grant a capability to a member for a limited time.', icon: HistoryIcon },
   { id: 'workspace', title: 'Workspace', description: 'Shared containers for projects, documents, and research.', icon: OfficeIcon },
   { id: 'crm', title: 'Organization CRM', description: 'Contacts, companies, and meeting notes shared to the org.', icon: OrganizationIcon },
-  { id: 'credits', title: 'Credits & Billing', description: 'The Autonomous Ticket System balance, and on Enterprise the shared credit pool and member credit requests.', icon: CardIcon },
+  { id: 'credits', title: 'Credits & Billing', description: 'Give Paw Compute to members, the Autonomous Ticket System balance, and on Enterprise the shared credit pool.', icon: CardIcon },
   { id: 'governance', title: 'Governance & Approvals', description: 'Require approval before a member can take an action.', icon: SecurityIcon },
   { id: 'credentialVault', title: 'Credential Vault', description: 'Shared connector credentials for the organization.', icon: PlugIcon },
   { id: 'sso', title: 'Single Sign-On', description: 'Federated identity for Team and Enterprise plans.', icon: LanguageIcon },
@@ -731,21 +730,19 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
               {/* The shared credit pool is Enterprise-only: Paw Team members each use their own seat. */}
               {tier === 'enterprise' && <CreditPoolCard organizationId={org.id} orgMembers={members} />}
               <AutonomousTaskBillingCard organizationId={org.id} />
-              {tier === 'enterprise' && myRole !== 'member' && accessToken && (
-                <AdminCreditManagementPanel
-                  organizationId={org.id}
-                  accessToken={accessToken}
-                  members={members
-                    .filter((m): m is typeof members[0] & { userId: string; displayName: string } => m.userId !== null && m.displayName !== null)
-                    .map(m => ({ userId: m.userId, email: m.email, displayName: m.displayName }))}
-                />
-              )}
-              {tier === 'enterprise' && myRole === 'member' && accessToken && (
-                <MemberCreditRequestPanel
-                  organizationId={org.id}
-                  tier={tier as 'Team' | 'Enterprise'}
-                  accessToken={accessToken}
-                />
+              {/* Owners and billing admins buy Paw Compute and give it to members; members see what they were given. */}
+              {canManageBilling(myRole) ? (
+                <div style={{ marginTop: 16 }}>
+                  <GivePawComputePanel
+                    organizationId={org.id}
+                    organizationName={org.name}
+                    members={members}
+                    currentUserId={user.id}
+                    userEmail={user.email ?? ''}
+                  />
+                </div>
+              ) : (
+                <GivenToYouCard organizationId={org.id} currentUserId={user.id} members={members} />
               )}
             </>
           )}

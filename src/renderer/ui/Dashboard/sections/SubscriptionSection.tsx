@@ -84,7 +84,7 @@ export function SubscriptionSection({
     <div>
       {orgBilling?.isAdmin && (
         <p style={{ margin: '0 0 12px', fontSize: '0.85em', opacity: 0.7 }} data-testid="org-admin-billing">
-          You manage purchases for {orgBilling.organization.name} ({orgBilling.roleLabel}) — plans, seats and credits for your members.
+          You manage purchases for {orgBilling.organization.name} ({orgBilling.roleLabel}). Buy Paw Compute here, then give it to members in Organization → Credits &amp; Billing.
         </p>
       )}
       <div style={{

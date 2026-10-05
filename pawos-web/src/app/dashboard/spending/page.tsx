@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getAccountContext } from "../../../lib/account/accountContext";
 import { PageHeader, Panel, Row, SectionLabel, formatDate, primaryButton, secondaryButton } from "../../../components/dashboard/ui";
 import { orgBilling } from "../../../lib/account/orgBilling";
+import { OrgPawCompute } from "./OrgPawCompute";
 
 export const metadata: Metadata = { title: "Spending" };
 
@@ -63,6 +64,10 @@ export default async function DashboardSpendingPage() {
             </Row>
           </Panel>
         </section>
+
+        {org && (
+          <OrgPawCompute organizationId={org.organization.id} organizationName={org.organization.name} isAdmin={org.isAdmin} userId={account.user.id} />
+        )}
 
         <section aria-label="Autonomous Task Credits">
           <SectionLabel>Autonomous Task Credits</SectionLabel>

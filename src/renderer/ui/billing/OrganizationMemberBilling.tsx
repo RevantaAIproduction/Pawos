@@ -3,6 +3,7 @@ import styles from '../Dashboard/dashboard.module.css';
 import { PlanUsageLimits } from './PlanUsageLimits';
 import { useEntitlementSnapshot } from '../../billing/useEntitlementSnapshot';
 import type { OrganizationBilling } from '../../organization/useOrganizationBilling';
+import { GivenToYouCard } from './GivePawComputePanel';
 
 /**
  * What a Team / Enterprise member (not an admin) sees for billing: their plan and seat, their own
@@ -47,11 +48,13 @@ export function OrganizationMemberBilling({ billing }: { billing: OrganizationBi
         </div>
       </div>
 
+      <GivenToYouCard organizationId={billing.organization.id} currentUserId={billing.userId} />
+
       <div className={styles.card} style={{ marginTop: 16 }}>
         <h3 className={styles.cardTitle}>Need more usage?</h3>
         <p className={styles.cardBody} style={{ marginTop: 6 }}>
-          Your organization&apos;s admins handle purchases for {billing.organization.name} — plans, seats and credits. Ask one of them to
-          add more for you.
+          Your organization&apos;s admins handle purchases for {billing.organization.name} — plans, seats and credits. Your admins can
+          give you more Paw Compute — ask one of them.
         </p>
         {billing.billingAdmins.length > 0 && (
           <ul style={{ listStyle: 'none', margin: '12px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>

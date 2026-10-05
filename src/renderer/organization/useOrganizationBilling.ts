@@ -20,6 +20,7 @@ export const ORG_ROLE_LABELS: Record<OrgRole, string> = {
 
 export type OrganizationBilling = {
   organization: OrganizationRecord;
+  userId: string;
   role: OrgRole;
   roleLabel: string;
   /** Owners and billing admins buy plans, seats and credits; everyone else only sees their plan and usage. */
@@ -41,6 +42,7 @@ export function resolveOrganizationBilling(
   const role: OrgRole = mine?.role ?? (organization.ownerUserId === user.id ? ownerRole : 'member');
   return {
     organization,
+    userId: user.id,
     role,
     roleLabel: ORG_ROLE_LABELS[role] ?? 'Member',
     isAdmin: canManageBilling(role),
