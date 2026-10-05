@@ -12,13 +12,13 @@ export function ResetPasswordForm() {
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
   // The reset email's link establishes a session one of two ways depending on Supabase's own
-  // project config, and this page can't assume which: a PKCE `?code=` query param (exchanged via
-  // exchangeCodeForSession) or the older `#access_token=...&type=recovery` hash fragment, which
-  // @supabase/ssr's browser client auto-detects and consumes during its own init — but that can
-  // resolve asynchronously via a PASSWORD_RECOVERY auth event rather than being available the
-  // instant getSession() is first called, so this listens for that event too rather than trusting
-  // a single synchronous check. The 4s timeout only ever fires for a genuinely broken/expired link
-  // — a working one always resolves via one of the three paths well before that.
+  // project config: a PKCE `?code=` query param (exchanged via exchangeCodeForSession) or the
+  // `#access_token=...&refresh_token=...&type=recovery` hash fragment (what admin generateLink in
+  // api/auth/password/forgot produces). The hash is read and applied here with setSession rather
+  // than left to the client's own detectSessionInUrl: @supabase/ssr's browser client is a
+  // per-tab singleton whose flowType is whatever its *first* caller asked for, and a 'pkce'
+  // client rejects an implicit-grant hash ("Not a valid PKCE flow url") silently — which showed
+  // up as this page timing out with valid tokens sitting right there in the URL.
   const [sessionReady, setSessionReady] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
   // Parameter NAMES only, never values — safe to show/screenshot, and tells us exactly which link
@@ -55,6 +55,24 @@ export function ResetPasswordForm() {
       return;
     }
 
+    const hash = new URLSearchParams(window.location.hash.slice(1));
+    const hashError = hash.get("error_description") || hash.get("error_code") || hash.get("error");
+    if (hashError) {
+      markInvalid(`link error: ${hashError}`);
+      return;
+    }
+    const accessToken = hash.get("access_token");
+    const refreshToken = hash.get("refresh_token");
+    if (accessToken && refreshToken) {
+      // Drop the tokens from the address bar (and history) before anything else can read them.
+      window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search);
+      supabase.auth
+        .setSession({ access_token: accessToken, refresh_token: refreshToken })
+        .then(({ data, error }) => (error || !data.session ? markInvalid(`session failed: ${error?.message ?? "no session"}`) : markReady()))
+        .catch((err: unknown) => markInvalid(`session failed: ${err instanceof Error ? err.message : String(err)}`));
+      return;
+    }
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
@@ -63,7 +81,7 @@ export function ResetPasswordForm() {
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) markReady();
     });
-    const timeout = window.setTimeout(() => markInvalid("no code, no session, no recovery event within 4s"), 4000);
+    const timeout = window.setTimeout(() => markInvalid("no code, no tokens, no session within 4s"), 4000);
 
     return () => {
       subscription.unsubscribe();
