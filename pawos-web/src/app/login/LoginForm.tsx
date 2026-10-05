@@ -20,8 +20,7 @@ import {
 
 /**
  * Log in: Google or GitHub in one click, or email — the email first ("Continue with email"), then the
- * password. `?next=` (a same-origin path) is where the browser goes afterwards, e.g. back to the
- * PawOS Desktop sign-in page.
+ * password. `?next=` (a same-origin path) is where the browser goes afterwards.
  */
 export function LoginForm() {
   const [step, setStep] = useState<"email" | "password">("email");
