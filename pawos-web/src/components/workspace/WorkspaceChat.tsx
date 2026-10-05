@@ -795,7 +795,7 @@ export function WorkspaceChat({
             disabled={busy || outOfMessages}
             rows={empty ? 3 : 2}
             enterKeyHint="enter"
-            placeholder={outOfMessages ? "Upgrade to keep chatting" : changeMode ? (promptLimit ? "Describe a small change — e.g. change the heading to …" : "Describe the change — e.g. make the header sticky on mobile") : "Ask Paw to explain, plan or review"}
+            placeholder={outOfMessages ? "Upgrade to keep chatting" : changeMode ? (promptLimit ? "Describe a small change" : "Describe the change") : "Ask Paw to explain, plan or review"}
             className="max-h-[40dvh] w-full resize-none bg-transparent text-base text-neutral-100 placeholder-neutral-600 focus:outline-none disabled:opacity-60 md:text-sm"
           />
           <div className="mt-1 flex items-center gap-2">
