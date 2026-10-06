@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import styles from "./desktop-success.module.css";
 
@@ -34,12 +34,27 @@ function DesktopSuccessPageContent() {
     return url.toString();
   }, [provider, ref, code, error]);
 
+  // True once PawOS has probably been opened: the user clicked the button, or this tab lost focus
+  // (which is what happens when the automatic handoff below goes through). The page has no way to
+  // hear back from the desktop app, so the copy says what to expect rather than claiming it worked.
+  const [handedOff, setHandedOff] = useState(false);
+
   useEffect(() => {
     if (!deepLink) return;
+    const markHandedOff = () => setHandedOff(true);
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") markHandedOff();
+    };
+    window.addEventListener("blur", markHandedOff);
+    document.addEventListener("visibilitychange", onVisibility);
     // Attempt automatic handoff
-    // This may be silently blocked by Chromium's external app throttle, 
-    // which is why the fallback button is prominently displayed.
+    // Browsers silently ignore this when the redirect chain that led here had no user click
+    // (Google/GitHub → Supabase → here), which is why the page asks for the click below.
     window.location.href = deepLink;
+    return () => {
+      window.removeEventListener("blur", markHandedOff);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [deepLink]);
 
   return (
@@ -60,7 +75,11 @@ function DesktopSuccessPageContent() {
           ) : (
             <>
               <p className={styles.successText}>You&apos;re securely signed in.</p>
-              <p className={styles.hintText}>Returning you to PawOS...</p>
+              <p className={styles.hintText}>
+                {handedOff
+                  ? "PawOS should now be open. Once it shows you as signed in, you can close this tab."
+                  : "One more step: click Open PawOS to finish signing in to the desktop app."}
+              </p>
             </>
           )}
         </div>
@@ -69,15 +88,17 @@ function DesktopSuccessPageContent() {
           {error ? (
             <p className={styles.hintText}>You can close this tab and try again in PawOS.</p>
           ) : deepLink ? (
-            <a href={deepLink} className={styles.primaryButton}>
-              Open PawOS
+            <a href={deepLink} className={styles.primaryButton} onClick={() => setHandedOff(true)}>
+              {handedOff ? "Open PawOS again" : "Open PawOS"}
             </a>
           ) : (
             <p className={styles.errorText}>Missing required authentication details.</p>
           )}
           {!error && deepLink && (
             <p className={styles.footnote}>
-              Click the button above if you aren&apos;t redirected automatically.
+              {handedOff
+                ? "Nothing happened? Click the button again and choose Open if your browser asks."
+                : "If your browser asks whether to open PawOS, choose Open."}
             </p>
           )}
         </div>
