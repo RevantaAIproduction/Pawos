@@ -1,9 +1,8 @@
 import { CliSessionStore, keyringServiceFor, openSystemKeyring } from "./auth/sessionStore";
-import { openBrowser } from "./auth/openBrowser";
 import { runCli } from "./cli";
 import { VERSION, apiConfig, configDirectory } from "./config";
 import type { CliContext } from "./context";
-import { detectLocalRepository } from "./git/localRepository";
+import { detectProject } from "./git/localRepository";
 import { DEFAULT_API_BASE_URL, PawosClient, SessionManager, runTask } from "./shared";
 import { PendingTaskStore } from "./state/pendingTask";
 import { createPrompter } from "./ui/prompts";
@@ -18,7 +17,7 @@ function createContext(): CliContext {
     if (!config.ok) throw new Error(config.problem);
     return config.config.apiBaseUrl;
   };
-  const store = new CliSessionStore(openSystemKeyring(keyringServiceFor(config.ok ? config.config.apiBaseUrl : DEFAULT_API_BASE_URL, DEFAULT_API_BASE_URL)), directory);
+  const store = new CliSessionStore(openSystemKeyring(keyringServiceFor(config.ok ? config.config.apiBaseUrl : DEFAULT_API_BASE_URL, DEFAULT_API_BASE_URL)), directory, process.cwd());
   const session = new SessionManager({ storage: store, getApiBaseUrl: baseUrl });
   return {
     term: new Terminal(process.stdout, detectCapabilities(process.stdout, env)),
@@ -29,9 +28,8 @@ function createContext(): CliContext {
     store,
     client: new PawosClient(baseUrl, (forceRefresh) => session.getAccessToken(forceRefresh), () => session.expire()),
     pending: new PendingTaskStore(directory),
-    detectRepository: () => detectLocalRepository(process.cwd()),
-    // PAWOS_NO_BROWSER: don't try to open one (a remote shell, a container) — the address is printed instead.
-    openBrowser: (url) => (env.PAWOS_NO_BROWSER ? Promise.resolve(false) : openBrowser(url)),
+    // Wherever the user ran `pawos` — not where the package is installed.
+    detectProject: () => detectProject(process.cwd()),
     run: runTask,
     onInterrupt: (handler) => {
       process.once("SIGINT", handler);

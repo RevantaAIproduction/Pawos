@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { AuthLayout } from "../../../components/auth/AuthLayout";
 import { DEVICE_CLIENT_LABELS, isChallenge, isDeviceClient } from "../../../lib/auth/deviceAuth";
+import { deviceAuthLoginPath } from "../../../lib/auth/deviceAuthLinks";
 import { createClient } from "../../../lib/supabase/server";
 import { DeviceAuthorize } from "./DeviceAuthorize";
 
@@ -16,7 +17,7 @@ export const metadata: Metadata = {
  * /auth/device?challenge=…&client=cli|vscode — where the PawOS CLI and the VS Code extension send
  * the browser to sign in (see lib/auth/deviceAuth.ts). A signed-out browser goes through the
  * normal /login first (Google, GitHub or email) and comes back here; a signed-in one confirms and
- * is shown a one-time code to paste into the client.
+ * clicks Authorize and is shown the authentication URL to paste into the client.
  */
 export default async function DeviceAuthPage({ searchParams }: { searchParams: Promise<{ challenge?: string; client?: string }> }) {
   const params = await searchParams;
@@ -32,7 +33,7 @@ export default async function DeviceAuthPage({ searchParams }: { searchParams: P
     signedIn = false;
   }
   if (request && !signedIn) {
-    redirect(`/login?next=${encodeURIComponent(`/auth/device?challenge=${request.challenge}&client=${request.client}`)}`);
+    redirect(deviceAuthLoginPath(request.challenge, request.client));
   }
 
   return (

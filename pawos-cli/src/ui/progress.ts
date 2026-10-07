@@ -17,6 +17,32 @@ export function renderSteps(steps: CodeChangeStep[] | null | undefined, glyphs: 
   });
 }
 
+/**
+ * The backend's step ids (pawos-web/src/lib/webCode/codeChange.ts StepId) in PawOS's own words.
+ * Only ids whose meaning is known are here; anything else is never guessed at.
+ *
+ *   read     reading the repository's files          → exploring
+ *   plan     choosing which files the change needs   → planning
+ *   write    writing the change                      → building
+ *   fix      rewriting it after a failed check       → building
+ *   check    checking the change for problems        → verifying
+ *   preview  watching the repository's own checks    → verifying
+ *
+ * "push" (committing) has no word of its own and shows the generic line.
+ */
+const STAGE_VERB: Record<string, string> = { read: "exploring", plan: "planning", write: "building", fix: "building", check: "verifying", preview: "verifying" };
+
+/**
+ * The status line for a task: "PawOS is planning…" when the backend reports a step in progress that
+ * is known, and the plain "PawOS is working…" otherwise — no active step yet, more than one, or one
+ * this version doesn't recognise. It describes only what the backend says is happening now.
+ */
+export function stageTitle(change: Pick<CodeChange, "steps"> | null, glyphs: Glyphs): string {
+  const active = (change?.steps ?? []).filter((step) => step.status === "active");
+  const id = active.length === 1 && typeof active[0]!.id === "string" ? active[0]!.id : "";
+  return `PawOS is ${Object.hasOwn(STAGE_VERB, id) ? STAGE_VERB[id] : "working"}${glyphs.ellipsis}`;
+}
+
 /** What is shown under "PawOS is working…": the steps, or a quiet line until the first ones arrive. */
 export function renderProgress(change: Pick<CodeChange, "steps"> | null, glyphs: Glyphs): Line[] {
   const steps = renderSteps(change?.steps, glyphs);

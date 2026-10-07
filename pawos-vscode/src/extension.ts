@@ -4,7 +4,6 @@ import { SESSION_SECRET_KEY, SessionStore } from "./auth/sessionStore";
 import { PawosController } from "./controller";
 import { WorkspaceRepository } from "./git/workspaceRemote";
 import { SIDEBAR_VIEW_ID, SidebarProvider } from "./ui/sidebarProvider";
-import { looksLikeLoginCode } from "../../pawos-shared/src/auth/deviceLogin";
 import { SessionManager } from "../../pawos-shared/src/auth/session";
 import { resolveApiConfig, type ApiConfig } from "../../pawos-shared/src/config";
 
@@ -30,22 +29,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const openExternal = (url: string) => Promise.resolve(vscode.env.openExternal(vscode.Uri.parse(url, true)));
 
   /**
-   * The PawOS browser sign-in, the same one the PawOS CLI uses: the browser opens PawOS, the user
-   * signs in the way they always do and is shown a one-time code, and pastes it here.
+   * The PawOS browser sign-in, the same hand-off the PawOS CLI uses: the browser opens PawOS, the
+   * user signs in the way they always do, clicks Authorize and is shown an authentication URL, and
+   * pastes it here. The URL is only read as text; it is never opened.
    */
   const startSignIn = async () => {
     const pending = session.beginSignIn("vscode");
     try {
       if (!(await openExternal(pending.url))) throw new Error("The browser couldn't be opened for sign-in.");
-      const code = await vscode.window.showInputBox({
+      const pasted = await vscode.window.showInputBox({
         title: "Sign in to PawOS",
-        prompt: "Sign in in your browser, then paste the authentication code PawOS shows you.",
-        placeHolder: "PAWOS-XXXX-XXXX",
+        prompt: "Sign in in your browser and click Authorize, then paste the authentication URL PawOS shows you.",
+        placeHolder: "https://…/auth/device/complete?handoff=…",
         ignoreFocusOut: true,
-        validateInput: (value) => (!value.trim() || looksLikeLoginCode(value) ? null : "The code looks like PAWOS-XXXX-XXXX."),
+        validateInput: (value) => {
+          if (!value.trim()) return null;
+          const checked = pending.check(value);
+          return checked.ok ? null : checked.reason;
+        },
       });
-      if (!code?.trim()) return pending.cancel();
-      await pending.complete(code);
+      if (!pasted?.trim()) return pending.cancel();
+      await pending.complete(pasted);
     } catch (error) {
       pending.cancel();
       throw error;

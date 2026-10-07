@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
-import { DeviceAuthError, allowExchangeAttempt, consumeDeviceCode, createSessionForUser } from "../../../../../lib/auth/deviceAuth";
+import { DeviceAuthError, allowExchangeAttempt, consumeDeviceHandoff, createSessionForUser } from "../../../../../lib/auth/deviceAuth";
 
 /**
- * POST /api/auth/device/exchange { code, verifier } — a PawOS client (CLI, VS Code) trades the
- * one-time code its user pasted for a session of its own (see lib/auth/deviceAuth.ts).
+ * POST /api/auth/device/exchange { handoff, verifier, client } — a PawOS client (CLI, VS Code)
+ * trades the one-time handoff from the completion address its user pasted for a session of its own
+ * (see lib/auth/deviceAuth.ts).
  *
- * The code works once, for a few minutes, and only together with the verifier of the client that
- * started the sign-in. Nothing is logged here: not the code, the verifier, or the session.
+ * The handoff works once, for a few minutes, only for the kind of client it was issued to, and
+ * only together with the verifier of the client that started the sign-in. Nothing is logged here:
+ * not the handoff, the verifier, or the session.
  */
 const noStore = { "Cache-Control": "no-store" };
 
@@ -15,12 +17,16 @@ export async function POST(request: Request) {
   if (!allowExchangeAttempt(caller)) {
     return NextResponse.json({ ok: false, code: "rate_limited", message: "Too many attempts. Wait a minute and try again." }, { status: 429, headers: noStore });
   }
-  const body = (await request.json().catch(() => null)) as { code?: unknown; verifier?: unknown } | null;
-  const consumed = consumeDeviceCode(body?.code, body?.verifier);
+  const body = (await request.json().catch(() => null)) as { handoff?: unknown; verifier?: unknown; client?: unknown } | null;
+  const consumed = consumeDeviceHandoff(body?.handoff, body?.verifier, body?.client);
   if (!consumed.ok) {
     const expired = consumed.reason === "expired";
     return NextResponse.json(
-      { ok: false, code: expired ? "code_expired" : "invalid_code", message: expired ? "That code has expired. Start sign-in again." : "That code isn't valid. Check it and try again, or start sign-in again." },
+      {
+        ok: false,
+        code: expired ? "handoff_expired" : "invalid_handoff",
+        message: expired ? "That authentication URL has expired. Start sign-in again." : "That authentication URL isn't valid or has already been used. Start sign-in again.",
+      },
       { status: 400, headers: noStore }
     );
   }

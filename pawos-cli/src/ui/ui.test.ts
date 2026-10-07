@@ -335,7 +335,7 @@ describe("the interface as a whole", () => {
     h.server.polls = [pushed("r")];
     await runCli([], h.ctx);
     const output = h.output();
-    expect(output.split("\n").slice(0, 3).join("\n")).toBe("\n  ◉ PawOS  v0.1.0\n  AI Developer OS");
+    expect(output.split("\n").slice(0, 3).join("\n")).toBe("\n  ◉ PawOS v0.1.0\n  AI Developer Workspace");
     expect(output).not.toMatch(/\p{Extended_Pictographic}/u);
     expect(output).toMatch(/─{20,}/);
   });

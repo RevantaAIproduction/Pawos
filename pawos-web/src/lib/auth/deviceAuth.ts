@@ -1,4 +1,4 @@
-import { createHash, randomInt, timingSafeEqual } from "crypto";
+import { createHash, randomBytes, timingSafeEqual } from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { createSupabaseClient as createAdminClient } from "../supabase/server-admin";
 
@@ -6,25 +6,26 @@ import { createSupabaseClient as createAdminClient } from "../supabase/server-ad
  * Signing a PawOS client that isn't a browser (the PawOS CLI, the VS Code extension) in to the same
  * PawOS account, without that client ever seeing a password or a provider token:
  *
- *   client   makes a secret (the verifier) and opens the browser at /auth/device with its SHA-256
- *            (the challenge);
+ *   client   makes a secret (the verifier) and gives the user the address of /auth/device, which
+ *            carries the secret's SHA-256 (the challenge);
  *   browser  the user signs in to PawOS the way they always do (Google, GitHub, or email) and
- *            confirms; PawOS shows a one-time code;
- *   client   the user pastes the code; the client sends it with the verifier to
+ *            clicks Authorize; PawOS shows a completion address carrying a one-time handoff;
+ *   client   the user pastes that address; the client sends the handoff with its verifier to
  *            /api/auth/device/exchange and receives its own session for that account.
  *
- * The code is short-lived, single-use, and useless without the verifier of the client that asked
- * for it. It names a pending sign-in — it is not, and does not contain, a session or a token.
+ * The handoff is short-lived, single-use, tied to the sign-in request it was issued for and to the
+ * kind of client that asked, and useless without that client's verifier. It names a pending
+ * sign-in — it is not, and does not contain, a session, a token or any key.
  *
- * Codes are kept in memory only: this server is one long-lived Node process (see
- * googleAuthRelayStore.ts), and a code lives for a few minutes at most.
+ * Handoffs are kept in memory only: this server is one long-lived Node process (see
+ * googleAuthRelayStore.ts), and a handoff lives for a few minutes at most. Nothing here logs one.
  */
 
-export const DEVICE_CODE_TTL_MS = 5 * 60 * 1000;
-/** How long an expired code is remembered, only so the client can be told "expired" rather than "invalid". */
+export const DEVICE_HANDOFF_TTL_MS = 5 * 60 * 1000;
+/** How long an expired handoff is remembered, only so the client can be told "expired" rather than "invalid". */
 const EXPIRED_MEMORY_MS = 10 * 60 * 1000;
-const MAX_CODES_PER_USER = 5;
-const MAX_CODES = 10_000;
+const MAX_HANDOFFS_PER_USER = 5;
+const MAX_HANDOFFS = 10_000;
 const EXCHANGE_ATTEMPTS_PER_MINUTE = 10;
 
 export const DEVICE_CLIENTS = ["cli", "vscode"] as const;
@@ -35,9 +36,8 @@ export const DEVICE_CLIENT_LABELS: Record<DeviceClient, string> = { cli: "PawOS 
 const CHALLENGE = /^[A-Za-z0-9_-]{43}$/;
 /** RFC 7636 code verifier. */
 const VERIFIER = /^[A-Za-z0-9._~-]{43,128}$/;
-/** No 0/O, 1/I/L: the code is read and typed by people. */
-const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-const CODE_LENGTH = 8;
+/** 32 random bytes, base64url: 43 characters. */
+const HANDOFF = /^[A-Za-z0-9_-]{43}$/;
 
 export function isDeviceClient(value: unknown): value is DeviceClient {
   return typeof value === "string" && (DEVICE_CLIENTS as readonly string[]).includes(value);
@@ -47,7 +47,7 @@ export function isChallenge(value: unknown): value is string {
   return typeof value === "string" && CHALLENGE.test(value);
 }
 
-interface PendingCode {
+interface PendingHandoff {
   userId: string;
   challenge: string;
   client: DeviceClient;
@@ -55,65 +55,51 @@ interface PendingCode {
 }
 
 interface DeviceAuthState {
-  codes: Map<string, PendingCode>;
+  handoffs: Map<string, PendingHandoff>;
   attempts: Map<string, number[]>;
 }
 
 // One store for the whole process, whichever route bundle loads this module first.
 const globalStore = globalThis as typeof globalThis & { __pawosDeviceAuth?: DeviceAuthState };
-const state: DeviceAuthState = (globalStore.__pawosDeviceAuth ??= { codes: new Map(), attempts: new Map() });
+const state: DeviceAuthState = (globalStore.__pawosDeviceAuth ??= { handoffs: new Map(), attempts: new Map() });
 
+// Only a hash of each handoff is kept: reading this process's memory does not yield a usable one.
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 
 function sweep(now: number): void {
-  for (const [key, entry] of state.codes) {
-    if (entry.expiresAt + EXPIRED_MEMORY_MS <= now) state.codes.delete(key);
+  for (const [key, entry] of state.handoffs) {
+    if (entry.expiresAt + EXPIRED_MEMORY_MS <= now) state.handoffs.delete(key);
   }
 }
 
-/** "PAWOS-8F4K-92KD", however it was typed: any case, with or without the prefix, dashes or spaces. */
-export function normaliseDeviceCode(raw: unknown): string | null {
-  if (typeof raw !== "string" || raw.length > 64) return null;
-  const compact = raw.toUpperCase().replace(/[\s-]/g, "").replace(/^PAWOS/, "");
-  if (compact.length !== CODE_LENGTH || [...compact].some((char) => !CODE_ALPHABET.includes(char))) return null;
-  return compact;
-}
-
-function formatDeviceCode(compact: string): string {
-  return `PAWOS-${compact.slice(0, 4)}-${compact.slice(4)}`;
-}
-
-/** A new one-time code for a signed-in user who confirmed the sign-in in their browser. */
-export function issueDeviceCode(userId: string, challenge: string, client: DeviceClient, now: number = Date.now()): { code: string; expiresInSeconds: number } {
+/** A new one-time handoff for a signed-in user who clicked Authorize in their browser. */
+export function issueDeviceHandoff(userId: string, challenge: string, client: DeviceClient, now: number = Date.now()): { handoff: string; expiresInSeconds: number } {
   sweep(now);
-  // A user holds a few pending codes at most; asking again retires the oldest.
-  const own = [...state.codes].filter(([, entry]) => entry.userId === userId).sort((a, b) => a[1].expiresAt - b[1].expiresAt);
-  while (own.length >= MAX_CODES_PER_USER) state.codes.delete(own.shift()![0]);
-  if (state.codes.size >= MAX_CODES) throw new Error("Too many sign-ins are pending. Please try again in a few minutes.");
+  // A user holds a few pending handoffs at most; asking again retires the oldest.
+  const own = [...state.handoffs].filter(([, entry]) => entry.userId === userId).sort((a, b) => a[1].expiresAt - b[1].expiresAt);
+  while (own.length >= MAX_HANDOFFS_PER_USER) state.handoffs.delete(own.shift()![0]);
+  if (state.handoffs.size >= MAX_HANDOFFS) throw new Error("Too many sign-ins are pending. Please try again in a few minutes.");
 
-  let compact: string;
-  do {
-    compact = Array.from({ length: CODE_LENGTH }, () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)]).join("");
-  } while (state.codes.has(hash(compact)));
-  state.codes.set(hash(compact), { userId, challenge, client, expiresAt: now + DEVICE_CODE_TTL_MS });
-  return { code: formatDeviceCode(compact), expiresInSeconds: DEVICE_CODE_TTL_MS / 1000 };
+  const handoff = randomBytes(32).toString("base64url");
+  state.handoffs.set(hash(handoff), { userId, challenge, client, expiresAt: now + DEVICE_HANDOFF_TTL_MS });
+  return { handoff, expiresInSeconds: DEVICE_HANDOFF_TTL_MS / 1000 };
 }
 
 export type ConsumeResult = { ok: true; userId: string; client: DeviceClient } | { ok: false; reason: "invalid" | "expired" };
 
 /**
- * Uses a code up. Whatever the outcome, the code is gone: a wrong verifier, a second attempt or a
- * late one never leaves it usable. Succeeds only for the client holding the verifier the code was
- * issued against.
+ * Uses a handoff up. Whatever the outcome, it is gone: a wrong verifier, the wrong kind of client,
+ * a second attempt or a late one never leaves it usable. Succeeds only for the client that started
+ * the sign-in — the one holding the verifier behind the challenge the handoff was issued against.
  */
-export function consumeDeviceCode(rawCode: unknown, verifier: unknown, now: number = Date.now()): ConsumeResult {
-  const compact = normaliseDeviceCode(rawCode);
-  if (!compact || typeof verifier !== "string" || !VERIFIER.test(verifier)) return { ok: false, reason: "invalid" };
-  const key = hash(compact);
-  const entry = state.codes.get(key);
-  state.codes.delete(key);
-  if (!entry) return { ok: false, reason: "invalid" };
+export function consumeDeviceHandoff(handoff: unknown, verifier: unknown, client: unknown, now: number = Date.now()): ConsumeResult {
+  if (typeof handoff !== "string" || !HANDOFF.test(handoff)) return { ok: false, reason: "invalid" };
+  const key = hash(handoff);
+  const entry = state.handoffs.get(key);
+  state.handoffs.delete(key);
+  if (!entry || typeof verifier !== "string" || !VERIFIER.test(verifier) || !isDeviceClient(client)) return { ok: false, reason: "invalid" };
   if (entry.expiresAt <= now) return { ok: false, reason: "expired" };
+  if (entry.client !== client) return { ok: false, reason: "invalid" };
   const expected = Buffer.from(entry.challenge);
   const offered = Buffer.from(createHash("sha256").update(verifier).digest("base64url"));
   if (expected.length !== offered.length || !timingSafeEqual(expected, offered)) return { ok: false, reason: "invalid" };
@@ -129,13 +115,13 @@ export function allowExchangeAttempt(caller: string, now: number = Date.now()): 
   }
   recent.push(now);
   state.attempts.set(caller, recent);
-  if (state.attempts.size > MAX_CODES) for (const [key, times] of state.attempts) if (times.every((at) => now - at >= 60_000)) state.attempts.delete(key);
+  if (state.attempts.size > MAX_HANDOFFS) for (const [key, times] of state.attempts) if (times.every((at) => now - at >= 60_000)) state.attempts.delete(key);
   return true;
 }
 
-/** Test-only: forget every pending code and attempt. */
+/** Test-only: forget every pending handoff and attempt. */
 export function resetDeviceAuthForTests(): void {
-  state.codes.clear();
+  state.handoffs.clear();
   state.attempts.clear();
 }
 
@@ -174,7 +160,7 @@ function toClientSession(body: unknown): ClientSession | null {
 }
 
 /**
- * A new Supabase session of its own for the account the code was issued to — separate from the
+ * A new Supabase session of its own for the account the handoff was issued to — separate from the
  * browser's, so signing out of one never signs out the other. Made with Supabase's own one-time
  * sign-in link for that account (generated and used here, on the server; it is never emailed or
  * shown). The service-role key stays on this server; the client receives an ordinary user session.
@@ -198,7 +184,7 @@ export async function createSessionForUser(userId: string): Promise<ClientSessio
   const anonymous = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
   const verified = await anonymous.auth.verifyOtp({ token_hash: tokenHash, type: "magiclink" });
   const session = verified.data.session;
-  // The session must be for exactly the account the code named.
+  // The session must be for exactly the account the handoff named.
   if (verified.error || !session || session.user.id !== userId) throw new DeviceAuthError("unavailable", "Sign-in couldn't be completed. Please try again.", 502);
   return { accessToken: session.access_token, refreshToken: session.refresh_token, expiresAt: session.expires_at ?? Math.floor(Date.now() / 1000) + session.expires_in, email: session.user.email ?? email };
 }

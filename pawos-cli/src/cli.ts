@@ -1,12 +1,11 @@
-import { browserLogin } from "./auth/browserLogin";
 import { interactive } from "./commands/interactive";
 import { status } from "./commands/status";
 import type { CliContext } from "./context";
 import { line, seg, type Line } from "./ui/terminal";
 
 /**
- * The `pawos` command. `pawos` on its own is the product — the interactive session; the few
- * subcommands exist for the things that aren't a conversation.
+ * The `pawos` command. `pawos` on its own is the product — the interactive workspace; `pawos login`
+ * signs in and opens that same workspace; the other subcommands print something and exit.
  */
 export const COMMANDS = ["version", "login", "logout", "status", "help"] as const;
 
@@ -16,13 +15,14 @@ export function usage(version: string): Line[] {
     line(seg(`PawOS v${version}`, "strong")),
     line(),
     line("Usage"),
-    command("pawos", "Start PawOS in this project"),
-    command("pawos login", "Sign in to PawOS in your browser"),
+    command("pawos", "Open PawOS, from any folder"),
+    command("pawos login", "Sign in, then open PawOS"),
     command("pawos logout", "Sign out on this computer"),
-    command("pawos status", "Show the account and repository PawOS will use"),
+    command("pawos status", "Show your account, plan, usage and connections"),
     command("pawos version", "Show the version"),
     line(),
-    line(seg("PawOS works on your connected GitHub project.", "muted")),
+    line(seg("Inside PawOS, /help lists what you can do. Code changes are made in", "muted")),
+    line(seg("your connected GitHub project, not in the files on this computer.", "muted")),
   ];
 }
 
@@ -49,11 +49,10 @@ export async function runCli(argv: string[], ctx: CliContext): Promise<number> {
     case "-h":
       term.print(usage(ctx.version));
       return 0;
-    case "login": {
+    case "login":
       if (rest.length > 0) return tooMany();
-      await ctx.session.initialize();
-      return (await browserLogin(ctx)) ? 0 : 1;
-    }
+      // Sign in, then straight into the same workspace `pawos` opens: one session, no second command.
+      return interactive(ctx, { signIn: true });
     case "logout": {
       if (rest.length > 0) return tooMany();
       await ctx.session.initialize();

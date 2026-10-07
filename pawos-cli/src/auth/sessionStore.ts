@@ -70,15 +70,34 @@ function parse(raw: string | null | undefined): Persisted | null {
 
 export type StorageKind = "keychain" | "file" | "none";
 
+/** The session could not be kept anywhere safe, so it was not kept at all. */
+export class SessionStorageError extends Error {}
+
+/** True when `file` is `folder` itself or anything inside it (any slash style; case-insensitive on Windows). */
+export function isInside(file: string, folder: string, platform: string = process.platform): boolean {
+  const normalise = (value: string) => {
+    const resolved = path.resolve(value).replace(/[\\/]+/g, "/").replace(/\/+$/, "");
+    return platform === "win32" ? resolved.toLowerCase() : resolved;
+  };
+  const inner = normalise(file);
+  const outer = normalise(folder);
+  return inner === outer || inner.startsWith(`${outer}/`);
+}
+
 export class CliSessionStore implements SessionStorage {
   /** This run's session, access token included. Never persisted. */
   private memory: Session | null = null;
   private kind: StorageKind | null = null;
   private readonly file: string;
 
+  /**
+   * `projectDirectory` is the folder the user is working in. The fallback file is never written
+   * inside it: a session must not end up in a project, where it could be committed or shared.
+   */
   constructor(
     private readonly keyring: Keyring | null,
-    directory: string
+    directory: string,
+    private readonly projectDirectory: string | null = null
   ) {
     this.file = path.join(directory, SESSION_FILE_NAME);
   }
@@ -142,12 +161,24 @@ export class CliSessionStore implements SessionStorage {
         // fall through to the protected file
       }
     }
-    fs.mkdirSync(path.dirname(this.file), { recursive: true, mode: 0o700 });
-    fs.writeFileSync(this.file, value, { encoding: "utf8", mode: 0o600 });
+    // No credential store. The only other place is a file in the user's own configuration folder,
+    // readable by that user alone — and never one inside the project. If that can't be had, the
+    // session is not stored at all and signing in fails, rather than leaving it somewhere unsafe.
+    if (this.projectDirectory && isInside(this.file, this.projectDirectory)) {
+      this.memory = null;
+      throw new SessionStorageError("PawOS couldn't store your session safely: no system credential store is available, and its own folder is inside this project. Sign-in was not completed.");
+    }
     try {
-      fs.chmodSync(this.file, 0o600); // an existing file keeps its old mode otherwise
+      fs.mkdirSync(path.dirname(this.file), { recursive: true, mode: 0o700 });
+      fs.writeFileSync(this.file, value, { encoding: "utf8", mode: 0o600 });
+      try {
+        fs.chmodSync(this.file, 0o600); // an existing file keeps its old mode otherwise
+      } catch {
+        // not supported on this file system
+      }
     } catch {
-      // not supported on this file system
+      this.memory = null;
+      throw new SessionStorageError("PawOS couldn't store your session: no system credential store is available and its own folder can't be written. Sign-in was not completed.");
     }
     this.kind = "file";
   }

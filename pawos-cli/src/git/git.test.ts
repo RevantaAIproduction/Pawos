@@ -105,16 +105,20 @@ describe("pawos in a folder without a GitHub repository", () => {
     [{ kind: "notGit" } as const, "This folder isn't a Git repository."],
     [{ kind: "noRemote" } as const, "This Git repository has no remote."],
     [{ kind: "notGitHub", remote: "https://gitlab.com/a/b.git" } as const, "This repository's remote isn't on GitHub."],
-  ])("explains the problem and stops — it never falls back to the repository selected in PawOS", async (local, message) => {
-    const h = harness({ signedIn: true, local, answers: ["fix the bug"] });
-    expect(await runCli([], h.ctx)).toBe(1);
+  ])("PawOS still opens; there is no Code mode, and it never falls back to the repository selected in PawOS (%j)", async (local, message) => {
+    const h = harness({ signedIn: true, local, answers: ["fix the bug", "/code", "fix the bug again", null] });
+    expect(await runCli([], h.ctx)).toBe(0);
     const output = h.output();
-    expect(output).toContain("No GitHub repository detected");
+    expect(output).toContain("What would you like to work on?");
+    expect(output).not.toContain("Code mode:");
+    expect(output).not.toContain("No GitHub repository detected");
+    // /code explains why there are no code changes here, in the user's terms.
+    expect(output).toContain("Code changes aren't available here.");
     expect(output).toContain(message);
-    expect(output).toContain("PawOS is set to acme/site. It was not used");
-    expect(output).not.toContain("What would you like PawOS to do?");
+    // Nothing was ever sent as a code change — not to the repository PawOS is set to (acme/site), not anywhere.
     expect(h.server.starts()).toHaveLength(0);
     expect(h.server.calls.filter((call) => call.method === "PUT")).toHaveLength(0);
+    expect(h.server.chats().map((call) => call.body?.content)).toEqual(["fix the bug", "fix the bug again"]);
     h.cleanup();
   });
 });

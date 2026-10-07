@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "../../../../../lib/supabase/server";
-import { isChallenge, isDeviceClient, issueDeviceCode } from "../../../../../lib/auth/deviceAuth";
+import { isChallenge, isDeviceClient, issueDeviceHandoff } from "../../../../../lib/auth/deviceAuth";
 
 /**
  * POST /api/auth/device/authorize { challenge, client } — the "Authorize" button on /auth/device.
- * Gives the signed-in browser user a one-time code to paste into the PawOS client that opened the
- * page (see lib/auth/deviceAuth.ts).
+ * Gives the signed-in browser user a one-time handoff, which the page shows as the completion
+ * address to paste into the PawOS client that started the sign-in (see lib/auth/deviceAuth.ts).
  *
  * Browser sessions only: the caller must be signed in to PawOS Web by cookie, and the request must
  * come from a PawOS page (same-origin). A request carrying an Authorization header is refused — a
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, code: "invalid_request", message: "This sign-in link isn't valid. Start again from PawOS." }, { status: 400 });
   }
   try {
-    const issued = issueDeviceCode(userId, body.challenge, body.client);
+    const issued = issueDeviceHandoff(userId, body.challenge, body.client);
     return NextResponse.json({ ok: true, ...issued }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return NextResponse.json({ ok: false, code: "unavailable", message: error instanceof Error ? error.message : "Please try again." }, { status: 503 });

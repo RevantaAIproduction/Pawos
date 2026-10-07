@@ -60,3 +60,25 @@ export function explainLocalRepository(local: Exclude<LocalRepository, { kind: "
       return ["This repository's remote isn't on GitHub.", "PawOS works on GitHub repositories."];
   }
 }
+
+/** Where `pawos` was started: the folder, and what Git says about it. Nothing here is assumed. */
+export interface ProjectContext {
+  /** The folder the user ran `pawos` in (process.cwd()). */
+  cwd: string;
+  /** The branch that is checked out — null outside a Git repository, or when HEAD is detached. */
+  branch: string | null;
+  repository: LocalRepository;
+}
+
+/**
+ * Reads the project the user is standing in. The branch comes from `git symbolic-ref`, which only
+ * answers when HEAD points at a branch: on a detached HEAD, or outside a repository, there is no
+ * branch and none is reported. One more read-only query; nothing is fetched or changed.
+ */
+export async function detectProject(cwd: string, git: GitRunner = runGit): Promise<ProjectContext> {
+  const repository = await detectLocalRepository(cwd, git);
+  if (repository.kind === "notGit" || repository.kind === "gitMissing") return { cwd, branch: null, repository };
+  const head = await git(["symbolic-ref", "--short", "-q", "HEAD"], cwd);
+  const branch = head.ok ? head.stdout.trim() : "";
+  return { cwd, branch: branch || null, repository };
+}

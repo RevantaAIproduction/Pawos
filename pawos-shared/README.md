@@ -2,7 +2,7 @@
 
 The code the PawOS CLI (`pawos-cli`) and the PawOS VS Code extension (`pawos-vscode`) have in common:
 
-- `auth/` — the PawOS browser sign-in (one-time code), the session and its renewal
+- `auth/` — the PawOS browser sign-in (the authentication URL and its one-time handoff), the session and its renewal
 - `api/` — the client for the existing PawOS Web API, and its types
 - `git/` — reading `owner/name` from a GitHub remote URL
 - `task/` — request ids and following one Code-mode task to its result

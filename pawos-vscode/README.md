@@ -9,8 +9,9 @@ extension does not change files in the folder open in VS Code.
 ## Signing in
 
 Choose **Sign In** in the PawOS sidebar. Your browser opens PawOS; sign in the way you always do
-(Google, GitHub, or email and password), confirm, and paste the one-time code PawOS shows you into
-the box at the top of VS Code. This is the same sign-in the PawOS CLI uses.
+(Google, GitHub, or email and password) and click **Authorize**. PawOS shows an authentication
+URL: copy it and paste it into the box at the top of VS Code. This is the same hand-off the PawOS
+CLI uses.
 
 The session is kept in VS Code SecretStorage only. No setup is needed: the extension talks to one
 address, PawOS's (the **PawOS: Api Base Url** setting, which you only change to use a local

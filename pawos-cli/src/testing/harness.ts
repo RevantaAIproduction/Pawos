@@ -4,7 +4,8 @@ import * as path from "path";
 import { CliSessionStore, type Keyring } from "../auth/sessionStore";
 import type { CliContext } from "../context";
 import type { LocalRepository } from "../git/localRepository";
-import { PawosClient, SessionManager, runTask, type CodeChange, type CodeChangeStep, type FetchLike, type RepositoryReadiness } from "../shared";
+import { INTERRUPT } from "./keys";
+import { PawosClient, SessionManager, runTask, sendChatMessage, type AccountOverview, type CodeChange, type CodeChangeStep, type FetchLike, type Integration, type RepositoryReadiness } from "../shared";
 import { PendingTaskStore } from "../state/pendingTask";
 import type { Prompter } from "../ui/prompts";
 import type { Timers } from "../ui/spinner";
@@ -13,9 +14,13 @@ import { Terminal, type TerminalCapabilities } from "../ui/terminal";
 /**
  * Test-only. The real commands, the real session manager, API client, task runner and session
  * store — run against a scripted PawOS, a fake credential store, a scripted keyboard and a captured
- * screen. Nothing here can reach a real account, a real repository, a real browser or the network.
+ * screen. Nothing here can reach a real account, a real repository or the network.
  */
 export const API = "https://pawos.test";
+/** A handoff as PawOS issues it (43 base64url characters), and the completion address that carries it. */
+export const HANDOFF = "h".repeat(43);
+export const completionUrl = (handoff: string = HANDOFF, origin: string = API) => `${origin}/auth/device/complete?handoff=${handoff}`;
+export { INTERRUPT };
 export const ALICE = { email: "alice@example.com", plan: { tier: "pro", label: "Paw Pro" } };
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -56,6 +61,20 @@ export function pushed(requestId: string, overrides: Partial<CodeChange> = {}): 
   });
 }
 
+/** A connector as PawOS lists it for an account. */
+export function integration(id: string, name: string, overrides: Partial<Integration> = {}): Integration {
+  return { id, name, description: `${name} for PawOS.`, group: "integrations", entitled: true, availableOn: null, connection: "notConnected", accountLabel: null, connectedAt: null, mcp: null, ...overrides };
+}
+
+/** The capabilities PawOS Web reports today (pawos-web/src/lib/webPolicy/webCapabilities.ts), for a plan that has them all. */
+export const CAPABILITIES = [
+  { id: "web.chat", label: "Chat", status: "available", availableOn: null },
+  { id: "web.codeChanges", label: "Code changes", status: "available", availableOn: null },
+  { id: "web.integrationContext", label: "Integration context", status: "desktopOnly", availableOn: null },
+  { id: "web.mcpRead", label: "MCP read access", status: "desktopOnly", availableOn: null },
+  { id: "web.autonomousWork", label: "Autonomous Work", status: "future", availableOn: null },
+] as const;
+
 export interface RecordedCall {
   method: string;
   path: string;
@@ -73,13 +92,23 @@ const play = (entry: Scripted): Response => {
 /** A scripted PawOS: the device sign-in endpoints and the existing Web API the CLI calls. */
 export class FakePawos {
   calls: RecordedCall[] = [];
-  /** One-time codes PawOS would accept (compact form), and whether they have expired. */
-  codes = new Map<string, "valid" | "expired">();
+  /** One-time handoffs PawOS would accept, and whether they have expired. */
+  handoffs = new Map<string, "valid" | "expired">();
   validAccess = new Set<string>();
   validRefresh = new Set<string>();
   private issued = 0;
   readiness: RepositoryReadiness = { state: "ready", repository: { fullName: "acme/site", defaultBranch: "main" }, scope: "full" };
   capabilitiesAnswer: Scripted | null = null;
+  plan: { tier: string; label: string } = ALICE.plan;
+  /** GET /api/dashboard/overview: the account's usage as the server reports it (null: nothing to report). */
+  usage: AccountOverview["usage"] = null;
+  overviewAnswer: Scripted | null = null;
+  /** The account's connectors, as GET /api/dashboard/integrations lists them. */
+  integrations: Integration[] = [integration("github", "GitHub", { group: "sourceControl" }), integration("slack", "Slack"), integration("linear", "Linear", { entitled: false, availableOn: "Paw Pro Max" })];
+  /** Connectors PawOS connects from its web Integrations page; the rest are connected from the desktop app. */
+  webConnectable = new Set(["github"]);
+  /** Answers to chat messages (no mode), in order; when they run out PawOS gives a plain reply. */
+  chatReplies: Scripted[] = [];
   selectAnswer: Scripted | null = null;
   /** Answers to POST /api/web-chat/messages that start a task, in order. */
   sends: Scripted[] = [];
@@ -108,8 +137,14 @@ export class FakePawos {
       });
   }
 
+  /** Code tasks that were started (mode: codeChange). */
   starts(): RecordedCall[] {
-    return this.calls.filter((call) => call.path === "/api/web-chat/messages" && call.body?.recoverOnly !== true);
+    return this.calls.filter((call) => call.path === "/api/web-chat/messages" && call.body?.recoverOnly !== true && call.body?.mode === "codeChange");
+  }
+
+  /** Chat messages that were sent (no mode). */
+  chats(): RecordedCall[] {
+    return this.calls.filter((call) => call.path === "/api/web-chat/messages" && call.body?.recoverOnly !== true && call.body?.mode === undefined);
   }
 
   recovers(): RecordedCall[] {
@@ -125,12 +160,13 @@ export class FakePawos {
     const route = `${call.method} ${call.path}`;
 
     if (route === "POST /api/auth/device/exchange") {
-      const compact = String(call.body?.code ?? "").toUpperCase().replace(/[\s-]/g, "").replace(/^PAWOS/, "");
-      const known = this.codes.get(compact);
-      this.codes.delete(compact); // single use, whatever happens
-      if (known === "valid" && typeof call.body?.verifier === "string" && call.body.verifier.length >= 43) return json(200, { ok: true, session: this.issueSession() });
-      if (known === "expired") return json(400, { ok: false, code: "code_expired", message: "That code has expired. Start sign-in again." });
-      return json(400, { ok: false, code: "invalid_code", message: "That code isn't valid. Check it and try again, or start sign-in again." });
+      const handoff = String(call.body?.handoff ?? "");
+      const known = this.handoffs.get(handoff);
+      this.handoffs.delete(handoff); // single use, whatever happens
+      const rightClient = call.body?.client === "cli";
+      if (known === "valid" && rightClient && typeof call.body?.verifier === "string" && call.body.verifier.length >= 43) return json(200, { ok: true, session: this.issueSession() });
+      if (known === "expired") return json(400, { ok: false, code: "handoff_expired", message: "That authentication URL has expired. Start sign-in again." });
+      return json(400, { ok: false, code: "invalid_handoff", message: "That authentication URL isn't valid or has already been used. Start sign-in again." });
     }
     if (route === "POST /api/auth/device/refresh") {
       const token = String(call.body?.refreshToken ?? "");
@@ -147,7 +183,20 @@ export class FakePawos {
       return json(401, { ok: false, code: "not_authenticated", message: "Sign in to continue." });
     }
     if (route === "GET /api/web/capabilities") {
-      return this.capabilitiesAnswer ? play(this.capabilitiesAnswer) : json(200, { ok: true, plan: ALICE.plan, capabilities: [{ id: "web.codeChanges", label: "Code changes", status: "available", availableOn: null }] });
+      return this.capabilitiesAnswer ? play(this.capabilitiesAnswer) : json(200, { ok: true, plan: this.plan, capabilities: CAPABILITIES });
+    }
+    if (route === "GET /api/dashboard/overview") {
+      if (this.overviewAnswer) return play(this.overviewAnswer);
+      return json(200, { ok: true, plan: this.plan, usage: this.usage, integrations: { connected: this.integrations.filter((item) => item.connection === "connected").map((item) => item.id), available: this.integrations.filter((item) => item.entitled).length, total: this.integrations.length } });
+    }
+    if (route === "GET /api/dashboard/integrations") return json(200, { ok: true, tier: this.plan.label, integrations: this.integrations });
+    if (call.method === "POST" && call.path.startsWith("/api/dashboard/integrations/")) {
+      const found = this.integrations.find((item) => item.id === call.path.split("/").pop());
+      if (!found) return json(404, { ok: false, code: "unknown_connector", message: "PawOS doesn't support that integration." });
+      if (!found.entitled) return json(403, { ok: false, code: "not_entitled", message: `${found.name} is available on a higher plan.` });
+      // The address PawOS returns for a browser carries an OAuth state bound to that browser's cookie.
+      if (this.webConnectable.has(found.id)) return json(200, { ok: true, connect: { method: "redirect", url: `https://provider.example/oauth/authorize?client_id=PAWOS_CLIENT_ID&state=web.${found.id}.SECRET_STATE` } });
+      return json(200, { ok: true, connect: { method: "desktop", message: `Open PawOS on your desktop, go to Settings → Connections and connect ${found.name}. It will show as connected here once it's done.` } });
     }
     if (route === "GET /api/web/github/repository") return json(200, { ok: true, readiness: this.readiness });
     if (route === "PUT /api/web/github/repository") {
@@ -159,6 +208,11 @@ export class FakePawos {
       if (call.body?.recoverOnly === true) {
         const next = this.recoveries.length > 1 ? this.recoveries.shift()! : this.recoveries[0];
         return next ? play(next) : json(404, { ok: false, code: "not_found", message: "That message wasn't received." });
+      }
+      if (call.body?.mode === undefined) {
+        const scripted = this.chatReplies.shift();
+        if (scripted) return play(scripted);
+        return json(200, { ok: true, chatId: typeof call.body?.chatId === "string" ? call.body.chatId : "chat-1", reply: "Here is what I know.", recovered: false, requiresDesktop: false, allowance: { messageLimit: null, remaining: null } });
       }
       const next = this.sends.shift();
       if (!next) throw new Error("The CLI started a task the test did not expect.");
@@ -197,17 +251,23 @@ export class MemoryKeyring implements Keyring {
   }
 }
 
-/** A keyboard with the answers already typed. When they run out, input has ended (as Ctrl+D would). */
+/**
+ * A keyboard with the answers already typed. INTERRUPT is the user pressing Ctrl+C at the prompt;
+ * when the answers run out, input has ended (as Ctrl+D would).
+ */
 export class ScriptedPrompter implements Prompter {
   prompts: string[] = [];
+  interrupted = false;
   constructor(
-    private answers: (string | null)[],
+    private answers: (string | null | typeof INTERRUPT)[],
     private readonly echo: (text: string) => void
   ) {}
   async ask(prompt: string): Promise<string | null> {
     this.prompts.push(prompt);
     this.echo(prompt);
-    const answer = this.answers.length > 0 ? this.answers.shift()! : null;
+    const next = this.answers.length > 0 ? this.answers.shift()! : null;
+    this.interrupted = next === INTERRUPT;
+    const answer = next === INTERRUPT ? null : next;
     this.echo(`${answer ?? ""}\n`);
     return answer;
   }
@@ -241,15 +301,16 @@ export const STATIC_TERMINAL: TerminalCapabilities = { interactive: false, color
 export const LIVE_TERMINAL: TerminalCapabilities = { interactive: true, color: true, unicode: true, hyperlinks: true, columns: 100 };
 
 export interface HarnessOptions {
-  answers?: (string | null)[];
+  answers?: (string | null | typeof INTERRUPT)[];
+  /** The folder `pawos` was started in, and the branch Git reports there (null: none, e.g. a detached HEAD). */
+  cwd?: string;
+  branch?: string | null;
   /** Start already signed in (a session from an earlier run is in the credential store). */
   signedIn?: boolean;
   local?: LocalRepository;
   caps?: TerminalCapabilities;
   keyring?: MemoryKeyring | null;
   apiProblem?: string;
-  /** How the browser opener behaves. */
-  browserOpens?: boolean;
 }
 
 export function harness(options: HarnessOptions = {}) {
@@ -257,7 +318,10 @@ export function harness(options: HarnessOptions = {}) {
   const chunks: string[] = [];
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "pawos-cli-test-"));
   const keyring = options.keyring === undefined ? new MemoryKeyring() : options.keyring;
-  const store = new CliSessionStore(keyring, directory);
+  const cwd = options.cwd ?? "C:\\Projects\\MyApp";
+  const local: LocalRepository = options.local ?? { kind: "github", fullName: "acme/site", remote: "origin" };
+  const inGit = local.kind !== "notGit" && local.kind !== "gitMissing";
+  const store = new CliSessionStore(keyring, directory, cwd);
   if (options.signedIn) {
     const session = server.issueSession();
     server.validAccess.delete(session.accessToken); // only the refresh token survives between runs
@@ -268,7 +332,6 @@ export function harness(options: HarnessOptions = {}) {
   const session = new SessionManager({ storage: store, getApiBaseUrl: () => API, fetchImpl: server.fetch });
   const client = new PawosClient(() => API, (forceRefresh) => session.getAccessToken(forceRefresh), () => session.expire(), server.fetch);
   const term = new Terminal({ write: (text) => chunks.push(text), isTTY: options.caps?.interactive ?? false, columns: 100 }, options.caps ?? STATIC_TERMINAL);
-  const opened: string[] = [];
   const timers = new ManualTimers();
   const interruptHandlers = new Set<() => void>();
   let clock = 0;
@@ -283,13 +346,11 @@ export function harness(options: HarnessOptions = {}) {
     store,
     client,
     pending: new PendingTaskStore(directory),
-    detectRepository: async () => options.local ?? { kind: "github", fullName: "acme/site", remote: "origin" },
-    openBrowser: async (url) => {
-      opened.push(url);
-      return options.browserOpens ?? true;
-    },
+    detectProject: async () => ({ cwd, branch: inGit ? (options.branch === undefined ? "main" : options.branch) : null, repository: local }),
     // The real task runner, with time that only moves when it waits.
     run: (taskOptions) => runTask({ ...taskOptions, sleep: async (ms) => void (clock += ms), now: () => clock }),
+    // The real chat sender, with the same clock.
+    chat: (chatOptions) => sendChatMessage({ ...chatOptions, sleep: async (ms) => void (clock += ms), now: () => clock }),
     onInterrupt: (handler) => {
       interruptHandlers.add(handler);
       return () => interruptHandlers.delete(handler);
@@ -303,7 +364,8 @@ export function harness(options: HarnessOptions = {}) {
     keyring,
     store,
     directory,
-    opened,
+    /** The sign-in addresses the CLI printed, in order. */
+    signInUrls: () => stripAnsi(chunks.join("")).match(/https:\/\/pawos\.test\/auth\/device\?\S+/g) ?? [],
     timers,
     prompter,
     raw: () => chunks.join(""),

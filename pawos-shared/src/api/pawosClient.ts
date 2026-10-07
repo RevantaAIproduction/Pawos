@@ -1,5 +1,5 @@
 import { AuthRequiredError, type FetchLike } from "../auth/types";
-import type { Capabilities, CodeChange, RepositoryReadiness, SendResult } from "./types";
+import type { AccountOverview, Capabilities, CodeChange, ConnectStart, Integration, RepositoryReadiness, SendResult } from "./types";
 
 /**
  * A PawOS client's only door to PawOS: the existing PawOS Web API, called as the signed-in account
@@ -136,6 +136,39 @@ export class PawosClient {
   /** POST /api/web-chat/messages in Code mode — starts the change. Safe to repeat with the same request id. */
   sendCodeChange(content: string, requestId: string): Promise<SendOutcome> {
     return this.send({ content, requestId, mode: "codeChange" }, false);
+  }
+
+  /**
+   * POST /api/web-chat/messages with no mode — one message to Paw, in the account's own chat history.
+   * Safe to repeat with the same request id. `chatId` continues an existing conversation.
+   */
+  sendChat(content: string, requestId: string, chatId: string | null = null): Promise<SendOutcome> {
+    return this.send({ content, requestId, ...(chatId ? { chatId } : {}) }, false);
+  }
+
+  /** GET /api/dashboard/overview — the account's plan, usage and connected services, as the server resolves them. */
+  async getOverview(): Promise<AccountOverview> {
+    const data = await this.json("GET", "/api/dashboard/overview");
+    return { plan: data.plan as AccountOverview["plan"], usage: (data.usage ?? null) as AccountOverview["usage"], integrations: (data.integrations ?? null) as AccountOverview["integrations"] };
+  }
+
+  /** GET /api/dashboard/integrations — every connector PawOS supports, with this account's entitlement and connection state. */
+  async listIntegrations(): Promise<Integration[]> {
+    const data = await this.json("GET", "/api/dashboard/integrations");
+    return Array.isArray(data.integrations) ? (data.integrations as Integration[]) : [];
+  }
+
+  /**
+   * POST /api/dashboard/integrations/<id> — asks PawOS whether this account may connect the
+   * connector, and where. The server checks the plan; a refusal is thrown as it is. The OAuth
+   * address it returns for a browser is deliberately not passed on: it only works from the
+   * signed-in browser PawOS issued it to, so a client sends the user to the Integrations page.
+   */
+  async startConnect(connectorId: string): Promise<ConnectStart> {
+    const data = await this.json("POST", `/api/dashboard/integrations/${encodeURIComponent(connectorId)}`, {});
+    const connect = (data.connect ?? {}) as { method?: unknown; message?: unknown };
+    if (connect.method === "desktop") return { method: "desktop", message: typeof connect.message === "string" ? connect.message : "" };
+    return { method: "redirect" };
   }
 
   /** Asks whether an earlier send with this request id arrived. Never starts anything. */

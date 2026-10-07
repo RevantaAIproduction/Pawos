@@ -1,6 +1,7 @@
 # PawOS CLI
 
-PawOS in your terminal. Describe a change, and PawOS makes it in your connected GitHub project.
+PawOS in your terminal: ask PawOS anything from any folder, and have it make changes in your
+connected GitHub project.
 
 ```bash
 npm install -g pawos
@@ -10,42 +11,81 @@ npm install -g pawos
 pawos
 ```
 
-PawOS works on your connected GitHub project: it reads the repository on GitHub, commits the
-change there, and shows you the commit or pull request. It does not edit the files in your local
-folder — pull the change once you have reviewed it.
+`pawos` starts in any folder. Git is not required.
 
 ## Requirements
 
 - Node.js 20 or newer
-- Git
-- A PawOS account with GitHub connected (connect GitHub in the PawOS desktop app)
-- A project cloned from GitHub
+- A PawOS account
+- For code changes only: Git, a project cloned from GitHub, and GitHub connected to your PawOS
+  account
 
 ## Using it
 
-Run `pawos` from your project's folder:
-
 ```bash
-cd my-project
 pawos
 ```
 
-PawOS signs you in if needed, shows the repository it will work on, and asks what you would like
-it to do. Type the task and press Enter. While it works you see the steps PawOS reports; when it
-finishes you see the summary, the files changed, the state of your repository's checks, and the
-commit and pull request links.
+PawOS opens in the terminal, shows where you are and asks what you would like to work on. In an
+ordinary folder it shows just the folder; inside a Git project it also shows the branch and the
+GitHub repository. If you are signed out, `pawos` signs you in first and carries straight on.
 
-Leave with `exit`, Ctrl+C or Ctrl+D.
+Type and press Enter. What happens next depends on the mode, which is always shown above the prompt:
 
-### Commands
+- **Chat** — your message goes to PawOS and its reply is printed. This is the same PawOS chat as on
+  PawOS Web, so the conversation also appears in your PawOS chats. It is the only mode in a folder
+  that isn't a GitHub project.
+- **Code mode** — on by default inside a GitHub project that matches the repository selected in
+  PawOS. What you type is a change request: PawOS reads the repository on GitHub, commits the change
+  there, and shows you the summary, the files changed, the state of your checks, and the commit or
+  pull request. It does not edit the files in your local folder — pull the change once you have
+  reviewed it.
+
+Leave with `/exit` or Ctrl+D. Ctrl+C at the prompt cancels what you were typing; press it again to leave.
+
+### Inside PawOS
 
 | Command | What it does |
 |---|---|
-| `pawos` | Start PawOS in this project |
-| `pawos login` | Sign in to PawOS in your browser |
+| `/chat` | Talk to PawOS without changing code |
+| `/code` | Make changes in this folder's GitHub project (says why if that isn't possible here) |
+| `/connections` | Show your account's connections |
+| `/connect <name>` | Connect a service, for example `/connect github` |
+| `/status` | Show your account, plan, usage and connections |
+| `/help` | List these commands |
+| `/exit` | Leave PawOS |
+
+### From the shell
+
+| Command | What it does |
+|---|---|
+| `pawos` | Open PawOS, from any folder |
+| `pawos login` | Sign in, then open PawOS |
 | `pawos logout` | Sign out on this computer |
-| `pawos status` | Show the account and repository PawOS will use (changes nothing) |
+| `pawos status` | Show your account, plan, usage and connections (changes nothing) |
 | `pawos version` | Show the version |
+
+## Your account, plan and usage
+
+`pawos status` and `/status` show what PawOS reports for your account right now: the plan, usage
+against your allowances and any extra-usage credits (in Paw Compute, PawOS's own unit), which
+capabilities the plan includes, and which services are connected. A value PawOS doesn't report is
+left out; nothing is estimated or calculated here.
+
+PawOS decides what your account may do, on its servers, exactly as it does for PawOS Web and the
+desktop app. When it refuses something — a usage limit, a feature the plan doesn't include, an
+organization permission — the CLI shows PawOS's message, your plan, and the address of PawOS's
+plans page, then returns to the prompt. The CLI takes no payment and holds no payment details;
+plans and billing are managed on PawOS itself.
+
+## Connections
+
+Your connections belong to your PawOS account, not to a folder: `/connections` lists the same ones
+wherever you run `pawos`. `/connect <name>` does not connect anything itself: it tells you where
+PawOS connects that service — PawOS's Integrations page in your browser, or the PawOS desktop app —
+and, once you have completed the connection there and pressed Enter, asks PawOS whether it is
+connected. It reports a service as connected only when PawOS says so. The CLI runs no sign-in of
+its own with those services and never sees their tokens.
 
 ## Signing in
 
@@ -53,13 +93,21 @@ Leave with `exit`, Ctrl+C or Ctrl+D.
 pawos login
 ```
 
-1. The CLI opens PawOS in your browser. (It also prints the address, in case the browser doesn't open.)
-2. Sign in to PawOS the way you always do — Google, GitHub, or email and password.
-3. Confirm, and PawOS shows a one-time authentication code such as `PAWOS-8F4K-92KD`.
-4. Paste the code into the terminal.
+The CLI prints a PawOS address and waits. It does not open a browser for you, so you choose where
+to open it: another browser, another profile, or your own computer when you are working over SSH.
 
-The code works once and expires after five minutes. Running `pawos` while signed out starts the
-same flow.
+1. Open the printed address in your browser.
+2. Sign in to PawOS the way you always do: Google, GitHub, or email and password. If the browser
+   is already signed in, PawOS shows that account; choose **Use a different account** to sign in
+   as someone else.
+3. Click **Authorize**. PawOS shows an authentication URL with a **Copy URL** button.
+4. Return to the terminal and paste the URL.
+
+PawOS then opens, signed in.
+
+The authentication URL works once and expires after five minutes. The CLI only reads it; it never
+opens it. It accepts nothing but PawOS's own completion address, and the one-time value inside it
+is of no use to anyone except the CLI that started the sign-in.
 
 ## Your repository
 
@@ -77,15 +125,16 @@ It then compares that repository with the one selected in your PawOS account:
 - **They match** — PawOS is ready.
 - **They differ** — the CLI shows both and asks whether to use the local repository in PawOS. It
   never switches by itself. Saying yes also changes the selection on PawOS Web.
-- **No GitHub repository here** — the CLI explains why (not a Git repository, no remote, or a
-  remote that isn't GitHub) and stops. It never falls back to another repository.
+- **No GitHub repository here** — PawOS still opens, in Chat. `/code` explains why code changes
+  aren't possible (not a Git repository, no remote, or a remote that isn't GitHub). It never falls
+  back to another repository.
 
 ## If something is interrupted
 
-A task is sent to PawOS once. If your connection drops, or you press Ctrl+C while PawOS is
-working, the task keeps running on PawOS and the CLI remembers its request ID. Run `pawos` in the
-same project again and it offers to check on that task — it asks PawOS for the result and never
-sends the task a second time.
+A task or a message is sent to PawOS once. If your connection drops, the CLI asks PawOS about that
+same request; it never sends it a second time. If you press Ctrl+C while PawOS is working on a code
+task, the task keeps running on PawOS and the CLI remembers its request ID: run `pawos` in the same
+project again and it offers to check on it.
 
 ## Current limitations
 
@@ -95,28 +144,59 @@ sends the task a second time.
   pushes to a new branch and opens a pull request instead.
 - PawOS does not run your code. It reads what your repository's own checks and preview
   deployments report, as one overall result.
+- Using your connected services from a conversation — reading GitHub issues, Slack messages or
+  Google Drive files, creating a Linear ticket, calling an MCP server — runs only in the PawOS
+  desktop app today. PawOS's servers do not offer it to PawOS Web or to this CLI, so when you ask
+  for it here PawOS tells you it needs the desktop app, and nothing is done.
+- Autonomous Work (ticket solving) likewise runs only in the PawOS desktop app, and its ticket
+  balance is not shown here.
+- Most services are connected from PawOS's Integrations page or the desktop app; the CLI points
+  you there and checks the result.
 - Plan limits are the same as on PawOS Web, because the same service does the work.
 
+## Not available from the CLI yet
+
+These need PawOS's servers to offer them to signed-in clients other than the desktop app. Today
+they don't, so the CLI does not attempt them and does not work around it — it never reaches into
+the desktop app, a database or a provider directly.
+
+| Capability | What PawOS's servers offer today | What the CLI does |
+|---|---|---|
+| MCP tool calls | None outside the desktop app (`web.mcpRead` is reported as desktop-only) | Shows the status; a request is answered by PawOS with "needs PawOS Desktop" |
+| Connector actions (GitHub issues, Slack, Google Drive, Linear, ...) | None outside the desktop app | Same |
+| Connecting a service | Listing and status; the connection itself is made in a browser on PawOS's Integrations page, or in the desktop app | Says where, then checks the status |
+| Autonomous Work (ticket solving) | None (`web.autonomousWork` is reported as not available yet) | Shows the status; cannot start it |
+| Ticket balance | Not returned by any client API | Not shown |
+| Usage and credits | Read-only, in Paw Compute (`/api/dashboard/overview`) | Shown as returned |
+| Plan and entitlements | The plan label and each capability's status (`/api/web/capabilities`) | Shown as returned; PawOS enforces them |
+
+Supporting the first five from the CLI is server work: PawOS would need to expose them through its
+authenticated API, with the same plan, credit and organization checks it applies in the desktop app.
+
 ## Security
+
+- The CLI talks only to PawOS's authenticated API, and PawOS decides there what the account may do.
+  It never talks to the desktop app's internals, to the database, or to a connected service.
 
 - The CLI never asks for your password, and never asks you to paste an access token.
 - Your session is kept in your operating system's credential store: Windows Credential Manager,
   the macOS Keychain, or the Secret Service (GNOME Keyring / KWallet) on Linux. Only the refresh
   token and your email address are stored; the access token is held in memory for one run.
 - If no credential store is available (for example on a server with no desktop session), the
-  session is kept in a file only your user can read, and the CLI tells you where.
+  session is kept in a file in your own configuration folder that only your user can read, and
+  the CLI tells you where. It is never written inside your project; if there is nowhere safe to
+  keep it, sign-in fails instead.
 - The CLI holds no GitHub token, no model key and no service key. GitHub access stays on PawOS's
   servers.
 - The CLI talks to one address: PawOS's. It prints no tokens, in normal output or in errors.
 - Text that comes back from PawOS is cleaned before it is printed, so it cannot send control
-  sequences to your terminal.
+  sequences to your terminal. Only https links are printed as links.
 
 ## Environment variables
 
 | Variable | Purpose |
 |---|---|
 | `PAWOS_API_URL` | Use another PawOS address (for example a local development server). https only, except `localhost`. |
-| `PAWOS_NO_BROWSER` | Don't try to open a browser; just print the sign-in address. |
 | `PAWOS_NO_ANIMATION` | Print plain progress lines instead of the animated display. |
 | `PAWOS_ASCII` | Use plain ASCII marks instead of symbols. |
 | `NO_COLOR` | Turn colour off. |

@@ -65,7 +65,11 @@ export class LiveStatus {
     this.title = title;
     this.body = body;
     if (this.term.caps.interactive) this.draw();
-    else this.printChanged(body);
+    else {
+      // No redrawing here: a new status is said once, on its own line, as it happens.
+      this.printOnce(line(seg(this.term.glyphs.mark, "accent"), " ", title));
+      this.printChanged(body);
+    }
   }
 
   stop(): void {

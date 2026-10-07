@@ -113,7 +113,8 @@ export interface OutputStream {
 
 export class Terminal {
   readonly glyphs: Glyphs;
-  private liveLines = 0;
+  /** The lines of the in-place display as last drawn (empty when there is none). */
+  private liveFrame: string[] = [];
   private cursorHidden = false;
 
   constructor(
@@ -148,7 +149,10 @@ export class Terminal {
 
   /**
    * Draws lines in place, replacing what the previous `live` call drew — for the progress display.
-   * On a terminal that can't redraw, nothing is drawn here: the caller prints changes as plain lines.
+   * Only the lines that actually changed are rewritten: when the PawOS mark pulses, one line is
+   * touched and the rest of the screen is left exactly as it is, so nothing flickers and nothing
+   * above the display is ever disturbed. On a terminal that can't redraw, nothing is drawn here:
+   * the caller prints changes as plain lines.
    */
   live(lines: Line[]): void {
     if (!this.caps.interactive) return;
@@ -156,18 +160,24 @@ export class Terminal {
       this.out.write("\u001b[?25l");
       this.cursorHidden = true;
     }
-    let frame = this.liveLines > 0 ? `\u001b[${this.liveLines}A` : "";
-    for (const segments of lines) frame += `\r\u001b[2K${this.format(segments, this.caps.columns - 1)}\n`;
+    const next = lines.map((segments) => this.format(segments, this.caps.columns - 1));
+    const previous = this.liveFrame;
+    let frame = previous.length > 0 ? `\u001b[${previous.length}A` : "";
+    next.forEach((text, index) => {
+      // An unchanged line is stepped over; a changed or new one is cleared and rewritten.
+      frame += index < previous.length && previous[index] === text ? "\u001b[1B" : `\r\u001b[2K${text}\n`;
+    });
+    frame += "\r";
     // Fewer lines than last time: clear what is left of the old frame.
-    if (lines.length < this.liveLines) frame += "\u001b[0J";
+    if (next.length < previous.length) frame += "\u001b[0J";
     this.out.write(frame);
-    this.liveLines = lines.length;
+    this.liveFrame = next;
   }
 
   /** Erases the in-place display and gives the cursor back. Always called before anything else is printed. */
   endLive(): void {
-    if (this.liveLines > 0) this.out.write(`\u001b[${this.liveLines}A\r\u001b[0J`);
-    this.liveLines = 0;
+    if (this.liveFrame.length > 0) this.out.write(`\u001b[${this.liveFrame.length}A\r\u001b[0J`);
+    this.liveFrame = [];
     if (this.cursorHidden) {
       this.out.write("\u001b[?25h");
       this.cursorHidden = false;

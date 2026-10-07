@@ -4,26 +4,69 @@ import { AuthRejectedError, AuthUnavailableError, type FetchLike, type Session }
 /**
  * The PawOS browser sign-in every PawOS client uses (pawos-web/src/lib/auth/deviceAuth.ts):
  *
- *   1. the client makes a secret and opens the browser at <PawOS>/auth/device with its SHA-256;
- *   2. the user signs in to PawOS as usual (Google, GitHub or email) and confirms;
- *   3. PawOS shows a one-time code; the user pastes it into the client;
- *   4. the client sends the code with its secret and receives a session of its own.
+ *   1. the client makes a secret and gives the user the address <PawOS>/auth/device, carrying the
+ *      secret's SHA-256;
+ *   2. the user signs in to PawOS as usual (Google, GitHub or email) and clicks Authorize;
+ *   3. PawOS shows a completion address carrying a one-time handoff; the user pastes it into the client;
+ *   4. the client checks the address, sends the handoff with its secret, and receives a session of its own.
  *
- * Nothing here logs, and no error carries a code, a secret, a token or a response body.
+ * The pasted address is only ever read as text: it is never opened, fetched or followed. Nothing
+ * here logs, and no error carries a handoff, a secret, a token or a response body.
  */
 export type DeviceClient = "cli" | "vscode";
 
+export const DEVICE_AUTH_PATH = "/auth/device";
+export const DEVICE_COMPLETION_PATH = "/auth/device/complete";
+/** 32 random bytes, base64url: 43 characters. */
+const HANDOFF = /^[A-Za-z0-9_-]{43}$/;
+
 export function beginDeviceLogin(apiBaseUrl: string, client: DeviceClient): { url: string; verifier: string } {
   const pair = createPkcePair();
-  const url = new URL(`${apiBaseUrl}/auth/device`);
+  const url = new URL(`${apiBaseUrl}${DEVICE_AUTH_PATH}`);
   url.searchParams.set("challenge", pair.challenge);
   url.searchParams.set("client", client);
   return { url: url.toString(), verifier: pair.verifier };
 }
 
-/** Whether pasted text could be a PawOS authentication code ("PAWOS-8F4K-92KD", typed any way). */
-export function looksLikeLoginCode(raw: string): boolean {
-  return /^[A-Z0-9]{8}$/.test(raw.toUpperCase().replace(/[\s-]/g, "").replace(/^PAWOS/, ""));
+export type CompletionUrl = { ok: true; handoff: string } | { ok: false; reason: string };
+
+const NOT_THE_URL = "That isn't the authentication URL. Copy the URL PawOS shows after you click Authorize.";
+
+/**
+ * Reads the completion address the user pasted and returns the handoff in it — or why it was not
+ * accepted. Strict on purpose: it must be exactly PawOS's own address, the completion path, and one
+ * `handoff` parameter of the right shape. Anything else (another site, another path, a second or
+ * repeated parameter, credentials, a fragment) is refused before anything is sent anywhere.
+ * The reason never repeats what was pasted.
+ */
+export function parseCompletionUrl(input: unknown, apiBaseUrl: string): CompletionUrl {
+  const text = typeof input === "string" ? input.trim() : "";
+  if (!text) return { ok: false, reason: "Paste the authentication URL PawOS shows after you click Authorize." };
+  // Control characters or whitespace inside it: not something PawOS produced.
+  if (text.length > 512 || /[\s\u0000-\u001f\u007f-\u009f]/.test(text)) return { ok: false, reason: NOT_THE_URL };
+
+  let url: URL;
+  let expected: URL;
+  try {
+    url = new URL(text);
+    expected = new URL(apiBaseUrl);
+  } catch {
+    return { ok: false, reason: NOT_THE_URL };
+  }
+  if (url.protocol !== expected.protocol || url.host !== expected.host || url.username || url.password) {
+    return { ok: false, reason: `That address isn't from ${expected.host}. Copy the URL PawOS shows after you click Authorize.` };
+  }
+  if (url.pathname === DEVICE_AUTH_PATH) {
+    return { ok: false, reason: "That's the sign-in address. Open it in your browser, click Authorize, then paste the URL PawOS shows you." };
+  }
+  if (url.pathname !== DEVICE_COMPLETION_PATH || url.hash) return { ok: false, reason: NOT_THE_URL };
+
+  const names = [...url.searchParams.keys()];
+  const handoffs = url.searchParams.getAll("handoff");
+  if (handoffs.length === 0) return { ok: false, reason: "That URL is incomplete. Copy the whole URL PawOS shows, using its Copy URL button." };
+  // Exactly one parameter, and it is the handoff: nothing repeated, nothing extra to be ambiguous about.
+  if (handoffs.length !== 1 || names.length !== 1 || !HANDOFF.test(handoffs[0]!)) return { ok: false, reason: NOT_THE_URL };
+  return { ok: true, handoff: handoffs[0]! };
 }
 
 function toSession(body: unknown): Session | null {
@@ -53,14 +96,18 @@ function said(data: Record<string, unknown>, fallback: string): string {
   return typeof data.message === "string" && data.message ? data.message : fallback;
 }
 
-/** Trades the pasted one-time code for a session. Only the client that started the sign-in can. */
-export async function exchangeLoginCode(apiBaseUrl: string, code: string, verifier: string, fetchImpl: FetchLike = fetch): Promise<Session> {
-  if (!looksLikeLoginCode(code)) throw new AuthRejectedError("That doesn't look like a PawOS authentication code. It looks like PAWOS-XXXX-XXXX.", "invalid_code");
-  const { status, data } = await post(apiBaseUrl, "/api/auth/device/exchange", { code: code.trim(), verifier }, fetchImpl);
+/**
+ * Trades the handoff from a pasted completion address for a session. Only the client that started
+ * the sign-in can: PawOS checks the verifier and the kind of client the handoff was issued to.
+ */
+export async function exchangeCompletionUrl(apiBaseUrl: string, pastedUrl: unknown, verifier: string, client: DeviceClient, fetchImpl: FetchLike = fetch): Promise<Session> {
+  const parsed = parseCompletionUrl(pastedUrl, apiBaseUrl);
+  if (!parsed.ok) throw new AuthRejectedError(parsed.reason, "invalid_url");
+  const { status, data } = await post(apiBaseUrl, "/api/auth/device/exchange", { handoff: parsed.handoff, verifier, client }, fetchImpl);
   const session = status >= 200 && status < 300 && data.ok === true ? toSession(data) : null;
   if (session) return session;
   if (status === 429) throw new AuthUnavailableError(said(data, "Too many attempts. Wait a minute and try again."));
-  if (status >= 400 && status < 500) throw new AuthRejectedError(said(data, "That code isn't valid. Start sign-in again."), typeof data.code === "string" ? data.code : null);
+  if (status >= 400 && status < 500) throw new AuthRejectedError(said(data, "That authentication URL isn't valid. Start sign-in again."), typeof data.code === "string" ? data.code : null);
   throw new AuthUnavailableError(said(data, "PawOS sign-in is unavailable right now. Please try again."));
 }
 

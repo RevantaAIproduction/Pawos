@@ -7,6 +7,8 @@ import * as readline from "readline";
  */
 export interface Prompter {
   ask(prompt: string): Promise<string | null>;
+  /** True when the last `ask` ended because the user pressed Ctrl+C (rather than input running out). */
+  readonly interrupted: boolean;
   close(): void;
 }
 
@@ -28,9 +30,11 @@ type Input = NodeJS.ReadableStream & { isTTY?: boolean };
 export function createPrompter(input: Input, output: NodeJS.WritableStream): Prompter {
   if (input.isTTY) {
     let open: readline.Interface | null = null;
-    return {
-      ask: (prompt) =>
+    const prompter = {
+      interrupted: false,
+      ask: (prompt: string) =>
         new Promise<string | null>((resolve) => {
+          prompter.interrupted = false;
           const rl = readline.createInterface({ input, output, terminal: true });
           open = rl;
           let answered = false;
@@ -42,6 +46,8 @@ export function createPrompter(input: Input, output: NodeJS.WritableStream): Pro
             resolve(value);
           };
           rl.on("SIGINT", () => {
+            // Ctrl+C at a prompt cancels that prompt. Whatever was typed is discarded, never submitted.
+            prompter.interrupted = true;
             output.write("\n");
             finish(null);
           });
@@ -50,6 +56,7 @@ export function createPrompter(input: Input, output: NodeJS.WritableStream): Pro
         }),
       close: () => open?.close(),
     };
+    return prompter;
   }
 
   const queued: string[] = [];
@@ -66,6 +73,7 @@ export function createPrompter(input: Input, output: NodeJS.WritableStream): Pro
     for (const next of waiting.splice(0)) next(null);
   });
   return {
+    interrupted: false, // piped input has no Ctrl+C: it simply ends
     ask: (prompt) => {
       output.write(prompt);
       if (queued.length > 0) return Promise.resolve(queued.shift()!).then((text) => (output.write("\n"), text));

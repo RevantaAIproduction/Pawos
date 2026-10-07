@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { runCli } from "../cli";
 import { REQUEST_ID_PATTERN, newRequestId } from "../shared";
 import { PENDING_FILE_NAME } from "../state/pendingTask";
-import { change, delivered, harness, pushed, reply, step } from "../testing/harness";
+import { HANDOFF, change, completionUrl, delivered, harness, pushed, reply, step } from "../testing/harness";
 
 /** Running a task from `pawos`: sent once, followed to its result, and never sent twice. */
 const cleanups: (() => void)[] = [];
@@ -53,7 +53,8 @@ describe("task submission", () => {
     const h = start({ signedIn: true, answers: ["", "   ", "x".repeat(4001), "exit", TASK] });
     expect(await runCli([], h.ctx)).toBe(0);
     expect(h.server.starts()).toHaveLength(0);
-    expect(h.output()).toContain("Keep the task under 4,000 characters.");
+    expect(h.server.chats()).toHaveLength(0);
+    expect(h.output()).toContain("Keep it under 4,000 characters.");
   });
 });
 
@@ -105,7 +106,7 @@ describe("completion", () => {
     h.server.sends = [delivered("r", pushed("r"))];
     h.server.polls = [pushed("r")];
     await runCli([], h.ctx);
-    expect(h.output().match(/What would you like PawOS to do\?/g)).toHaveLength(2);
+    expect(h.output().match(/What would you like to work on\?/g)).toHaveLength(2);
   });
 
   it("says so when PawOS found nothing to change", async () => {
@@ -149,8 +150,8 @@ describe("failure", () => {
     expect(fs.existsSync(pendingFile(h))).toBe(false);
   });
 
-  it("a session that ends mid-task stops the session and says how to continue", async () => {
-    const h = start({ signedIn: true, answers: [TASK, "another"] });
+  it("a session that ends mid-task is cleared, and PawOS returns to sign-in without sending the task again", async () => {
+    const h = start({ signedIn: true, answers: [TASK, null] });
     h.server.sends = [
       () => {
         h.server.validAccess.clear();
@@ -158,9 +159,30 @@ describe("failure", () => {
         return reply({ code: "not_authenticated", message: "Sign in to continue." }, 401);
       },
     ];
-    expect(await runCli([], h.ctx)).toBe(1);
-    expect(h.output()).toContain("Your PawOS session has expired. Sign in again.");
-    expect(h.output()).toContain("Run pawos login, then pawos, to continue.");
+    expect(await runCli([], h.ctx)).toBe(1); // the user left at the sign-in prompt
+    const output = h.output();
+    expect(output).toContain("Your PawOS session has expired. Sign in again.");
+    expect(output.indexOf("To sign in, open this URL in your browser:")).toBeGreaterThan(output.indexOf("PawOS could not complete the task"));
+    expect(h.keyring!.value).toBeNull(); // the dead session is gone from the credential store
+    expect(h.server.starts()).toHaveLength(1);
+    // One refresh attempt for the refused token, and no loop.
+    expect(h.server.calls.filter((call) => call.path === "/api/auth/device/refresh").length).toBeLessThanOrEqual(2);
+  });
+
+  it("after signing in again the same PawOS session carries on", async () => {
+    const h = start({ signedIn: true, answers: [TASK, completionUrl(), null] });
+    h.server.handoffs.set(HANDOFF, "valid");
+    h.server.sends = [
+      () => {
+        h.server.validAccess.clear();
+        h.server.validRefresh.clear();
+        return reply({ code: "not_authenticated", message: "Sign in to continue." }, 401);
+      },
+    ];
+    expect(await runCli([], h.ctx)).toBe(0);
+    const output = h.output();
+    expect(output).toContain("Signed in as alice@example.com");
+    expect(output.match(/What would you like to work on\?/g)).toHaveLength(2); // back at the prompt
     expect(h.server.starts()).toHaveLength(1);
   });
 });

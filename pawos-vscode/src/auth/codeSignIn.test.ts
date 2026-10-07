@@ -39,9 +39,12 @@ function setup(respond: (path: string, body: Record<string, unknown>, authorizat
   return { session, secrets, calls, fetchImpl };
 }
 
+const HANDOFF = "h".repeat(43);
+const COMPLETION_URL = `${API}/auth/device/complete?handoff=${HANDOFF}`;
+
 const SESSION = { accessToken: "access-1.jwt.sig", refreshToken: "refresh-1", expiresAt: Math.floor(Date.now() / 1000) + 3600, email: "dev@example.com" };
 
-describe("signing in to the extension with a pasted code", () => {
+describe("signing in to the extension with the pasted authentication URL", () => {
   it("opens PawOS's own sign-in page for VS Code, carrying only a challenge", () => {
     const { session } = setup(() => json(404, {}));
     const pending = session.beginSignIn("vscode");
@@ -53,29 +56,48 @@ describe("signing in to the extension with a pasted code", () => {
     expect(session.status).toBe("signingIn");
   });
 
-  it("exchanges the code and stores the session in SecretStorage — and nowhere else", async () => {
+  it("exchanges the handoff in the pasted URL and stores the session in SecretStorage — and nowhere else", async () => {
     const { session, secrets, calls } = setup((path) => (path === "/api/auth/device/exchange" ? json(200, { ok: true, session: SESSION }) : json(404, {})));
     const pending = session.beginSignIn("vscode");
-    await pending.complete("PAWOS-8F4K-92KD");
+    await pending.complete(`  ${COMPLETION_URL}\n`);
 
     expect(session.status).toBe("signedIn");
     expect(session.email).toBe("dev@example.com");
     expect([...secrets.values.keys()]).toEqual([SESSION_SECRET_KEY]);
     expect(JSON.parse(secrets.values.get(SESSION_SECRET_KEY)!)).toEqual(SESSION);
-    // The verifier that goes with the code is the one behind the challenge the browser was given.
+    // The verifier that goes with the handoff is the one behind the challenge the browser was given.
     const verifier = String(calls[0]!.body.verifier);
     expect(new URL(pending.url).searchParams.get("challenge")).toBe(createHash("sha256").update(verifier).digest("base64url"));
-    expect(calls[0]!.body.code).toBe("PAWOS-8F4K-92KD");
+    expect(calls[0]!.body).toEqual({ handoff: HANDOFF, verifier, client: "vscode" });
   });
 
-  it("a refused code leaves the extension signed out with nothing stored", async () => {
-    const { session, secrets } = setup(() => json(400, { ok: false, code: "code_expired", message: "That code has expired. Start sign-in again." }));
-    await expect(session.beginSignIn("vscode").complete("PAWOS-8F4K-92KD")).rejects.toThrow("That code has expired. Start sign-in again.");
+  it("a refused handoff leaves the extension signed out with nothing stored", async () => {
+    const { session, secrets } = setup(() => json(400, { ok: false, code: "handoff_expired", message: "That authentication URL has expired. Start sign-in again." }));
+    await expect(session.beginSignIn("vscode").complete(COMPLETION_URL)).rejects.toThrow("That authentication URL has expired. Start sign-in again.");
     expect(session.status).toBe("signedOut");
     expect(secrets.values.size).toBe(0);
   });
 
-  it("closing the code box cancels the sign-in without disturbing an existing session", async () => {
+  it("the box only accepts PawOS's own completion address, and says why without sending anything", () => {
+    const { session, calls } = setup(() => json(404, {}));
+    const pending = session.beginSignIn("vscode");
+    expect(pending.check(COMPLETION_URL)).toEqual({ ok: true, handoff: HANDOFF });
+    for (const pasted of [
+      `https://evil.example/auth/device/complete?handoff=${HANDOFF}`,
+      `${API}/somewhere/else?handoff=${HANDOFF}`,
+      `${API}/auth/device/complete`,
+      `${API}/auth/device/complete?handoff=${HANDOFF}&handoff=${HANDOFF}`,
+      "PAWOS-8F4K-92KD",
+      pending.url,
+    ]) {
+      const checked = pending.check(pasted);
+      expect(checked.ok).toBe(false);
+      if (!checked.ok) expect(checked.reason).not.toContain(HANDOFF); // the reason never repeats what was pasted
+    }
+    expect(calls).toHaveLength(0);
+  });
+
+  it("closing the box cancels the sign-in without disturbing an existing session", async () => {
     const { session, secrets } = setup(() => json(404, {}));
     secrets.values.set(SESSION_SECRET_KEY, JSON.stringify(SESSION));
     await session.initialize();
@@ -122,7 +144,7 @@ describe("signing in to the extension with a pasted code", () => {
       auth: session,
       startSignIn: async () => {
         started += 1;
-        throw new Error("That code isn't valid. Start sign-in again.");
+        throw new Error("That authentication URL isn't valid. Start sign-in again.");
       },
       client,
       getConfig: () => resolveApiConfig(API, "setting"),
@@ -132,6 +154,6 @@ describe("signing in to the extension with a pasted code", () => {
     });
     await controller.signIn();
     expect(started).toBe(1);
-    expect(controller.state).toMatchObject({ auth: "signedOut", error: "That code isn't valid. Start sign-in again." });
+    expect(controller.state).toMatchObject({ auth: "signedOut", error: "That authentication URL isn't valid. Start sign-in again." });
   });
 });

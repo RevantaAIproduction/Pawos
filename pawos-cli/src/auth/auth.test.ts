@@ -4,10 +4,9 @@ import * as path from "path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runCli } from "../cli";
 import { apiConfig, configDirectory } from "../config";
-import { AuthRejectedError, AuthRequiredError, AuthUnavailableError, SESSION_EXPIRED_NOTICE, SessionManager, exchangeLoginCode, looksLikeLoginCode, type Session } from "../shared";
-import { API, FakePawos, MemoryKeyring, harness } from "../testing/harness";
-import { openerFor } from "./openBrowser";
-import { CliSessionStore, KEYRING_ACCOUNT, KEYRING_SERVICE, SESSION_FILE_NAME, keyringServiceFor } from "./sessionStore";
+import { AuthRejectedError, AuthRequiredError, AuthUnavailableError, SESSION_EXPIRED_NOTICE, SessionManager, exchangeCompletionUrl, parseCompletionUrl, type Session } from "../shared";
+import { API, FakePawos, HANDOFF, MemoryKeyring, completionUrl, harness } from "../testing/harness";
+import { CliSessionStore, KEYRING_ACCOUNT, KEYRING_SERVICE, SESSION_FILE_NAME, SessionStorageError, isInside, keyringServiceFor } from "./sessionStore";
 
 /** Signing in with a one-time code, and where the CLI keeps the session afterwards. */
 const directories: string[] = [];
@@ -24,63 +23,137 @@ afterEach(() => {
 const VERIFIER = "v".repeat(64);
 const session = (overrides: Partial<Session> = {}): Session => ({ accessToken: "access.jwt.sig", refreshToken: "refresh-1", expiresAt: Math.floor(Date.now() / 1000) + 3600, email: "alice@example.com", ...overrides });
 
-describe("one-time code handling", () => {
-  it.each([["PAWOS-8F4K-92KD"], ["pawos-8f4k-92kd"], ["8F4K92KD"], [" PAWOS 8F4K 92KD "], ["8f4k-92kd"]])("recognises a code typed as %s", (code) => {
-    expect(looksLikeLoginCode(code)).toBe(true);
+describe("the authentication URL the user pastes", () => {
+  const URL_OK = completionUrl();
+
+  it("completion URL accepted: PawOS's own completion address with one handoff", () => {
+    expect(parseCompletionUrl(URL_OK, API)).toEqual({ ok: true, handoff: HANDOFF });
+    // Pasted with the whitespace a terminal adds around it.
+    expect(parseCompletionUrl(`  ${URL_OK}\r\n`, API)).toEqual({ ok: true, handoff: HANDOFF });
   });
 
-  it.each([[""], ["PAWOS"], ["PAWOS-8F4K"], ["PAWOS-8F4K-92KD-EXTRA"], ["https://pawos.test/auth/device"], ["eyJhbGciOiJIUzI1NiJ9.e30.sig"]])("rejects %s before anything is sent", async (code) => {
-    expect(looksLikeLoginCode(code)).toBe(false);
+  it.each([
+    ["another site", `https://evil.example/auth/device/complete?handoff=${HANDOFF}`],
+    ["a look-alike host", `https://pawos.test.evil.example/auth/device/complete?handoff=${HANDOFF}`],
+    ["a subdomain", `https://login.pawos.test/auth/device/complete?handoff=${HANDOFF}`],
+    ["another port", `https://pawos.test:8443/auth/device/complete?handoff=${HANDOFF}`],
+    ["plain http", `http://pawos.test/auth/device/complete?handoff=${HANDOFF}`],
+    ["credentials in the address", `https://pawos.test@evil.example/auth/device/complete?handoff=${HANDOFF}`],
+    ["a user name on the right host", `https://someone@pawos.test/auth/device/complete?handoff=${HANDOFF}`],
+  ])("invalid host rejected: %s", (_name, pasted) => {
+    const result = parseCompletionUrl(pasted, API);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe("That address isn't from pawos.test. Copy the URL PawOS shows after you click Authorize.");
+  });
+
+  it.each([
+    ["another page", `${API}/dashboard?handoff=${HANDOFF}`],
+    ["a longer path", `${API}/auth/device/complete/extra?handoff=${HANDOFF}`],
+    ["a trailing slash", `${API}/auth/device/complete/?handoff=${HANDOFF}`],
+    ["path tricks", `${API}/auth/device/complete/../complete/x?handoff=${HANDOFF}`],
+    ["the API route itself", `${API}/api/auth/device/exchange?handoff=${HANDOFF}`],
+    ["the handoff in a fragment", `${API}/auth/device/complete#handoff=${HANDOFF}`],
+    ["a fragment after it", `${API}/auth/device/complete?handoff=${HANDOFF}#x`],
+  ])("invalid path rejected: %s", (_name, pasted) => {
+    expect(parseCompletionUrl(pasted, API).ok).toBe(false);
+  });
+
+  it("the sign-in address pasted back by mistake gets its own explanation", () => {
+    const result = parseCompletionUrl(`${API}/auth/device?challenge=${"c".repeat(43)}&client=cli`, API);
+    expect(result).toEqual({ ok: false, reason: "That's the sign-in address. Open it in your browser, click Authorize, then paste the URL PawOS shows you." });
+  });
+
+  it.each([
+    ["no parameters", `${API}/auth/device/complete`],
+    ["an empty query", `${API}/auth/device/complete?`],
+    ["another parameter only", `${API}/auth/device/complete?code=${HANDOFF}`],
+  ])("missing handoff rejected: %s", (_name, pasted) => {
+    expect(parseCompletionUrl(pasted, API)).toEqual({ ok: false, reason: "That URL is incomplete. Copy the whole URL PawOS shows, using its Copy URL button." });
+  });
+
+  it.each([
+    ["the handoff twice", `${API}/auth/device/complete?handoff=${HANDOFF}&handoff=${HANDOFF}`],
+    ["two different handoffs", `${API}/auth/device/complete?handoff=${HANDOFF}&handoff=${"x".repeat(43)}`],
+    ["an extra parameter", `${API}/auth/device/complete?handoff=${HANDOFF}&next=https://evil.example`],
+    ["an extra parameter first", `${API}/auth/device/complete?client=cli&handoff=${HANDOFF}`],
+    ["an empty handoff", `${API}/auth/device/complete?handoff=`],
+    ["a handoff that is too short", `${API}/auth/device/complete?handoff=abc`],
+    ["a handoff that is too long", `${API}/auth/device/complete?handoff=${HANDOFF}extra`],
+    ["a handoff with other characters", `${API}/auth/device/complete?handoff=${"h".repeat(42)}%2F`],
+  ])("duplicated or ambiguous parameters rejected: %s", (_name, pasted) => {
+    expect(parseCompletionUrl(pasted, API).ok).toBe(false);
+  });
+
+  it.each([[""], ["   "], ["not a url"], ["PAWOS-8F4K-92KD"], [HANDOFF], ["javascript:alert(1)"], ["file:///etc/passwd"], [`${URL_OK} and more`], [`${API}/auth/device/complete?handoff=${"h".repeat(20)}\n${"h".repeat(23)}`], ["x".repeat(600)], [null], [undefined], [42]])(
+    "malformed URL rejected: %j",
+    (pasted) => {
+      expect(parseCompletionUrl(pasted, API).ok).toBe(false);
+    }
+  );
+
+  it("a rejection never repeats what was pasted", () => {
+    for (const pasted of [`https://evil.example/auth/device/complete?handoff=${HANDOFF}`, `${API}/auth/device/complete?handoff=${HANDOFF}&handoff=${HANDOFF}`, `${API}/x?handoff=${HANDOFF}`]) {
+      const result = parseCompletionUrl(pasted, API);
+      if (!result.ok) {
+        expect(result.reason).not.toContain(HANDOFF);
+        expect(result.reason).not.toContain("evil.example");
+      }
+    }
+  });
+
+  it("nothing is sent anywhere for a URL that fails these checks, and the URL is never fetched or opened", async () => {
     const server = new FakePawos();
-    await expect(exchangeLoginCode(API, code, VERIFIER, server.fetch)).rejects.toBeInstanceOf(AuthRejectedError);
+    for (const pasted of [`https://evil.example/auth/device/complete?handoff=${HANDOFF}`, `${API}/auth/device/complete`, "not a url"]) {
+      await expect(exchangeCompletionUrl(API, pasted, VERIFIER, "cli", server.fetch)).rejects.toBeInstanceOf(AuthRejectedError);
+    }
     expect(server.calls).toHaveLength(0);
   });
 
-  it("successful exchange: the code and the verifier go to PawOS, a session comes back", async () => {
+  it("successful exchange: the handoff, the verifier and the client kind go to PawOS's exchange route — the pasted address itself is never requested", async () => {
     const server = new FakePawos();
-    server.codes.set("8F4K92KD", "valid");
-    const result = await exchangeLoginCode(API, "PAWOS-8F4K-92KD", VERIFIER, server.fetch);
+    server.handoffs.set(HANDOFF, "valid");
+    const result = await exchangeCompletionUrl(API, URL_OK, VERIFIER, "cli", server.fetch);
     expect(result).toMatchObject({ accessToken: "access-1.jwt.sig", refreshToken: "refresh-1", email: "alice@example.com" });
-    expect(server.calls).toEqual([{ method: "POST", path: "/api/auth/device/exchange", body: { code: "PAWOS-8F4K-92KD", verifier: VERIFIER }, authorization: null }]);
+    expect(server.calls).toEqual([{ method: "POST", path: "/api/auth/device/exchange", body: { handoff: HANDOFF, verifier: VERIFIER, client: "cli" }, authorization: null }]);
   });
 
-  it("expired code", async () => {
+  it("expired handoff rejected", async () => {
     const server = new FakePawos();
-    server.codes.set("8F4K92KD", "expired");
-    const error = await exchangeLoginCode(API, "PAWOS-8F4K-92KD", VERIFIER, server.fetch).catch((e: unknown) => e);
+    server.handoffs.set(HANDOFF, "expired");
+    const error = await exchangeCompletionUrl(API, URL_OK, VERIFIER, "cli", server.fetch).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(AuthRejectedError);
-    expect(error).toMatchObject({ code: "code_expired", message: "That code has expired. Start sign-in again." });
+    expect(error).toMatchObject({ code: "handoff_expired", message: "That authentication URL has expired. Start sign-in again." });
   });
 
-  it("invalid code", async () => {
-    const error = await exchangeLoginCode(API, "PAWOS-ZZZZ-ZZZZ", VERIFIER, new FakePawos().fetch).catch((e: unknown) => e);
+  it("an unknown handoff is rejected", async () => {
+    const error = await exchangeCompletionUrl(API, URL_OK, VERIFIER, "cli", new FakePawos().fetch).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(AuthRejectedError);
-    expect(error).toMatchObject({ code: "invalid_code" });
+    expect(error).toMatchObject({ code: "invalid_handoff" });
   });
 
-  it("the code is single-use", async () => {
+  it("reused handoff rejected: it is invalid after one exchange", async () => {
     const server = new FakePawos();
-    server.codes.set("8F4K92KD", "valid");
-    await exchangeLoginCode(API, "PAWOS-8F4K-92KD", VERIFIER, server.fetch);
-    await expect(exchangeLoginCode(API, "PAWOS-8F4K-92KD", VERIFIER, server.fetch)).rejects.toMatchObject({ code: "invalid_code" });
+    server.handoffs.set(HANDOFF, "valid");
+    await exchangeCompletionUrl(API, URL_OK, VERIFIER, "cli", server.fetch);
+    await expect(exchangeCompletionUrl(API, URL_OK, VERIFIER, "cli", server.fetch)).rejects.toMatchObject({ code: "invalid_handoff" });
   });
 
   it.each([
     [429, { ok: false, code: "rate_limited", message: "Too many attempts. Wait a minute and try again." }, "Too many attempts. Wait a minute and try again."],
     [502, {}, "PawOS sign-in is unavailable right now. Please try again."],
     [200, { ok: true, session: { accessToken: "", refreshToken: "" } }, "PawOS sign-in is unavailable right now. Please try again."],
-  ])("HTTP %i is PawOS being unavailable, not the code being wrong", async (status, body, message) => {
-    const error = await exchangeLoginCode(API, "PAWOS-8F4K-92KD", VERIFIER, async () => new Response(JSON.stringify(body), { status })).catch((e: unknown) => e);
+  ])("HTTP %i is PawOS being unavailable, not the URL being wrong", async (status, body, message) => {
+    const error = await exchangeCompletionUrl(API, URL_OK, VERIFIER, "cli", async () => new Response(JSON.stringify(body), { status })).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(AuthUnavailableError);
     expect((error as Error).message).toBe(message);
   });
 
-  it("a newer sign-in makes an older one's code unusable here", async () => {
+  it("a newer sign-in makes an older one's URL unusable here", async () => {
     const h = harness();
-    h.server.codes.set("8F4K92KD", "valid");
+    h.server.handoffs.set(HANDOFF, "valid");
     const older = h.ctx.session.beginSignIn("cli");
     h.ctx.session.beginSignIn("cli");
-    await expect(older.complete("PAWOS-8F4K-92KD")).rejects.toThrow("restarted");
+    await expect(older.complete(URL_OK)).rejects.toThrow("restarted");
     expect(h.server.calls).toHaveLength(0);
     h.cleanup();
   });
@@ -133,12 +206,58 @@ describe("secure session storage", () => {
   });
 
   it("the CLI says so when it had to use the file", async () => {
-    const h = harness({ keyring: null, answers: ["PAWOS-8F4K-92KD"] });
-    h.server.codes.set("8F4K92KD", "valid");
+    const h = harness({ keyring: null, answers: [completionUrl(), null] });
+    h.server.handoffs.set(HANDOFF, "valid");
     await runCli(["login"], h.ctx);
     expect(h.output()).toContain("No system credential store is available, so the session is kept in a file only you can read:");
     expect(h.output()).toContain(path.join(h.directory, SESSION_FILE_NAME));
     h.cleanup();
+  });
+
+  it("the fallback file is in the user's configuration folder, never in the project", async () => {
+    // PawOS's folder has (mis)been pointed inside the project the user is working in.
+    const project = tempDirectory();
+    const store = new CliSessionStore(null, path.join(project, ".pawos"), project);
+    await expect(store.write(session())).rejects.toBeInstanceOf(SessionStorageError);
+    expect(fs.existsSync(path.join(project, ".pawos"))).toBe(false); // nothing was written
+    expect(await store.read()).toBeNull(); // and nothing is kept in memory as if signed in
+    expect(store.storage).toBe("none");
+
+    expect(isInside("C:\\Projects\\MyApp\\.pawos\\session.json", "C:\\Projects\\MyApp", "win32")).toBe(true);
+    expect(isInside("c:/projects/myapp/x", "C:\\Projects\\MyApp", "win32")).toBe(true);
+    expect(isInside("C:\\Projects\\MyApp2\\session.json", "C:\\Projects\\MyApp", "win32")).toBe(false);
+    expect(isInside("C:\\Users\\dev\\AppData\\Roaming\\pawos\\session.json", "C:\\Projects\\MyApp", "win32")).toBe(false);
+  });
+
+  it("with a credential store, being inside the project doesn't matter: nothing is written to disk at all", async () => {
+    const project = tempDirectory();
+    const keyring = new MemoryKeyring();
+    await new CliSessionStore(keyring, path.join(project, ".pawos"), project).write(session());
+    expect(keyring.value).not.toBeNull();
+    expect(fs.readdirSync(project)).toEqual([]);
+  });
+
+  it("sign-in fails, rather than storing the session unsafely", async () => {
+    const h = harness({ keyring: null, answers: [completionUrl(), null] });
+    h.server.handoffs.set(HANDOFF, "valid");
+    // The only place left is inside the project.
+    const project = tempDirectory();
+    const unsafe = new CliSessionStore(null, path.join(project, ".pawos"), project);
+    h.ctx.store = unsafe;
+    h.ctx.session = new SessionManager({ storage: unsafe, getApiBaseUrl: () => API, fetchImpl: h.server.fetch });
+    expect(await runCli(["login"], h.ctx)).toBe(1);
+    expect(h.output()).toContain("PawOS couldn't store your session safely");
+    expect(h.output()).not.toContain("Signed in as");
+    expect(h.ctx.session.status).toBe("signedOut");
+    expect(fs.readdirSync(project)).toEqual([]);
+    h.cleanup();
+  });
+
+  it("a fallback folder that can't be written fails sign-in the same way", async () => {
+    const blocked = path.join(tempDirectory(), "a-file");
+    fs.writeFileSync(blocked, "not a folder");
+    const store = new CliSessionStore(null, path.join(blocked, "pawos"));
+    await expect(store.write(session())).rejects.toBeInstanceOf(SessionStorageError);
   });
 
   it("moving to the credential store removes the older file copy", async () => {
@@ -238,23 +357,26 @@ describe("token refresh", () => {
 describe("no token logging", () => {
   it("a full sign-in, a task-less session and a sign-out put no token on the screen or in the console", async () => {
     const spies = (["log", "info", "warn", "error", "debug"] as const).map((level) => vi.spyOn(console, level).mockImplementation(() => undefined));
-    const h = harness({ answers: ["PAWOS-8F4K-92KD", null] });
-    h.server.codes.set("8F4K92KD", "valid");
+    const h = harness({ answers: [completionUrl(), null] });
+    h.server.handoffs.set(HANDOFF, "valid");
     await runCli([], h.ctx);
     await runCli(["status"], h.ctx);
     await runCli(["logout"], h.ctx);
     const verifier = String(h.server.calls.find((call) => call.path === "/api/auth/device/exchange")!.body?.verifier);
     const seen = h.raw() + JSON.stringify(spies.flatMap((spy) => spy.mock.calls));
-    for (const secret of ["access-1", "refresh-1", "Bearer ", verifier]) expect(seen).not.toContain(secret);
+    // The handoff was typed by the user (the scripted keyboard echoes it once); the CLI itself never prints it again.
+    const printedByCli = seen.split(completionUrl()).join("");
+    for (const secret of ["access-1", "refresh-1", "Bearer ", verifier, HANDOFF]) expect(printedByCli).not.toContain(secret);
     expect(spies.flatMap((spy) => spy.mock.calls)).toEqual([]);
     h.cleanup();
   });
 
   it("errors never carry a token or a response body", async () => {
     const leaky = async () => new Response(JSON.stringify({ ok: false, detail: "refresh-1 access.jwt.sig", message: "" }), { status: 500 });
-    const error = (await exchangeLoginCode(API, "PAWOS-8F4K-92KD", VERIFIER, leaky).catch((e: unknown) => e)) as Error;
+    const error = (await exchangeCompletionUrl(API, completionUrl(), VERIFIER, "cli", leaky).catch((e: unknown) => e)) as Error;
     expect(error.message).toBe("PawOS sign-in is unavailable right now. Please try again.");
-    expect(JSON.stringify(error)).not.toContain(VERIFIER);
+    expect(JSON.stringify(error) + error.message).not.toContain(VERIFIER);
+    expect(error.message).not.toContain(HANDOFF);
   });
 
   it("the session is only ever sent to PawOS's own address", async () => {
@@ -265,18 +387,11 @@ describe("no token logging", () => {
   });
 });
 
-describe("where the CLI connects and how it opens the browser", () => {
+describe("where the CLI connects", () => {
   it("talks to PawOS, or to the address in PAWOS_API_URL — https only", () => {
     expect(apiConfig({})).toEqual({ ok: true, config: { apiBaseUrl: "https://pawos.revantaai.com" } });
     expect(apiConfig({ PAWOS_API_URL: "http://localhost:3000/" })).toEqual({ ok: true, config: { apiBaseUrl: "http://localhost:3000" } });
     expect(apiConfig({ PAWOS_API_URL: "http://pawos.example.com" }).ok).toBe(false);
     expect(apiConfig({ PAWOS_API_URL: "https://user:pass@pawos.example.com" }).ok).toBe(false);
-  });
-
-  it("hands the address to the system's opener as one argument, never through a shell", () => {
-    const url = "https://pawos.test/auth/device?challenge=abc&client=cli";
-    expect(openerFor("win32", url)).toEqual({ command: "rundll32", args: ["url.dll,FileProtocolHandler", url] });
-    expect(openerFor("darwin", url)).toEqual({ command: "open", args: [url] });
-    expect(openerFor("linux", url)).toEqual({ command: "xdg-open", args: [url] });
   });
 });

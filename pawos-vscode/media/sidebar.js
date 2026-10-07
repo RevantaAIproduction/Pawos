@@ -116,7 +116,7 @@
     if (s.configProblem) {
       nodes.push(para(s.configProblem, "warning"), button("Open Settings", () => send("openSettings")));
     } else if (s.auth === "signingIn") {
-      nodes.push(para("Sign in to PawOS in your browser, then paste the authentication code it shows you into the box at the top of VS Code."), secondary("Start Again", () => send("signIn")));
+      nodes.push(para("Sign in to PawOS in your browser and click Authorize, then paste the authentication URL it shows you into the box at the top of VS Code."), secondary("Start Again", () => send("signIn")));
     } else if (s.auth !== "signedIn") {
       nodes.push(para(s.notice, "warning"), para(s.error, "warning"), button("Sign In", () => send("signIn")));
     } else {

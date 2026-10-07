@@ -1,4 +1,4 @@
-import { beginDeviceLogin, endSession, exchangeLoginCode, refreshSession, type DeviceClient } from "./deviceLogin";
+import { beginDeviceLogin, endSession, exchangeCompletionUrl, parseCompletionUrl, refreshSession, type CompletionUrl, type DeviceClient } from "./deviceLogin";
 import { AuthRejectedError, AuthRequiredError, type FetchLike, type Session } from "./types";
 
 export * from "./types";
@@ -31,10 +31,15 @@ export interface SessionManagerDeps {
   now?: () => number;
 }
 
-/** One sign-in in progress: open `url` in the browser, then `complete` with the code the user pastes. */
+/**
+ * One sign-in in progress: the user opens `url` in a browser, then `complete` is given the
+ * completion address PawOS showed them. `check` says whether pasted text is such an address,
+ * without sending anything.
+ */
 export interface PendingSignIn {
   url: string;
-  complete(code: string): Promise<void>;
+  check(pastedUrl: string): CompletionUrl;
+  complete(pastedUrl: string): Promise<void>;
   cancel(): void;
 }
 
@@ -74,7 +79,7 @@ export class SessionManager {
 
   /**
    * Starts a browser sign-in. The returned address carries only a challenge; the secret it was made
-   * from stays here, and the pasted code is useless to anyone without it.
+   * from stays here, and the handoff in the address the user pastes back is useless to anyone without it.
    */
   beginSignIn(client: DeviceClient): PendingSignIn {
     const attempt = ++this.signInAttempt;
@@ -83,10 +88,11 @@ export class SessionManager {
     this.set("signingIn", null, null);
     return {
       url: login.url,
-      complete: async (code) => {
-        if (attempt !== this.signInAttempt) throw new AuthRejectedError("Sign-in was restarted. Use the newest code.");
+      check: (pastedUrl) => parseCompletionUrl(pastedUrl, this.deps.getApiBaseUrl()),
+      complete: async (pastedUrl) => {
+        if (attempt !== this.signInAttempt) throw new AuthRejectedError("Sign-in was restarted. Use the newest sign-in address.");
         try {
-          const session = await exchangeLoginCode(this.deps.getApiBaseUrl(), code, login.verifier, this.deps.fetchImpl);
+          const session = await exchangeCompletionUrl(this.deps.getApiBaseUrl(), pastedUrl, login.verifier, client, this.deps.fetchImpl);
           await this.deps.storage.write(session);
           this.set("signedIn", session.email, null);
         } catch (error) {
