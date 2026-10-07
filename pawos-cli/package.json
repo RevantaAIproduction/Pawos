@@ -1,0 +1,39 @@
+{
+  "name": "pawos",
+  "version": "0.1.0",
+  "description": "PawOS in your terminal: run PawOS code tasks on your connected GitHub project.",
+  "license": "UNLICENSED",
+  "author": "PawosAI",
+  "homepage": "https://pawos.revantaai.com",
+  "keywords": [
+    "pawos",
+    "ai",
+    "cli",
+    "developer-tools"
+  ],
+  "bin": {
+    "pawos": "dist/pawos.js"
+  },
+  "files": [
+    "dist/pawos.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ./",
+    "build": "npm run typecheck && node esbuild.mjs",
+    "test": "vitest run",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@napi-rs/keyring": "^1.1.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "esbuild": "^0.21.5",
+    "typescript": "^5.8.3",
+    "vitest": "^2.1.9"
+  }
+}

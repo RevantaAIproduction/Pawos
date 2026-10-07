@@ -1,13 +1,16 @@
 import { cache } from "react";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
-import { createClient } from "../supabase/server";
+import { headers } from "next/headers";
+import { createBearerClient, createClient } from "../supabase/server";
 import { TIER_LABELS, type AccountTier } from "./entitlements";
 
 /**
  * Who is making this request and what their account is entitled to — resolved on the server from
- * the session cookie and the database, for every dashboard page and /api/dashboard route. Nothing
+ * the session (the session cookie, or a Supabase access token in the Authorization header — see
+ * getAccountContext) and the database, for every dashboard page and /api/dashboard route. Nothing
  * here is ever taken from the request body, query string or headers the browser controls: not the
- * user id, not the organization, not the tier, not the role.
+ * user id, not the organization, not the tier, not the role. The Authorization header only carries
+ * a token for Supabase to verify; the user is whoever Supabase says that token belongs to.
  *
  * One tier per account, resolved exactly as PawOS Desktop resolves it (EntitlementService
  * baseTier() / effectiveTier()), so a plan bought on either surface is the same plan on both.
@@ -61,7 +64,11 @@ export function accountAvatarUrl(user: Pick<User, "user_metadata">): string | nu
 
 const TIER_RANK: Record<AccountTier, number> = { go: 0, build: 0, pro: 1, proMax: 2, team: 3, enterprise: 4 };
 
-/** The internal accounts PawOS Desktop lets test other tiers (TestTierOverrideStore.AUTHORIZED_ADMINS). */
+/**
+ * Addresses of the internal accounts that test other tiers. NOT an authorization list: it only
+ * saves every other account the two lookups below. Whether an override is honoured is decided by
+ * the database's administrator check on the account id (pawos_is_build_admin).
+ */
 const TEST_TIER_ACCOUNTS = new Set(["tharun@revantaai.com", "founder@revantaai.com", "pawos@revantaai.com"]);
 const OVERRIDE_TIERS: readonly AccountTier[] = ["go", "pro", "proMax", "team", "enterprise"];
 
@@ -71,7 +78,10 @@ async function testTierOverride(supabase: SupabaseClient, user: User): Promise<A
   const { data, error } = await supabase.from("admin_test_tier_overrides").select("override_tier").eq("user_id", user.id).is("organization_id", null).maybeSingle();
   if (error) return null;
   const tier = (data as { override_tier?: string } | null)?.override_tier;
-  return OVERRIDE_TIERS.includes(tier as AccountTier) ? (tier as AccountTier) : null;
+  if (!OVERRIDE_TIERS.includes(tier as AccountTier)) return null;
+  // Only a bound PawOS administrator account may run under an override.
+  const admin = await supabase.rpc("pawos_is_build_admin");
+  return !admin.error && admin.data === true ? (tier as AccountTier) : null;
 }
 
 type OrganizationRow = { role: string; organizations: { id: string; name: string; tier: string } | { id: string; name: string; tier: string }[] | null };
@@ -121,10 +131,61 @@ export async function resolveAccountContext(supabase: SupabaseClient, user: User
 }
 
 /**
+ * A Supabase access token is a JWT: three base64url segments. Only its shape is checked here —
+ * whether it is genuine, unexpired and whose it is, is Supabase's answer (auth.getUser), never ours.
+ */
+const BEARER_HEADER = /^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/;
+const MAX_AUTHORIZATION_HEADER_CHARS = 8192;
+
+/** The access token in an `Authorization: Bearer <token>` header, or null for any other value. */
+export function bearerTokenFrom(authorization: string): string | null {
+  if (authorization.length > MAX_AUTHORIZATION_HEADER_CHARS) return null;
+  return BEARER_HEADER.exec(authorization)?.[1] ?? null;
+}
+
+/** The request's Authorization header, or null when it has none. */
+async function authorizationHeader(): Promise<string | null> {
+  try {
+    return (await headers()).get("authorization");
+  } catch {
+    return null; // no request to read (the cookie path below then decides, as it always has)
+  }
+}
+
+/**
+ * The account behind a Supabase access token sent as `Authorization: Bearer <token>` — how a
+ * non-browser client of the same PawOS account (an editor extension) signs its requests. Supabase
+ * verifies the token and names the user; the client that then reads the account carries that same
+ * token, so row-level security applies to it exactly as it does to a cookie session.
+ */
+async function bearerAccountContext(authorization: string): Promise<AccountContext | null> {
+  const token = bearerTokenFrom(authorization);
+  if (!token) return null;
+  let supabase: SupabaseClient;
+  try {
+    supabase = createBearerClient(token);
+  } catch {
+    return null; // Supabase not configured
+  }
+  const { data } = await supabase.auth.getUser(token);
+  if (!data.user) return null;
+  return resolveAccountContext(supabase, data.user);
+}
+
+/**
  * The signed-in account for this request, or null when nobody is signed in. Wrapped in React's
  * per-request cache so the dashboard layout and the page it renders resolve the account once.
+ *
+ * Two ways to be signed in, resolving to the same AccountContext:
+ *  - the session cookie (PawOS Web in a browser);
+ *  - `Authorization: Bearer <Supabase access token>` (a non-browser client).
+ * A request that sends an Authorization header is judged by that header alone: a malformed header
+ * or a token Supabase rejects is signed out, and never falls back to whatever cookie came with it.
  */
 export const getAccountContext = cache(async (): Promise<AccountContext | null> => {
+  const authorization = await authorizationHeader();
+  if (authorization !== null) return bearerAccountContext(authorization);
+
   let supabase: SupabaseClient;
   try {
     supabase = await createClient();

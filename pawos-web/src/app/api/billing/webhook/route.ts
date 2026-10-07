@@ -10,7 +10,10 @@ import { recordRazorpaySubscription } from "@/lib/billing/subscriptionRecords";
 import { creditVerifiedTicketBalancePayment } from "@/lib/billing/ticketBalanceCrediting";
 import { creditVerifiedUsageCreditsPayment } from "@/lib/billing/usageCreditsCrediting";
 
-import { createServiceClient } from "@/lib/supabase/serviceClient";
+import { createServiceClient } from "@/lib/supabase/serviceClient";
+import { paidSeatTierFromNotes, recordPaidSeatTier } from "@/lib/billing/paidSeatTier";
+import { applyPlanPurchase, planSeats } from "@/lib/billing/planPurchase";
+import { SEAT_PRODUCT_TYPE, applyVerifiedSeatPayment } from "@/lib/billing/seatPurchase";
 import { creditPaidInvoice, fetchRazorpayInvoice } from "@/lib/billing/invoiceCrediting";
 import { creditVerifiedMidMonthPayment, MID_MONTH_PRODUCT_TYPE } from "@/lib/billing/midMonthPurchase";
 
@@ -60,6 +63,7 @@ async function handleTierPurchaseWebhookAsync(
   const tier = paymentEntity.notes.tier as "team" | "enterprise" | undefined;
   const seatCountStr = paymentEntity.notes.seatCount;
   const seatCount = seatCountStr ? Number(seatCountStr) : undefined;
+  const seatTier = paidSeatTierFromNotes(paymentEntity.notes);
 
   if (!userId) {
     console.warn("[razorpay-webhook] Tier purchase event missing userId");
@@ -101,20 +105,35 @@ async function handleTierPurchaseWebhookAsync(
     }
 
     if (existingOrgs && existingOrgs.length > 0) {
-      // Update existing org
-      const { error: updateError } = await serviceClient
-        .from("organizations")
-        .update({
-          tier,
-          seat_count: tier === "enterprise" ? (seatCount || 20) : (seatCount || 2),
-        })
-        .eq("id", existingOrgs[0].id);
+      // Applied once per payment, and never lowering seats bought since (lib/billing/planPurchase.ts).
+      const applied = paymentEntity.id
+        ? await applyPlanPurchase(serviceClient, {
+            paymentId: paymentEntity.id,
+            orderId: paymentEntity.order_id ?? null,
+            organizationId: existingOrgs[0].id,
+            buyerUserId: userId,
+            tier,
+            seatTier,
+            seats: planSeats(tier, seatCount),
+          })
+        : "failed";
+      if (applied === "failed") return;
+      if (applied === "unavailable") {
+        const { error: updateError } = await serviceClient
+          .from("organizations")
+          .update({
+            tier,
+            seat_count: tier === "enterprise" ? (seatCount || 20) : (seatCount || 2),
+          })
+          .eq("id", existingOrgs[0].id);
 
-      if (updateError) {
-        console.warn("[razorpay-webhook] Failed to update organization tier:", updateError);
-        return;
+        if (updateError) {
+          console.warn("[razorpay-webhook] Failed to update organization tier:", updateError);
+          return;
+        }
+
+        await recordPaidSeatTier(serviceClient, existingOrgs[0].id, tier, seatTier, seatCount || 2);
       }
-
       console.log("[razorpay-webhook] Organization tier updated for tier purchase:", existingOrgs[0].id);
     } else {
       // Create new org
@@ -144,6 +163,20 @@ async function handleTierPurchaseWebhookAsync(
         console.warn("[razorpay-webhook] Failed to create organization:", createError);
         return;
       }
+
+      // Record the payment against the new organization, so a repeat of this event changes nothing.
+      const recorded = paymentEntity.id
+        ? await applyPlanPurchase(serviceClient, {
+            paymentId: paymentEntity.id,
+            orderId: paymentEntity.order_id ?? null,
+            organizationId: newOrg.id,
+            buyerUserId: userId,
+            tier,
+            seatTier,
+            seats: planSeats(tier, seatCount),
+          })
+        : "failed";
+      if (recorded === "unavailable") await recordPaidSeatTier(serviceClient, newOrg.id, tier, seatTier, seatCount || 2);
 
       // Add owner as member
       const ownerRole = tier === "enterprise" ? "organizationOwner" : "owner";
@@ -207,6 +240,7 @@ async function applyPaymentCapturedEvent(event: RazorpayWebhookEvent): Promise<b
   //   - /api/billing/checkout-credits     → "ticket_balance"  (Autonomous Work Credits)
   //   - /api/billing/checkout-usage-credits → "usage_credits" (Usage Credits)
   //   - /api/billing/checkout-tier         → "tier_purchase"  (Team/Enterprise tier purchase)
+  //   - /api/billing/checkout-seat         → "seat_purchase"  (additional Team seats)
   //
   // Neither crediting function ever trusts the webhook payload's amount — both independently
   // re-fetch the payment and order from Razorpay's own API for authoritative amount verification.
@@ -217,6 +251,22 @@ async function applyPaymentCapturedEvent(event: RazorpayWebhookEvent): Promise<b
     await handleTierPurchaseWebhookAsync(paymentEntity).catch((error) => {
       console.warn(`[razorpay-webhook] Tier purchase webhook handling failed for ${paymentId}:`, error);
     });
+    return true;
+  }
+
+  // Additional seats: the same verified path as /api/billing/verify-seat-payment, so the seats
+  // arrive even if the buyer's app never reports back. A payment adds its seats once.
+  if (productType === SEAT_PRODUCT_TYPE) {
+    const seats = await applyVerifiedSeatPayment({ orderId, paymentId }).catch((error) => ({
+      ok: false as const,
+      status: 500,
+      reason: error instanceof Error ? error.message : String(error),
+    }));
+    if (!seats.ok) {
+      console.log(`[razorpay-webhook] payment.captured for ${paymentId} (seat_purchase) not applied via webhook: ${seats.reason}`);
+      return !((seats.status ?? 0) >= 500);
+    }
+    console.log(`[razorpay-webhook] payment.captured for ${paymentId} (seat_purchase) applied.`);
     return true;
   }
 

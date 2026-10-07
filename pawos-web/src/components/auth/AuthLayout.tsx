@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 /** Pages that show only the sign-in screen: no site navbar or footer (see Nav.tsx / Footer.tsx). */
-export const AUTH_PAGE_PATHS = ["/login", "/signup", "/forgot-password", "/reset-password"];
+export const AUTH_PAGE_PATHS = ["/login", "/signup", "/forgot-password", "/reset-password", "/auth/device"];
 
 export function isAuthPagePath(pathname: string | null | undefined): boolean {
   return !!pathname && AUTH_PAGE_PATHS.includes(pathname);

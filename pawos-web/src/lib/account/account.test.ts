@@ -112,12 +112,17 @@ describe("account tier is resolved from server records", () => {
     const backend = new FakeBackend();
     const admin = backend.addUser("admin", { email: "founder@revantaai.com", subscription: { active: true, tier: "pro" } });
     const customer = backend.addUser("customer", { email: "someone@example.com", subscription: { active: true, tier: "pro" } });
+    // Somebody who registered an internal address but is not a bound administrator account.
+    const squatter = backend.addUser("squatter", { email: "pawos@revantaai.com", subscription: { active: true, tier: "pro" } });
+    backend.admins.add("admin");
     backend.tables.admin_test_tier_overrides = [
       { user_id: "admin", organization_id: null, real_tier: "pro", override_tier: "enterprise" },
       { user_id: "customer", organization_id: null, real_tier: "pro", override_tier: "enterprise" },
+      { user_id: "squatter", organization_id: null, real_tier: "pro", override_tier: "enterprise" },
     ];
     expect((await backend.accountFor(admin)).tier).toBe("enterprise");
     expect((await backend.accountFor(customer)).tier).toBe("pro");
+    expect((await backend.accountFor(squatter)).tier).toBe("pro");
     // An override to Paw Go lets an active Build grant apply, exactly as Desktop's effectiveTier().
     backend.tables.admin_test_tier_overrides[0].override_tier = "go";
     backend.users.set("admin", { ...backend.users.get("admin"), buildStatus: "active" });

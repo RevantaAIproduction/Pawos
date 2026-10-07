@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
+import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
 /**
@@ -36,5 +37,28 @@ export async function createClient() {
         }
       },
     },
+  });
+}
+
+/**
+ * Server-side Supabase client for a request that authenticates with a Supabase access token in
+ * `Authorization: Bearer <token>` instead of the session cookie (a non-browser client of the same
+ * account, such as an editor extension). Every database call it makes carries that token, so
+ * row-level security sees the token's own user — exactly as it does for the cookie client. Only
+ * the public anon key is used; the token is held for this request only: nothing is persisted,
+ * refreshed or written to a cookie. Whoever creates it must still verify the token
+ * (`auth.getUser(token)`) before trusting it.
+ */
+export function createBearerClient(accessToken: string): SupabaseClient {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) {
+    throw new Error(
+      "Supabase isn't configured — set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY."
+    );
+  }
+  return createSupabaseClient(url, anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
   });
 }

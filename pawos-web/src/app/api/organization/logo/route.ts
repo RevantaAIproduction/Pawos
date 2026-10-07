@@ -7,6 +7,20 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
  * DELETE: Admin removes logo
  */
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_LOGO_BYTES = 2 * 1024 * 1024;
+/** The roles that manage an organization (the same set the membership policies use). */
+const LOGO_MANAGER_ROLES = new Set(["owner", "organizationOwner", "organizationAdministrator", "billingAdministrator", "workspaceAdministrator"]);
+
+/** The image type of these bytes — decided from the file itself, never from what the client says it is. */
+function sniffLogoType(bytes: Uint8Array): { mimeType: string; extension: string } | null {
+  const at = (offset: number, ...values: number[]) => values.every((value, index) => bytes[offset + index] === value);
+  if (at(0, 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) return { mimeType: "image/png", extension: "png" };
+  if (at(0, 0xff, 0xd8, 0xff)) return { mimeType: "image/jpeg", extension: "jpg" };
+  if (at(0, 0x52, 0x49, 0x46, 0x46) && at(8, 0x57, 0x45, 0x42, 0x50)) return { mimeType: "image/webp", extension: "webp" };
+  return null;
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const organizationId = searchParams.get("organizationId");
@@ -45,25 +59,31 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
-  const { organizationId, fileName, fileData, mimeType } = body;
+  const organizationId = typeof body?.organizationId === "string" ? body.organizationId : "";
+  const fileData = typeof body?.fileData === "string" ? body.fileData : "";
   const accessToken = request.headers.get("authorization")?.replace("Bearer ", "");
 
-  if (!accessToken || !organizationId || !fileName || !fileData || !mimeType) {
+  if (!accessToken || !UUID_RE.test(organizationId) || !fileData) {
     return NextResponse.json({ ok: false, reason: "Invalid request." }, { status: 400 });
   }
 
-  // Validate image type
-  if (!["image/png", "image/jpeg", "image/jpg", "image/webp"].includes(mimeType)) {
-    return NextResponse.json({ ok: false, reason: "Invalid image type." }, { status: 400 });
-  }
-
-  // Decode base64 file data
-  const buffer = Buffer.from(fileData, "base64");
-
-  // Validate file size (max 2MB, matches Supabase bucket limit)
-  if (buffer.length > 2 * 1024 * 1024) {
+  // Size first, from the encoded length, so an oversized upload is never decoded.
+  if (fileData.length > Math.ceil((MAX_LOGO_BYTES * 4) / 3) + 4) {
     return NextResponse.json({ ok: false, reason: "File too large (max 2MB)." }, { status: 400 });
   }
+  const buffer = Buffer.from(fileData, "base64");
+  if (buffer.length === 0 || buffer.length > MAX_LOGO_BYTES) {
+    return NextResponse.json({ ok: false, reason: "File too large (max 2MB)." }, { status: 400 });
+  }
+
+  // The type comes from the bytes. The client's file name and declared type are not used: the
+  // stored name is generated here, so nothing the client sends ends up in a storage path.
+  const sniffed = sniffLogoType(buffer);
+  if (!sniffed) {
+    return NextResponse.json({ ok: false, reason: "Invalid image type." }, { status: 400 });
+  }
+  const mimeType = sniffed.mimeType;
+  const fileName = `logo.${sniffed.extension}`;
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -91,7 +111,7 @@ export async function POST(request: Request) {
       .eq("status", "active")
       .maybeSingle();
 
-    if (!membership || membership.role !== "admin") {
+    if (!membership || !LOGO_MANAGER_ROLES.has(membership.role)) {
       return NextResponse.json({ ok: false, reason: "Not an admin." }, { status: 403 });
     }
 
@@ -108,10 +128,10 @@ export async function POST(request: Request) {
     }
 
     // Upload new logo to Supabase storage
-    const storagePath = `${organizationId}/${Date.now()}-${fileName}`;
+    const storagePath = `${organizationId}/${Date.now()}.${sniffed.extension}`;
     const { error: uploadError } = await client.storage
       .from("org-logos")
-      .upload(storagePath, buffer, { upsert: false });
+      .upload(storagePath, buffer, { upsert: false, contentType: mimeType });
 
     if (uploadError) {
       return NextResponse.json({ ok: false, reason: "Upload failed." }, { status: 500 });
@@ -189,7 +209,7 @@ export async function DELETE(request: Request) {
       .eq("status", "active")
       .maybeSingle();
 
-    if (!membership || membership.role !== "admin") {
+    if (!membership || !LOGO_MANAGER_ROLES.has(membership.role)) {
       return NextResponse.json({ ok: false, reason: "Not an admin." }, { status: 403 });
     }
 

@@ -1,0 +1,78 @@
+{
+  "name": "pawos",
+  "displayName": "PawOS",
+  "description": "Run PawOS code changes on your connected GitHub repository from VS Code.",
+  "version": "0.1.0",
+  "publisher": "revantaai",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "pawos",
+          "title": "PawOS",
+          "icon": "media/pawos.svg"
+        }
+      ]
+    },
+    "views": {
+      "pawos": [
+        {
+          "type": "webview",
+          "id": "pawos.sidebar",
+          "name": "PawOS"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "pawos.signIn",
+        "title": "Sign In",
+        "category": "PawOS"
+      },
+      {
+        "command": "pawos.signOut",
+        "title": "Sign Out",
+        "category": "PawOS"
+      },
+      {
+        "command": "pawos.refresh",
+        "title": "Refresh",
+        "category": "PawOS"
+      }
+    ],
+    "configuration": {
+      "title": "PawOS",
+      "properties": {
+        "pawos.apiBaseUrl": {
+          "type": "string",
+          "default": "https://pawos.revantaai.com",
+          "scope": "application",
+          "description": "The PawOS Web address this extension talks to."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ./",
+    "compile": "npm run typecheck && node esbuild.mjs",
+    "test": "vitest run",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.8.3",
+    "vitest": "^2.1.9",
+    "esbuild": "^0.21.5"
+  }
+}

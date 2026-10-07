@@ -1,3 +1,4 @@
+import { TEAM_SEAT_PRICE_PAISE } from "@/lib/billing/seatPurchase";
 import { NextResponse } from "next/server";
 import { getRazorpayCredentials, razorpayAuthHeader, type SeatTier, type SubscriptionTierId, type ProMaxVariant } from "@/lib/billing/razorpay";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
@@ -10,10 +11,8 @@ const VALID_SEAT_TIERS: SeatTier[] = ["standard", "premium"];
  * not here — they're Razorpay subscriptions priced by their Razorpay plans (/api/billing/checkout).
  */
 const TIER_PRICING_PAISE: Record<"team" | "enterprise", Record<string, number>> = {
-  team: {
-    standard: 191300, // ₹1,913 per seat
-    premium: 956500, // ₹9,565 per seat
-  },
+  // One price list for Team seats, shared with additional-seat purchases.
+  team: TEAM_SEAT_PRICE_PAISE,
   enterprise: {
     base: 1000000, // ₹10,000 base per seat
   },

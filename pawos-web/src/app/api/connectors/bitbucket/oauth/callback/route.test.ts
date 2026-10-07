@@ -226,7 +226,7 @@ describe("POST /api/connectivity/oauth/exchange — Bitbucket (used by the deskt
     process.env.GITLAB_CLIENT_ID = "gl-id";
     process.env.GITLAB_CLIENT_SECRET = "gl-secret";
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ access_token: "gl" }), { status: 200 }));
-    await exchange(exchangeRequest({ connectorId: "gitlab", grant_type: "authorization_code", code: "c" }));
+    await exchange(exchangeRequest({ connectorId: "gitlab", grant_type: "authorization_code", code: "c", redirect_uri: "https://pawos.revantaai.com/auth/gitlab/callback" }));
 
     const init = fetchMock.mock.calls[0][1];
     expect((init.headers as Record<string, string>).Authorization).toBeUndefined();

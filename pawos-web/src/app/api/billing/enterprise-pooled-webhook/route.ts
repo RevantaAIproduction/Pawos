@@ -1,21 +1,20 @@
 import { NextResponse } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import { getRazorpayCredentials } from "@/lib/billing/razorpay";
-import crypto from "crypto";
+import { getRazorpayWebhookSecret, verifyRazorpayWebhookSignature } from "@/lib/billing/razorpay";
 
 /**
  * POST: Razorpay webhook for Enterprise pooled-credit settlement payment confirmation
  *
- * Handles payment.authorized, invoice.paid events for pooled-credit settlements.
- * Verifies Razorpay signature.
+ * Handles payment.captured and invoice.paid events for pooled-credit settlements. Nothing is read
+ * from the body until the signature has been verified with the Razorpay webhook secret (the same
+ * check as ../webhook/route.ts). An authorized-but-not-captured payment, a failed payment or any
+ * other event never settles anything.
  * Processes idempotently using settlement_id.
  * Replenishes pool only after verified payment.
  */
 
-function verifyRazorpaySignature(body: string, signature: string, keySecret: string): boolean {
-  const hash = crypto.createHmac("sha256", keySecret).update(body).digest("hex");
-  return hash === signature;
-}
+/** Events that mean money was actually received. */
+const PAID_EVENTS = new Set(["payment.captured", "invoice.paid"]);
 
 export async function POST(request: Request) {
   const body = await request.text();
@@ -25,17 +24,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, reason: "Missing Razorpay signature." }, { status: 400 });
   }
 
-  const credentials = getRazorpayCredentials();
-  if (!credentials) {
+  const secret = getRazorpayWebhookSecret();
+  if (!secret) {
     return NextResponse.json({ ok: false, reason: "Razorpay not configured." }, { status: 503 });
   }
 
   // Verify Razorpay signature
-  if (!verifyRazorpaySignature(body, signature, credentials.keySecret)) {
+  if (!verifyRazorpayWebhookSignature(body, signature, secret)) {
     return NextResponse.json({ ok: false, reason: "Invalid Razorpay signature." }, { status: 401 });
   }
 
-  const event = JSON.parse(body) as { event: string; payload?: { settlement_id?: string; payment?: { entity?: Record<string, unknown> & { notes?: Record<string, unknown> } }; invoice?: { entity?: Record<string, unknown> & { notes?: Record<string, unknown> } } } };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return NextResponse.json({ ok: false, reason: "Invalid webhook payload." }, { status: 400 });
+  }
+  if (!parsed || typeof parsed !== "object" || !PAID_EVENTS.has(String((parsed as { event?: unknown }).event))) {
+    return NextResponse.json({ ok: true, message: "Event acknowledged; it is not a completed payment." });
+  }
+
+  const event = parsed as { event: string; payload?: { settlement_id?: string; payment?: { entity?: Record<string, unknown> & { notes?: Record<string, unknown> } }; invoice?: { entity?: Record<string, unknown> & { notes?: Record<string, unknown> } } } };
   const eventData = event.payload?.payment?.entity || event.payload?.invoice?.entity;
 
   if (!eventData) {

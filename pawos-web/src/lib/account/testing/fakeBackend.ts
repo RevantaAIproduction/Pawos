@@ -65,6 +65,8 @@ export class FakeBackend {
    */
   organizationUsage = new Map<string, number>();
   organizationLimit: number | null = null;
+  /** Account ids pawos_is_build_admin() answers true for. */
+  admins = new Set<string>();
   /** Objects in Supabase Storage, keyed "bucket/path". Service role only, like the private bucket. */
   storage = new Map<string, { data: Uint8Array; contentType: string }>();
   /**
@@ -201,6 +203,8 @@ export class FakeBackend {
     }
 
     switch (name) {
+      case "pawos_is_build_admin":
+        return ok(userId !== null && this.admins.has(userId));
       case "get_my_subscription":
         return ok(state.subscription ?? { active: false });
       case "get_my_build_access":

@@ -1,11 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-
-const AUTHORIZED_ADMINS = [
-  "founder@revantaai.com",
-  "pawos@revantaai.com",
-  "tharun@revantaai.com",
-];
+import { isPawosAdmin } from "../../../../lib/admin/isPawosAdmin";
 
 /**
  * Internal PawOS admin API — strict authorization required.
@@ -39,7 +34,7 @@ export async function GET(request: Request) {
   const userEmail = userData.user.email;
 
   // Enforce strict authorization — only exact email matches allowed
-  if (!AUTHORIZED_ADMINS.includes(userEmail)) {
+  if (!(await isPawosAdmin(accessToken))) {
     return NextResponse.json(
       { ok: false, reason: "Unauthorized." },
       { status: 403 }
@@ -97,7 +92,7 @@ export async function POST(request: Request) {
   }
 
   const userEmail = userData.user.email;
-  if (!AUTHORIZED_ADMINS.includes(userEmail)) {
+  if (!(await isPawosAdmin(accessToken))) {
     return NextResponse.json(
       { ok: false, reason: "Unauthorized." },
       { status: 403 }

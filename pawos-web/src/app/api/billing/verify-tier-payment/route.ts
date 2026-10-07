@@ -7,6 +7,8 @@ import {
   type SubscriptionTierId,
 } from "@/lib/billing/razorpay";
 import { createServiceClient } from "@/lib/supabase/serviceClient";
+import { paidSeatTierFromNotes, recordPaidSeatTier, type PaidSeatTier } from "@/lib/billing/paidSeatTier";
+import { applyPlanPurchase, planSeats } from "@/lib/billing/planPurchase";
 
 /**
  * Verifies a tier purchase payment and activates the tier for the user.
@@ -101,7 +103,7 @@ export async function POST(request: Request) {
 
   // ---- Activate Team/Enterprise tier (create org if needed) ----
   if (tier === "team" || tier === "enterprise") {
-    activateOrganizationTierAsync(userId, tier, seatCount).catch((error) => {
+    activateOrganizationTierAsync(userId, tier, seatCount, paidSeatTierFromNotes(order.notes), { paymentId, orderId }).catch((error) => {
       console.warn("[verify-tier-payment] Organization tier activation failed:", error);
     });
   }
@@ -125,7 +127,13 @@ export async function POST(request: Request) {
  * If the user already has an organization, updates its tier and seat_count instead.
  * This runs asynchronously (fire-and-forget) since it's non-blocking to the payment verification.
  */
-async function activateOrganizationTierAsync(userId: string, tier: "team" | "enterprise", seatCount?: number): Promise<void> {
+async function activateOrganizationTierAsync(
+  userId: string,
+  tier: "team" | "enterprise",
+  seatCount: number | undefined,
+  seatTier: PaidSeatTier | null,
+  payment: { paymentId: string; orderId: string }
+): Promise<void> {
   try {
     const serviceClient = createServiceClient();
 
@@ -158,19 +166,25 @@ async function activateOrganizationTierAsync(userId: string, tier: "team" | "ent
     if (existingOrgs && existingOrgs.length > 0) {
       // Organization exists — update tier and seatCount
       const orgId = existingOrgs[0].id;
-      const { error: updateError } = await serviceClient
-        .from("organizations")
-        .update({
-          tier,
-          seat_count: tier === "enterprise" ? (seatCount || 20) : (seatCount || 2),
-        })
-        .eq("id", orgId);
+      // Applied once per payment, and never lowering seats bought since (lib/billing/planPurchase.ts).
+      const applied = await applyPlanPurchase(serviceClient, { ...payment, organizationId: orgId, buyerUserId: userId, tier, seatTier, seats: planSeats(tier, seatCount) });
+      if (applied === "failed") return;
+      if (applied === "unavailable") {
+        const { error: updateError } = await serviceClient
+          .from("organizations")
+          .update({
+            tier,
+            seat_count: tier === "enterprise" ? (seatCount || 20) : (seatCount || 2),
+          })
+          .eq("id", orgId);
 
-      if (updateError) {
-        console.warn("[verify-tier-payment] Failed to update organization tier:", updateError);
-        return;
+        if (updateError) {
+          console.warn("[verify-tier-payment] Failed to update organization tier:", updateError);
+          return;
+        }
+
+        await recordPaidSeatTier(serviceClient, orgId, tier, seatTier, seatCount || 2);
       }
-
       console.log("[verify-tier-payment] Organization tier updated:", orgId, "tier:", tier, "seatCount:", seatCount);
     } else {
       // No organization exists — create one with the purchased tier
@@ -201,6 +215,9 @@ async function activateOrganizationTierAsync(userId: string, tier: "team" | "ent
         return;
       }
 
+      // Record the payment against the new organization, so verifying it again changes nothing.
+      const recorded = await applyPlanPurchase(serviceClient, { ...payment, organizationId: newOrg.id, buyerUserId: userId, tier, seatTier, seats: planSeats(tier, seatCount) });
+      if (recorded === "unavailable") await recordPaidSeatTier(serviceClient, newOrg.id, tier, seatTier, seatCount || 2);
       console.log("[verify-tier-payment] Organization created:", newOrg.id, "tier:", tier, "seatCount:", seatCount);
 
       // Add the owner as an organizationOwner member

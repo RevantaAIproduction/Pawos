@@ -1,19 +1,14 @@
 import { NextResponse } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseClient as createServiceClient } from "../../../../lib/supabase/server-admin";
-
-const AUTHORIZED_ADMINS = [
-  "founder@revantaai.com",
-  "pawos@revantaai.com",
-  "tharun@revantaai.com",
-];
+import { isPawosAdmin } from "../../../../lib/admin/isPawosAdmin";
 
 /**
  * Admin-only endpoint to apply a test-tier override.
  * Combines user lookup + override application in one secure operation.
  *
  * Authorization: Bearer token required (PawOS authenticated user)
- * Caller must be in AUTHORIZED_ADMINS
+ * Caller must be a PawOS administrator (lib/admin/isPawosAdmin)
  *
  * Body: { targetEmail: string, tier: "proMax" | "pro" | "go" | "team" | "enterprise" }
  *
@@ -64,7 +59,7 @@ export async function POST(request: Request) {
   const adminId = userData.user.id;
 
   // 2. Verify admin authorization
-  if (!AUTHORIZED_ADMINS.includes(adminEmail)) {
+  if (!(await isPawosAdmin(accessToken))) {
     return NextResponse.json(
       { ok: false, reason: "Unauthorized" },
       { status: 403 }

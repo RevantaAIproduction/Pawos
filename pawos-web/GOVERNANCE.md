@@ -264,10 +264,10 @@ TeamCheckoutPage (Invoice Checkout)
 **Environment Configuration:**
 ```
 Desktop (.env):
-GOOGLE_PLACES_API_KEY=AIzaSyDHzp2u6H5VnEuVTGAkSC-LiJvr3huUFgY
+GOOGLE_PLACES_API_KEY=<your-google-places-api-key>
 
 Web (pawos-web/.env):
-NEXT_PUBLIC_GOOGLE_PLACES_API_KEY=AIzaSyDHzp2u6H5VnEuVTGAkSC-LiJvr3huUFgY
+NEXT_PUBLIC_GOOGLE_PLACES_API_KEY=<your-google-places-api-key>
 ```
 
 ---

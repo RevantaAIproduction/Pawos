@@ -14,6 +14,24 @@ const nextConfig: NextConfig = {
   // for updates when it re-fetches this exact file).
   async headers() {
     return [
+      // Baseline protections on every response. The Content-Security-Policy here is deliberately the
+      // part that cannot break a page: who may frame PawOS, what <base> and plugins may do. It does
+      // not restrict scripts, styles or connections, so Razorpay checkout, Supabase, sign-in
+      // redirects and the pawos:// hand-off are unaffected. A script/connect policy needs its own
+      // rollout (report-only first).
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'; base-uri 'self'; object-src 'none'" },
+          // Features the site never uses. `payment` is left alone for Razorpay's checkout frame.
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), usb=(), browsing-topics=()" },
+          // Browsers ignore this over plain HTTP (local development); production is HTTPS only.
+          { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+        ],
+      },
       {
         source: "/sw.js",
         headers: [
