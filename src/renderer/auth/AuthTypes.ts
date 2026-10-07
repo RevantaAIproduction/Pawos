@@ -42,8 +42,12 @@ export interface AuthService {
    * exists in this codebase yet. Business Configuration Required.
    */
   completePasswordReset(resetToken: string, newPassword: string): Promise<{ ok: boolean; reason?: string }>;
-  /** Sends a real 6-digit email-ownership code — proves the entered address before createEmailAccount is ever called. */
-  sendVerificationCode(email: string): Promise<{ expiresInMinutes: number }>;
+  /**
+   * Has PawOS's server email a sign-up code to this address. The server makes and checks the code;
+   * `expiresInMinutes` is 0 because the server, not this app, decides how long it lasts.
+   */
+  sendVerificationCode(email: string, name: { firstName: string; lastName: string }): Promise<{ expiresInMinutes: number }>;
+  /** Proves the code with the server. On success this device holds a verified session for the address, which createEmailAccount finishes. */
   verifyEmailCode(email: string, code: string): Promise<{ valid: boolean; reason?: string }>;
   signOut(): Promise<void>;
   getCurrentUser(): Promise<AuthUser | null>;

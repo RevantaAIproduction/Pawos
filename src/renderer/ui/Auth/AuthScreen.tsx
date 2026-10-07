@@ -32,7 +32,7 @@ export function AuthScreen({
   onRequestPasswordReset: (email: string) => Promise<{ expiresInMinutes: number }>;
   onVerifyPasswordResetCode: (email: string, code: string) => Promise<{ valid: boolean; reason?: string; resetToken?: string }>;
   onCompletePasswordReset: (resetToken: string, newPassword: string) => Promise<{ ok: boolean; reason?: string }>;
-  onSendVerificationCode: (email: string) => Promise<{ expiresInMinutes: number }>;
+  onSendVerificationCode: (email: string, name: { firstName: string; lastName: string }) => Promise<{ expiresInMinutes: number }>;
   onVerifyEmailCode: (email: string, code: string) => Promise<{ valid: boolean; reason?: string }>;
   isGoogleSignInAvailable: () => Promise<boolean>;
   isGithubSignInAvailable: () => Promise<boolean>;
@@ -101,7 +101,7 @@ export function AuthScreen({
     setError(null);
     setPending('email');
     try {
-      const { expiresInMinutes } = await onSendVerificationCode(email);
+      const { expiresInMinutes } = await onSendVerificationCode(email, { firstName: firstName.trim(), lastName: lastName.trim() });
       setCodeExpiresInMinutes(expiresInMinutes);
       setOtpCode('');
       setVerifyError(null);

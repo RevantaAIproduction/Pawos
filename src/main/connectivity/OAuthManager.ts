@@ -5,6 +5,7 @@ import type { AddressInfo } from 'net';
 import { connectorRegistry } from './ConnectorRegistry';
 import { credentialVaultBridge } from './CredentialVaultBridge';
 import { registerConnectivityOAuthHandler } from '../auth/OAuthProtocolBridge';
+import { getServerAccessToken } from '../auth/ServerSessionToken';
 import type { ConnectivityScope } from '../../shared/connectivity/ConnectivityTypes';
 
 /**
@@ -439,9 +440,12 @@ class OAuthManager {
     connectorId: string,
     params: { grant_type: string; code?: string; redirect_uri?: string; code_verifier?: string; refresh_token?: string }
   ): Promise<OAuthTokenResult> {
+    // The signed-in account's session goes with the request. pawos-web checks it whenever it is
+    // present, and will require it once versions that did not send it (1.0.2 and earlier) are retired.
+    const sessionToken = getServerAccessToken();
     const response = await fetch(`${CONNECTIVITY_OAUTH_BACKEND_BASE_URL}/api/connectivity/oauth/exchange`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}) },
       body: JSON.stringify({ connectorId, ...params }),
     });
     const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;

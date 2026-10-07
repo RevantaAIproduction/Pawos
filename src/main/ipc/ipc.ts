@@ -20,6 +20,8 @@ import { emailService } from '../mail/EmailService';
 import { listMailTemplates, renderMailPreview } from '../mail/preview';
 import { createOtp, verifyOtp } from '../mail/otp';
 import { deliverOtp } from '../mail/otpDelivery';
+import { requestSignupCode } from '../mail/signupCode';
+import { isSignInAuthorizeUrl } from '../auth/signInAuthorizeUrl';
 import { createPasswordResetToken, verifyPasswordResetToken } from '../mail/passwordResetToken';
 import { deviceIdentityStore } from '../device/DeviceIdentityStore';
 import { pushNotificationService } from '../notifications/PushNotificationService';
@@ -412,20 +414,28 @@ export function registerIpc(opts: {
   ipcMain.handle('auth:isGoogleSignInConfigured', () => opts.isGoogleSignInConfigured());
   ipcMain.handle('auth:startGoogleSignIn', () => opts.startGoogleSignIn());
   ipcMain.handle('auth:isGithubSignInConfigured', () => opts.isGithubSignInConfigured());
-  ipcMain.handle('auth:startGithubSignIn', (_evt, authorizeUrl: string) => opts.startGithubSignIn(authorizeUrl));
+  // The window builds the authorize URL (its Supabase client holds the PKCE verifier); the main
+  // process opens it in the system browser only if it is the account service's own authorize
+  // endpoint — never an arbitrary site or scheme.
+  ipcMain.handle('auth:startGithubSignIn', (_evt, authorizeUrl: unknown) => {
+    if (!isSignInAuthorizeUrl(authorizeUrl, opts.getEnvApiKeys().supabaseUrl)) {
+      throw new Error('Sign-in could not be started. Please try again.');
+    }
+    return opts.startGithubSignIn(authorizeUrl);
+  });
   ipcMain.handle('auth:isMicrosoftSignInConfigured', () => opts.isMicrosoftSignInConfigured());
   ipcMain.handle('auth:startMicrosoftSignIn', () => opts.startMicrosoftSignIn());
 
-  // Email-ownership verification for account creation — generates and
-  // hashes a real 6-digit code (src/main/mail/otp.ts) and sends it via the
-  // real OTP email template, independent of whatever Supabase's own project
-  // settings do for email confirmation (see EmailAuthProvider.ts).
-  ipcMain.handle('auth:sendOtp', async (_evt, email: string) => {
-    const { code, expiresInMinutes } = await createOtp(email);
-    await deliverOtp(email, { code, expiresInMinutes, purpose: 'signup' });
-    return { expiresInMinutes };
+  // Email-ownership verification for account creation. PawOS's server makes, emails and checks the
+  // code (src/main/mail/signupCode.ts → pawos-web /api/auth/signup/code); the window proves it with
+  // supabase.auth.verifyOtp (EmailAuthProvider.verifySignupCode). Nothing about the code is decided
+  // in this app.
+  ipcMain.handle('auth:requestSignupCode', async (_evt, email: unknown, firstName: unknown, lastName: unknown) => {
+    if (typeof email !== 'string' || typeof firstName !== 'string' || typeof lastName !== 'string') {
+      throw new Error('auth:requestSignupCode requires an email, a first name and a last name.');
+    }
+    return requestSignupCode({ email: email.trim(), firstName: firstName.trim(), lastName: lastName.trim() });
   });
-  ipcMain.handle('auth:verifyOtp', (_evt, email: string, code: string) => verifyOtp(email, code));
 
   // Password reset — independent OTP namespace ('password-reset') from
   // signup verification above, same underlying otp.ts primitives. A
@@ -1161,6 +1171,70 @@ export function registerIpc(opts: {
     const result = (await response.json().catch(() => null)) as Record<string, unknown> | null;
     return { response, result };
   };
+  // Additional Team seats. The server prices the seat, binds the order to the organization and adds
+  // the seats itself once it has verified the payment (pawos-web lib/billing/seatPurchase.ts) — this
+  // app never writes organizations.seat_count. Verification sends only the payment's ids: which
+  // organization and how many seats come from the order the server created.
+  ipcMain.handle(
+    'billing:createNativeSeatCheckout',
+    async (_evt, organizationId: unknown, seatTier: unknown, accessToken: unknown): Promise<NativeCreditsCheckoutResult> => {
+      if (typeof accessToken !== 'string' || !accessToken) return { ok: false, reason: 'Missing PawOS session. Sign in again before adding a seat.' };
+      if (typeof organizationId !== 'string' || (seatTier !== 'standard' && seatTier !== 'premium')) {
+        return { ok: false, reason: 'Choose the organization and the seat to add.' };
+      }
+      try {
+        const { response, result } = await postBillingApi('checkout-seat', { accessToken, organizationId, seatTier, seats: 1 });
+        if (
+          !response.ok ||
+          !result?.ok ||
+          typeof result.keyId !== 'string' ||
+          typeof result.orderId !== 'string' ||
+          typeof result.amountUsd !== 'number' ||
+          typeof result.amountInr !== 'number' ||
+          typeof result.amountPaise !== 'number' ||
+          typeof result.usdInrRate !== 'number' ||
+          result.currency !== 'INR'
+        ) {
+          return { ok: false, reason: cleanReason(result, `Could not create payment order: ${response.statusText}`) };
+        }
+        return {
+          ok: true,
+          checkoutUrl: typeof result.checkoutUrl === 'string' ? result.checkoutUrl : '',
+          keyId: result.keyId,
+          orderId: result.orderId,
+          amountUsd: result.amountUsd,
+          amountInr: result.amountInr,
+          amountPaise: result.amountPaise,
+          usdInrRate: result.usdInrRate,
+          currency: 'INR',
+        };
+      } catch (error) {
+        return { ok: false, reason: error instanceof Error ? error.message : 'Could not create payment order.' };
+      }
+    }
+  );
+  ipcMain.handle(
+    'billing:verifyNativeSeatPayment',
+    async (_evt, params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string }): Promise<NativeCreditsVerificationResult> => {
+      if (!params?.accessToken || !params.orderId || !params.paymentId || !params.signature) {
+        return { ok: false, reason: 'Missing payment verification fields.' };
+      }
+      try {
+        const { response, result } = await postBillingApi('verify-seat-payment', {
+          accessToken: params.accessToken,
+          orderId: params.orderId,
+          paymentId: params.paymentId,
+          signature: params.signature,
+        });
+        if (!response.ok || !result?.ok) {
+          return { ok: false, reason: cleanReason(result, `Payment could not be verified: ${response.statusText}`) };
+        }
+        return { ok: true, amountUsd: 0 };
+      } catch (error) {
+        return { ok: false, reason: error instanceof Error ? error.message : 'Payment verification failed.' };
+      }
+    }
+  );
   // Credits purchase UI configuration (presets, bounds, INR rate, PC per dollar) — from the server,
   // never hardcoded in the app.
   ipcMain.handle('billing:getUsageCreditsConfig', async () => {

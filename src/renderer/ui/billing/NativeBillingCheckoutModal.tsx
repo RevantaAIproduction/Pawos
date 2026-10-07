@@ -3,7 +3,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { CheckoutOptions, SeatTier, SubscriptionTierId, NativePaymentMethodId, ProMaxVariant } from '../../../shared/billing/BillingTypes';
 import { getSupabaseClient } from '../../auth/supabaseClient';
 import { ipc } from '../../services/ipc/ipcBridgeImplementation';
-import { organizationService } from '../../organization/OrganizationService';
 import { HighValueOrderForm, type HighValueOrderData } from './HighValueOrderForm';
 import { PaymentEvidenceUpload } from './PaymentEvidenceUpload';
 import { billingWebPost } from './billingWebApi';
@@ -1357,9 +1356,10 @@ export function NativeBillingCheckoutModal({
       // Create the appropriate Order based on product type
       let checkout;
       if (isAdditionalSeat) {
-        checkout = await ipc.billingCreateNativeUsageCreditsCheckout(
-          additionalSeatPriceUsd,
+        // A seat order: priced and bound to this organization by the server (not a credits top-up).
+        checkout = await ipc.billingCreateNativeSeatCheckout(
           (intent as { organizationId: string }).organizationId,
+          (intent as { seatTier: 'standard' | 'premium' }).seatTier,
           accessToken
         );
       } else if (isUsageCredits) {
@@ -1394,12 +1394,12 @@ export function NativeBillingCheckoutModal({
         // Use the appropriate verification endpoint
         let verified;
         if (isAdditionalSeat) {
-          verified = await ipc.billingVerifyNativeUsageCreditsPayment({
+          // The server verifies the payment and adds the seat itself.
+          verified = await ipc.billingVerifyNativeSeatPayment({
             accessToken,
             orderId: response.razorpay_order_id,
             paymentId: response.razorpay_payment_id,
             signature: response.razorpay_signature,
-            organizationId: (intent as { organizationId: string }).organizationId,
           });
         } else if (isUsageCredits) {
           verified = await ipc.billingVerifyNativeUsageCreditsPayment({
@@ -1428,11 +1428,6 @@ export function NativeBillingCheckoutModal({
 
         // Post-payment success logic based on product type
         if (isAdditionalSeat) {
-          try {
-            await organizationService.incrementSeatCount((intent as { organizationId: string }).organizationId);
-          } catch {
-            // seat_count column may not exist yet — invite can proceed
-          }
           setSuccessDetail(`Seat purchased. ${(intent as { inviteEmail: string }).inviteEmail} has been invited.`);
         } else if (isUsageCredits) {
           setSuccessDetail(

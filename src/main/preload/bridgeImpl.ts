@@ -222,9 +222,8 @@ export function contextBridge() {
     authIsMicrosoftSignInConfigured: () => ipcRenderer.invoke("auth:isMicrosoftSignInConfigured") as Promise<boolean>,
     authStartMicrosoftSignIn: () =>
       ipcRenderer.invoke("auth:startMicrosoftSignIn") as Promise<{ profile: any; idToken: string; accessToken: string }>,
-    authSendOtp: (email: string) => ipcRenderer.invoke("auth:sendOtp", email) as Promise<{ expiresInMinutes: number }>,
-    authVerifyOtp: (email: string, code: string) =>
-      ipcRenderer.invoke("auth:verifyOtp", email, code) as Promise<{ valid: boolean; reason?: string }>,
+    authRequestSignupCode: (email: string, firstName: string, lastName: string) =>
+      ipcRenderer.invoke("auth:requestSignupCode", email, firstName, lastName) as Promise<{ verifyType: 'signup' | 'email' }>,
     authSendPasswordResetOtp: (email: string) =>
       ipcRenderer.invoke("auth:sendPasswordResetOtp", email) as Promise<{ expiresInMinutes: number }>,
     authVerifyPasswordResetOtp: (email: string, code: string) =>
@@ -338,6 +337,10 @@ export function contextBridge() {
       ipcRenderer.invoke("billing:createNativeUsageCreditsCheckout", amountUsd, organizationId, accessToken) as Promise<NativeCreditsCheckoutResult>,
     billingVerifyNativeUsageCreditsPayment: (params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string; organizationId?: string }) =>
       ipcRenderer.invoke("billing:verifyNativeUsageCreditsPayment", params) as Promise<NativeCreditsVerificationResult>,
+    billingCreateNativeSeatCheckout: (organizationId: string, seatTier: 'standard' | 'premium', accessToken?: string) =>
+      ipcRenderer.invoke("billing:createNativeSeatCheckout", organizationId, seatTier, accessToken) as Promise<NativeCreditsCheckoutResult>,
+    billingVerifyNativeSeatPayment: (params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string }) =>
+      ipcRenderer.invoke("billing:verifyNativeSeatPayment", params) as Promise<NativeCreditsVerificationResult>,
     billingGetUsageCreditsConfig: () => ipcRenderer.invoke("billing:getUsageCreditsConfig") as Promise<import('../../shared/billing/UsageBucketTypes').UsageCreditsPurchaseConfig>,
     billingGetMidMonthOffer: (accessToken?: string) =>
       ipcRenderer.invoke("billing:getMidMonthOffer", accessToken) as Promise<import('../../shared/billing/UsageBucketTypes').MidMonthOfferResult>,

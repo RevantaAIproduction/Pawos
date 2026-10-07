@@ -101,7 +101,10 @@ export function useAuth() {
     []
   );
 
-  const sendVerificationCode = useCallback(async (email: string) => authService.sendVerificationCode(email), []);
+  const sendVerificationCode = useCallback(
+    async (email: string, name: { firstName: string; lastName: string }) => authService.sendVerificationCode(email, name),
+    []
+  );
 
   const verifyEmailCode = useCallback(
     async (email: string, code: string) => authService.verifyEmailCode(email, code),

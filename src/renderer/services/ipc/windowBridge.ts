@@ -210,9 +210,8 @@ export function contextBridge() {
     authIsMicrosoftSignInConfigured: async (): Promise<boolean> => ipcApi.invoke('auth:isMicrosoftSignInConfigured'),
     authStartMicrosoftSignIn: async (): Promise<{ profile: any; idToken: string; accessToken: string }> =>
       ipcApi.invoke('auth:startMicrosoftSignIn'),
-    authSendOtp: async (email: string): Promise<{ expiresInMinutes: number }> => ipcApi.invoke('auth:sendOtp', email),
-    authVerifyOtp: async (email: string, code: string): Promise<{ valid: boolean; reason?: string }> =>
-      ipcApi.invoke('auth:verifyOtp', email, code),
+    authRequestSignupCode: async (email: string, firstName: string, lastName: string): Promise<{ verifyType: 'signup' | 'email' }> =>
+      ipcApi.invoke('auth:requestSignupCode', email, firstName, lastName),
     authSendPasswordResetOtp: async (email: string): Promise<{ expiresInMinutes: number }> =>
       ipcApi.invoke('auth:sendPasswordResetOtp', email),
     authVerifyPasswordResetOtp: async (email: string, code: string): Promise<{ valid: boolean; reason?: string; token?: string }> =>
@@ -328,6 +327,10 @@ export function contextBridge() {
       ipcApi.invoke('billing:createNativeUsageCreditsCheckout', amountUsd, organizationId, accessToken),
     billingVerifyNativeUsageCreditsPayment: async (params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string; organizationId?: string }): Promise<NativeCreditsVerificationResult> =>
       ipcApi.invoke('billing:verifyNativeUsageCreditsPayment', params),
+    billingCreateNativeSeatCheckout: async (organizationId: string, seatTier: 'standard' | 'premium', accessToken?: string): Promise<NativeCreditsCheckoutResult> =>
+      ipcApi.invoke('billing:createNativeSeatCheckout', organizationId, seatTier, accessToken),
+    billingVerifyNativeSeatPayment: async (params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string }): Promise<NativeCreditsVerificationResult> =>
+      ipcApi.invoke('billing:verifyNativeSeatPayment', params),
     billingGetUsageCreditsConfig: async (): Promise<import('../../../shared/billing/UsageBucketTypes').UsageCreditsPurchaseConfig> => ipcApi.invoke('billing:getUsageCreditsConfig'),
     billingGetMidMonthOffer: async (accessToken?: string): Promise<import('../../../shared/billing/UsageBucketTypes').MidMonthOfferResult> => ipcApi.invoke('billing:getMidMonthOffer', accessToken),
     billingCreateMidMonthCheckout: async (accessToken?: string): Promise<import('../../../shared/billing/UsageBucketTypes').MidMonthCheckoutResult> => ipcApi.invoke('billing:createMidMonthCheckout', accessToken),

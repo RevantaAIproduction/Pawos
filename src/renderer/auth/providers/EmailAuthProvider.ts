@@ -40,31 +40,43 @@ function toAuthUser(user: SupabaseUser): AuthUser {
  * shape before calling Supabase and shapes the response into an AuthUser.
  */
 export class EmailAuthProvider {
+  /**
+   * Proves a sign-up code with the server (supabase.auth.verifyOtp). The code was made by PawOS's
+   * server and emailed to the address (see src/main/mail/signupCode.ts); whether it is right is
+   * decided there, never in this app. Success leaves this client signed in to the verified account,
+   * which createAccount() then finishes.
+   */
+  async verifySignupCode(email: string, code: string, type: 'signup' | 'email'): Promise<{ valid: boolean; reason?: string }> {
+    if (!isValidEmail(email)) return { valid: false, reason: 'Enter a valid email address.' };
+    const supabase = await getSupabaseClient();
+    const { data, error } = await supabase.auth.verifyOtp({ email: email.trim(), token: code, type });
+    if (error || !data.session) {
+      return { valid: false, reason: "That code isn't right or has expired. Check the email or send a new one." };
+    }
+    return { valid: true };
+  }
+
+  /**
+   * Finishes creating an account whose email was just verified (verifySignupCode): sets the
+   * password and name on that signed-in account. It never creates an account for an address that
+   * has not been proven — there is no supabase.auth.signUp() here.
+   */
   async createAccount({ name, email, password }: EmailCreateAccountOptions): Promise<AuthUser> {
     if (!name.trim()) throw new Error('Enter your name.');
     if (!isValidEmail(email)) throw new Error('Enter a valid email address.');
     if (!isValidPassword(password)) throw new Error(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
 
     const supabase = await getSupabaseClient();
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { name: name.trim() } },
-    });
+    const { data: sessionData } = await supabase.auth.getSession();
+    const verifiedEmail = sessionData.session?.user.email?.toLowerCase();
+    if (!verifiedEmail || verifiedEmail !== email.trim().toLowerCase()) {
+      throw new Error('Verify your email with the code we sent before choosing a password.');
+    }
+
+    const { data, error } = await supabase.auth.updateUser({ password, data: { name: name.trim() } });
     if (error) throw new Error(toUserFacingAuthError(error.message));
     if (!data.user) throw new Error('Something went wrong creating your account. Please try again.');
-    // The account exists in Supabase from this point regardless of whether
-    // a session was issued immediately, so the welcome email fires here.
     notify('sendWelcome', email, { name: name.trim(), launchUrl: PAWOS_HOME_URL });
-    if (!data.session) {
-      // This project's "Confirm email" setting is on, so Supabase withheld
-      // a session and will send its OWN confirmation email — on top of the
-      // OTP the user already verified. Turning that setting off (Supabase
-      // dashboard → Authentication → Sign In / Providers → Email) is the
-      // real fix, since our own OTP already proved this email is real;
-      // that's a project-settings change, not something this code can do.
-      throw new Error('Account created — check your email to confirm it, then sign in.');
-    }
     return toAuthUser(data.user);
   }
 

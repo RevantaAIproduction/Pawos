@@ -277,11 +277,8 @@ export const ipc = {
   async authStartMicrosoftSignIn(): Promise<{ profile: any; idToken: string; accessToken: string }> {
     return getBridge().authStartMicrosoftSignIn();
   },
-  async authSendOtp(email: string): Promise<{ expiresInMinutes: number }> {
-    return getBridge().authSendOtp(email);
-  },
-  async authVerifyOtp(email: string, code: string): Promise<{ valid: boolean; reason?: string }> {
-    return getBridge().authVerifyOtp(email, code);
+  async authRequestSignupCode(email: string, firstName: string, lastName: string): Promise<{ verifyType: 'signup' | 'email' }> {
+    return getBridge().authRequestSignupCode(email, firstName, lastName);
   },
   async authSendPasswordResetOtp(email: string): Promise<{ expiresInMinutes: number }> {
     return getBridge().authSendPasswordResetOtp(email);
@@ -461,6 +458,12 @@ export const ipc = {
   },
   async billingVerifyNativeUsageCreditsPayment(params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string; organizationId?: string }): Promise<NativeCreditsVerificationResult> {
     return getBridge().billingVerifyNativeUsageCreditsPayment(params);
+  },
+  async billingCreateNativeSeatCheckout(organizationId: string, seatTier: 'standard' | 'premium', accessToken?: string): Promise<NativeCreditsCheckoutResult> {
+    return getBridge().billingCreateNativeSeatCheckout(organizationId, seatTier, accessToken);
+  },
+  async billingVerifyNativeSeatPayment(params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string }): Promise<NativeCreditsVerificationResult> {
+    return getBridge().billingVerifyNativeSeatPayment(params);
   },
   async billingGetUsageCreditsConfig(): Promise<import('../../../shared/billing/UsageBucketTypes').UsageCreditsPurchaseConfig> {
     return getBridge().billingGetUsageCreditsConfig();

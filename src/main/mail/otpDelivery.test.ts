@@ -34,9 +34,12 @@ describe('deliverOtp (installed/Store builds have no SMTP credentials)', () => {
     ).rejects.toThrow("Couldn't reach PawOS");
   });
 
-  it('sign-up and password-reset IPC handlers use deliverOtp, and the web route exists', () => {
+  it('the password-reset IPC handler uses deliverOtp, sign-up codes come from the server, and the web route exists', () => {
     const ipc = fs.readFileSync(path.join(__dirname, '../ipc/ipc.ts'), 'utf8');
-    expect(ipc).toContain("deliverOtp(email, { code, expiresInMinutes, purpose: 'signup' })");
+    // Sign-up: the server makes and checks the code (signupCode.ts) — this app never sends its own.
+    expect(ipc).toContain('requestSignupCode(');
+    expect(ipc).not.toContain("purpose: 'signup'");
+    expect(ipc).not.toContain("'auth:verifyOtp'");
     expect(ipc).toContain("deliverOtp(email, { code, expiresInMinutes, purpose: 'password-reset' })");
     expect(ipc).not.toContain('emailService.sendOTP');
     const route = path.join(__dirname, '../../../pawos-web/src/app/api/auth/send-verification-code/route.ts');

@@ -1,3 +1,5 @@
+// First, so it wraps ipcMain before any handler exists: only the app's own pages may call the main process.
+import './ipc/ipcSenderGuard';
 import { autoUpdater } from 'electron-updater';
 import { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, screen, session, shell, Notification } from 'electron';
 import * as path from 'path';

@@ -35,6 +35,8 @@ const SUPABASE_SESSION_KEY = 'pawos:supabase:session';
  */
 export class AuthenticationProvider implements AuthService {
   private emailProvider = new EmailAuthProvider();
+  /** How the server said the pending sign-up code must be checked (see sendVerificationCode). */
+  private signupVerifyType: 'signup' | 'email' = 'signup';
   constructor() {
     // PawOS Build access is server-authoritative and held only in main-process memory
     // (BuildAccessStore.ts), so it must be re-confirmed from Supabase whenever a session appears or
@@ -176,12 +178,14 @@ export class AuthenticationProvider implements AuthService {
     return this.emailProvider.resetPassword(email, newPassword);
   }
 
-  async sendVerificationCode(email: string): Promise<{ expiresInMinutes: number }> {
-    return ipc.authSendOtp(email);
+  async sendVerificationCode(email: string, name: { firstName: string; lastName: string }): Promise<{ expiresInMinutes: number }> {
+    const { verifyType } = await ipc.authRequestSignupCode(email, name.firstName, name.lastName);
+    this.signupVerifyType = verifyType;
+    return { expiresInMinutes: 0 };
   }
 
   async verifyEmailCode(email: string, code: string): Promise<{ valid: boolean; reason?: string }> {
-    return ipc.authVerifyOtp(email, code);
+    return this.emailProvider.verifySignupCode(email, code, this.signupVerifyType);
   }
 
   async signOut(): Promise<void> {
