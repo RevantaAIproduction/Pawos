@@ -1,4 +1,5 @@
-import type { DocBlock, DocStatus } from '../../lib/docs/types';
+import Image from 'next/image';
+import type { DocBlock, DocScreenshot, DocStatus } from '../../lib/docs/types';
 import { CodeBlock } from './CodeBlock';
 
 const STATUS_STYLE: Record<DocStatus, { label: string; cls: string }> = {
@@ -8,6 +9,29 @@ const STATUS_STYLE: Record<DocStatus, { label: string; cls: string }> = {
   'not-verified': { label: 'Not verified', cls: 'border-neutral-300 bg-neutral-100 text-neutral-700' },
   deprecated: { label: 'Deprecated', cls: 'border-rose-200 bg-rose-50 text-rose-800' },
 };
+
+/**
+ * A screenshot in its frame — or, until the image exists, a labelled slot of the same shape, so the
+ * page reads the same either way and nothing shifts when the real capture is added.
+ */
+function Screenshot({ shot }: { shot: DocScreenshot }) {
+  const frame = shot.portrait ? 'mx-auto max-w-[280px]' : 'w-full';
+  return (
+    <figure className="my-6">
+      <div className={`${frame} overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50 shadow-sm`}>
+        {shot.src ? (
+          <Image src={shot.src} alt={shot.alt} width={shot.width} height={shot.height} sizes={shot.portrait ? '280px' : '(min-width: 1024px) 720px, 100vw'} className="block h-auto w-full" />
+        ) : (
+          <div role="img" aria-label={`${shot.alt} (screenshot to be added)`} className="flex w-full flex-col items-center justify-center gap-1 px-4 text-center" style={{ aspectRatio: `${shot.width} / ${shot.height}` }}>
+            <p className="text-sm font-medium text-neutral-600">Screenshot goes here</p>
+            <p className="font-mono text-xs text-neutral-400">{shot.slot}</p>
+          </div>
+        )}
+      </div>
+      <figcaption className="mt-2 text-center text-sm text-neutral-500">{shot.caption}</figcaption>
+    </figure>
+  );
+}
 
 function Callout({ tone, text }: { tone: 'note' | 'warning' | 'tip'; text: string }) {
   const style =
@@ -130,10 +154,12 @@ export function DocArticle({ blocks }: { blocks: DocBlock[] }) {
               </div>
             );
           }
+          case 'screenshot':
+            return <Screenshot key={i} shot={block.shot} />;
           case 'cards':
-            // One column on a phone or a narrow window, side by side when there is room for three.
+            // One column on a phone or a narrow window, side by side when there is room: three across, or two by two for four.
             return (
-              <div key={i} className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+              <div key={i} className={`mt-6 grid grid-cols-1 gap-4 ${block.items.length === 4 ? 'sm:grid-cols-2' : 'lg:grid-cols-3'}`}>
                 {block.items.map((card, j) => (
                   <section key={j} className="flex flex-col rounded-lg border border-neutral-200 bg-white p-5">
                     <h3 className="text-base font-semibold tracking-tight text-neutral-900">{card.title}</h3>

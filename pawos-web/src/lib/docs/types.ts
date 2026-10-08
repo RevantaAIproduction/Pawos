@@ -36,7 +36,27 @@ export type DocBlock =
   /** Side-by-side summaries (they stack on a phone) — e.g. the ways to use PawOS. */
   | { type: 'cards'; items: { title: string; subtitle: string; detail: string; points: string[] }[] }
   /** One sentence and one link out. `href` must be https. */
-  | { type: 'cta'; text: string; label: string; href: string };
+  | { type: 'cta'; text: string; label: string; href: string }
+  /** A real screenshot of PawOS, or a labelled slot where one goes when `shot.src` is null. */
+  | { type: 'screenshot'; shot: DocScreenshot };
+
+/**
+ * A screenshot shown in a doc page. `src` is a path under /public (for example "/docs/pawos-web.png");
+ * with `src: null` the page shows a labelled slot of the same shape instead, so the layout holds
+ * before the image exists. Only real captures of PawOS belong here — never a mock-up.
+ */
+export type DocScreenshot = {
+  /** The slot's name, shown in the placeholder: WEB_SCREENSHOT, CLI_SCREENSHOT, … */
+  slot: string;
+  src: string | null;
+  /** The image's own size in pixels (it sets the shape; the image scales to the page). */
+  width: number;
+  height: number;
+  alt: string;
+  caption: string;
+  /** A phone-shaped capture: shown narrow and centred instead of full width. */
+  portrait?: boolean;
+};
 
 export type DocSectionId =
   | 'getting-started'

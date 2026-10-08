@@ -47,11 +47,11 @@ export const DOCS: DocPage[] = [
     slug: "installation",
     title: "Installation",
     category: "Getting Started",
-    summary: "How to install PawOS once a build is available for your platform.",
+    summary: "How to install PawOS Desktop for Windows from the Microsoft Store.",
     body: [
       {
         paragraphs: [
-          "PawOS for Windows is released through early access: choose Download for Windows on this site to join, and we email you the installer link when your access opens. Run the installer and sign in when the app opens.",
+          "PawOS Desktop is for Windows only and is installed from the Microsoft Store. Choosing Download for Windows on this site asks you to request early access, and the email you receive links to the same Microsoft Store listing. Install it from the Store and sign in when the app opens.",
           "Nothing else needs to be installed first — PawOS is a self-contained desktop app.",
         ],
       },
@@ -62,14 +62,14 @@ export const DOCS: DocPage[] = [
     slug: "system-requirements",
     title: "System Requirements",
     category: "Getting Started",
-    summary: "Minimum and recommended specs per platform.",
+    summary: "What PawOS Desktop needs on Windows, and what PawOS Web needs.",
     body: [
       {
         paragraphs: ["PawOS is a desktop app with a real-time 3D companion, so requirements are modest but not trivial."],
         list: [
           "Windows: Windows 10 (64-bit) or later, 4 GB RAM minimum (8 GB recommended)",
-          "macOS: macOS 12 Monterey or later, Apple Silicon or Intel",
-          "Linux: a modern glibc-based distribution (Ubuntu 22.04+ or equivalent), 4 GB RAM minimum",
+          "PawOS Desktop is for Windows only, installed from the Microsoft Store. It is not currently available for macOS or Linux.",
+          "PawOS Web needs only a current web browser, on any computer or phone.",
           "A graphics card with 3D acceleration is recommended for smooth companion animation",
         ],
       },

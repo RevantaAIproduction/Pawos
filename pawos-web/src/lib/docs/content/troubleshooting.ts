@@ -12,7 +12,7 @@ export const troubleshootingPages: DocPage[] = [
         items: [
           'Confirm your OS meets the minimum requirements — see Getting Started → System Requirements.',
           'Restart your computer — after a long uptime the app can occasionally fail to access the graphics card or display.',
-          'Reinstall using the latest installer for your platform.',
+          'Reinstall PawOS Desktop from the Microsoft Store.',
         ],
       },
     ],

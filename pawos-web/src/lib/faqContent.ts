@@ -1,7 +1,7 @@
 export type FaqItem = { category: string; q: string; a: string };
 
 export const FAQ_ITEMS: FaqItem[] = [
-  { category: "Installation", q: "What platforms does PawOS support?", a: "Windows, macOS, and Linux — see the Download page for current build availability per platform." },
+  { category: "Installation", q: "What platforms does PawOS support?", a: "PawOS Desktop is for Windows only and is installed from the Microsoft Store; it is not currently available for macOS or Linux. PawOS Web works in a browser on any computer or phone, and the PawOS CLI runs in a terminal with Node.js 20 or newer." },
   { category: "Installation", q: "Do I need to install anything else first?", a: "No. PawOS is a self-contained desktop app — nothing else needs to be installed first." },
   { category: "Billing", q: "Is there a free plan?", a: "Yes — Paw Go is free, with local runtime features and real AI for planning & analysis (Paw Flash); execution requires Paw Pro. See Pricing for the full tier ladder." },
   { category: "Billing", q: "How is Autonomous Ticket Resolution billed?", a: "As a completed Autonomous Engineering Task, billed only once a real pull request is opened and the ticket is updated — never for a failed, cancelled, or denied run." },
@@ -20,7 +20,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   { category: "Deployments", q: "Do I need to give PawOS my cloud credentials?", a: "No — connectors use your machine's own already-authenticated CLI/API sessions for each provider. PawOS never manages your cloud credentials on your behalf." },
   { category: "Deployments", q: "What happens if a deploy breaks production?", a: "Deploys can run an automatic post-deploy health check with rollback to the last good deployment." },
   { category: "Updates", q: "How often does PawOS update?", a: "See the Changelog for the real, chronological history of what's shipped." },
-  { category: "Downloads", q: "Are public installers available yet?", a: "See the Download page for current status per platform." },
+  { category: "Downloads", q: "Are public installers available yet?", a: "PawOS Desktop for Windows is available from the Microsoft Store. There is no macOS or Linux installer." },
   { category: "Licensing", q: "Is PawOS open source?", a: "See our Licensing and Third-Party Licenses pages for the current, accurate answer rather than an assumption either way." },
   { category: "Support", q: "How do I report a bug?", a: "Email support@revantaai.com with steps to reproduce — see the Support page." },
   { category: "Support", q: "How do I request a feature?", a: "Email support@revantaai.com — see the Support page." },

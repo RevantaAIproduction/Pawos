@@ -5,18 +5,18 @@ export const mobilePages: DocPage[] = [
     section: 'mobile',
     slug: 'overview',
     title: 'Mobile Overview',
-    description: 'PawOS on a paired phone — a companion surface, not a second full app.',
+    description: 'PawOS on a phone: PawOS Web in the browser, and a phone paired with PawOS Desktop.',
     blocks: [
       {
         type: 'lead',
-        text: 'PawOS Mobile is a paired-phone PWA (progressive web app) that extends your desktop session to a phone — it is not an independent, full-featured mobile application.',
+        text: 'PawOS works on a phone in two ways. PawOS Web runs in your phone\u2019s browser on its own: you chat with Paw and change code in a GitHub repository, exactly as on a computer. Mobile Presence, which this section describes, is different: you pair your phone with PawOS Desktop and follow that desktop session from it \u2014 its conversation, its notifications, and actions waiting for your approval. Neither is an independent, full-featured mobile application, and there is no separate app to download.',
       },
       {
         type: 'paragraph',
         text: 'Pairing uses a QR code scanned from the desktop app to establish a trusted device relationship, secured with real encryption and token rotation.',
       },
     ],
-    related: ['mobile/connectivity', 'mobile/supported-capabilities'],
+    related: ['mobile/connectivity', 'mobile/supported-capabilities', 'getting-started/four-ways-to-work', 'getting-started/web-and-mobile'],
   },
   {
     section: 'mobile',

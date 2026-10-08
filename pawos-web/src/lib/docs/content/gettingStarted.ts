@@ -87,19 +87,25 @@ export const gettingStartedPages: DocPage[] = [
     blocks: [
       {
         type: 'lead',
-        text: 'PawOS is a self-contained Windows desktop app \u2014 nothing else needs to be installed first.',
+        text: 'PawOS Desktop is a self-contained app for Windows only, installed from the Microsoft Store \u2014 nothing else needs to be installed first.',
       },
       {
         type: 'steps',
         items: [
-          { title: 'Get the installer', detail: 'Choose Download for Windows on this site and join early access. We email you the installer link when your access opens.' },
-          { title: 'Run the installer', detail: 'Open the installer from the email and follow the prompts.' },
+          { title: 'Get PawOS from the Microsoft Store', detail: 'Open the PawOS listing in the Microsoft Store and choose Get or Install. On this site, Download for Windows asks you to request early access, and the email you receive links to the same Microsoft Store listing.' },
+          { title: 'Let the Store install it', detail: 'The Microsoft Store downloads and installs PawOS for you. There is no separate installer file to run.' },
           { title: 'Sign in', detail: 'Open PawOS and sign in. Workspace and system permissions are requested only when a task needs them.' },
         ],
       },
       {
+        type: 'cta',
+        text: 'PawOS Desktop for Windows is installed from the Microsoft Store.',
+        label: 'Get PawOS Desktop for Windows',
+        href: 'https://apps.microsoft.com/detail/9p6732l7486c?hl=en-US&gl=IN',
+      },
+      {
         type: 'warning',
-        text: 'Only install PawOS from the link we email you.',
+        text: 'Only install PawOS from its Microsoft Store listing.',
       },
       { type: 'heading', level: 2, id: 'first-launch', text: 'First launch' },
       {
@@ -109,7 +115,7 @@ export const gettingStartedPages: DocPage[] = [
       {
         type: 'faq',
         items: [
-          { q: 'What if launch fails?', a: 'Make sure you installed from the link we emailed you, that Windows allowed the app to run, and see Troubleshooting → PawOS won’t start.' },
+          { q: 'What if launch fails?', a: 'Make sure you installed PawOS from the Microsoft Store, that Windows allowed the app to run, and see Troubleshooting \u2192 PawOS won\u2019t start.' },
           { q: 'Do I need anything else installed first?', a: 'No — the PawOS installer includes everything the app needs.' },
         ],
       },
@@ -120,20 +126,46 @@ export const gettingStartedPages: DocPage[] = [
     section: 'getting-started',
     slug: 'system-requirements',
     title: 'System Requirements',
-    description: 'Minimum specs per platform.',
+    description: 'What you need for PawOS Desktop on Windows, and for PawOS Web on a computer or phone.',
+    keywords: ['requirements', 'windows', 'macos', 'mac', 'linux', 'supported platforms', 'browser', 'phone', 'node'],
     blocks: [
       {
+        type: 'lead',
+        text: 'PawOS Desktop is for Windows only, and is installed from the Microsoft Store. PawOS Web runs in a browser on any computer or phone, with nothing to install.',
+      },
+      { type: 'heading', level: 2, id: 'desktop', text: 'PawOS Desktop (Windows only)' },
+      {
         type: 'table',
-        headers: ['Platform', 'Requirement'],
+        headers: ['', 'Requirement'],
         rows: [
-          ['Windows', 'Windows 10 (64-bit) or later, 4\u202fGB RAM minimum (8\u202fGB recommended)'],
-          ['macOS', 'macOS 12 Monterey or later, Apple Silicon or Intel'],
-          ['Linux', 'A modern glibc-based distribution (Ubuntu 22.04+ or equivalent), 4\u202fGB RAM minimum'],
+          ['Operating system', 'Windows 10 (64-bit) or later'],
+          ['Memory', '4\u202fGB RAM minimum (8\u202fGB recommended)'],
+          ['Install from', 'The Microsoft Store'],
         ],
       },
       {
         type: 'note',
         text: 'A graphics card with 3D acceleration is recommended for smooth companion animation \u2014 PawOS still runs without one, with reduced animation quality.',
+      },
+      {
+        type: 'status',
+        status: 'not-implemented',
+        text: 'PawOS Desktop is not currently available for macOS or Linux. On a Mac or a Linux computer you can use PawOS Web in your browser, and the PawOS CLI in your terminal.',
+      },
+      { type: 'heading', level: 2, id: 'web-and-mobile', text: 'PawOS Web and Mobile (any browser)' },
+      {
+        type: 'table',
+        headers: ['', 'Requirement'],
+        rows: [
+          ['PawOS Web', 'A current web browser on Windows, macOS or Linux. Nothing to install.'],
+          ['PawOS on a phone', 'A current mobile browser on your phone. Nothing to install; you can add PawOS to your home screen.'],
+          ['A phone paired with PawOS Desktop', 'The phone\u2019s browser, and PawOS Desktop running on a Windows computer signed in to the same account.'],
+        ],
+      },
+      { type: 'heading', level: 2, id: 'cli', text: 'PawOS CLI' },
+      {
+        type: 'paragraph',
+        text: 'The PawOS CLI needs Node.js 20 or newer. It works on PawOS\u2019s servers through your PawOS account, so it does not need PawOS Desktop.',
       },
     ],
     related: ['getting-started/installation'],
@@ -427,8 +459,9 @@ export const gettingStartedPages: DocPage[] = [
       { type: 'heading', level: 2, text: 'PawOS CLI', id: 'cli' },
       {
         type: 'paragraph',
-        text: 'The PawOS CLI is PawOS in your terminal. Run pawos in any folder: it signs you in through your browser, greets you, shows where you are, and asks what you would like to work on.',
+        text: 'The PawOS CLI is PawOS in your terminal. Install it with npm, then run pawos in any folder: it signs you in through your browser, greets you, shows where you are, and asks what you would like to work on.',
       },
+      { type: 'code', lang: 'bash', code: 'npm install -g @revantaai/pawos-cli' },
       { type: 'heading', level: 3, text: 'What it does', id: 'cli-does' },
       {
         type: 'list',
@@ -436,7 +469,7 @@ export const gettingStartedPages: DocPage[] = [
           'Starts from any folder. Git is not required.',
           'Chat with Paw — the same conversation you see on Web.',
           'Shows the Git branch when the folder is a Git repository, and the GitHub repository when it has a GitHub remote.',
-          'Code mode, inside a folder whose GitHub repository is the one selected in your PawOS account: your request goes to the same service as Web’s Code mode, and you see its progress and its result — summary, files changed, checks, commit and pull request.',
+          'Code mode, inside a folder whose GitHub repository is the one selected in your PawOS account: a request to change the project is recognised as a task, PawOS asks your permission, and then your request goes to the same service as Web’s Code mode. You see its progress and its result — summary, files changed, checks, commit and pull request. A greeting, a question or a request to explain is answered as chat instead.',
           'Your account, plan and usage, and the status of your connections.',
           'Signs in with your PawOS account in the browser. It never asks for your password in the terminal.',
         ],
@@ -481,6 +514,7 @@ export const gettingStartedPages: DocPage[] = [
       {
         type: 'list',
         items: [
+          'PawOS Desktop is for Windows only, installed from the Microsoft Store. It is not available for macOS or Linux.',
           'Working on files, the terminal and tests in Desktop is part of paid plans.',
           'The terminal is an approved list of developer tools, not an unrestricted shell.',
           'Editing files, running commands, installing software and connecting accounts each ask for your approval.',
@@ -497,12 +531,12 @@ export const gettingStartedPages: DocPage[] = [
         items: [
           { q: 'Can Web or the CLI run my tests?', a: 'No. They read the result of the checks your repository already runs on GitHub. To run tests yourself, on your machine, use PawOS Desktop.' },
           { q: 'I have changes I haven’t pushed. Can Web or the CLI see them?', a: 'No. They work from what is on GitHub. Push your changes first, or use PawOS Desktop, which works on your local files.' },
-          { q: 'Is there a PawOS mobile app?', a: 'PawOS on a phone is PawOS Web in your phone’s browser. You can add it to your home screen. It has the same capabilities and limits as Web on a computer.' },
+          { q: 'Is there a PawOS mobile app?', a: 'There is no separate app to download. PawOS Web works in your phone\u2019s browser and can be added to your home screen, with the same capabilities and limits as Web on a computer. You can also pair your phone with PawOS Desktop to follow a desktop session from it \u2014 see Mobile Overview.' },
           { q: 'Does the CLI change the files in my folder?', a: 'No. It makes the change on GitHub and shows you the commit or pull request. Pull the change when you are ready.' },
           { q: 'Do I need a different plan for each?', a: 'No. One PawOS account and one plan cover Web, the CLI and Desktop, with one shared usage allowance.' },
         ],
       },
     ],
-    related: ['getting-started/web-and-mobile', 'getting-started/installation', 'coding/overview', 'billing/web-and-desktop'],
+    related: ['getting-started/four-ways-to-work', 'getting-started/web-and-mobile', 'getting-started/installation', 'coding/overview', 'billing/web-and-desktop'],
   },
 ];

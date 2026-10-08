@@ -19,6 +19,7 @@ export const DOC_NAV: DocNavSection[] = [
       { slug: 'first-workspace', title: 'First Workspace' },
       { slug: 'first-coding-task', title: 'First Coding Task' },
       { slug: 'web-and-mobile', title: 'PawOS on the Web and your Phone' },
+      { slug: 'four-ways-to-work', title: 'Web, Mobile, Desktop and CLI' },
       { slug: 'web-cli-desktop', title: 'Web, CLI or Desktop?' },
     ],
   },

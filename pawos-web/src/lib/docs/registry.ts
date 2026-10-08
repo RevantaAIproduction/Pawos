@@ -1,6 +1,7 @@
 import type { DocPage, DocSectionId } from './types';
 import { DOC_NAV } from './navigation';
 import { gettingStartedPages } from './content/gettingStarted';
+import { fourWaysPages } from './content/fourWays';
 import { conceptsPages } from './content/concepts';
 import { codingPages } from './content/coding';
 import { autonomousWorkPages } from './content/autonomousWork';
@@ -15,6 +16,7 @@ import { addDisclosureBlocks } from './disclosure';
 
 const RAW_DOC_PAGES: DocPage[] = [
   ...gettingStartedPages,
+  ...fourWaysPages,
   ...conceptsPages,
   ...codingPages,
   ...autonomousWorkPages,
@@ -97,6 +99,8 @@ function blockText(block: DocPage['blocks'][number]): string {
       return block.items.map((i) => `${i.title} ${i.subtitle} ${i.detail} ${i.points.join(' ')}`).join(' ');
     case 'cta':
       return `${block.text} ${block.label}`;
+    case 'screenshot':
+      return `${block.shot.caption} ${block.shot.alt}`;
     default:
       return '';
   }
