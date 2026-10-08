@@ -14,6 +14,7 @@ import { LiveStatus } from "../ui/spinner";
 import { blank, clean, cleanLines, indent, line, seg, type Line } from "../ui/terminal";
 import { connectService, showConnections } from "./connections";
 import { accountRows } from "./status";
+import { classifyIntent } from "../intent/intent";
 import { MODE_SUMMARY, askPermission, listPreviousWork, modeLines, openPreviousWork, parseMode, readAttachment, type PermissionMode } from "./workspace";
 
 /** PawOS Web's own limit on a message (WEB_POLICY.maxMessageChars); the server enforces it too. */
@@ -248,7 +249,7 @@ async function resolveCodeMode(ctx: CliContext, project: ProjectContext, account
 }
 
 export const COMMAND_HELP: [string, string][] = [
-  ["/code", "Make changes in this project's GitHub repository"],
+  ["/code [request]", "Make changes in this project's GitHub repository"],
   ["/chat", "Talk to PawOS without changing anything"],
   ["/connections", "Show your connected services"],
   ["/connect <name>", "Connect a service to your PawOS account"],
@@ -354,8 +355,22 @@ export async function interactive(ctx: CliContext, options: { signIn?: boolean }
       if (ctx.prompter.interrupted && !(await leaving())) continue;
       break; // the user said yes, or input has ended (Ctrl+D)
     }
-    const content = answer.trim();
+    let content = answer.trim();
     if (!content) continue;
+
+    // "/code <request>": this one is a code change, whatever its wording — the user said so.
+    let saidCode = false;
+    const requested = /^\/code\s+(\S[\s\S]*)$/i.exec(content);
+    if (requested) {
+      if (!("repository" in code)) code = await resolveCodeMode(ctx, project, account);
+      if (!("repository" in code)) {
+        term.print([blank(), line("  ", seg("Code changes aren't available here.", "warn")), ...code.unavailable.map(note), note("You can still ask PawOS anything."), blank()]);
+        continue;
+      }
+      mode = "code";
+      content = requested[1]!.trim();
+      saidCode = true;
+    }
 
     // The workspace's own commands. Anything else starting with "/" is a mistake, never a message.
     if (content.startsWith("/") || /^(exit|quit)$/i.test(content)) {
@@ -465,8 +480,16 @@ export async function interactive(ctx: CliContext, options: { signIn?: boolean }
 
     let unauthenticated = false;
     // Plan mode: the request is talked through and nothing is changed — it is never sent as a code change.
-    const planOnly = mode === "code" && "repository" in code && permission === "plan";
-    if (mode === "code" && "repository" in code && permission === "ask") {
+    // Intent first. Before the permission question, the runner or any progress display, PawOS decides
+    // what this message is: a real task (an instruction to change the project) or conversation. Only a
+    // real task goes on; a greeting, a question or a request to explain is answered as chat and never
+    // reaches the repository. `/code <request>` is the user saying it is a task.
+    const decision = saidCode ? ({ intent: "task", reason: "directive" } as const) : classifyIntent(content);
+    if (ctx.debug && mode === "code" && "repository" in code) term.print([line("  ", seg(`debug: intent=${decision.intent} reason=${decision.reason}`, "muted"))]);
+    const codeTurn = mode === "code" && "repository" in code && decision.intent === "task";
+    const talking = mode === "code" && "repository" in code && !codeTurn;
+    const planOnly = codeTurn && permission === "plan";
+    if (codeTurn && "repository" in code && permission === "ask") {
       const decision = await askPermission(ctx.prompter, code.repository, (lines) => term.print(lines));
       if (decision === "deny") {
         term.print([blank(), line("  ", seg("Not sent. Nothing was changed.", "muted")), blank()]);
@@ -477,7 +500,7 @@ export async function interactive(ctx: CliContext, options: { signIn?: boolean }
         term.print([blank(), line("  ", seg("PawOS won't ask again in this session. /mode ask turns it back on.", "muted"))]);
       }
     }
-    if (mode === "code" && "repository" in code && !planOnly) {
+    if (codeTurn && "repository" in code && !planOnly) {
       const task: PendingTask = { requestId: newRequestId(), content, repository: code.repository, startedAt: new Date().toISOString() };
       ctx.pending.write(task); // before it is sent, so an interruption at any point can be picked up again
       const result = await followTask(ctx, task, false, planLabel);
@@ -502,6 +525,8 @@ export async function interactive(ctx: CliContext, options: { signIn?: boolean }
         term.print([...(term.caps.interactive ? [] : [blank()]), line("  ", seg("PawOS:", "muted")), ...(reply.length > 0 ? reply : ["(PawOS sent an empty reply.)"]).map((text) => (text === "" ? blank() : line("  ", text))), blank()]);
         // PawOS said this needs its desktop app: it was not done here, and the CLI doesn't pretend otherwise.
         if (asked.result.requiresDesktop) term.print([line("  ", seg("PawOS says this needs the PawOS desktop app. Nothing was done from here.", "muted")), blank()]);
+        // Said in Code mode but answered as conversation: say so, and how to ask for a change instead.
+        else if (talking) term.print([line("  ", seg("Answered as chat; nothing was changed. To change code, say what to change or start with /code.", "muted")), blank()]);
       } else {
         unauthenticated = asked.error instanceof PawosApiError && asked.error.kind === "unauthenticated";
         term.print([...(term.caps.interactive ? [] : [blank()]), ...(unauthenticated ? [line("  ", seg(SESSION_EXPIRED_NOTICE, "warn"))] : renderRefusal(asked.error, planLabel, baseUrl(ctx)))]);

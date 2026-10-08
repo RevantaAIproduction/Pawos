@@ -1,6 +1,6 @@
 {
   "name": "@revantaai/pawos-cli",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "PawOS in your terminal: run PawOS code tasks on your connected GitHub project.",
   "license": "UNLICENSED",
   "author": "PawosAI",

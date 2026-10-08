@@ -24,7 +24,7 @@ const processing = () => reply({ code: "processing", message: "Your message is s
 
 describe("requestId creation", () => {
   it("every task gets its own id, in the form PawOS accepts", async () => {
-    const h = start({ signedIn: true, answers: [TASK, "Another change", null] });
+    const h = start({ signedIn: true, answers: [TASK, "Add another change", null] });
     h.server.sends = [delivered("a", pushed("a")), delivered("b", pushed("b"))];
     h.server.polls = [pushed("x")];
     await runCli([], h.ctx);
@@ -77,8 +77,11 @@ describe("polling", () => {
     // The server's own labels, in its order, with its statuses.
     expect(output).toContain("✓ Read the repository  42 files");
     expect(output).toContain("● Choose the files");
-    expect(output).toContain("○ Write the change");
+    // A step is listed from the moment PawOS says it has started — never before, as something still to come.
+    expect(output).not.toContain("○ Write the change");
+    expect(output).not.toContain("Commit and push to main\n  ○");
     expect(output).toContain("● Write the change");
+    expect(output.indexOf("● Write the change")).toBeGreaterThan(output.indexOf("● Choose the files"));
     expect(output.indexOf("● Choose the files")).toBeLessThan(output.indexOf("● Write the change"));
   });
 });

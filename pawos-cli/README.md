@@ -36,19 +36,27 @@ Type and press Enter. What happens next depends on the mode, which is always sho
   PawOS Web, so the conversation also appears in your PawOS chats. It is the only mode in a folder
   that isn't a GitHub project.
 - **Code mode** — on by default inside a GitHub project that matches the repository selected in
-  PawOS. What you type is a change request: PawOS reads the repository on GitHub, commits the change
+  PawOS. When you ask for a change ("fix the login redirect", "add a footer", "the submit button
+  is broken"), PawOS asks your permission, reads the repository on GitHub, commits the change
   there, and shows you the summary, the files changed, the state of your checks, and the commit or
   pull request. It does not edit the files in your local folder — pull the change once you have
   reviewed it.
 
-Leave with `/exit` or Ctrl+D. Ctrl+C at the prompt cancels what you were typing; press it again to leave.
+  A greeting or a question ("hii", "what does this project do?") is not a change request, even in
+  Code mode: it is answered as chat and nothing is changed. If PawOS treats a request as
+  conversation and you meant a change, start it with `/code`, for example `/code the footer, darker`.
+
+  While a change runs, the list shows the steps PawOS reports as started or finished. A step that
+  has not started — committing, pushing, checks — is not shown until it does.
+
+Leave with `/exit` or Ctrl+D. Ctrl+C asks before leaving.
 
 ### Inside PawOS
 
 | Command | What it does |
 |---|---|
 | `/chat` | Talk to PawOS without changing code |
-| `/code` | Make changes in this folder's GitHub project (says why if that isn't possible here) |
+| `/code [request]` | Switch to Code mode, or make this one request a code change (says why if that isn't possible here) |
 | `/connections` | Show your account's connections |
 | `/connect <name>` | Connect a service, for example `/connect github` |
 | `/mode [name]` | Ask before code changes (`ask`), don't ask (`auto`), or plan only (`plan`) |

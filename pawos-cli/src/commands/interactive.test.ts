@@ -340,11 +340,11 @@ describe("the task loop", () => {
   });
 
   it("several tasks in one session, each sent once", async () => {
-    const h = start({ signedIn: true, answers: ["First", "Second", "Third", null] });
+    const h = start({ signedIn: true, answers: ["Add the first page", "Add the second page", "Add the third page", null] });
     h.server.sends = [delivered("a", pushed("a")), reply({ code: "usage_limit_reached", message: "Your plan's included usage is used up." }, 402), delivered("c", pushed("c"))];
     h.server.polls = [pushed("x")];
     await runCli([], h.ctx);
-    expect(h.server.starts().map((call) => call.body?.content)).toEqual(["First", "Second", "Third"]);
+    expect(h.server.starts().map((call) => call.body?.content)).toEqual(["Add the first page", "Add the second page", "Add the third page"]);
     expect(count(h.output(), QUESTION)).toBe(4);
   });
 });

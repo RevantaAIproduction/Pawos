@@ -4,12 +4,19 @@ import { clean, line, seg, type Glyphs, type Line, type Tone } from "./terminal"
 /**
  * A task's progress, drawn from the steps PawOS reports — its labels, its order, its statuses.
  * Nothing is added, renamed or guessed: if PawOS hasn't reported a step yet, none is shown.
+ *
+ * Only steps that have happened or are happening are listed. PawOS reports its whole plan up front
+ * with every later step "pending", but a pending step is something that has not been done and may
+ * never be — a request can end at the plan — so "Commit and push" or "Preview and checks" appears
+ * only once PawOS says it has actually started it.
  */
 const MARK: Record<CodeChangeStep["status"], keyof Glyphs> = { done: "done", active: "active", pending: "pending", failed: "failed", skipped: "skipped" };
 const TONE: Record<CodeChangeStep["status"], Tone | undefined> = { done: "good", active: "accent", pending: "muted", failed: "bad", skipped: "muted" };
 
 export function renderSteps(steps: CodeChangeStep[] | null | undefined, glyphs: Glyphs): Line[] {
-  return (steps ?? []).map((step) => {
+  // A status this version doesn't know is treated as not started: it is never shown as done or running.
+  const started = (steps ?? []).filter((step) => step.status === "done" || step.status === "active" || step.status === "failed" || step.status === "skipped");
+  return started.map((step) => {
     const status = MARK[step.status] ? step.status : "pending";
     const quiet = status === "pending" || status === "skipped";
     const detail = clean(step.detail, 160);

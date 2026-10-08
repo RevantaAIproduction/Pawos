@@ -23,9 +23,21 @@ function screen(caps = LIVE_TERMINAL) {
 }
 
 describe("progress rendering", () => {
-  it("draws the steps PawOS reported: its labels, its order, its statuses", () => {
+  it("draws the steps PawOS says have happened or are happening: its labels, its order, its statuses", () => {
     const text = plain(renderSteps(change(REQUEST_ID).steps, GLYPHS));
-    expect(text.split("\n")).toEqual(["  ✓ Read the repository  42 files", "  ● Choose the files", "  ○ Write the change", "  ○ Check for problems", "  ○ Commit and push to main", "  ○ Preview and checks"]);
+    expect(text.split("\n")).toEqual(["  ✓ Read the repository  42 files", "  ● Choose the files"]);
+  });
+
+  it("a step PawOS has not started is not listed: writing, committing, pushing and checks appear only when they really begin", () => {
+    const steps = change(REQUEST_ID).steps; // read done, plan active, the other four still pending
+    const text = plain(renderSteps(steps, GLYPHS));
+    for (const later of ["Write the change", "Check for problems", "Commit and push to main", "Preview and checks"]) expect(text).not.toContain(later);
+    // …and each one shows up at the moment PawOS reports it started.
+    const pushing = steps.map((s) => (s.id === "push" ? { ...s, status: "active" as const } : s.id === "preview" ? s : { ...s, status: "done" as const }));
+    expect(plain(renderSteps(pushing, GLYPHS)).split("\n")).toEqual(["  ✓ Read the repository  42 files", "  ✓ Choose the files", "  ✓ Write the change", "  ✓ Check for problems", "  ● Commit and push to main"]);
+    // With nothing started yet there is nothing to list.
+    expect(renderSteps(steps.map((s) => ({ ...s, status: "pending" as const })), GLYPHS)).toEqual([]);
+    expect(plain(renderProgress({ steps: steps.map((s) => ({ ...s, status: "pending" as const })) }, GLYPHS))).toBe("  Starting…");
   });
 
   it("marks a failed and a skipped step", () => {
@@ -39,13 +51,13 @@ describe("progress rendering", () => {
     expect(plain(renderProgress(null, GLYPHS))).toBe("  Starting…");
   });
 
-  it("an unknown status from a newer server is shown as not-yet-done, never as done", () => {
+  it("an unknown status from a newer server is treated as not started: it is never shown as done or running", () => {
     const odd = { id: "x", label: "New kind of step", status: "paused" } as unknown as Parameters<typeof renderSteps>[0] extends (infer S)[] | null | undefined ? S : never;
-    expect(plain(renderSteps([odd], GLYPHS))).toBe("  ○ New kind of step");
+    expect(renderSteps([odd], GLYPHS)).toEqual([]);
   });
 
   it("has plain-ASCII marks for terminals that can't draw the symbols", () => {
-    expect(plain(renderSteps(change(REQUEST_ID).steps.slice(0, 3), glyphsFor(false)))).toBe("  + Read the repository  42 files\n  * Choose the files\n  - Write the change");
+    expect(plain(renderSteps(change(REQUEST_ID).steps.slice(0, 3), glyphsFor(false)))).toBe("  + Read the repository  42 files\n  * Choose the files");
   });
 });
 
@@ -235,13 +247,13 @@ describe("the PawOS animation", () => {
     timers.tick(2);
     const frames = stripAnsi(chunks.slice(before).join(""));
     expect(frames).toContain("◎ PawOS is working…"); // the mark moved; nothing else did
-    expect(chunks[before]).toContain(`${ESC}[8A`); // redrawn over the previous frame, not appended
+    expect(chunks[before]).toContain(`${ESC}[4A`); // redrawn over the previous frame (status, blank, two steps), not appended
 
     live.stop();
     expect(timers.active).toBe(0);
     expect(timers.cleared).toBe(1);
     expect(raw().endsWith(`${ESC}[?25h`)).toBe(true); // cursor visible again
-    expect(raw()).toContain(`${ESC}[8A\r${ESC}[0J`); // the animated block is erased
+    expect(raw()).toContain(`${ESC}[4A\r${ESC}[0J`); // the animated block is erased
 
     const after = chunks.length;
     timers.tick(5);
