@@ -866,14 +866,20 @@ export function WorkspaceChat({
         {empty && (
           <div className="mt-6 flex flex-col gap-4 rounded-xl border border-neutral-800/80 bg-neutral-900/40 p-4 sm:flex-row sm:items-center">
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-neutral-100">PawOS does the work on your desktop</p>
+              <p className="text-sm font-medium text-neutral-100" data-testid="web-capability-note">Before you start</p>
               <p className="mt-0.5 text-sm text-neutral-400">
-                On the web Paw talks things through
-                {frontendChanges.state === "locked" ? "" : promptLimit ? ", and makes small frontend changes (text, headings, buttons) in a GitHub repository" : ", and changes code in a GitHub repository and pushes it"}. In the desktop app it reads your code, runs commands and works on your machine.
+                {changeMode
+                  ? promptLimit
+                    ? "Code mode on Web makes small frontend changes (text, headings, buttons) in your GitHub repository."
+                    : "Code mode on Web changes code in your GitHub repository and pushes it. It reads what your repository's own checks report; it doesn't run your code."
+                  : frontendChanges.state === "locked"
+                    ? "On Web, Paw talks things through."
+                    : "On Web, Paw talks things through, and Code mode changes code in your GitHub repository."}{" "}
+                A task that needs your local files, your terminal, tests run on your machine or changes you haven&apos;t pushed needs PawOS Desktop.
               </p>
             </div>
-            <Link href="/docs" className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-md bg-neutral-100 px-3 text-sm font-medium text-black hover:bg-white md:min-h-8">
-              Read the docs
+            <Link href="/docs/getting-started/web-cli-desktop" className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-md bg-neutral-100 px-3 text-sm font-medium text-black hover:bg-white md:min-h-8">
+              Web, CLI or Desktop?
             </Link>
           </div>
         )}

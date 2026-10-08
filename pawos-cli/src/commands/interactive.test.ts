@@ -35,14 +35,15 @@ describe("already-authenticated startup", () => {
     expect(h.output()).toBe(
       [
         "",
-        "  ◉ PawOS v0.1.0",
+        "  PawOS v0.1.0",
         "  AI Developer Workspace",
+        "",
+        "  Good morning, Alice.",
         "",
         "  C:\\Users\\APPLE\\Downloads\\PawOS",
         "  Git: main",
         "  Repository: RevantaAIproduction/Pawos",
         "",
-        "  ◉ Connecting to PawOS…", // on a terminal that redraws, this line is animated and then erased
         `  ${RULE}`,
         "",
         `  ${QUESTION}`,
@@ -57,13 +58,12 @@ describe("already-authenticated startup", () => {
     expect(h.signInUrls()).toHaveLength(0); // no sign-in was needed or shown
   });
 
-  it("on a terminal that redraws, the connecting line is gone once PawOS is ready", async () => {
+  it("with the startup animation off, nothing is drawn or left running while PawOS connects", async () => {
     const h = start({ signedIn: true, answers: [null], caps: { ...LIVE_TERMINAL, color: false, hyperlinks: false } });
     await runCli([], h.ctx);
     const raw = h.raw();
-    expect(raw).toContain("Connecting to PawOS…");
-    // It was drawn on three lines (status, a blank line, nothing under it) and exactly that was erased.
-    expect(raw).toContain(`${ESC}[2A\r${ESC}[0J`);
+    expect(raw).not.toContain("Connecting to PawOS");
+    expect(raw).not.toContain(`${ESC}[`); // no cursor movement at all before the prompt
     expect(h.timers.active).toBe(0);
   });
 });
@@ -74,7 +74,7 @@ describe("signed-out startup", () => {
     h.server.handoffs.set(HANDOFF, "valid");
     expect(await runCli([], h.ctx)).toBe(0);
     const output = h.output();
-    const order = ["PawOS CLI", "To sign in, open this URL in your browser:", "Authentication URL:", `✓ Signed in as ${ALICE.email}`, "◉ PawOS v0.1.0", "AI Developer Workspace", "/home/dev/site", "Git: main", "Repository: acme/site", QUESTION];
+    const order = ["PawOS CLI", "To sign in, open this URL in your browser:", "Authentication URL:", `✓ Signed in as ${ALICE.email}`, "PawOS v0.1.0", "AI Developer Workspace", "Good morning, Alice.", "/home/dev/site", "Git: main", "Repository: acme/site", QUESTION];
     const positions = order.map((text) => output.indexOf(text));
     expect(positions.every((at) => at >= 0)).toBe(true);
     expect([...positions].sort((a, b) => a - b)).toEqual(positions); // in this order, top to bottom
@@ -89,7 +89,7 @@ describe("signed-out startup", () => {
     await runCli([], h.ctx);
     const after = h.output().slice(h.output().indexOf("  ✓ Signed in as"));
     expect(after).toBe(
-      ["  ✓ Signed in as alice@example.com", "", "  ◉ PawOS v0.1.0", "  AI Developer Workspace", "", "  C:\\Users\\APPLE\\Downloads\\PawOS", "  Git: main", "  Repository: RevantaAIproduction/Pawos", "", "  ◉ Connecting to PawOS…", `  ${RULE}`, "", `  ${QUESTION}`, "", "  Code mode: changes go to RevantaAIproduction/Pawos on GitHub. /chat to just talk.", "", "  > ", "", ""].join("\n")
+      ["  ✓ Signed in as alice@example.com", "", "  PawOS v0.1.0", "  AI Developer Workspace", "", "  Good morning, Alice.", "", "  C:\\Users\\APPLE\\Downloads\\PawOS", "  Git: main", "  Repository: RevantaAIproduction/Pawos", "", `  ${RULE}`, "", `  ${QUESTION}`, "", "  Code mode: changes go to RevantaAIproduction/Pawos on GitHub. /chat to just talk.", "", "  > ", "", ""].join("\n")
     );
   });
 
@@ -124,7 +124,7 @@ describe("pawos login transitions into the workspace", () => {
     await runCli(["login"], viaLogin.ctx);
     const viaPawos = start({ signedIn: true, answers: [null] });
     await runCli([], viaPawos.ctx);
-    const workspace = (text: string) => text.slice(text.indexOf("  ◉ PawOS v0.1.0"));
+    const workspace = (text: string) => text.slice(text.indexOf("  PawOS v0.1.0"));
     expect(workspace(viaLogin.output())).toBe(workspace(viaPawos.output()));
   });
 
@@ -138,7 +138,7 @@ describe("pawos login transitions into the workspace", () => {
 });
 
 describe("project context is read from where the user is", () => {
-  const header = (h: ReturnType<typeof harness>) => h.output().slice(h.output().indexOf("  AI Developer Workspace"), h.output().indexOf("  ◉ Connecting")).split("\n").slice(2).filter(Boolean);
+  const header = (h: ReturnType<typeof harness>) => h.output().slice(h.output().indexOf("  Good morning, Alice."), h.output().indexOf(`  ${RULE}`)).split("\n").slice(2).filter(Boolean);
 
   it("current directory displayed: whatever folder pawos was started in", async () => {
     for (const cwd of ["C:\\Projects\\MyApp", "C:\\Users\\APPLE\\Downloads\\PawOS", "/home/dev/work/api", "/Users/dev/Code/My App"]) {
@@ -482,7 +482,8 @@ describe("the PawOS animation in the workspace", () => {
     h.server.polls = [pushed("r")];
     await runCli([], h.ctx);
     const output = h.output();
-    expect(output).toContain("(o) PawOS v0.1.0");
+    expect(output).toContain("  PawOS v0.1.0");
+    expect(output).toContain("  Good morning, Alice.");
     expect(output).toContain("+ Task completed");
     expect(output).toContain("-".repeat(40));
     expect(output).toMatch(/^[\x20-\x7e\n]*$/); // nothing outside printable ASCII

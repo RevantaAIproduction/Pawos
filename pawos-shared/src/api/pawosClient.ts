@@ -110,7 +110,7 @@ export class PawosClient {
   /** GET /api/web/capabilities — the account's plan and what it may do on PawOS Web. */
   async getCapabilities(): Promise<Capabilities> {
     const data = await this.json("GET", "/api/web/capabilities");
-    return { plan: data.plan as Capabilities["plan"], capabilities: (data.capabilities ?? []) as Capabilities["capabilities"] };
+    return { plan: data.plan as Capabilities["plan"], user: (data.user ?? null) as Capabilities["user"], capabilities: (data.capabilities ?? []) as Capabilities["capabilities"] };
   }
 
   /** GET /api/web/github/repository — whether the account can make code changes, and where. */

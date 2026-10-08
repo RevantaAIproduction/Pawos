@@ -29,6 +29,7 @@ import { GET as getChange } from "../changes/[requestId]/route";
 import { changedLineCount, isEditablePath, isFrontendPath, isFullScopePath, suspiciousEdits, validateEdits } from "../../../../lib/webCode/codePolicy";
 import { branchFor, parseModelJson } from "../../../../lib/webCode/codeChange";
 import { summariseSignals } from "../../../../lib/webCode/changeWatch";
+import { pathsNamedIn, referencedPaths } from "../../../../lib/webCode/investigate";
 import { WEB_POLICY, promptTooLongFor } from "../../../../lib/webPolicy/webCapabilities";
 
 const HOST = "pawos.test";
@@ -44,10 +45,12 @@ let github: FakeGitHub;
 let goUser: User;
 let proUser: User;
 let planReply: unknown;
+/** The investigation's replies, in order (the last repeats). */
+let analysisReplies: unknown[];
 let editReply: unknown;
 let repairReply: unknown;
 let fixReply: unknown;
-let modelCalls: { system: string }[];
+let modelCalls: { system: string; user: string }[];
 /** Runs once just before GitHub receives the next branch update — to move the branch meanwhile. */
 let beforeNextRefUpdate: (() => void) | null;
 
@@ -90,6 +93,7 @@ beforeEach(() => {
     changes: [{ path: "src/components/Header.tsx", content: HEADER.replace(">Shop<", ">Welcome<") }],
     decline: null,
   };
+  analysisReplies = [{ need: [], rootCause: null, plan: ["In src/components/Header.tsx, change the heading text."], decline: null }];
   repairReply = { changes: [] };
   fixReply = { summary: "Nothing to fix here.", changes: [] };
   modelCalls = [];
@@ -110,10 +114,15 @@ beforeEach(() => {
         return new Response(JSON.stringify(result.json), { status: result.status });
       }
       if (url.includes("generativelanguage.googleapis.com")) {
-        const system = (JSON.parse(String(init?.body)) as { systemInstruction: { parts: { text: string }[] } }).systemInstruction.parts[0].text;
-        modelCalls.push({ system });
+        const sent = JSON.parse(String(init?.body)) as { systemInstruction: { parts: { text: string }[] }; contents: { parts: { text?: string }[] }[] };
+        const system = sent.systemInstruction.parts[0].text;
+        modelCalls.push({ system, user: sent.contents.flatMap((content) => content.parts.map((part) => part.text ?? "")).join("\n") });
         const reply = system.includes("choosing which files")
           ? planReply
+          : system.includes("investigating a GitHub repository")
+            ? analysisReplies.length > 1
+              ? analysisReplies.shift()
+              : analysisReplies[0]
           : system.includes("repairing your own code change")
             ? repairReply
             : system.includes("fixing a code change")
@@ -244,8 +253,9 @@ describe("paid plans: frontend and backend, pushed to the default branch", () =>
       ["preview", "active"],
     ]);
     const reserves = state.backend.usageCalls.filter((c) => c.name === "reserve_usage");
-    expect(reserves.map((c) => c.args.p_category)).toEqual(["web-code-change", "web-code-change"]);
-    expect(state.backend.usageCalls.filter((c) => c.name === "settle_usage")).toHaveLength(2);
+    // Three model calls: where to start, the investigation, the edit.
+    expect(reserves.map((c) => c.args.p_category)).toEqual(["web-code-change", "web-code-change", "web-code-change"]);
+    expect(state.backend.usageCalls.filter((c) => c.name === "settle_usage")).toHaveLength(3);
     expect(body.reply).toMatch(/doesn't build or run your code itself/);
   });
 
@@ -362,7 +372,7 @@ describe("preview and automatic fixes", () => {
     expect(fixSha).not.toBe(sha);
     expect(mainFiles()["src/components/Header.tsx"]).toContain(">Welcome!<");
     // The fix model call was charged to the allowance like any other.
-    expect(state.backend.usageCalls.filter((c) => c.name === "reserve_usage")).toHaveLength(3);
+    expect(state.backend.usageCalls.filter((c) => c.name === "reserve_usage")).toHaveLength(4);
 
     github.signals.set(fixSha, { checks: [{ id: 8, name: "typecheck", status: "completed", conclusion: "success" }] });
     recheckNow("autofix-0001");
@@ -608,5 +618,356 @@ describe("policies", () => {
         0
       )
     ).toMatchObject({ previewUrl: "https://p.example.com", checks: "failure" });
+  });
+});
+
+/**
+ * What a paid plan's change actually does before it writes anything: it reads the code, follows
+ * what that code refers to, and plans from the contents. Then what it does when the repository's
+ * own checks fail, and what it says when nothing verified the change at all.
+ */
+describe("investigation: read the code, follow it, plan from it", () => {
+  const CART = "acme/cart";
+  const PAGE = 'import { cartTotal } from "@/lib/cart";\n\nexport default function CartPage() {\n  return <p>Total: {cartTotal([{ price: 100 }], 10)}</p>;\n}\n';
+  const CART_LIB = 'import { applyDiscount } from "./pricing";\n\nexport function cartTotal(items: { price: number }[], percent: number) {\n  return items.reduce((sum, item) => sum + applyDiscount(item.price, percent), 0);\n}\n';
+  const PRICING = "export function applyDiscount(price: number, percent: number) {\n  return price - price * percent;\n}\n";
+  const PRICING_FIXED = PRICING.replace("price * percent", "(price * percent) / 100");
+  const CART_FILES = {
+    "src/app/cart/page.tsx": PAGE,
+    "src/lib/cart.ts": CART_LIB,
+    "src/lib/pricing.ts": PRICING,
+    "src/lib/format.ts": "export const money = (n: number) => `$${n}`;\n",
+    "README.md": "# Cart\n",
+    ".env": "SECRET=1\n",
+  };
+  const analyses = () => modelCalls.filter((call) => call.system.includes("investigating a GitHub repository"));
+  const edits = () => modelCalls.filter((call) => call.system.includes("making a code change"));
+  const cartFiles = () => github.filesOn(CART, "main") ?? {};
+
+  beforeEach(async () => {
+    connectGitHub("pro-user");
+    github.addRepo(CART, CART_FILES);
+    expect((await selectRepo(put({ fullName: CART }))).status).toBe(200);
+    planReply = { files: ["src/app/cart/page.tsx"], decline: null };
+    analysisReplies = [
+      { need: ["src/lib/cart.ts"], rootCause: null, plan: [], decline: null },
+      { need: ["src/lib/pricing.ts"], rootCause: null, plan: [], decline: null },
+      { need: [], rootCause: "applyDiscount in src/lib/pricing.ts multiplies by the percentage without dividing by 100.", plan: ["In src/lib/pricing.ts, divide the percentage by 100 in applyDiscount."], decline: null },
+    ];
+    editReply = { title: "Fix the discount", summary: "The discount is now a percentage.", changes: [{ path: "src/lib/pricing.ts", content: PRICING_FIXED }], decline: null };
+  });
+
+  it("multi-file investigation: it follows the code from the page to the root cause, two files away, and changes that file", async () => {
+    const response = await send(post({ content: "The cart total is wrong when a discount is applied", mode: "codeChange", requestId: "investigate-001" }));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    // Three looks at the code: each one saw more of it than the last.
+    expect(analyses()).toHaveLength(3);
+    expect(analyses()[0].user).toContain("--- FILE: src/app/cart/page.tsx");
+    expect(analyses()[0].user).not.toContain("--- FILE: src/lib/cart.ts");
+    expect(analyses()[1].user).toContain("--- FILE: src/lib/cart.ts");
+    expect(analyses()[1].user).not.toContain("--- FILE: src/lib/pricing.ts");
+    expect(analyses()[2].user).toContain(`--- FILE: src/lib/pricing.ts\n${PRICING}`);
+    // The file that was changed is the one with the bug — not the one the request seemed to be about.
+    expect(cartFiles()["src/lib/pricing.ts"]).toBe(PRICING_FIXED);
+    expect(cartFiles()["src/app/cart/page.tsx"]).toBe(PAGE);
+    expect(body.change.files).toEqual(["src/lib/pricing.ts"]);
+    expect(body.change.steps.map((s: { id: string; status: string }) => [s.id, s.status])).toEqual([["read", "done"], ["plan", "done"], ["write", "done"], ["check", "done"], ["push", "done"], ["preview", "active"]]);
+  });
+
+  it("relevant-file discovery: the files the code imports are worked out from the code itself and offered, not guessed", async () => {
+    await send(post({ content: "The cart total is wrong", mode: "codeChange" }));
+    // page.tsx imports "@/lib/cart"; cart.ts imports "./pricing". Neither path was in the request.
+    expect(analyses()[0].user).toContain("Files the code you have read refers to, not read yet:\nsrc/lib/cart.ts");
+    expect(analyses()[1].user).toContain("Files the code you have read refers to, not read yet:\nsrc/lib/pricing.ts");
+    expect(analyses()[2].user).not.toContain("not read yet"); // nothing left to follow
+    expect(analyses()[0].user).not.toContain("src/lib/format.ts\n\nFiles you have read"); // an unrelated file is not offered as a reference
+  });
+
+  it("planning based on inspected files: the edit is written from the files read and the plan made from them", async () => {
+    const body = await (await send(post({ content: "The cart total is wrong", mode: "codeChange" }))).json();
+    expect(edits()).toHaveLength(1);
+    const edit = edits()[0].user;
+    for (const path of ["src/app/cart/page.tsx", "src/lib/cart.ts", "src/lib/pricing.ts"]) expect(edit).toContain(`--- FILE: ${path}`);
+    expect(edit).toContain("Root cause: applyDiscount in src/lib/pricing.ts multiplies by the percentage without dividing by 100.");
+    expect(edit).toContain("Plan:\n- In src/lib/pricing.ts, divide the percentage by 100 in applyDiscount.");
+    // And the task panel says what was actually done: files read, files followed, the cause found.
+    const plan = body.change.steps.find((s: { id: string }) => s.id === "plan");
+    expect(plan.label).toBe("Investigate and plan");
+    expect(plan.detail).toMatch(/^3 files read \(2 followed from the code\) · 1 step planned · Cause: applyDiscount in src\/lib\/pricing\.ts/);
+    expect(body.change.steps.find((s: { id: string }) => s.id === "read").detail).toBe("5 files listed · 1 read");
+  });
+
+  it("a change that needs no more files is planned in one look", async () => {
+    analysisReplies = [{ need: [], rootCause: null, plan: ["In src/app/cart/page.tsx, change the label."], decline: null }];
+    editReply = { title: "Label", summary: "Label changed.", changes: [{ path: "src/app/cart/page.tsx", content: PAGE.replace("Total:", "Sum:") }] };
+    const body = await (await send(post({ content: "Rename the Total label to Sum", mode: "codeChange" }))).json();
+    expect(analyses()).toHaveLength(1);
+    expect(body.change.steps.find((s: { id: string }) => s.id === "plan").detail).toBe("1 files read · 1 step planned");
+    expect(cartFiles()["src/app/cart/page.tsx"]).toContain("Sum:");
+  });
+
+  it("it only ever reads files the plan may read: a secret, a path outside the repository or a file that doesn't exist is never fetched", async () => {
+    analysisReplies = [{ need: [".env", "../../etc/passwd", "src/lib/nope.ts", ".github/workflows/ci.yml"], rootCause: null, plan: ["In src/app/cart/page.tsx, change the label."], decline: null }];
+    editReply = { title: "Label", summary: "Label changed.", changes: [{ path: "src/app/cart/page.tsx", content: PAGE.replace("Total:", "Sum:") }] };
+    expect((await send(post({ content: "Rename the label", mode: "codeChange" }))).status).toBe(200);
+    for (const call of modelCalls) {
+      expect(call.user).not.toContain("SECRET=1");
+      expect(call.user).not.toContain("--- FILE: .env");
+    }
+    expect(github.calls.filter((call) => call.method === "GET" && /contents\/(\.env|\.github)/.test(call.path))).toHaveLength(0);
+  });
+
+  it("the investigation is bounded: after the plan's rounds it must plan with what it has, and if it can't, nothing is written or pushed", async () => {
+    const head = github.headOf(CART, "main");
+    analysisReplies = [
+      { need: ["src/lib/cart.ts"], plan: [] },
+      { need: ["src/lib/pricing.ts"], plan: [] },
+      { need: ["src/lib/format.ts"], plan: [] },
+    ];
+    const body = await (await send(post({ content: "The cart total is wrong", mode: "codeChange", requestId: "investigate-bound" }))).json();
+    expect(analyses()).toHaveLength(WEB_POLICY.codeChange.full.investigationRounds + 1);
+    expect(analyses().at(-1)?.user).toContain("No more files can be read for this change");
+    expect(analyses().at(-1)?.user).not.toContain("--- FILE: src/lib/format.ts"); // the extra file was never read
+    expect(edits()).toHaveLength(0);
+    expect(github.headOf(CART, "main")).toBe(head);
+    expect(body.reply).toMatch(/I didn't change anything in acme\/cart/);
+    expect(body.change.state).toBe("failed");
+    expect(body.change.commitSha ?? null).toBeNull(); // no commit is reported, because none was made
+    expect(body.change.pullRequestUrl ?? null).toBeNull();
+    expect(body.change.files ?? []).toEqual([]);
+    expect(body.change.steps.find((s: { id: string }) => s.id === "plan").status).toBe("failed");
+  });
+
+  it("never reads more files than the plan allows, however many are asked for", async () => {
+    const many: Record<string, string> = { "src/index.ts": Array.from({ length: 30 }, (_, i) => `import "./m${i}";`).join("\n") + "\n" };
+    for (let i = 0; i < 30; i++) many[`src/m${i}.ts`] = `export const v${i} = ${i};\n`;
+    github.addRepo("acme/many", many);
+    expect((await selectRepo(put({ fullName: "acme/many" }))).status).toBe(200);
+    planReply = { files: ["src/index.ts"], decline: null };
+    analysisReplies = [{ need: Array.from({ length: 30 }, (_, i) => `src/m${i}.ts`), plan: [] }, { need: [], plan: ["In src/index.ts, add a comment."] }];
+    editReply = { title: "Comment", summary: "Added a comment.", changes: [{ path: "src/index.ts", content: `// entry\n${many["src/index.ts"]}` }] };
+    expect((await send(post({ content: "Add a comment to the entry file", mode: "codeChange" }))).status).toBe(200);
+    const read = (edits()[0].user.match(/^--- FILE: /gm) ?? []).length;
+    expect(read).toBe(WEB_POLICY.codeChange.full.maxFilesRead);
+  });
+
+  it("failure handling: an investigation that declines, or can't be read, changes nothing", async () => {
+    const head = github.headOf(CART, "main");
+    analysisReplies = [{ need: [], rootCause: null, plan: [], decline: "That needs a database migration run by hand, which needs PawOS Desktop." }];
+    const declined = await (await send(post({ content: "Add a column to the orders table", mode: "codeChange" }))).json();
+    expect(declined.reply).toMatch(/I didn't change anything in acme\/cart\. That needs a database migration run by hand/);
+    expect(declined.requiresDesktop).toBe(true);
+
+    analysisReplies = ["I think the bug is somewhere in the cart."]; // not the JSON it was asked for
+    expect((await send(post({ content: "The cart total is wrong", mode: "codeChange", requestId: "investigate-bad1" }))).status).toBe(502);
+    const failed = (await (await change("investigate-bad1")).json()).change;
+    expect(failed.state).toBe("failed");
+    expect(failed.commitSha ?? null).toBeNull();
+    expect(edits()).toHaveLength(0);
+    expect(github.headOf(CART, "main")).toBe(head);
+  });
+
+  it("real files, commit and pull request only: what is reported is what GitHub has", async () => {
+    github.repos.get(CART)?.protectedBranches.add("main");
+    const body = await (await send(post({ content: "The cart total is wrong", mode: "codeChange", requestId: "investigate-pr01" }))).json();
+    const branch = branchFor("investigate-pr01");
+    expect(body.change.branch).toBe(branch);
+    expect(body.change.commitSha).toBe(github.headOf(CART, branch));
+    expect(body.change.pullRequestUrl).toMatch(/^https:\/\/github\.com\/acme\/cart\/pull\/\d+$/);
+    expect(github.filesOn(CART, branch)?.["src/lib/pricing.ts"]).toBe(PRICING_FIXED);
+    expect(cartFiles()["src/lib/pricing.ts"]).toBe(PRICING); // main itself was not changed
+    expect(body.change.files).toEqual(["src/lib/pricing.ts"]);
+    // The model's summary is reported as its summary; the commit and files come from the push.
+    expect(body.reply).toContain(body.change.pullRequestUrl);
+  });
+
+  it("every look at the code is charged to the plan's allowance like any other model call — and nothing is charged when the allowance is gone", async () => {
+    expect((await send(post({ content: "The cart total is wrong", mode: "codeChange" }))).status).toBe(200);
+    const reserves = state.backend.usageCalls.filter((c) => c.name === "reserve_usage");
+    expect(reserves).toHaveLength(5); // choose, three looks, write
+    expect(new Set(reserves.map((c) => c.args.p_category))).toEqual(new Set(["web-code-change"]));
+    expect(new Set(reserves.map((c) => c.args.p_request_key)).size).toBe(5); // each its own key: none can be charged twice
+    expect(state.backend.usageCalls.filter((c) => c.name === "settle_usage")).toHaveLength(5);
+
+    modelCalls = [];
+    state.backend.usagePool = 0;
+    expect((await send(post({ content: "And again", mode: "codeChange" }))).status).toBe(402);
+    expect(modelCalls).toHaveLength(0);
+  });
+
+  it("Paw Go is unchanged: no investigation, the same two calls inside its four messages", async () => {
+    state.session = goUser;
+    await ready("go-user");
+    planReply = { files: ["src/components/Header.tsx"], decline: null };
+    editReply = { title: "Rename", summary: "Renamed.", changes: [{ path: "src/components/Header.tsx", content: HEADER.replace(">Shop<", ">Welcome<") }] };
+    modelCalls = [];
+    const body = await (await send(post({ content: "Change the heading to Welcome", mode: "codeChange" }))).json();
+    expect(analyses()).toHaveLength(0);
+    expect(modelCalls).toHaveLength(2);
+    expect(body.change.scope).toBe("small");
+    expect(body.change.steps.find((s: { id: string }) => s.id === "plan")).toMatchObject({ label: "Choose the files", status: "done" });
+    expect(body.allowance).toMatchObject({ messagesUsed: 1 });
+  });
+});
+
+describe("verification and repair: only what the repository's own checks report", () => {
+  const recheckNow = (requestId: string) => {
+    const row = state.backend.tables.web_code_changes.find((r) => r.request_id === requestId);
+    if (row) row.last_checked_at = null;
+  };
+  const fixes = () => modelCalls.filter((call) => call.system.includes("fixing a code change"));
+  const PAGE_FIXED = 'import { Header } from "../components/Header";\n\nexport default function Page() { return <Header />; }\n';
+
+  beforeEach(async () => {
+    await ready();
+  });
+
+  async function pushed(requestId: string) {
+    expect((await send(post({ content: "Rename the heading", mode: "codeChange", requestId }))).status).toBe(200);
+    return github.headOf(REPO, "main") as string;
+  }
+
+  it("failed verification → repair: the failure names a file the change didn't touch, so that file is read and fixed", async () => {
+    const sha = await pushed("repair-0001");
+    github.signals.set(sha, { checks: [{ id: 21, name: "typecheck", status: "completed", conclusion: "failure", title: "1 error", annotations: [{ path: "src/app/page.tsx", start_line: 1, message: "Module '../components/Header' has no exported member 'Title'" }] }] });
+    fixReply = { summary: "page.tsx imported a name the header no longer exports.", changes: [{ path: "src/app/page.tsx", content: PAGE_FIXED }] };
+    const fixing = await (await change("repair-0001")).json();
+
+    // The fix saw the real report and the real contents of both the changed file and the failing one.
+    expect(fixes()).toHaveLength(1);
+    expect(fixes()[0].user).toContain("src/app/page.tsx:1 failure: Module '../components/Header' has no exported member 'Title'");
+    expect(fixes()[0].user).toContain("Files the change touched: src/components/Header.tsx");
+    expect(fixes()[0].user).toContain("Other files the reports name: src/app/page.tsx");
+    expect(fixes()[0].user).toContain(`--- FILE: src/app/page.tsx\n${SHOP_FILES["src/app/page.tsx"]}`);
+    expect(fixes()[0].user).toContain("--- FILE: src/components/Header.tsx");
+    expect(fixes()[0].user).toContain("What the change did:\nThe heading now says Welcome.");
+
+    // The correction went to the file that failed, and is on GitHub.
+    const fixSha = github.headOf(REPO, "main") as string;
+    expect(fixSha).not.toBe(sha);
+    expect(mainFiles()["src/app/page.tsx"]).toBe(PAGE_FIXED);
+    expect(fixing.change).toMatchObject({ state: "pushed", fixAttempts: 1, checksState: "pending", commitSha: fixSha });
+    // Every file actually changed is tracked — the fix's file too.
+    expect(fixing.change.files).toEqual(["src/components/Header.tsx", "src/app/page.tsx"]);
+    expect(fixing.change.steps.find((s: { id: string }) => s.id === "fix")).toMatchObject({ status: "done" });
+    // It is not called fixed until the checks say so on the new commit.
+    expect(fixing.change.steps.find((s: { id: string }) => s.id === "preview")).toMatchObject({ status: "active" });
+
+    github.signals.set(fixSha, { checks: [{ id: 22, name: "typecheck", status: "completed", conclusion: "success" }] });
+    recheckNow("repair-0001");
+    const done = await (await change("repair-0001")).json();
+    expect(done.change).toMatchObject({ state: "done", checksState: "success" });
+    expect(done.change.steps.find((s: { id: string }) => s.id === "preview")).toMatchObject({ status: "done", detail: "Checks passed" });
+  });
+
+  it("a repair never reads or writes a file the plan may not touch, even when the failure names it", async () => {
+    const sha = await pushed("repair-0002");
+    github.signals.set(sha, { checks: [{ id: 23, name: "build", status: "completed", conclusion: "failure", annotations: [{ path: ".env", start_line: 1, message: "SECRET is not set" }, { path: ".github/workflows/ci.yml", start_line: 3, message: "bad step" }] }] });
+    fixReply = { summary: "Set the secret.", changes: [{ path: ".env", content: "SECRET=2\n" }] };
+    const body = await (await change("repair-0002")).json();
+    expect(fixes()[0].user).not.toContain("SECRET=1");
+    expect(fixes()[0].user).not.toContain("--- FILE: .env");
+    expect(fixes()[0].user).not.toContain("Other files the reports name");
+    expect(mainFiles()[".env"]).toBe("SECRET=1\n");
+    expect(github.headOf(REPO, "main")).toBe(sha);
+    expect(body.change).toMatchObject({ state: "failed", checksState: "failure" });
+  });
+
+  it("Paw Go's repair is unchanged: it sees, and may edit, only the files its change touched — whatever the failure names", async () => {
+    state.session = goUser;
+    await ready("go-user");
+    expect((await send(post({ content: "Change the heading to Welcome", mode: "codeChange", requestId: "go-repair-001" }))).status).toBe(200);
+    const sha = github.headOf(REPO, "main") as string;
+    github.signals.set(sha, { checks: [{ id: 31, name: "typecheck", status: "completed", conclusion: "failure", annotations: [{ path: "src/app/page.tsx", start_line: 1, message: "broken import" }] }] });
+    fixReply = { summary: "Fixed the page.", changes: [{ path: "src/app/page.tsx", content: PAGE_FIXED }] };
+    const body = await (await change("go-repair-001")).json();
+    expect(fixes()).toHaveLength(1);
+    expect(fixes()[0].user).toContain("--- FILE: src/components/Header.tsx");
+    expect(fixes()[0].user).not.toContain("--- FILE: src/app/page.tsx");
+    expect(fixes()[0].user).not.toContain("Other files the reports name");
+    // A file it never read is not one it may change: nothing is pushed.
+    expect(mainFiles()["src/app/page.tsx"]).toBe(SHOP_FILES["src/app/page.tsx"]);
+    expect(github.headOf(REPO, "main")).toBe(sha);
+    expect(body.change).toMatchObject({ state: "failed", checksState: "failure" });
+    expect(github.calls.filter((call) => call.method === "GET" && call.path.includes("/git/trees/")).length).toBe(1); // the repair listed nothing
+  });
+
+  it("a repair always sees every file the change touched, however large they are together", async () => {
+    const big = (name: string) => `export const ${name} = [\n${Array.from({ length: 2900 }, (_, i) => `  "${name}-${String(i).padStart(6, "0")}-padding-padding",`).join("\n")}\n];\n`;
+    const files = { "src/a.ts": big("a"), "src/b.ts": big("b"), "src/c.ts": big("c"), "src/d.ts": big("d") };
+    github.addRepo("acme/big", files);
+    expect((await selectRepo(put({ fullName: "acme/big" }))).status).toBe(200);
+    expect(Object.values(files).reduce((sum, text) => sum + text.length, 0)).toBeGreaterThan(WEB_POLICY.codeChange.full.maxContextBytes);
+    // A change that touched all four (recorded as PawOS records it), then a failing check.
+    planReply = { files: ["src/a.ts"], decline: null };
+    editReply = { title: "Mark a", summary: "Marked a.", changes: [{ path: "src/a.ts", content: `// a\n${files["src/a.ts"]}` }] };
+    expect((await send(post({ content: "Add a comment", mode: "codeChange", requestId: "big-repair-01" }))).status).toBe(200);
+    const row = state.backend.tables.web_code_changes.find((r) => r.request_id === "big-repair-01");
+    if (row) row.files = Object.keys(files);
+    const sha = github.headOf("acme/big", "main") as string;
+    github.signals.set(sha, { checks: [{ id: 32, name: "build", status: "completed", conclusion: "failure" }] });
+    fixReply = { summary: "Fixed d.", changes: [{ path: "src/d.ts", content: `// d\n${files["src/d.ts"]}` }] };
+    await change("big-repair-01");
+    for (const path of Object.keys(files)) expect(fixes()[0].user).toContain(`--- FILE: ${path}`);
+    expect(github.filesOn("acme/big", "main")?.["src/d.ts"]?.startsWith("// d\n")).toBe(true); // and the fix to the last one was accepted
+  });
+
+  it("a failure that can't be fixed here is reported as a failure — never as done", async () => {
+    const sha = await pushed("repair-0003");
+    github.signals.set(sha, { checks: [{ id: 24, name: "e2e", status: "completed", conclusion: "failure", title: "Runner out of disk space" }] });
+    fixReply = { summary: "The runner ran out of disk space; nothing in these files caused it.", changes: [] };
+    const body = await (await change("repair-0003")).json();
+    expect(body.change).toMatchObject({ state: "failed", checksState: "failure", error: "Checks failed on the pushed change." });
+    expect(body.change.steps.find((s: { id: string }) => s.id === "fix")).toMatchObject({ status: "failed", detail: "The runner ran out of disk space; nothing in these files caused it." });
+    expect(github.headOf(REPO, "main")).toBe(sha);
+  });
+
+  it("successful verification: reported as passed only because the repository's checks passed", async () => {
+    const sha = await pushed("verify-0001");
+    expect((await (await change("verify-0001")).json()).change).toMatchObject({ state: "pushed", checksState: "pending" }); // nothing reported yet: not a pass
+    github.signals.set(sha, { checks: [{ id: 25, name: "test", status: "completed", conclusion: "success" }, { id: 26, name: "build", status: "completed", conclusion: "success" }] });
+    recheckNow("verify-0001");
+    const body = await (await change("verify-0001")).json();
+    expect(body.change).toMatchObject({ state: "done", checksState: "success", fixAttempts: 0 });
+    expect(fixes()).toHaveLength(0);
+  });
+
+  it("no verification evidence: the change is never called verified or passed", async () => {
+    const sent = await (await send(post({ content: "Rename the heading", mode: "codeChange", requestId: "noevidence-01" }))).json();
+    expect(sent.reply).not.toMatch(/checks passed|verified|tests pass/i);
+    expect(sent.change.checksState).toBe("pending");
+    const row = state.backend.tables.web_code_changes.find((r) => r.request_id === "noevidence-01");
+    if (row) row.pushed_at = new Date(Date.now() - (WEB_POLICY.codeChange.previewWaitSeconds + 5) * 1000).toISOString();
+    const body = await (await change("noevidence-01")).json();
+    expect(body.change.checksState).toBe("none");
+    const preview = body.change.steps.find((s: { id: string }) => s.id === "preview");
+    expect(preview.status).toBe("skipped"); // not "done": nothing checked it
+    expect(preview.detail).toBe("No deployments or checks reported for this repository — the change was not verified");
+    expect(JSON.stringify(body.change)).not.toMatch(/checks passed/i);
+  });
+});
+
+describe("following the code (pure helpers)", () => {
+  const known = new Set(["src/app/page.tsx", "src/lib/cart.ts", "src/lib/cart.test.ts", "src/lib/pricing.ts", "src/lib/util/index.ts", "src/styles/base.css", "src/styles/theme.css", "lib/shared.js", "app/models/user.py", "app/models/__init__.py", "app/db.py", "page.tsx", "README.md"]);
+
+  it("resolves what a file imports to files that exist — relative, aliased, compiled-name and index imports", () => {
+    expect(referencedPaths("src/app/page.tsx", 'import { a } from "@/lib/cart";\nimport b from "../lib/pricing";\nconst c = require("../lib/util");\nawait import("../lib/cart.js");\nimport "../styles/base.css";\n', known)).toEqual(["src/lib/cart.ts", "src/lib/pricing.ts", "src/lib/util/index.ts", "src/styles/base.css"]);
+    expect(referencedPaths("src/lib/cart.ts", 'export { x } from "./pricing";\nimport shared from "lib/shared";\n', known)).toEqual(["src/lib/pricing.ts", "lib/shared.js"]);
+    expect(referencedPaths("src/styles/base.css", '@import "./theme.css";\n', known)).toEqual(["src/styles/theme.css"]);
+    expect(referencedPaths("app/models/user.py", "from ..db import session\nfrom . import base\nimport app.models\n", known)).toEqual(["app/db.py", "app/models/__init__.py"]);
+  });
+
+  it("never resolves a package, a URL, a path outside the repository or a file that isn't there", () => {
+    expect(referencedPaths("src/app/page.tsx", 'import React from "react";\nimport x from "@scope/pkg";\nimport y from "https://cdn.example/x.js";\nimport z from "../../../../etc/passwd";\nimport w from "./missing";\nimport fs from "node:fs";\n', known)).toEqual([]);
+    expect(referencedPaths("src/lib/cart.ts", 'import self from "./cart";\n', known)).toEqual([]);
+  });
+
+  it("finds the repository files a failure report names, whole paths only", () => {
+    const report = "error TS2305 at src/lib/pricing.ts:12:3\n  in ./src/app/page.tsx (line 4)\nFAIL src\\lib\\cart.test.ts\nsee notsrc/lib/cart.tsx and src/lib/cart.tsbackup";
+    expect(pathsNamedIn(report, known)).toEqual(["src/lib/pricing.ts", "src/app/page.tsx", "src/lib/cart.test.ts"]);
+    expect(pathsNamedIn("nothing here", known)).toEqual([]);
+    expect(pathsNamedIn("", known)).toEqual([]);
+    expect(pathsNamedIn("/etc/passwd and ../.env and node_modules/x/index.js", known)).toEqual([]);
   });
 });

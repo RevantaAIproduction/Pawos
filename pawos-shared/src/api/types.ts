@@ -12,6 +12,8 @@ export type CapabilityStatus = "available" | "locked" | "desktopOnly" | "future"
 
 export interface Capabilities {
   plan: { tier: string; label: string };
+  /** The account holder's name, when they have one on record. Never an email address. */
+  user?: { name: string | null } | null;
   capabilities: { id: string; label: string; status: CapabilityStatus; availableOn: string | null }[];
 }
 

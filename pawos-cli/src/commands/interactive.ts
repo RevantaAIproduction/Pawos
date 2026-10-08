@@ -4,6 +4,7 @@ import { explainLocalRepository, type ProjectContext } from "../git/localReposit
 import { PawosApiError, SESSION_EXPIRED_NOTICE, describeRepository, newRequestId, sendChatMessage, type Capabilities, type RepositoryReadiness, type SendResult, type TaskOutcome } from "../shared";
 import type { PendingTask } from "../state/pendingTask";
 import { isPlanRefusal, renderRefusal } from "../ui/account";
+import { StartupIntro, greeting, wordmarkLine } from "../ui/intro";
 import { renderProgress, stageTitle } from "../ui/progress";
 import { confirm } from "../ui/prompts";
 import { renderOutcome } from "../ui/result";
@@ -17,16 +18,18 @@ export const MAX_TASK_CHARS = 4000;
 export const QUESTION = "What would you like to work on?";
 
 /**
- * The top of the PawOS workspace: the PawOS mark and version, then where the user is. The folder is
- * always shown. The branch and the repository are shown only when Git actually reports them — a
+ * The top of the PawOS workspace: PawOS and its version, a greeting, then where the user is. The
+ * greeting uses the first name PawOS returned for the account, and nothing else about it; without
+ * one it is "Welcome back." The folder is always shown. The branch and the repository are shown only when Git actually reports them — a
  * folder that isn't a repository has no "Git:" line, a detached HEAD has none either, and a
  * repository with no GitHub remote has no "Repository:" line. Nothing is filled in by default.
  */
-export function workspaceHeader(ctx: CliContext, project: ProjectContext): Line[] {
+export function workspaceHeader(ctx: CliContext, project: ProjectContext, name: unknown = null): Line[] {
   const lines: Line[] = [
-    blank(),
-    line("  ", seg(ctx.term.glyphs.mark, "accent"), " ", seg("PawOS", "strong"), seg(` v${ctx.version}`, "muted")),
+    wordmarkLine(ctx.version),
     line("  ", seg("AI Developer Workspace", "muted")),
+    blank(),
+    line("  ", greeting(name, ctx.now?.() ?? new Date())),
     blank(),
     line("  ", clean(project.cwd, 400)),
   ];
@@ -45,17 +48,20 @@ interface Account {
   readiness: RepositoryReadiness;
 }
 
-/** Loads the account and the repository PawOS is set to, with the PawOS mark turning while it does. */
-async function connect(ctx: CliContext): Promise<Account | Error> {
+/**
+ * Loads the account and the repository PawOS is set to. At startup the wordmark is already
+ * animating, so nothing else is shown; otherwise the PawOS mark turns while it loads.
+ */
+async function connect(ctx: CliContext, quiet = false): Promise<Account | Error> {
   const live = new LiveStatus(ctx.term, ctx.timers);
-  live.start(`Connecting to PawOS${ctx.term.glyphs.ellipsis}`);
+  if (!quiet) live.start(`Connecting to PawOS${ctx.term.glyphs.ellipsis}`);
   try {
     const [capabilities, readiness] = await Promise.all([ctx.client.getCapabilities(), ctx.client.getRepositoryReadiness()]);
     return { capabilities, readiness };
   } catch (error) {
     return error instanceof Error ? error : new Error("Something went wrong.");
   } finally {
-    live.stop();
+    if (!quiet) live.stop(); // when quiet, the line on screen belongs to the startup animation
   }
 }
 
@@ -231,9 +237,18 @@ export async function interactive(ctx: CliContext, options: { signIn?: boolean }
   if ((options.signIn || session.status !== "signedIn") && !(await browserLogin(ctx))) return 1;
 
   const project = await ctx.detectProject();
-  term.print(workspaceHeader(ctx, project));
-
-  let account = await connect(ctx);
+  // PawOS comes online: the wordmark animates, once, while the account loads. The two run together,
+  // so the animation costs no extra time unless PawOS answers faster than it plays.
+  term.print([blank()]);
+  const intro = new StartupIntro(term, ctx.version, ctx.timers, ctx.animateStartup !== false);
+  intro.start();
+  let account: Account | Error;
+  try {
+    account = await connect(ctx, true);
+    await intro.finished;
+  } finally {
+    intro.stop(); // its line is handed back whatever happened; the header takes its place
+  }
   if (account instanceof PawosApiError && account.kind === "unauthenticated") {
     // The stored session is no longer accepted: it has been cleared. Sign in again, once.
     term.print([line("  ", seg(SESSION_EXPIRED_NOTICE, "warn"))]);
@@ -241,6 +256,7 @@ export async function interactive(ctx: CliContext, options: { signIn?: boolean }
     term.print([blank()]);
     account = await connect(ctx);
   }
+  term.print(workspaceHeader(ctx, project, account instanceof Error ? null : account.capabilities.user?.name));
   if (account instanceof Error) {
     term.print([bad(ctx, clean(account.message)), blank()]);
     return 1;

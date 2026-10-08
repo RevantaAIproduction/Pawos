@@ -93,6 +93,10 @@ function blockText(block: DocPage['blocks'][number]): string {
       return block.code;
     case 'faq':
       return block.items.map((i) => `${i.q} ${i.a}`).join(' ');
+    case 'cards':
+      return block.items.map((i) => `${i.title} ${i.subtitle} ${i.detail} ${i.points.join(' ')}`).join(' ');
+    case 'cta':
+      return `${block.text} ${block.label}`;
     default:
       return '';
   }

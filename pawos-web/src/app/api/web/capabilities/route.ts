@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAccount } from "../../../../lib/account/api";
+import { accountPersonName } from "../../../../lib/account/accountContext";
 import { WEB_POLICY, resolveWebCapabilities, webMessageLimitFor } from "../../../../lib/webPolicy/webCapabilities";
 
 /**
@@ -12,6 +13,8 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     plan: { tier: guard.account.tier, label: guard.account.tierLabel },
+    // For a greeting in PawOS's clients: the name on the account, or null. Never the email address.
+    user: { name: accountPersonName(guard.account.user) },
     capabilities: resolveWebCapabilities(guard.account),
     limits: {
       webMessageLimit: webMessageLimitFor(guard.account),

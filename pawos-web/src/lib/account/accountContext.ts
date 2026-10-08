@@ -57,6 +57,17 @@ export function accountDisplayName(user: Pick<User, "email" | "user_metadata">):
   );
 }
 
+/** The person's own name from their sign-in profile, or null. Unlike the display name it never falls back to a login or an email address. */
+export function accountPersonName(user: Pick<User, "user_metadata">): string | null {
+  const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+  for (const value of [meta.full_name, meta.name]) {
+    if (typeof value !== "string") continue;
+    const name = value.replace(/\s+/g, " ").trim();
+    if (name && name.length <= 80 && !name.includes("@")) return name;
+  }
+  return null;
+}
+
 export function accountAvatarUrl(user: Pick<User, "user_metadata">): string | null {
   const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
   return (typeof meta.avatar_url === "string" && meta.avatar_url) || (typeof meta.picture === "string" && meta.picture) || null;

@@ -271,7 +271,7 @@ describe("Use a different account", () => {
     expect(page).toContain("if (request && !signedIn) {");
     expect(page).toContain("email={email}");
     expect(component).toContain("is asking to use your PawOS account");
-    expect(component).toContain("{email}");
+    expect(component).toContain("{email ??"); // shown under "Signing in as"
     // And Authorize works for that account as it is: one click, one handoff, for the signed-in user.
     state.cookieUserId = ALICE;
     const response = await authorize(post("/api/auth/device/authorize", { challenge: CHALLENGE, client: "cli" }, fromBrowser));
@@ -302,11 +302,15 @@ describe("Use a different account", () => {
     expect(deviceAuthLoginPath(CHALLENGE, "cli")).not.toMatch(/token|handoff|session/i);
   });
 
-  it("is offered beside Authorize, which stays the default for the current account", () => {
-    expect(component).toContain("Use a different account");
-    expect(component).toContain('"Authorize"');
-    // In the markup, Authorize comes first (the label also appears earlier, in a comment).
-    expect(component.indexOf('"Authorize"')).toBeLessThan(component.lastIndexOf("Use a different account"));
+  it("the confirm step reads: Signing in as, the account, Use a different account, then Authorize", () => {
+    const confirm = component.slice(component.indexOf('data-testid="device-auth-confirm"'));
+    const order = ["Signing in as", 'data-testid="device-auth-account"', "{email ??", 'data-testid="device-auth-switch-account"', '"Use a different account"', "onClick={authorize}", '"Authorize"'];
+    const positions = order.map((text) => confirm.indexOf(text));
+    expect(positions.every((at) => at >= 0)).toBe(true);
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions); // top to bottom, in this order
+    // Authorize stays the primary button; switching account is the quieter one above it.
+    expect(confirm).toMatch(/onClick=\{authorize\}[^>]*className=\{`\$\{primaryButtonClass\}/);
+    expect(confirm).not.toMatch(/onClick=\{useDifferentAccount\}[\s\S]{0,200}primaryButtonClass/);
     // Offered on the confirm step only: once the completion address is on screen there is nothing to switch.
     const completionScreen = component.slice(component.indexOf("if (completionUrl) {"), component.indexOf('data-testid="device-auth-confirm"'));
     expect(completionScreen.length).toBeGreaterThan(100);

@@ -32,7 +32,11 @@ export type DocBlock =
   | { type: 'warning'; text: string }
   | { type: 'tip'; text: string }
   | { type: 'status'; status: DocStatus; text: string }
-  | { type: 'faq'; items: { q: string; a: string }[] };
+  | { type: 'faq'; items: { q: string; a: string }[] }
+  /** Side-by-side summaries (they stack on a phone) — e.g. the ways to use PawOS. */
+  | { type: 'cards'; items: { title: string; subtitle: string; detail: string; points: string[] }[] }
+  /** One sentence and one link out. `href` must be https. */
+  | { type: 'cta'; text: string; label: string; href: string };
 
 export type DocSectionId =
   | 'getting-started'

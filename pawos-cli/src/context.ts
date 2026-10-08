@@ -29,4 +29,8 @@ export interface CliContext {
   /** Calls `handler` if the user presses Ctrl+C; returns a function that stops listening. */
   onInterrupt: (handler: () => void) => () => void;
   timers?: Timers;
+  /** The time on this computer, for the greeting. */
+  now?: () => Date;
+  /** False to skip the startup animation (it is also skipped wherever the terminal can't redraw in place). */
+  animateStartup?: boolean;
 }

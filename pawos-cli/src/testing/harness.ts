@@ -21,7 +21,9 @@ export const API = "https://pawos.test";
 export const HANDOFF = "h".repeat(43);
 export const completionUrl = (handoff: string = HANDOFF, origin: string = API) => `${origin}/auth/device/complete?handoff=${handoff}`;
 export { INTERRUPT };
-export const ALICE = { email: "alice@example.com", plan: { tier: "pro", label: "Paw Pro" } };
+export const ALICE = { email: "alice@example.com", name: "Alice Example", plan: { tier: "pro", label: "Paw Pro" } };
+/** Nine in the morning on this computer, whatever its time zone. */
+export const MORNING = new Date(2026, 9, 8, 9, 0, 0);
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
@@ -100,6 +102,8 @@ export class FakePawos {
   readiness: RepositoryReadiness = { state: "ready", repository: { fullName: "acme/site", defaultBranch: "main" }, scope: "full" };
   capabilitiesAnswer: Scripted | null = null;
   plan: { tier: string; label: string } = ALICE.plan;
+  /** The account holder's name as PawOS has it (null: none on record). */
+  name: string | null = ALICE.name;
   /** GET /api/dashboard/overview: the account's usage as the server reports it (null: nothing to report). */
   usage: AccountOverview["usage"] = null;
   overviewAnswer: Scripted | null = null;
@@ -183,7 +187,7 @@ export class FakePawos {
       return json(401, { ok: false, code: "not_authenticated", message: "Sign in to continue." });
     }
     if (route === "GET /api/web/capabilities") {
-      return this.capabilitiesAnswer ? play(this.capabilitiesAnswer) : json(200, { ok: true, plan: this.plan, capabilities: CAPABILITIES });
+      return this.capabilitiesAnswer ? play(this.capabilitiesAnswer) : json(200, { ok: true, plan: this.plan, user: { name: this.name }, capabilities: CAPABILITIES });
     }
     if (route === "GET /api/dashboard/overview") {
       if (this.overviewAnswer) return play(this.overviewAnswer);
@@ -311,6 +315,10 @@ export interface HarnessOptions {
   caps?: TerminalCapabilities;
   keyring?: MemoryKeyring | null;
   apiProblem?: string;
+  /** The time on the user's computer (default: nine in the morning). */
+  now?: Date;
+  /** Play the startup animation (needs a terminal that redraws; the test moves the frames with `timers.tick`). */
+  intro?: boolean;
 }
 
 export function harness(options: HarnessOptions = {}) {
@@ -356,6 +364,8 @@ export function harness(options: HarnessOptions = {}) {
       return () => interruptHandlers.delete(handler);
     },
     timers,
+    now: () => options.now ?? MORNING,
+    animateStartup: options.intro === true,
   };
 
   return {

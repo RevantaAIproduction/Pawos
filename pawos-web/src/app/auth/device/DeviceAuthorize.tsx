@@ -97,20 +97,25 @@ export function DeviceAuthorize({ challenge, client, clientLabel, email }: { cha
     <div className="w-full" data-testid="device-auth-confirm">
       <h1 className="text-2xl font-semibold tracking-tight text-white">Sign in to {clientLabel}</h1>
       <p className="mt-3 text-sm leading-relaxed text-neutral-400">
-        {clientLabel} is asking to use your PawOS account{email ? <> (<span className="text-neutral-200">{email}</span>)</> : null}. It will be able to run PawOS tasks as you.
+        {clientLabel} is asking to use your PawOS account. It will be able to run PawOS tasks as you.
       </p>
       <p className="mt-3 text-sm leading-relaxed text-neutral-400">Only continue if you just started signing in from {clientLabel} yourself.</p>
-      <button type="button" onClick={authorize} disabled={pending || switching} className={`${primaryButtonClass} mt-8`}>
-        {pending ? "Authorizing…" : "Authorize"}
-      </button>
+      <p className="mt-8 text-xs font-medium uppercase tracking-wider text-neutral-500">Signing in as</p>
+      <p className="mt-1 break-all text-sm font-medium text-neutral-100" data-testid="device-auth-account">
+        {email ?? "your PawOS account"}
+      </p>
+      {/* Above Authorize: for a browser that is signed in to the wrong PawOS account. */}
       <button
         type="button"
         onClick={useDifferentAccount}
         disabled={pending || switching}
-        className="mt-3 flex h-11 w-full items-center justify-center rounded-lg border border-neutral-800 text-sm font-semibold text-neutral-200 transition hover:bg-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-50"
+        className="mt-4 flex h-11 w-full items-center justify-center rounded-lg border border-neutral-800 text-sm font-semibold text-neutral-200 transition hover:bg-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-50"
         data-testid="device-auth-switch-account"
       >
         {switching ? "Signing out…" : "Use a different account"}
+      </button>
+      <button type="button" onClick={authorize} disabled={pending || switching} className={`${primaryButtonClass} mt-3`}>
+        {pending ? "Authorizing…" : "Authorize"}
       </button>
       {message && <p className="mt-3 text-sm text-red-400" role="alert">{message}</p>}
     </div>

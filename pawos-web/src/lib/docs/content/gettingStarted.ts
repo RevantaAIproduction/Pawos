@@ -277,6 +277,232 @@ export const gettingStartedPages: DocPage[] = [
         text: 'For your safety, PawOS Web never edits environment files (.env), keys or certificates, CI workflows or lockfiles, and never asks for your GitHub password — you connect GitHub through GitHub’s own sign-in, and the token stays on PawOS’s servers.',
       },
     ],
-    related: ['billing/web-and-desktop', 'getting-started/first-coding-task', 'connectors/github'],
+    related: ['getting-started/web-cli-desktop', 'billing/web-and-desktop', 'getting-started/first-coding-task', 'connectors/github'],
+  },
+  {
+    section: 'getting-started',
+    slug: 'web-cli-desktop',
+    title: 'Web, CLI or Desktop?',
+    description: 'What you can do in PawOS Web, in the PawOS CLI and in PawOS Desktop — and when a task needs Desktop.',
+    keywords: ['web', 'cli', 'desktop', 'terminal', 'phone', 'mobile browser', 'compare', 'difference', 'which one', 'local files', 'requires desktop', 'needs desktop', 'command line', 'pawos cli'],
+    blocks: [
+      {
+        type: 'lead',
+        text: 'Start on the Web. Go deeper with Desktop. PawOS is one account with three ways in. Web and the CLI work on code that is on GitHub; Desktop works on your own computer. Knowing which is which before you start saves you from beginning a task in the wrong place.',
+      },
+      {
+        type: 'warning',
+        text: 'Web is best for browser-based GitHub work. Desktop is required when your task needs local files, terminal access, local runtimes, or deeper desktop workflows. Web and the CLI never run your project’s code and never see files that are only on your computer.',
+      },
+      {
+        type: 'cards',
+        items: [
+          {
+            title: 'PawOS Web',
+            subtitle: 'Browser-based workspace',
+            detail: 'Desktop browser + mobile browser',
+            points: ['Chat with Paw', 'Change code in a GitHub repository', 'See your repository’s checks and previews', 'Nothing to install'],
+          },
+          {
+            title: 'PawOS CLI',
+            subtitle: 'Terminal workspace',
+            detail: 'Any folder',
+            points: ['Chat with Paw from your shell', 'The same Code mode as Web', 'Shows the folder, branch and GitHub repository you are in', 'Account, usage and connection status'],
+          },
+          {
+            title: 'PawOS Desktop',
+            subtitle: 'Full local development workspace',
+            detail: 'Terminal + files + local runtime',
+            points: ['Works on the files on your computer', 'Runs commands, tests and builds locally', 'Connected tools and Autonomous Work', 'Everything your plan includes'],
+          },
+        ],
+      },
+
+      { type: 'heading', level: 2, text: 'Compare', id: 'compare' },
+      {
+        type: 'table',
+        headers: ['Capability', 'Web', 'CLI', 'Desktop'],
+        rows: [
+          ['Chat with PawOS', '✓', '✓', '✓'],
+          ['Code changes in a GitHub repository', '✓', '✓ (sent to the same service as Web)', '✓ (in your local project)'],
+          ['Reads the code before changing it', '✓ From GitHub, a limited number of files', '✓ Same as Web', '✓ From your local project'],
+          ['Start without a Git repository', '✓ Chat', '✓ Chat, from any folder', '✓ Any workspace folder'],
+          ['Use from a phone browser', '✓', '—', '—'],
+          ['Files on your computer', '—', '—', '✓'],
+          ['Local terminal and commands', '—', '—', '✓ An approved list of developer tools, with your permission'],
+          ['Run tests, builds and your app locally', '—', '—', '✓'],
+          ['Local changes you haven’t pushed', '—', '—', '✓'],
+          ['Where a change lands', 'Committed and pushed on GitHub (a pull request if the branch is protected)', 'Same as Web — pull it afterwards', 'In your local files'],
+          ['How a change is checked', 'Your repository’s own checks and preview deployments, read from GitHub', 'Same as Web', 'Tests and builds run on your machine'],
+          ['Install software, repair PATH', '—', '—', '✓'],
+          ['Connected tools in a task (Jira, Linear, Slack, MCP)', '— Connection status only', '— Connection status only', '✓ As your plan allows'],
+          ['Autonomous Work', '— Not currently available', '— Not currently available', '✓ As your plan allows'],
+          ['Meetings, Companion, working offline', '—', '—', '✓'],
+          ['Plan, usage and account status', '✓', '✓', '✓'],
+        ],
+      },
+      {
+        type: 'note',
+        text: 'One account, one plan: Web, the CLI and Desktop share your plan, your usage allowance and your chats. Your plan’s limits apply the same way in all three — none of them unlocks something the others don’t.',
+      },
+
+      { type: 'heading', level: 2, text: 'Which one should I use?', id: 'which-one' },
+      { type: 'heading', level: 3, text: 'Start with Web', id: 'start-with-web' },
+      {
+        type: 'list',
+        items: [
+          'You want to work from anywhere, including your phone.',
+          'You want to chat with Paw, or change code that is already on GitHub.',
+          'You don’t need your local terminal, files or a running app.',
+        ],
+      },
+      { type: 'heading', level: 3, text: 'Use the CLI', id: 'use-the-cli' },
+      {
+        type: 'list',
+        items: [
+          'You prefer the terminal and want PawOS in your development shell.',
+          'You want PawOS to pick up the folder, branch and GitHub repository you are standing in.',
+          'Your work is on GitHub — the CLI makes the same GitHub-based changes as Web.',
+        ],
+      },
+      { type: 'heading', level: 3, text: 'Use Desktop', id: 'use-desktop' },
+      {
+        type: 'list',
+        items: [
+          'The task needs files on your computer, or changes you haven’t pushed.',
+          'The task needs the terminal: running commands, tests, builds or your app.',
+          'The task needs software installed or your environment repaired.',
+          'You want connected tools used inside a task, or Autonomous Work.',
+        ],
+      },
+      {
+        type: 'cta',
+        text: 'Use Desktop when the task needs your local machine, terminal, local files, local runtimes, or deeper desktop workflows.',
+        label: 'Get PawOS Desktop for Windows',
+        href: 'https://apps.microsoft.com/detail/9p6732l7486c?hl=en-US&gl=IN',
+      },
+
+      { type: 'heading', level: 2, text: 'PawOS Web', id: 'web' },
+      {
+        type: 'paragraph',
+        text: 'PawOS Web is PawOS in a browser. It is the same site on a computer, a tablet and a phone — there is no separate mobile app to install.',
+      },
+      { type: 'heading', level: 3, text: 'What it does', id: 'web-does' },
+      {
+        type: 'list',
+        items: [
+          'Chat: ask Paw to explain, plan or review. Paid plans can attach a photo or a file.',
+          'Connect GitHub and choose the repository Paw works in.',
+          'Code mode: describe a change. On paid plans Paw reads the relevant files from GitHub, follows what they import, plans the change, writes it and pushes it. On Paw Go, Code mode makes small edits to existing frontend files.',
+          'A change is committed and pushed to the repository’s default branch. If that branch is protected, it goes to a new branch with a pull request instead.',
+          'After the push, Web shows what your repository’s own checks and preview deployments report, opens the preview when there is one, and tries to fix a reported failure automatically.',
+          'Your plan, your usage and your connections, the same as everywhere else in PawOS.',
+        ],
+      },
+      { type: 'heading', level: 3, text: 'What it does not do', id: 'web-limits' },
+      {
+        type: 'list',
+        items: [
+          'No local terminal, and no commands run on your computer.',
+          'No access to files or folders on your computer.',
+          'It does not build, test or run your code. It reads the result of the checks your repository already has. If your repository has no checks or preview deployments, the change is pushed but not verified, and PawOS says so.',
+          'It works from what is on GitHub. Changes you haven’t pushed are not visible to it.',
+          'It reads a limited number of files per change rather than searching the whole repository.',
+          'It never edits environment files, keys, CI workflows or lockfiles.',
+        ],
+      },
+      { type: 'heading', level: 3, text: 'On your phone', id: 'phone' },
+      {
+        type: 'paragraph',
+        text: 'PawOS Web works from your phone’s browser, and you can add it to your home screen. It is good for chatting with Paw, checking on work, reviewing a change, and starting or continuing GitHub-based work while you are away from your computer.',
+      },
+      {
+        type: 'list',
+        items: [
+          'It is the same PawOS Web, with the same limits: no terminal and no local files.',
+          'It does not turn your phone into PawOS Desktop, and it does not reach the files on your computer.',
+        ],
+      },
+
+      { type: 'heading', level: 2, text: 'PawOS CLI', id: 'cli' },
+      {
+        type: 'paragraph',
+        text: 'The PawOS CLI is PawOS in your terminal. Run pawos in any folder: it signs you in through your browser, greets you, shows where you are, and asks what you would like to work on.',
+      },
+      { type: 'heading', level: 3, text: 'What it does', id: 'cli-does' },
+      {
+        type: 'list',
+        items: [
+          'Starts from any folder. Git is not required.',
+          'Chat with Paw — the same conversation you see on Web.',
+          'Shows the Git branch when the folder is a Git repository, and the GitHub repository when it has a GitHub remote.',
+          'Code mode, inside a folder whose GitHub repository is the one selected in your PawOS account: your request goes to the same service as Web’s Code mode, and you see its progress and its result — summary, files changed, checks, commit and pull request.',
+          'Your account, plan and usage, and the status of your connections.',
+          'Signs in with your PawOS account in the browser. It never asks for your password in the terminal.',
+        ],
+      },
+      { type: 'heading', level: 3, text: 'What it does not do', id: 'cli-limits' },
+      {
+        type: 'list',
+        items: [
+          'It is not a separate coding engine. Code mode runs on PawOS’s servers, exactly as it does for Web.',
+          'It does not edit the files in your folder. Changes are made on GitHub — pull them once you have reviewed them.',
+          'It does not see local changes you haven’t pushed.',
+          'It does not run your project’s commands, tests or builds.',
+          'It does not call connected tools or MCP servers itself, and it cannot start Autonomous Work.',
+          'It follows the same plan, usage and organization rules as Web. It cannot be used to get around them.',
+        ],
+      },
+      {
+        type: 'tip',
+        text: 'If a task in the CLI needs your local files, terminal or a running app, that is a Desktop task. PawOS tells you when a request needs the desktop app, and nothing is done from the CLI in that case.',
+      },
+
+      { type: 'heading', level: 2, text: 'PawOS Desktop', id: 'desktop' },
+      {
+        type: 'paragraph',
+        text: 'PawOS Desktop is the app on your computer and the deepest way to work with PawOS. You choose a workspace folder, and PawOS works inside it — asking before it changes anything.',
+      },
+      { type: 'heading', level: 3, text: 'What it does', id: 'desktop-does' },
+      {
+        type: 'list',
+        items: [
+          'Works on your local project: reads it, plans changes, and edits the files in your workspace folder, including work you haven’t pushed.',
+          'Runs commands in the terminal from an approved list of developer tools (such as git, npm, node, python and docker), with your permission.',
+          'Runs your tests and builds, starts your app, and shows a preview.',
+          'Installs software and repairs PATH and environment problems.',
+          'Uses your connected tools inside a task, as your plan allows.',
+          'Autonomous Work on tickets, as your plan allows.',
+          'Meetings, the Companion, and working offline.',
+          'Keeps a Work Record of what ran: commands, output, files changed and test results.',
+        ],
+      },
+      { type: 'heading', level: 3, text: 'Good to know', id: 'desktop-notes' },
+      {
+        type: 'list',
+        items: [
+          'Working on files, the terminal and tests in Desktop is part of paid plans.',
+          'The terminal is an approved list of developer tools, not an unrestricted shell.',
+          'Editing files, running commands, installing software and connecting accounts each ask for your approval.',
+        ],
+      },
+
+      { type: 'heading', level: 2, text: 'Moving a task to Desktop', id: 'handoff' },
+      {
+        type: 'paragraph',
+        text: 'You don’t have to start over. Your chats are shared: a conversation started on Web is already in PawOS Desktop. When a reply on Web says the next step needs your computer, choose Continue in PawOS Desktop and carry on from there.',
+      },
+      {
+        type: 'faq',
+        items: [
+          { q: 'Can Web or the CLI run my tests?', a: 'No. They read the result of the checks your repository already runs on GitHub. To run tests yourself, on your machine, use PawOS Desktop.' },
+          { q: 'I have changes I haven’t pushed. Can Web or the CLI see them?', a: 'No. They work from what is on GitHub. Push your changes first, or use PawOS Desktop, which works on your local files.' },
+          { q: 'Is there a PawOS mobile app?', a: 'PawOS on a phone is PawOS Web in your phone’s browser. You can add it to your home screen. It has the same capabilities and limits as Web on a computer.' },
+          { q: 'Does the CLI change the files in my folder?', a: 'No. It makes the change on GitHub and shows you the commit or pull request. Pull the change when you are ready.' },
+          { q: 'Do I need a different plan for each?', a: 'No. One PawOS account and one plan cover Web, the CLI and Desktop, with one shared usage allowance.' },
+        ],
+      },
+    ],
+    related: ['getting-started/web-and-mobile', 'getting-started/installation', 'coding/overview', 'billing/web-and-desktop'],
   },
 ];

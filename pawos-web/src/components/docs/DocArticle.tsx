@@ -130,6 +130,38 @@ export function DocArticle({ blocks }: { blocks: DocBlock[] }) {
               </div>
             );
           }
+          case 'cards':
+            // One column on a phone or a narrow window, side by side when there is room for three.
+            return (
+              <div key={i} className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+                {block.items.map((card, j) => (
+                  <section key={j} className="flex flex-col rounded-lg border border-neutral-200 bg-white p-5">
+                    <h3 className="text-base font-semibold tracking-tight text-neutral-900">{card.title}</h3>
+                    <p className="mt-1 text-sm font-medium text-neutral-700">{card.subtitle}</p>
+                    <p className="mt-0.5 text-sm text-neutral-500">{card.detail}</p>
+                    <ul className="mt-4 space-y-1.5 border-t border-neutral-100 pt-4 text-sm leading-relaxed text-neutral-700">
+                      {card.points.map((point, k) => (
+                        <li key={k}>{point}</li>
+                      ))}
+                    </ul>
+                  </section>
+                ))}
+              </div>
+            );
+          case 'cta':
+            return /^https:\/\//.test(block.href) ? (
+              <div key={i} className="my-6 flex flex-col gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-5 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm leading-relaxed text-neutral-700">{block.text}</p>
+                <a
+                  href={block.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-md bg-neutral-900 px-4 text-sm font-medium text-white hover:bg-neutral-700"
+                >
+                  {block.label}
+                </a>
+              </div>
+            ) : null;
           case 'faq':
             return (
               <dl key={i} className="mt-4 divide-y divide-neutral-200 rounded-lg border border-neutral-200">

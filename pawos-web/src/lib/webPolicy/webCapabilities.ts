@@ -74,8 +74,11 @@ export const WEB_POLICY = {
    * (text, headings, titles, buttons) within its four messages.
    */
   codeChange: {
-    small: { maxFilesRead: 3, maxFilesChanged: 2, maxChangedLines: 40, maxFileBytes: 60_000, maxContextBytes: 90_000, autoFixAttempts: 1 },
-    full: { maxFilesRead: 12, maxFilesChanged: 10, maxChangedLines: 2_000, maxFileBytes: 100_000, maxContextBytes: 300_000, autoFixAttempts: 2 },
+    small: { maxFilesRead: 3, maxFilesChanged: 2, maxChangedLines: 40, maxFileBytes: 60_000, maxContextBytes: 90_000, autoFixAttempts: 1, investigationRounds: 0 },
+    full: { maxFilesRead: 12, maxFilesChanged: 10, maxChangedLines: 2_000, maxFileBytes: 100_000, maxContextBytes: 300_000, autoFixAttempts: 2, investigationRounds: 2 },
+    // investigationRounds: how many times a change may go back for more files (the ones the code it
+    // has read refers to) before it plans. Every file still counts against maxFilesRead and
+    // maxContextBytes, and every round is a model call on the plan's allowance.
     /** Repository paths listed to the model when it picks files. */
     maxTreeEntries: 2_000,
     /** A change takes several model and GitHub calls: its claim holds longer than a chat message's. */

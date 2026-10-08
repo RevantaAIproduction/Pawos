@@ -26,7 +26,7 @@ pawos
 pawos
 ```
 
-PawOS opens in the terminal, shows where you are and asks what you would like to work on. In an
+PawOS opens in the terminal, greets you, shows where you are and asks what you would like to work on. In an
 ordinary folder it shows just the folder; inside a Git project it also shows the branch and the
 GitHub repository. If you are signed out, `pawos` signs you in first and carries straight on.
 
@@ -142,8 +142,14 @@ project again and it offers to check on it.
   local changes are not seen.
 - A change is pushed to the repository's default branch. If that branch is protected, PawOS
   pushes to a new branch and opens a pull request instead.
-- PawOS does not run your code. It reads what your repository's own checks and preview
-  deployments report, as one overall result.
+- On paid plans PawOS reads the code before changing it: it starts from the files the task points
+  at, follows what they import (a few rounds, within your plan's file limit), and plans the change
+  from what it read. It does not search the whole repository, and it cannot see who calls a file
+  it hasn't read.
+- PawOS does not build or run your code. It reads what your repository's own checks and preview
+  deployments report, as one overall result, and fixes a failure they report (within your plan's
+  limit). If your repository has no checks or preview deployments, the change is pushed but not
+  verified, and PawOS says so.
 - Using your connected services from a conversation — reading GitHub issues, Slack messages or
   Google Drive files, creating a Linear ticket, calling an MCP server — runs only in the PawOS
   desktop app today. PawOS's servers do not offer it to PawOS Web or to this CLI, so when you ask
@@ -197,7 +203,7 @@ authenticated API, with the same plan, credit and organization checks it applies
 | Variable | Purpose |
 |---|---|
 | `PAWOS_API_URL` | Use another PawOS address (for example a local development server). https only, except `localhost`. |
-| `PAWOS_NO_ANIMATION` | Print plain progress lines instead of the animated display. |
+| `PAWOS_NO_ANIMATION` | Skip the startup animation and print plain progress lines instead of the animated display. |
 | `PAWOS_ASCII` | Use plain ASCII marks instead of symbols. |
 | `NO_COLOR` | Turn colour off. |
 | `PAWOS_CONFIG_DIR` | Where the CLI keeps its small state files. |

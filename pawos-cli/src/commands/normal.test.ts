@@ -36,7 +36,7 @@ describe("PawOS normal mode: started outside Git", () => {
   it("starts outside Git and displays only the folder — no Git line, no Repository line", async () => {
     const h = start({ signedIn: true, answers: [null], cwd: HOME, local: NOT_GIT });
     expect(await runCli([], h.ctx)).toBe(0);
-    expect(h.output()).toBe(["", "  ◉ PawOS v0.1.0", "  AI Developer Workspace", "", `  ${HOME}`, "", "  ◉ Connecting to PawOS…", `  ${RULE}`, "", `  ${QUESTION}`, "", "  > ", "", ""].join("\n"));
+    expect(h.output()).toBe(["", "  PawOS v0.1.0", "  AI Developer Workspace", "", "  Good morning, Alice.", "", `  ${HOME}`, "", `  ${RULE}`, "", `  ${QUESTION}`, "", "  > ", "", ""].join("\n"));
     expect(h.output()).not.toMatch(/Git:|Repository:/);
   });
 
