@@ -47,9 +47,9 @@ describe("pawos version", () => {
     expect(h.prompter.prompts).toHaveLength(0);
   });
 
-  it("is installed as the `pawos` command of the `@revantaai/pawos` package", () => {
+  it("is installed as the `pawos` command of the `@revantaai/pawos-cli` package", () => {
     const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8")) as { name: string; bin: Record<string, string> };
-    expect(packageJson.name).toBe("@revantaai/pawos");
+    expect(packageJson.name).toBe("@revantaai/pawos-cli");
     expect(Object.keys(packageJson.bin)).toEqual(["pawos"]);
   });
 

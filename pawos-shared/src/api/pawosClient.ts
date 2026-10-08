@@ -1,5 +1,5 @@
 import { AuthRequiredError, type FetchLike } from "../auth/types";
-import type { AccountOverview, Capabilities, CodeChange, ConnectStart, Integration, RepositoryReadiness, SendResult } from "./types";
+import type { AccountOverview, Capabilities, CodeChange, ConnectStart, Integration, RepositoryReadiness, SendResult, RecentChat, ChatAttachment, ChatMessage } from "./types";
 
 /**
  * A PawOS client's only door to PawOS: the existing PawOS Web API, called as the signed-in account
@@ -34,6 +34,11 @@ type TokenSource = (forceRefresh?: boolean) => Promise<string>;
 const DEFAULT_TIMEOUT_MS = 30_000;
 /** A code change is one long request; PawOS holds its claim for 300 seconds. */
 const SEND_TIMEOUT_MS = 330_000;
+/**
+ * A chat message is one model call, which PawOS itself gives up on after 60 seconds. Waiting much
+ * longer than that for the answer only leaves the user looking at a spinner.
+ */
+export const CHAT_TIMEOUT_MS = 90_000;
 
 interface Answer {
   status: number;
@@ -123,13 +128,15 @@ export class PawosClient {
     return (await this.json("PUT", "/api/web/github/repository", { fullName })).readiness as RepositoryReadiness;
   }
 
-  private async send(body: Record<string, unknown>, recoverOnly: boolean): Promise<SendOutcome> {
-    const { status, data } = await this.request("POST", "/api/web-chat/messages", body, recoverOnly ? DEFAULT_TIMEOUT_MS : SEND_TIMEOUT_MS);
+  private async send(body: Record<string, unknown>, recoverOnly: boolean, timeoutMs: number = SEND_TIMEOUT_MS): Promise<SendOutcome> {
+    const { status, data } = await this.request("POST", "/api/web-chat/messages", body, recoverOnly ? DEFAULT_TIMEOUT_MS : timeoutMs);
     if (status === 202 && data.code === "processing") return { kind: "processing" };
     if (recoverOnly && status === 404 && data.code === "not_found") return { kind: "notReceived" };
     if (status >= 200 && status < 300 && data.ok === true && typeof data.reply === "string" && typeof data.chatId === "string") {
       return { kind: "delivered", result: data as unknown as SendResult };
     }
+    // PawOS said yes but the answer isn't one this client can read. It is not sent again: PawOS has it.
+    if (status >= 200 && status < 300 && data.ok === true) throw new PawosApiError("server", "PawOS answered, but not in a form this version can read. Check PawOS Web for the reply.", status, "unreadable_reply");
     throw failure(status, data);
   }
 
@@ -142,14 +149,27 @@ export class PawosClient {
    * POST /api/web-chat/messages with no mode — one message to Paw, in the account's own chat history.
    * Safe to repeat with the same request id. `chatId` continues an existing conversation.
    */
-  sendChat(content: string, requestId: string, chatId: string | null = null): Promise<SendOutcome> {
-    return this.send({ content, requestId, ...(chatId ? { chatId } : {}) }, false);
+  sendChat(content: string, requestId: string, chatId: string | null = null, attachment: ChatAttachment | null = null): Promise<SendOutcome> {
+    return this.send({ content, requestId, ...(chatId ? { chatId } : {}), ...(attachment ? { attachment: { name: attachment.name, content: attachment.content } } : {}) }, false, CHAT_TIMEOUT_MS);
+  }
+
+  /** GET /api/web-chat/chats?chat=<id> — the messages of one of the account's own conversations. */
+  async getChat(chatId: string): Promise<ChatMessage[]> {
+    const data = await this.json("GET", `/api/web-chat/chats?chat=${encodeURIComponent(chatId)}`);
+    const messages = Array.isArray(data.messages) ? (data.messages as Partial<ChatMessage>[]) : [];
+    return messages.filter((message) => (message?.role === "user" || message?.role === "assistant") && typeof message.content === "string").map((message) => ({ role: message.role as ChatMessage["role"], content: message.content as string }));
   }
 
   /** GET /api/dashboard/overview — the account's plan, usage and connected services, as the server resolves them. */
   async getOverview(): Promise<AccountOverview> {
     const data = await this.json("GET", "/api/dashboard/overview");
     return { plan: data.plan as AccountOverview["plan"], usage: (data.usage ?? null) as AccountOverview["usage"], integrations: (data.integrations ?? null) as AccountOverview["integrations"] };
+  }
+
+  /** GET /api/web-chat/chats — the account's own conversations and code tasks, newest first. */
+  async listChats(): Promise<RecentChat[]> {
+    const data = await this.json("GET", "/api/web-chat/chats");
+    return Array.isArray(data.chats) ? (data.chats as RecentChat[]) : [];
   }
 
   /** GET /api/dashboard/integrations — every connector PawOS supports, with this account's entitlement and connection state. */

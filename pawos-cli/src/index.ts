@@ -8,6 +8,31 @@ import { PendingTaskStore } from "./state/pendingTask";
 import { createPrompter } from "./ui/prompts";
 import { Terminal, detectCapabilities } from "./ui/terminal";
 
+/**
+ * Ctrl+C belongs to PawOS for as long as it runs: a listener is always installed, so the process
+ * is never killed out from under the terminal. Whatever is waiting (a reply, a task) is told to
+ * stop; if nothing is, the keypress is remembered and PawOS asks about leaving at the next prompt.
+ */
+function interrupts() {
+  const handlers = new Set<() => void>();
+  let pending = false;
+  process.on("SIGINT", () => {
+    if (handlers.size === 0) pending = true;
+    for (const handler of [...handlers]) handler();
+  });
+  return {
+    onInterrupt: (handler: () => void) => {
+      handlers.add(handler);
+      return () => void handlers.delete(handler);
+    },
+    takeInterrupt: () => {
+      const was = pending;
+      pending = false;
+      return was;
+    },
+  };
+}
+
 /** The real `pawos`: the screen, the keyboard, the credential store, Git and PawOS itself. */
 function createContext(): CliContext {
   const env = process.env;
@@ -31,10 +56,7 @@ function createContext(): CliContext {
     // Wherever the user ran `pawos` — not where the package is installed.
     detectProject: () => detectProject(process.cwd()),
     run: runTask,
-    onInterrupt: (handler) => {
-      process.once("SIGINT", handler);
-      return () => process.removeListener("SIGINT", handler);
-    },
+    ...interrupts(),
   };
 }
 

@@ -80,6 +80,8 @@ export const CAPABILITIES = [
 export interface RecordedCall {
   method: string;
   path: string;
+  /** The query string, when there is one (e.g. "?chat=…"). */
+  query?: string;
   body: Record<string, unknown> | null;
   authorization: string | null;
 }
@@ -107,6 +109,11 @@ export class FakePawos {
   /** GET /api/dashboard/overview: the account's usage as the server reports it (null: nothing to report). */
   usage: AccountOverview["usage"] = null;
   overviewAnswer: Scripted | null = null;
+  /** The account's previous conversations and code tasks, as GET /api/web-chat/chats lists them (none: a new account). */
+  previousChats: unknown = [];
+  chatsAnswer: Scripted | null = null;
+  /** The messages of the account's earlier conversations, by chat id. */
+  chatMessages = new Map<string, unknown>();
   /** The account's connectors, as GET /api/dashboard/integrations lists them. */
   integrations: Integration[] = [integration("github", "GitHub", { group: "sourceControl" }), integration("slack", "Slack"), integration("linear", "Linear", { entitled: false, availableOn: "Paw Pro Max" })];
   /** Connectors PawOS connects from its web Integrations page; the rest are connected from the desktop app. */
@@ -159,7 +166,7 @@ export class FakePawos {
     const url = new URL(input);
     if (url.origin !== API) throw new Error(`The CLI called something other than PawOS: ${url.origin}`);
     const headers = (init?.headers ?? {}) as Record<string, string>;
-    const call: RecordedCall = { method: init?.method ?? "GET", path: url.pathname, body: init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : null, authorization: headers.Authorization ?? null };
+    const call: RecordedCall = { method: init?.method ?? "GET", path: url.pathname, ...(url.search ? { query: url.search } : {}), body: init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : null, authorization: headers.Authorization ?? null };
     this.calls.push(call);
     const route = `${call.method} ${call.path}`;
 
@@ -192,6 +199,13 @@ export class FakePawos {
     if (route === "GET /api/dashboard/overview") {
       if (this.overviewAnswer) return play(this.overviewAnswer);
       return json(200, { ok: true, plan: this.plan, usage: this.usage, integrations: { connected: this.integrations.filter((item) => item.connection === "connected").map((item) => item.id), available: this.integrations.filter((item) => item.entitled).length, total: this.integrations.length } });
+    }
+    if (route === "GET /api/web-chat/chats") {
+      if (this.chatsAnswer) return play(this.chatsAnswer);
+      const wanted = url.searchParams.get("chat");
+      if (wanted === null) return json(200, { ok: true, chats: this.previousChats, allowance: { messageLimit: null, remaining: null } });
+      if (!this.chatMessages.has(wanted)) return json(404, { ok: false, code: "chat_not_found", message: "That chat doesn't exist." });
+      return json(200, { ok: true, chats: this.previousChats, allowance: { messageLimit: null, remaining: null }, messages: this.chatMessages.get(wanted) });
     }
     if (route === "GET /api/dashboard/integrations") return json(200, { ok: true, tier: this.plan.label, integrations: this.integrations });
     if (call.method === "POST" && call.path.startsWith("/api/dashboard/integrations/")) {
@@ -317,6 +331,8 @@ export interface HarnessOptions {
   apiProblem?: string;
   /** The time on the user's computer (default: nine in the morning). */
   now?: Date;
+  /** How much PawOS asks before a code change (default here: auto, so a test's task is sent as typed). */
+  permissionMode?: "ask" | "auto" | "plan";
   /** Play the startup animation (needs a terminal that redraws; the test moves the frames with `timers.tick`). */
   intro?: boolean;
 }
@@ -342,6 +358,7 @@ export function harness(options: HarnessOptions = {}) {
   const term = new Terminal({ write: (text) => chunks.push(text), isTTY: options.caps?.interactive ?? false, columns: 100 }, options.caps ?? STATIC_TERMINAL);
   const timers = new ManualTimers();
   const interruptHandlers = new Set<() => void>();
+  let interruptPending = false;
   let clock = 0;
   const prompter = new ScriptedPrompter(options.answers ?? [], (text) => chunks.push(text));
 
@@ -363,9 +380,15 @@ export function harness(options: HarnessOptions = {}) {
       interruptHandlers.add(handler);
       return () => interruptHandlers.delete(handler);
     },
+    takeInterrupt: () => {
+      const was = interruptPending;
+      interruptPending = false;
+      return was;
+    },
     timers,
     now: () => options.now ?? MORNING,
     animateStartup: options.intro === true,
+    permissionMode: options.permissionMode ?? "auto",
   };
 
   return {
@@ -381,6 +404,7 @@ export function harness(options: HarnessOptions = {}) {
     raw: () => chunks.join(""),
     output: () => stripAnsi(chunks.join("")),
     interrupt: () => {
+      if (interruptHandlers.size === 0) interruptPending = true;
       for (const handler of [...interruptHandlers]) handler();
     },
     listening: () => interruptHandlers.size,

@@ -4,7 +4,7 @@
  * errors) is cleaned before it is printed, so it can never move the cursor, recolour the screen,
  * rewrite earlier output or disguise a link.
  */
-export type Tone = "muted" | "accent" | "good" | "bad" | "warn" | "strong";
+export type Tone = "muted" | "accent" | "good" | "bad" | "warn" | "strong" | "brand";
 
 export interface Segment {
   text: string;
@@ -84,7 +84,8 @@ export function detectCapabilities(stream: { isTTY?: boolean; columns?: number }
   return { interactive, color, unicode, hyperlinks, columns: Math.max(40, Math.min(stream.columns ?? 80, 120)) };
 }
 
-const CODES: Record<Tone, string> = { muted: "2", accent: "36", good: "32", bad: "31", warn: "33", strong: "1" };
+// "brand" is PawOS red — the mascot's colour.
+const CODES: Record<Tone, string> = { muted: "2", accent: "36", good: "32", bad: "31", warn: "33", strong: "1", brand: "91" };
 
 export interface Glyphs {
   mark: string;

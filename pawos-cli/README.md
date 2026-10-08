@@ -4,7 +4,7 @@ PawOS in your terminal: ask PawOS anything from any folder, and have it make cha
 connected GitHub project.
 
 ```bash
-npm install -g @revantaai/pawos
+npm install -g @revantaai/pawos-cli
 ```
 
 ```bash
@@ -51,6 +51,9 @@ Leave with `/exit` or Ctrl+D. Ctrl+C at the prompt cancels what you were typing;
 | `/code` | Make changes in this folder's GitHub project (says why if that isn't possible here) |
 | `/connections` | Show your account's connections |
 | `/connect <name>` | Connect a service, for example `/connect github` |
+| `/mode [name]` | Ask before code changes (`ask`), don't ask (`auto`), or plan only (`plan`) |
+| `/resume [number]` | List earlier PawOS work, or open one and carry on with it |
+| `/attach <file>` | Send one text file (up to 60 KB) with your next chat message |
 | `/status` | Show your account, plan, usage and connections |
 | `/help` | List these commands |
 | `/exit` | Leave PawOS |
@@ -64,6 +67,28 @@ Leave with `/exit` or Ctrl+D. Ctrl+C at the prompt cancels what you were typing;
 | `pawos logout` | Sign out on this computer |
 | `pawos status` | Show your account, plan, usage and connections (changes nothing) |
 | `pawos version` | Show the version |
+
+## Asking before a code change
+
+A code change is pushed to your repository on GitHub, so PawOS asks first. When you send a change
+request in Code mode it shows the repository and asks **allow**, **deny** or **always allow**. Only
+an explicit yes sends it; Enter, Ctrl+C or anything unclear sends nothing.
+
+- `/mode ask` — ask every time (the default).
+- `/mode auto` — don't ask. "Always allow" switches to this for the rest of the session.
+- `/mode plan` — PawOS talks the change through and changes nothing. It plans from your
+  description; it does not read the repository in this mode.
+
+The mode lasts for the session and only controls whether the CLI asks. It is never sent to PawOS and
+cannot allow anything your plan doesn't. `accept-edits` and `bypass-permissions` are accepted as
+names for `auto`: PawOS makes a change in one step on its servers, so there is no edit-by-edit
+approval to accept or skip.
+
+## Earlier work
+
+When you have used PawOS before, the start screen shows your three most recent conversations.
+`/resume` lists the last ten; `/resume 2` opens one, shows how it ended, and your next message
+continues it.
 
 ## Your account, plan and usage
 
@@ -150,6 +175,9 @@ project again and it offers to check on it.
   deployments report, as one overall result, and fixes a failure they report (within your plan's
   limit). If your repository has no checks or preview deployments, the change is pushed but not
   verified, and PawOS says so.
+- You cannot choose the model: PawOS's service uses its own, and offers no choice to clients.
+- You cannot send a folder. One text file can go with a chat message (`/attach`); images and files
+  with a code change are not supported from the CLI.
 - Using your connected services from a conversation — reading GitHub issues, Slack messages or
   Google Drive files, creating a Linear ticket, calling an MCP server — runs only in the PawOS
   desktop app today. PawOS's servers do not offer it to PawOS Web or to this CLI, so when you ask

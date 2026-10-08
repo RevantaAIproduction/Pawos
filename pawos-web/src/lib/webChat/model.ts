@@ -48,29 +48,54 @@ export interface GenerateRequest {
   timeoutMs?: number;
 }
 
+/**
+ * A chat reply has to come back before the gateway in front of PawOS Web gives up on the request
+ * (60 seconds). So a call with no timeout of its own gets two tries of 26 seconds each: if the model
+ * hangs or answers "busy" (429 / 5xx), it is asked once more, and if that fails too the user gets
+ * PawOS's own "try again" well inside the minute — never a gateway error page. A caller that sets
+ * its own timeout (a code change's long edit) keeps that timeout and gets one try, as before.
+ */
+export const MODEL_ATTEMPT_TIMEOUT_MS = 26_000;
+export const MODEL_ATTEMPTS = 2;
+
+const unavailable = () => new WebChatError("model_unavailable", "Paw couldn't answer just now. Please try again.", 502);
+
 export async function generate(request: GenerateRequest): Promise<ModelReply> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new WebChatError("not_configured", "PawOS Web chat isn't available right now.", 503);
-  let response: Response;
-  try {
-    response = await fetch(`${modelBaseUrl()}/models/${WEB_MODEL}:generateContent`, {
-      method: "POST",
-      // The key goes in a header, never in the URL.
-      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: request.system }] },
-        contents: request.contents,
-        generationConfig: { maxOutputTokens: request.maxOutputTokens, ...(request.json ? { responseMimeType: "application/json" } : {}) },
-      }),
-      signal: AbortSignal.timeout(request.timeoutMs ?? 60_000),
-    });
-  } catch {
-    throw new WebChatError("model_unavailable", "Paw couldn't answer just now. Please try again.", 502);
+  const attempts = request.timeoutMs === undefined ? MODEL_ATTEMPTS : 1;
+  const timeoutMs = request.timeoutMs ?? MODEL_ATTEMPT_TIMEOUT_MS;
+  let response: Response | null = null;
+  for (let attempt = 1; attempt <= attempts && !response; attempt++) {
+    const started = Date.now();
+    const last = attempt === attempts;
+    try {
+      const answer = await fetch(`${modelBaseUrl()}/models/${WEB_MODEL}:generateContent`, {
+        method: "POST",
+        // The key goes in a header, never in the URL.
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: request.system }] },
+          contents: request.contents,
+          generationConfig: { maxOutputTokens: request.maxOutputTokens, ...(request.json ? { responseMimeType: "application/json" } : {}) },
+        }),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (answer.ok) {
+        response = answer;
+        break;
+      }
+      // How long and what status: what whoever reads the log needs to tell a quota problem from an outage.
+      console.error(`[web-chat] model call failed: HTTP ${answer.status} after ${Date.now() - started}ms (attempt ${attempt} of ${attempts})`);
+      // "Busy" may clear on a second try; anything else (a bad key, a bad request) will not.
+      if (last || !(answer.status === 429 || answer.status >= 500)) throw unavailable();
+    } catch (error) {
+      if (error instanceof WebChatError) throw error;
+      console.error(`[web-chat] model call got no answer after ${Date.now() - started}ms (attempt ${attempt} of ${attempts})`);
+      if (last) throw unavailable();
+    }
   }
-  if (!response.ok) {
-    console.error(`[web-chat] model call failed: HTTP ${response.status}`);
-    throw new WebChatError("model_unavailable", "Paw couldn't answer just now. Please try again.", 502);
-  }
+  if (!response) throw unavailable();
   const body = (await response.json().catch(() => ({}))) as {
     candidates?: { content?: { parts?: { text?: string }[] } }[];
     usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; cachedContentTokenCount?: number; thoughtsTokenCount?: number };

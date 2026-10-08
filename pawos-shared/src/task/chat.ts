@@ -1,5 +1,5 @@
 import { PawosApiError, type SendOutcome } from "../api/pawosClient";
-import type { SendResult } from "../api/types";
+import type { ChatAttachment, SendResult } from "../api/types";
 
 /**
  * Sends one message to Paw through the existing PawOS Web chat (POST /api/web-chat/messages) and
@@ -8,7 +8,7 @@ import type { SendResult } from "../api/types";
  * message is never answered, counted or charged twice.
  */
 export interface ChatClient {
-  sendChat(content: string, requestId: string, chatId?: string | null): Promise<SendOutcome>;
+  sendChat(content: string, requestId: string, chatId?: string | null, attachment?: ChatAttachment | null): Promise<SendOutcome>;
   recoverSend(requestId: string): Promise<SendOutcome>;
 }
 
@@ -18,6 +18,8 @@ export interface ChatOptions {
   requestId: string;
   /** The conversation to continue, or null to start one. */
   chatId?: string | null;
+  /** A text file to send with the message. */
+  attachment?: ChatAttachment | null;
   sleep?: (ms: number) => Promise<void>;
   /** How long to keep asking about a message PawOS is still answering. */
   waitMs?: number;
@@ -25,7 +27,8 @@ export interface ChatOptions {
 }
 
 const ASK_AGAIN_MS = 2_000;
-const WAIT_MS = 3 * 60 * 1000;
+/** PawOS holds a message's claim for 150 seconds; after that it is either answered or was never stored. */
+const WAIT_MS = 160 * 1000;
 const MAX_RECOVERY_ATTEMPTS = 5;
 
 export async function sendChatMessage(options: ChatOptions): Promise<SendResult> {
@@ -34,7 +37,7 @@ export async function sendChatMessage(options: ChatOptions): Promise<SendResult>
   const now = options.now ?? Date.now;
   const deadline = now() + (options.waitMs ?? WAIT_MS);
   let recoveries = 0;
-  let attempt: () => Promise<SendOutcome> = () => client.sendChat(content, requestId, options.chatId ?? null);
+  let attempt: () => Promise<SendOutcome> = () => client.sendChat(content, requestId, options.chatId ?? null, options.attachment ?? null);
 
   for (;;) {
     let outcome: SendOutcome;
@@ -43,6 +46,8 @@ export async function sendChatMessage(options: ChatOptions): Promise<SendResult>
     } catch (error) {
       // No answer at all: PawOS may well have the message. Ask about it — never send it again.
       if (!(error instanceof PawosApiError) || !error.uncertain || recoveries >= MAX_RECOVERY_ATTEMPTS) throw error;
+      // Out of time as well: stop here rather than keep asking a PawOS that isn't answering.
+      if (now() >= deadline) throw new PawosApiError("network", "PawOS didn't answer in time. Your message was not sent again; check PawOS Web for the reply, or try again.", null, "timeout");
       recoveries += 1;
       outcome = { kind: "processing" };
     }

@@ -90,6 +90,27 @@ export interface AccountOverview {
 
 export type IntegrationConnection = "connected" | "needsReauth" | "error" | "notConnected";
 
+/** One of the account's PawOS conversations (a chat or a code task), as GET /api/web-chat/chats lists it. */
+export interface RecentChat {
+  id: string;
+  title: string;
+  updatedAt: string;
+  /** Where it started: PawOS Desktop, or PawOS Web (which the CLI uses). */
+  surface: "web" | "desktop";
+}
+
+/** A text file sent with a message (POST /api/web-chat/messages `attachment`). PawOS checks the plan, the size and the type. */
+export interface ChatAttachment {
+  name: string;
+  content: string;
+}
+
+/** One message of an earlier conversation, as GET /api/web-chat/chats?chat=<id> returns it. */
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 /** One connector PawOS supports, with this account's entitlement and connection state. No credential is ever part of it. */
 export interface Integration {
   id: string;

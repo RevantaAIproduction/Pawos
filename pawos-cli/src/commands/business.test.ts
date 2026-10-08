@@ -305,8 +305,12 @@ describe("organization", () => {
 
 describe("security: the server is the authority", () => {
   it("nothing local can change what the account may do: no flag, environment variable or file is read for it", () => {
-    for (const { source } of sources()) {
-      expect(source).not.toMatch(/PAWOS_(PLAN|TIER|CREDITS|USAGE|ENTITLE|BYPASS|UNLOCK)|--plan|--tier|--force-unlock|skipLimit|bypass/i);
+    for (const { file, source } of sources()) {
+      expect(source).not.toMatch(/PAWOS_(PLAN|TIER|CREDITS|USAGE|ENTITLE|BYPASS|UNLOCK)|--plan|--tier|--force-unlock|skipLimit/i);
+      // "bypass" appears in exactly one place: as a name people may type for the mode that doesn't ask
+      // before a code change (commands/workspace.ts). It is about this CLI asking, not about what the
+      // account may do — see "a mode never changes what PawOS allows" in workspace.test.ts.
+      if (file !== "commands/workspace.ts") expect(source).not.toMatch(/bypass/i);
     }
   });
 

@@ -250,7 +250,7 @@ describe("dropped connection", () => {
 
 describe("recovery without duplicate submission", () => {
   it("Ctrl+C stops watching — the task is not cancelled, its id is kept, and it is not sent again", async () => {
-    const h = start({ signedIn: true, answers: [TASK, "should never be read"] });
+    const h = start({ signedIn: true, answers: [TASK, "y"] }); // Ctrl+C, then yes to leaving
     h.server.polls = [change("r")];
     h.server.sends = [
       () => {

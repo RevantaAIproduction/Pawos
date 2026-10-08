@@ -18,7 +18,7 @@ export interface CliContext {
   config: ApiConfig;
   session: SessionManager;
   store: CliSessionStore;
-  client: Pick<PawosClient, "getCapabilities" | "getRepositoryReadiness" | "selectRepository" | "sendCodeChange" | "sendChat" | "recoverSend" | "getChange" | "getOverview" | "listIntegrations" | "startConnect">;
+  client: Pick<PawosClient, "getCapabilities" | "getRepositoryReadiness" | "selectRepository" | "sendCodeChange" | "sendChat" | "recoverSend" | "getChange" | "getOverview" | "listIntegrations" | "startConnect" | "listChats" | "getChat">;
   pending: PendingTaskStore;
   /** The folder the CLI was started in, its Git branch and its GitHub repository — read, never assumed. */
   detectProject: () => Promise<ProjectContext>;
@@ -28,9 +28,13 @@ export interface CliContext {
   run: (options: TaskOptions) => Promise<TaskOutcome>;
   /** Calls `handler` if the user presses Ctrl+C; returns a function that stops listening. */
   onInterrupt: (handler: () => void) => () => void;
+  /** True, once, if the user pressed Ctrl+C while nothing was listening for it (PawOS was starting up). */
+  takeInterrupt?: () => boolean;
   timers?: Timers;
   /** The time on this computer, for the greeting. */
   now?: () => Date;
+  /** How much PawOS asks before a code change when the session starts (default: ask). */
+  permissionMode?: "ask" | "auto" | "plan";
   /** False to skip the startup animation (it is also skipped wherever the terminal can't redraw in place). */
   animateStartup?: boolean;
 }

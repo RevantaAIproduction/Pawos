@@ -1,21 +1,25 @@
 import { browserLogin } from "../auth/browserLogin";
 import type { CliContext } from "../context";
 import { explainLocalRepository, type ProjectContext } from "../git/localRepository";
-import { PawosApiError, SESSION_EXPIRED_NOTICE, describeRepository, newRequestId, sendChatMessage, type Capabilities, type RepositoryReadiness, type SendResult, type TaskOutcome } from "../shared";
+import { PawosApiError, SESSION_EXPIRED_NOTICE, describeRepository, newRequestId, sendChatMessage, type Capabilities, type ChatAttachment, type RecentChat, type RepositoryReadiness, type SendResult, type TaskOutcome } from "../shared";
 import type { PendingTask } from "../state/pendingTask";
 import { isPlanRefusal, renderRefusal } from "../ui/account";
-import { StartupIntro, greeting, wordmarkLine } from "../ui/intro";
+import { StartupIntro, greeting, mascotHeader } from "../ui/intro";
 import { renderProgress, stageTitle } from "../ui/progress";
-import { confirm } from "../ui/prompts";
+import { twoColumnBox } from "../ui/box";
+import { recentLines, renderRecent } from "../ui/recent";
+import { confirm, confirmExit } from "../ui/prompts";
 import { renderOutcome } from "../ui/result";
 import { LiveStatus } from "../ui/spinner";
 import { blank, clean, cleanLines, indent, line, seg, type Line } from "../ui/terminal";
 import { connectService, showConnections } from "./connections";
 import { accountRows } from "./status";
+import { MODE_SUMMARY, askPermission, listPreviousWork, modeLines, openPreviousWork, parseMode, readAttachment, type PermissionMode } from "./workspace";
 
 /** PawOS Web's own limit on a message (WEB_POLICY.maxMessageChars); the server enforces it too. */
 export const MAX_TASK_CHARS = 4000;
 export const QUESTION = "What would you like to work on?";
+export const STILL_THINKING_AFTER_SECONDS = 20;
 
 /**
  * The top of the PawOS workspace: PawOS and its version, a greeting, then where the user is. The
@@ -24,19 +28,21 @@ export const QUESTION = "What would you like to work on?";
  * folder that isn't a repository has no "Git:" line, a detached HEAD has none either, and a
  * repository with no GitHub remote has no "Repository:" line. Nothing is filled in by default.
  */
-export function workspaceHeader(ctx: CliContext, project: ProjectContext, name: unknown = null): Line[] {
-  const lines: Line[] = [
-    wordmarkLine(ctx.version),
-    line("  ", seg("AI Developer Workspace", "muted")),
-    blank(),
-    line("  ", greeting(name, ctx.now?.() ?? new Date())),
-    blank(),
-    line("  ", clean(project.cwd, 400)),
-  ];
-  if (project.branch) lines.push(line("  ", seg("Git: ", "muted"), clean(project.branch, 200)));
-  if (project.repository.kind === "github") lines.push(line("  ", seg("Repository: ", "muted"), clean(project.repository.fullName, 200)));
-  lines.push(blank());
-  return lines;
+export function workspaceHeader(ctx: CliContext, project: ProjectContext, name: unknown = null, recent: unknown = null): Line[] {
+  const now = ctx.now?.() ?? new Date();
+  const { caps } = ctx.term;
+  // The mascot stays here: PawOS's name, what it is and the greeting stand beside it.
+  const identity = mascotHeader(ctx.version, greeting(name, now), caps.unicode);
+  // A returning user's previous work goes in a box with the mascot, to its right. With no previous
+  // work there is no box and no panel: the first screen is the mascot and the header, nothing else.
+  const work = recentLines(recent, now);
+  const boxed = work.length > 0 ? twoColumnBox(identity, work, caps.columns, caps.unicode) : null;
+  const where: Line[] = [line("  ", clean(project.cwd, 400))];
+  if (project.branch) where.push(line("  ", seg("Git: ", "muted"), clean(project.branch, 200)));
+  if (project.repository.kind === "github") where.push(line("  ", seg("Repository: ", "muted"), clean(project.repository.fullName, 200)));
+  // The first line is the one above the mascot: blank, or the top of the box.
+  if (boxed) return [...boxed, blank(), ...where, blank()];
+  return [blank(), ...identity, blank(), ...where, blank(), ...renderRecent(recent, now)];
 }
 
 const bad = (ctx: CliContext, text: string): Line => line("  ", seg(ctx.term.glyphs.failed, "bad"), " ", text);
@@ -49,7 +55,7 @@ interface Account {
 }
 
 /**
- * Loads the account and the repository PawOS is set to. At startup the wordmark is already
+ * Loads the account and the repository PawOS is set to. At startup the mascot is already
  * animating, so nothing else is shown; otherwise the PawOS mark turns while it loads.
  */
 async function connect(ctx: CliContext, quiet = false): Promise<Account | Error> {
@@ -62,6 +68,18 @@ async function connect(ctx: CliContext, quiet = false): Promise<Account | Error>
     return error instanceof Error ? error : new Error("Something went wrong.");
   } finally {
     if (!quiet) live.stop(); // when quiet, the line on screen belongs to the startup animation
+  }
+}
+
+/**
+ * The account's previous PawOS work, read once as PawOS opens — so nothing done in this run is in
+ * it. It is an extra: if PawOS can't list it, the start screen simply has no Recent activity.
+ */
+async function previousWork(ctx: CliContext): Promise<unknown> {
+  try {
+    return await ctx.client.listChats();
+  } catch {
+    return null;
   }
 }
 
@@ -135,7 +153,7 @@ type Asked = { kind: "reply"; result: SendResult } | { kind: "refused"; error: u
  * as PawOS Web, from whatever folder the user is in. The message is sent once; PawOS decides
  * whether the account may send it and what it costs.
  */
-async function ask(ctx: CliContext, content: string, chatId: string | null): Promise<Asked> {
+async function ask(ctx: CliContext, content: string, chatId: string | null, attachment: ChatAttachment | null = null): Promise<Asked> {
   const { term } = ctx;
   const live = new LiveStatus(term, ctx.timers);
   term.print([blank()]);
@@ -143,17 +161,25 @@ async function ask(ctx: CliContext, content: string, chatId: string | null): Pro
   let interrupt!: () => void;
   const interrupted = new Promise<Asked>((resolve) => (interrupt = () => resolve({ kind: "interrupted" })));
   const stopListening = ctx.onInterrupt(interrupt);
+  // A slow answer says so, rather than looking stuck. The wait itself is bounded by the request's timeout.
+  const timers = ctx.timers ?? { setInterval: (run: () => void, ms: number): unknown => setInterval(run, ms), clearInterval: (handle: unknown) => clearInterval(handle as NodeJS.Timeout) };
+  let seconds = 0;
+  const clock = timers.setInterval(() => {
+    seconds += 1;
+    if (seconds === STILL_THINKING_AFTER_SECONDS) live.update([], `PawOS is still thinking${term.glyphs.ellipsis} Ctrl+C stops waiting.`);
+  }, 1000);
   try {
     return await Promise.race([
-      (ctx.chat ?? sendChatMessage)({ client: ctx.client, content, requestId: newRequestId(), chatId }).then(
+      (ctx.chat ?? sendChatMessage)({ client: ctx.client, content, requestId: newRequestId(), chatId, attachment }).then(
         (result): Asked => ({ kind: "reply", result }),
         (error: unknown): Asked => ({ kind: "refused", error })
       ),
       interrupted,
     ]);
   } finally {
+    timers.clearInterval(clock);
     stopListening();
-    live.stop();
+    live.stop(); // success, refusal, timeout or Ctrl+C: the spinner never outlives the wait
   }
 }
 
@@ -212,6 +238,9 @@ export const COMMAND_HELP: [string, string][] = [
   ["/chat", "Talk to PawOS without changing anything"],
   ["/connections", "Show your connected services"],
   ["/connect <name>", "Connect a service to your PawOS account"],
+  ["/mode [name]", "Ask before code changes, don't ask, or plan only"],
+  ["/resume [number]", "Open earlier PawOS work and carry on with it"],
+  ["/attach <file>", "Send a text file with your next message"],
   ["/status", "Show your account, plan and usage"],
   ["/help", "Show these commands"],
   ["/exit", "Leave PawOS"],
@@ -237,17 +266,20 @@ export async function interactive(ctx: CliContext, options: { signIn?: boolean }
   if ((options.signIn || session.status !== "signedIn") && !(await browserLogin(ctx))) return 1;
 
   const project = await ctx.detectProject();
-  // PawOS comes online: the wordmark animates, once, while the account loads. The two run together,
+  // PawOS wakes up: its mascot animates, once, while the account loads. The two run together,
   // so the animation costs no extra time unless PawOS answers faster than it plays.
-  term.print([blank()]);
   const intro = new StartupIntro(term, ctx.version, ctx.timers, ctx.animateStartup !== false);
+  // The animation draws in the very lines the header will occupy (its first is the line above the
+  // mascot), so when it settles the mascot is already standing where it stays.
   intro.start();
   let account: Account | Error;
+  let recent: unknown = null;
   try {
     account = await connect(ctx, true);
+    if (!(account instanceof Error)) recent = await previousWork(ctx);
     await intro.finished;
   } finally {
-    intro.stop(); // its line is handed back whatever happened; the header takes its place
+    intro.stop(); // its lines are handed back whatever happened; the header takes their place
   }
   if (account instanceof PawosApiError && account.kind === "unauthenticated") {
     // The stored session is no longer accepted: it has been cleared. Sign in again, once.
@@ -255,8 +287,9 @@ export async function interactive(ctx: CliContext, options: { signIn?: boolean }
     if (!(await browserLogin(ctx))) return 1;
     term.print([blank()]);
     account = await connect(ctx);
+    if (!(account instanceof Error)) recent = await previousWork(ctx);
   }
-  term.print(workspaceHeader(ctx, project, account instanceof Error ? null : account.capabilities.user?.name));
+  term.print(workspaceHeader(ctx, project, account instanceof Error ? null : account.capabilities.user?.name, recent));
   if (account instanceof Error) {
     term.print([bad(ctx, clean(account.message)), blank()]);
     return 1;
@@ -267,21 +300,33 @@ export async function interactive(ctx: CliContext, options: { signIn?: boolean }
   let code = await resolveCodeMode(ctx, project, account);
   let mode: "code" | "chat" = "repository" in code ? "code" : "chat";
   let chatId: string | null = null;
+  // Before a code change PawOS asks, unless the user has said not to. It is this session's setting only.
+  let permission: PermissionMode = ctx.permissionMode ?? "ask";
+  let attachment: ChatAttachment | null = null;
+  let earlierWork: RecentChat[] = [];
+
+  /** Ctrl+C never ends PawOS by itself: it asks. True when the user chose to leave. */
+  const leaving = async (): Promise<boolean> => {
+    const leave = await confirmExit(ctx.prompter, (text) => term.print([text ? line(text) : blank()]));
+    term.print([blank()]);
+    return leave;
+  };
 
   // A code task from an earlier run that never reported back: ask about it — never send it again.
   const earlier = ctx.pending.read();
   if (earlier) {
     term.print([line("  An earlier task hasn't reported its result:"), note(clean(earlier.content, 160)), blank()]);
     if (await confirm(ctx.prompter, "  Check on it?")) {
-      if ((await followTask(ctx, earlier, true, planLabel)) === "interrupted") return 130;
+      if ((await followTask(ctx, earlier, true, planLabel)) === "interrupted" && (await leaving())) return 130;
     } else {
       ctx.pending.clear();
       term.print([note(`Left alone. Its request ID was ${clean(earlier.requestId, 80)}.`), blank()]);
     }
   }
 
-  let cancelledOnce = false;
   for (;;) {
+    // Ctrl+C while PawOS was starting: nothing was lost, so just ask.
+    if (ctx.takeInterrupt?.() && (await leaving())) break;
     const hint: Line[] =
       mode === "code" && "repository" in code
         ? [line("  ", seg(`Code mode: changes go to ${clean(code.repository, 200)} on GitHub. /chat to just talk.`, "muted")), blank()]
@@ -291,15 +336,10 @@ export async function interactive(ctx: CliContext, options: { signIn?: boolean }
     term.print([line("  ", ...term.rule()), blank(), line("  ", seg(QUESTION, "strong")), blank(), ...hint]);
     const answer = await ctx.prompter.ask(`  ${term.glyphs.prompt} `);
     if (answer === null) {
-      // Ctrl+C at the prompt cancels what was being typed and submits nothing. A second one leaves.
-      if (ctx.prompter.interrupted && !cancelledOnce) {
-        cancelledOnce = true;
-        term.print([line("  ", seg("Cancelled. Press Ctrl+C again to leave PawOS.", "muted")), blank()]);
-        continue;
-      }
-      break;
+      // Ctrl+C at the prompt discards what was being typed, submits nothing, and asks before leaving.
+      if (ctx.prompter.interrupted && !(await leaving())) continue;
+      break; // the user said yes, or input has ended (Ctrl+D)
     }
-    cancelledOnce = false;
     const content = answer.trim();
     if (!content) continue;
 
@@ -334,6 +374,63 @@ export async function interactive(ctx: CliContext, options: { signIn?: boolean }
             if (readiness) account = { ...account, readiness };
           }
           break;
+        case "mode": {
+          if (!argument) {
+            term.print([blank(), ...modeLines(permission), blank()]);
+            break;
+          }
+          const chosen = parseMode(argument);
+          if (!chosen) {
+            term.print([blank(), line("  ", seg(`PawOS has no mode called ${clean(argument, 30)}.`, "warn")), ...modeLines(permission), blank()]);
+            break;
+          }
+          permission = chosen.mode;
+          term.print([
+            blank(),
+            line("  ", seg("Mode: ", "muted"), seg(permission, "strong"), seg(`  ${MODE_SUMMARY[permission]}`, "muted")),
+            // PawOS makes a change in one step on its servers: there are no separate edits to accept one by one.
+            ...(chosen.alias ? [line("  ", seg("PawOS has no separate edit-by-edit approval, so that is the same as auto here.", "muted"))] : []),
+            blank(),
+          ]);
+          break;
+        }
+        case "resume": {
+          if (!argument) {
+            earlierWork = await listPreviousWork(ctx);
+            break;
+          }
+          if (earlierWork.length === 0) earlierWork = await listPreviousWork(ctx);
+          const wanted = /^\d{1,2}$/.test(argument) ? earlierWork[Number(argument) - 1] : undefined;
+          if (!wanted) {
+            if (earlierWork.length > 0) term.print([line("  ", seg(`Choose a number from 1 to ${earlierWork.length}.`, "warn")), blank()]);
+            break;
+          }
+          if (await openPreviousWork(ctx, wanted)) {
+            chatId = wanted.id;
+            mode = "chat"; // carrying on a conversation is talking; /code goes back to changing code
+          }
+          break;
+        }
+        case "attach": {
+          if (/^(none|clear|remove)$/i.test(argument)) {
+            attachment = null;
+            term.print([blank(), line("  ", seg("Nothing is attached.", "muted")), blank()]);
+            break;
+          }
+          const read = readAttachment(project.cwd, argument);
+          if (!read.ok) {
+            term.print([blank(), line("  ", seg(read.problem, "warn")), blank()]);
+            break;
+          }
+          attachment = read.attachment;
+          term.print([
+            blank(),
+            line("  ", seg(term.glyphs.done, "good"), ` Attached ${clean(attachment.name, 120)}`, seg(`  ${Math.max(1, Math.round(read.bytes / 1000))} KB`, "muted")),
+            line("  ", seg("It goes with your next chat message. /attach none removes it.", "muted")),
+            blank(),
+          ]);
+          break;
+        }
         case "status":
           try {
             term.print([blank(), line("  ", seg("PawOS Account", "strong")), blank(), ...(await accountRows(ctx, project)), blank()]);
@@ -353,20 +450,41 @@ export async function interactive(ctx: CliContext, options: { signIn?: boolean }
     }
 
     let unauthenticated = false;
-    if (mode === "code" && "repository" in code) {
+    // Plan mode: the request is talked through and nothing is changed — it is never sent as a code change.
+    const planOnly = mode === "code" && "repository" in code && permission === "plan";
+    if (mode === "code" && "repository" in code && permission === "ask") {
+      const decision = await askPermission(ctx.prompter, code.repository, (lines) => term.print(lines));
+      if (decision === "deny") {
+        term.print([blank(), line("  ", seg("Not sent. Nothing was changed.", "muted")), blank()]);
+        continue;
+      }
+      if (decision === "always") {
+        permission = "auto";
+        term.print([blank(), line("  ", seg("PawOS won't ask again in this session. /mode ask turns it back on.", "muted"))]);
+      }
+    }
+    if (mode === "code" && "repository" in code && !planOnly) {
       const task: PendingTask = { requestId: newRequestId(), content, repository: code.repository, startedAt: new Date().toISOString() };
       ctx.pending.write(task); // before it is sent, so an interruption at any point can be picked up again
       const result = await followTask(ctx, task, false, planLabel);
-      if (result === "interrupted") return 130;
+      if (result === "interrupted") {
+        // The display has stopped and the task carries on at PawOS. Leaving is still the user's call.
+        if (await leaving()) return 130;
+        continue;
+      }
       unauthenticated = result.status === "failed" && result.error?.kind === "unauthenticated";
     } else {
-      const asked = await ask(ctx, content, chatId);
+      if (planOnly) term.print([blank(), line("  ", seg("Plan mode: PawOS will plan this with you. Nothing will be changed.", "muted"))]);
+      const asked = await ask(ctx, planOnly ? `Plan this change without making it. Describe the steps and the files likely involved.\n\n${content}` : content, chatId, attachment);
+      // The file went (or was refused) with that message; it is never sent a second time by itself.
+      attachment = null;
       if (asked.kind === "interrupted") {
-        term.print([line("  ", seg("Stopped waiting. Your message was sent once; the reply will be in your PawOS chats.", "muted")), blank()]);
+        term.print([line("  ", seg("Stopped waiting. Your message was sent once; the reply will be in your PawOS chats.", "muted"))]);
+        if (await leaving()) break;
       } else if (asked.kind === "reply") {
         chatId = asked.result.chatId || chatId;
         const reply = cleanLines(asked.result.reply, 400);
-        term.print([...(term.caps.interactive ? [] : [blank()]), ...(reply.length > 0 ? reply : ["(PawOS sent an empty reply.)"]).map((text) => (text === "" ? blank() : line("  ", text))), blank()]);
+        term.print([...(term.caps.interactive ? [] : [blank()]), line("  ", seg("PawOS:", "muted")), ...(reply.length > 0 ? reply : ["(PawOS sent an empty reply.)"]).map((text) => (text === "" ? blank() : line("  ", text))), blank()]);
         // PawOS said this needs its desktop app: it was not done here, and the CLI doesn't pretend otherwise.
         if (asked.result.requiresDesktop) term.print([line("  ", seg("PawOS says this needs the PawOS desktop app. Nothing was done from here.", "muted")), blank()]);
       } else {

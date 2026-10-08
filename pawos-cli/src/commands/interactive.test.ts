@@ -35,10 +35,10 @@ describe("already-authenticated startup", () => {
     expect(h.output()).toBe(
       [
         "",
-        "  PawOS v0.1.0",
-        "  AI Developer Workspace",
-        "",
-        "  Good morning, Alice.",
+        "     ●",
+        "  ┌──┴──┐   PawOS v0.1.0",
+        "  │ ^ ^ │   AI Developer Workspace",
+        "  └─────┘   Good morning, Alice.",
         "",
         "  C:\\Users\\APPLE\\Downloads\\PawOS",
         "  Git: main",
@@ -89,7 +89,7 @@ describe("signed-out startup", () => {
     await runCli([], h.ctx);
     const after = h.output().slice(h.output().indexOf("  ✓ Signed in as"));
     expect(after).toBe(
-      ["  ✓ Signed in as alice@example.com", "", "  PawOS v0.1.0", "  AI Developer Workspace", "", "  Good morning, Alice.", "", "  C:\\Users\\APPLE\\Downloads\\PawOS", "  Git: main", "  Repository: RevantaAIproduction/Pawos", "", `  ${RULE}`, "", `  ${QUESTION}`, "", "  Code mode: changes go to RevantaAIproduction/Pawos on GitHub. /chat to just talk.", "", "  > ", "", ""].join("\n")
+      ["  ✓ Signed in as alice@example.com", "", "     ●", "  ┌──┴──┐   PawOS v0.1.0", "  │ ^ ^ │   AI Developer Workspace", "  └─────┘   Good morning, Alice.", "", "  C:\\Users\\APPLE\\Downloads\\PawOS", "  Git: main", "  Repository: RevantaAIproduction/Pawos", "", `  ${RULE}`, "", `  ${QUESTION}`, "", "  Code mode: changes go to RevantaAIproduction/Pawos on GitHub. /chat to just talk.", "", "  > ", "", ""].join("\n")
     );
   });
 
@@ -350,17 +350,17 @@ describe("the task loop", () => {
 });
 
 describe("Ctrl+C", () => {
-  it("at the prompt it cancels what was being typed: nothing is submitted, and PawOS stays open", async () => {
-    const h = start({ signedIn: true, answers: [INTERRUPT, TASK, null] });
+  it("at the prompt it discards what was being typed and asks before leaving: on No, PawOS stays open", async () => {
+    const h = start({ signedIn: true, answers: [INTERRUPT, "n", TASK, null] });
     h.server.sends = [delivered("r", pushed("r"))];
     h.server.polls = [pushed("r")];
     expect(await runCli([], h.ctx)).toBe(0);
-    expect(h.output()).toContain("Cancelled. Press Ctrl+C again to leave PawOS.");
+    expect(h.output()).toContain("Exit PawOS? (y/N)");
     expect(h.server.starts()).toHaveLength(1); // only the task typed afterwards
     expect(h.server.starts()[0]!.body?.content).toBe(TASK);
   });
 
-  it("twice in a row at the prompt leaves PawOS, having submitted nothing", async () => {
+  it("twice in a row (the second at the exit question) leaves PawOS, having submitted nothing", async () => {
     const h = start({ signedIn: true, answers: [INTERRUPT, INTERRUPT, TASK] });
     expect(await runCli([], h.ctx)).toBe(0);
     expect(h.server.starts()).toHaveLength(0);
@@ -368,7 +368,7 @@ describe("Ctrl+C", () => {
   });
 
   it("during a running task it stops the display, keeps the request id, and never sends the task again", async () => {
-    const h = start({ signedIn: true, answers: [TASK, "never read"], caps: LIVE_TERMINAL });
+    const h = start({ signedIn: true, answers: [TASK, "y"], caps: LIVE_TERMINAL });
     h.server.polls = [change("r")];
     h.server.sends = [
       () => {

@@ -20,6 +20,23 @@ export async function confirm(prompter: Prompter, prompt: string, defaultYes = t
   return text === "y" || text === "yes";
 }
 
+/**
+ * "Exit PawOS? (y/N)" — asked when the user presses Ctrl+C, so one keypress never ends the session
+ * by accident. Yes leaves; No, or just Enter, goes back to the prompt; anything else is asked again.
+ * A second Ctrl+C here, or the end of input, means there is nobody to ask: PawOS leaves.
+ */
+export async function confirmExit(prompter: Prompter, print: (text: string) => void): Promise<boolean> {
+  for (;;) {
+    print("");
+    const answer = await prompter.ask("  Exit PawOS? (y/N)\n\n  > ");
+    if (answer === null) return true;
+    const text = answer.trim().toLowerCase();
+    if (text === "y" || text === "yes") return true;
+    if (text === "" || text === "n" || text === "no") return false;
+    print("  Please answer y or n.");
+  }
+}
+
 type Input = NodeJS.ReadableStream & { isTTY?: boolean };
 
 /**
@@ -48,7 +65,7 @@ export function createPrompter(input: Input, output: NodeJS.WritableStream): Pro
           rl.on("SIGINT", () => {
             // Ctrl+C at a prompt cancels that prompt. Whatever was typed is discarded, never submitted.
             prompter.interrupted = true;
-            output.write("\n");
+            output.write("^C\n");
             finish(null);
           });
           rl.on("close", () => finish(null));

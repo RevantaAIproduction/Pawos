@@ -328,14 +328,14 @@ describe("what the terminal can do", () => {
 });
 
 describe("the interface as a whole", () => {
-  it("has PawOS's name at the top, and no emoji anywhere", async () => {
+  it("has PawOS's mascot and name at the top, and no emoji anywhere", async () => {
     const h = harness({ signedIn: true, answers: ["Fix the bug", null] });
     cleanups.push(h.cleanup);
     h.server.sends = [delivered("r", pushed("r", { pullRequestUrl: "https://github.com/acme/site/pull/12" }))];
     h.server.polls = [pushed("r")];
     await runCli([], h.ctx);
     const output = h.output();
-    expect(output.split("\n").slice(0, 3).join("\n")).toBe("\n  PawOS v0.1.0\n  AI Developer Workspace");
+    expect(output.split("\n").slice(0, 4).join("\n")).toBe("\n     ●\n  ┌──┴──┐   PawOS v0.1.0\n  │ ^ ^ │   AI Developer Workspace");
     expect(output).not.toMatch(/\p{Extended_Pictographic}/u);
     expect(output).toMatch(/─{20,}/);
   });
