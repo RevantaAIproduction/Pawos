@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import type { AccountContext } from "../account/accountContext";
-import { WebChatError } from "./errors";
+import { WebChatError, type ModelFailureDetail } from "./errors";
 
 /**
  * The model call PawOS Web makes, and its metering. Metering is the account's existing usage
@@ -58,7 +58,7 @@ export interface GenerateRequest {
 export const MODEL_ATTEMPT_TIMEOUT_MS = 26_000;
 export const MODEL_ATTEMPTS = 2;
 
-const unavailable = () => new WebChatError("model_unavailable", "Paw couldn't answer just now. Please try again.", 502);
+const unavailable = (detail: ModelFailureDetail) => new WebChatError("model_unavailable", "Paw couldn't answer just now. Please try again.", 502, detail);
 
 export async function generate(request: GenerateRequest): Promise<ModelReply> {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -88,14 +88,14 @@ export async function generate(request: GenerateRequest): Promise<ModelReply> {
       // How long and what status: what whoever reads the log needs to tell a quota problem from an outage.
       console.error(`[web-chat] model call failed: HTTP ${answer.status} after ${Date.now() - started}ms (attempt ${attempt} of ${attempts})`);
       // "Busy" may clear on a second try; anything else (a bad key, a bad request) will not.
-      if (last || !(answer.status === 429 || answer.status >= 500)) throw unavailable();
+      if (last || !(answer.status === 429 || answer.status >= 500)) throw unavailable(`model_http_${answer.status}`);
     } catch (error) {
       if (error instanceof WebChatError) throw error;
       console.error(`[web-chat] model call got no answer after ${Date.now() - started}ms (attempt ${attempt} of ${attempts})`);
-      if (last) throw unavailable();
+      if (last) throw unavailable("model_timeout");
     }
   }
-  if (!response) throw unavailable();
+  if (!response) throw unavailable("model_timeout");
   const body = (await response.json().catch(() => ({}))) as {
     candidates?: { content?: { parts?: { text?: string }[] } }[];
     usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; cachedContentTokenCount?: number; thoughtsTokenCount?: number };
@@ -104,7 +104,7 @@ export async function generate(request: GenerateRequest): Promise<ModelReply> {
     .map((part) => part.text ?? "")
     .join("")
     .trim();
-  if (!text) throw new WebChatError("model_unavailable", "Paw couldn't answer just now. Please try again.", 502);
+  if (!text) throw unavailable("model_empty_reply");
   const usage = body.usageMetadata ?? {};
   return {
     text,

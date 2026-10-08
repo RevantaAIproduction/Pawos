@@ -57,6 +57,7 @@ function createContext(): CliContext {
     detectProject: () => detectProject(process.cwd()),
     run: runTask,
     ...interrupts(),
+    debug: Boolean(env.PAWOS_DEBUG),
   };
 }
 

@@ -33,6 +33,8 @@ export interface CliContext {
   timers?: Timers;
   /** The time on this computer, for the greeting. */
   now?: () => Date;
+  /** Debug output (PAWOS_DEBUG): after a failed request, also say its status, code and time. Never a token or a reply. */
+  debug?: boolean;
   /** How much PawOS asks before a code change when the session starts (default: ask). */
   permissionMode?: "ask" | "auto" | "plan";
   /** False to skip the startup animation (it is also skipped wherever the terminal can't redraw in place). */

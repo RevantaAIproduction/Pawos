@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     if (error instanceof WebChatError) {
-      return NextResponse.json({ ok: false, code: error.code, message: error.message }, { status: error.status });
+      return NextResponse.json({ ok: false, code: error.code, message: error.message, ...(error.detail ? { detail: error.detail } : {}) }, { status: error.status });
     }
     console.error("[web-chat] unexpected failure");
     return NextResponse.json({ ok: false, code: "failed", message: "Something went wrong. Please try again." }, { status: 500 });

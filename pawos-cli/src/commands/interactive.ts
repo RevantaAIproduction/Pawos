@@ -146,6 +146,20 @@ export async function followTask(ctx: CliContext, task: PendingTask, resume: boo
   return result;
 }
 
+/** One line for debug output: the endpoint, the HTTP status, PawOS's error code and failure class, and how long it took. */
+export function debugLine(error: unknown, elapsedMs: number): Line {
+  const api = error instanceof PawosApiError ? error : null;
+  const parts = [
+    "POST /api/web-chat/messages",
+    `status=${api?.status ?? "none"}`,
+    `kind=${api?.kind ?? "unknown"}`,
+    `code=${clean(api?.code, 40) || "none"}`,
+    ...(api?.detail ? [`detail=${clean(api.detail, 40)}`] : []),
+    `after=${(elapsedMs / 1000).toFixed(1)}s`,
+  ];
+  return line("  ", seg(`debug: ${parts.join(" ")}`, "muted"));
+}
+
 type Asked = { kind: "reply"; result: SendResult } | { kind: "refused"; error: unknown } | { kind: "interrupted" };
 
 /**
@@ -475,6 +489,7 @@ export async function interactive(ctx: CliContext, options: { signIn?: boolean }
       unauthenticated = result.status === "failed" && result.error?.kind === "unauthenticated";
     } else {
       if (planOnly) term.print([blank(), line("  ", seg("Plan mode: PawOS will plan this with you. Nothing will be changed.", "muted"))]);
+      const sentAt = Date.now();
       const asked = await ask(ctx, planOnly ? `Plan this change without making it. Describe the steps and the files likely involved.\n\n${content}` : content, chatId, attachment);
       // The file went (or was refused) with that message; it is never sent a second time by itself.
       attachment = null;
@@ -489,7 +504,10 @@ export async function interactive(ctx: CliContext, options: { signIn?: boolean }
         if (asked.result.requiresDesktop) term.print([line("  ", seg("PawOS says this needs the PawOS desktop app. Nothing was done from here.", "muted")), blank()]);
       } else {
         unauthenticated = asked.error instanceof PawosApiError && asked.error.kind === "unauthenticated";
-        term.print([...(term.caps.interactive ? [] : [blank()]), ...(unauthenticated ? [line("  ", seg(SESSION_EXPIRED_NOTICE, "warn"))] : renderRefusal(asked.error, planLabel, baseUrl(ctx))), blank()]);
+        term.print([...(term.caps.interactive ? [] : [blank()]), ...(unauthenticated ? [line("  ", seg(SESSION_EXPIRED_NOTICE, "warn"))] : renderRefusal(asked.error, planLabel, baseUrl(ctx)))]);
+        // For whoever is debugging (PAWOS_DEBUG): what PawOS answered, as status, code and class. No token, no body.
+        if (ctx.debug) term.print([debugLine(asked.error, Date.now() - sentAt)]);
+        term.print([blank()]);
       }
     }
     if (unauthenticated) {

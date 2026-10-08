@@ -331,6 +331,8 @@ export interface HarnessOptions {
   apiProblem?: string;
   /** The time on the user's computer (default: nine in the morning). */
   now?: Date;
+  /** Debug output, as PAWOS_DEBUG turns it on. */
+  debug?: boolean;
   /** How much PawOS asks before a code change (default here: auto, so a test's task is sent as typed). */
   permissionMode?: "ask" | "auto" | "plan";
   /** Play the startup animation (needs a terminal that redraws; the test moves the frames with `timers.tick`). */
@@ -389,6 +391,7 @@ export function harness(options: HarnessOptions = {}) {
     now: () => options.now ?? MORNING,
     animateStartup: options.intro === true,
     permissionMode: options.permissionMode ?? "auto",
+    debug: options.debug === true,
   };
 
   return {

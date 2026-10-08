@@ -16,7 +16,9 @@ export class PawosApiError extends Error {
     message: string,
     readonly status: number | null = null,
     /** The server's own error code, when it sent one (e.g. "repository_not_selected"). */
-    readonly code: string | null = null
+    readonly code: string | null = null,
+    /** A finer class of failure the server may add for debugging (e.g. "model_http_429"). Never shown unless debug output is on. */
+    readonly detail: string | null = null
   ) {
     super(message);
   }
@@ -46,6 +48,16 @@ interface Answer {
 }
 
 function failure(status: number, data: Record<string, unknown>): PawosApiError {
+  return withDetail(classify(status, data), data);
+}
+
+/** Only a short lower-case identifier is accepted as a detail: nothing free-form from the wire. */
+function withDetail(error: PawosApiError, data: Record<string, unknown>): PawosApiError {
+  const detail = typeof data.detail === "string" && /^[a-z0-9_]{1,40}$/.test(data.detail) ? data.detail : null;
+  return detail ? new PawosApiError(error.kind, error.message, error.status, error.code, detail) : error;
+}
+
+function classify(status: number, data: Record<string, unknown>): PawosApiError {
   const code = typeof data.code === "string" ? data.code : null;
   const said = typeof data.message === "string" && data.message ? data.message : null;
   if (status === 401) return new PawosApiError("unauthenticated", "Your PawOS session has expired. Sign in again.", status, code);

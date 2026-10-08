@@ -235,6 +235,7 @@ authenticated API, with the same plan, credit and organization checks it applies
 | `PAWOS_ASCII` | Use plain ASCII marks instead of symbols. |
 | `NO_COLOR` | Turn colour off. |
 | `PAWOS_CONFIG_DIR` | Where the CLI keeps its small state files. |
+| `PAWOS_DEBUG` | After a failed message, also print the HTTP status, PawOS's error code and how long it took. Never prints a token or a reply. |
 
 ## Development
 

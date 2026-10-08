@@ -104,6 +104,23 @@ describe("generate", () => {
     for (const line of logged()) expect(line).not.toMatch(/test-model-key|hii|You are Paw/);
   });
 
+  it("says which kind of failure it was — a class only, for debugging", async () => {
+    answers = [new Error("timeout"), new Error("timeout")];
+    await expect(generate(request)).rejects.toMatchObject({ code: "model_unavailable", detail: "model_timeout" });
+    answers = [new Response("quota", { status: 429 }), new Response("quota", { status: 429 })];
+    await expect(generate(request)).rejects.toMatchObject({ detail: "model_http_429" });
+    answers = [new Error("timeout"), new Response("overloaded", { status: 503 })];
+    await expect(generate(request)).rejects.toMatchObject({ detail: "model_http_503" });
+    answers = [new Response("bad key", { status: 403 })];
+    await expect(generate(request)).rejects.toMatchObject({ detail: "model_http_403" });
+    answers = [ok("  ")];
+    await expect(generate(request)).rejects.toMatchObject({ detail: "model_empty_reply" });
+    // The provider's own words never travel with it.
+    answers = [new Response("API key AIza-secret is invalid", { status: 403 })];
+    const error = await generate(request).catch((caught: unknown) => caught as { message: string; detail: string });
+    expect(JSON.stringify({ message: error.message, detail: error.detail })).not.toMatch(/AIza|invalid|API key/);
+  });
+
   it("without a key it says chat isn't available, and calls nothing", async () => {
     delete process.env.GEMINI_API_KEY;
     await expect(generate(request)).rejects.toMatchObject({ code: "not_configured", status: 503 });
