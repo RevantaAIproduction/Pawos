@@ -76,7 +76,7 @@ export default async function RootLayout({
     "@type": "SoftwareApplication",
     name: "PawOS",
     applicationCategory: "DeveloperApplication",
-    operatingSystem: "Windows, macOS, Linux",
+    operatingSystem: "Windows",
     description:
       "PawOS is an AI companion that lives on your desktop, plans and executes real work, and helps you code, browse, deploy, and communicate.",
     offers: {
