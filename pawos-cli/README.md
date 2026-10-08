@@ -4,7 +4,7 @@ PawOS in your terminal: ask PawOS anything from any folder, and have it make cha
 connected GitHub project.
 
 ```bash
-npm install -g pawos
+npm install -g @revantaai/pawos
 ```
 
 ```bash

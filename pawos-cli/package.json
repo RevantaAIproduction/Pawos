@@ -1,5 +1,5 @@
 {
-  "name": "pawos",
+  "name": "@revantaai/pawos",
   "version": "0.1.0",
   "description": "PawOS in your terminal: run PawOS code tasks on your connected GitHub project.",
   "license": "UNLICENSED",
@@ -18,6 +18,9 @@
     "dist/pawos.js",
     "README.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=20"
   },
