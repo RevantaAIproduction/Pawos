@@ -172,8 +172,9 @@ describe("the browser is never launched automatically", () => {
     for (const file of sources) {
       const source = fs.readFileSync(path.join(__dirname, file), "utf8");
       expect(source).not.toMatch(/rundll32|xdg-open|FileProtocolHandler|openBrowser|PAWOS_NO_BROWSER/);
-      // Git is the only program the CLI ever runs.
-      if (source.includes("child_process")) expect(file.replace(/\\/g, "/")).toBe("git/localRepository.ts");
+      // The CLI starts programs in two places only: Git queries, and the local agent's command runner —
+      // which starts nothing that isn't on its short list of development tools (never a browser or a shell).
+      if (source.includes("child_process")) expect(["git/localRepository.ts", "local/process.ts"]).toContain(file.replace(/\\/g, "/"));
       // The CLI's own files make no network request of their own: every request goes through the shared client.
       expect(source).not.toMatch(/\bfetch\(/);
     }

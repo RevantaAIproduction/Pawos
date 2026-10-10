@@ -4,6 +4,7 @@ import * as path from "path";
 import { CliSessionStore, type Keyring } from "../auth/sessionStore";
 import type { CliContext } from "../context";
 import type { LocalRepository } from "../git/localRepository";
+import { openWorkspace } from "../local/workspace";
 import { INTERRUPT } from "./keys";
 import { PawosClient, SessionManager, runTask, sendChatMessage, type AccountOverview, type CodeChange, type CodeChangeStep, type FetchLike, type Integration, type RepositoryReadiness } from "../shared";
 import { PendingTaskStore } from "../state/pendingTask";
@@ -125,6 +126,8 @@ export class FakePawos {
   sends: Scripted[] = [];
   /** Answers to recoverOnly lookups, in order (the last repeats). */
   recoveries: Scripted[] = [];
+  /** Answers to POST /api/web/agent/turn (one turn of a local task), in order. */
+  agentTurns: Scripted[] = [];
   /** What GET /api/web/changes returns on each poll (the last repeats). */
   polls: (CodeChange | null)[] = [null];
   pollCount = 0;
@@ -156,6 +159,11 @@ export class FakePawos {
   /** Chat messages that were sent (no mode). */
   chats(): RecordedCall[] {
     return this.calls.filter((call) => call.path === "/api/web-chat/messages" && call.body?.recoverOnly !== true && call.body?.mode === undefined);
+  }
+
+  /** Turns of local tasks the CLI asked for. */
+  agentCalls(): RecordedCall[] {
+    return this.calls.filter((call) => call.path === "/api/web/agent/turn");
   }
 
   recovers(): RecordedCall[] {
@@ -238,6 +246,11 @@ export class FakePawos {
       if (value instanceof Error) throw value;
       return value.clone();
     }
+    if (route === "POST /api/web/agent/turn") {
+      const next = this.agentTurns.shift();
+      if (!next) throw new Error("The CLI started a local task the test did not expect.");
+      return play(next);
+    }
     if (call.method === "GET" && call.path.startsWith("/api/web/changes/")) {
       const current = this.polls[Math.min(this.pollCount, this.polls.length - 1)] ?? null;
       this.pollCount += 1;
@@ -248,6 +261,10 @@ export class FakePawos {
     return json(404, { ok: false, code: "not_found", message: "No such route." });
   };
 }
+
+/** One turn of a local task as PawOS answers it: a tool to run here, or the finished answer. */
+export const toolTurn = (id: string, name: string, args: Record<string, unknown> = {}, note: string | null = null) => json(200, { ok: true, turn: { kind: "tool", call: { id, name, args }, note }, turnsLeft: 10 });
+export const finishTurn = (summary: string) => json(200, { ok: true, turn: { kind: "finish", summary }, turnsLeft: 0 });
 
 export const reply = (body: Record<string, unknown>, status = 200) => json(status, { ok: status < 300, ...body });
 export const delivered = (requestId: string, changeView: CodeChange | null, text = "Done — I pushed the change.") => reply({ chatId: "chat-1", reply: text, recovered: false, requiresDesktop: false, change: changeView });
@@ -335,6 +352,10 @@ export interface HarnessOptions {
   debug?: boolean;
   /** How much PawOS asks before a code change (default here: auto, so a test's task is sent as typed). */
   permissionMode?: "ask" | "auto" | "plan";
+  /** A real folder to use as the project on this computer. Without one there is no local mode (as outside a Git repository). */
+  workspaceRoot?: string;
+  /** Where the CLI keeps its own files (default: a folder made for the test, outside the project). */
+  stateDirectory?: string;
   /** Play the startup animation (needs a terminal that redraws; the test moves the frames with `timers.tick`). */
   intro?: boolean;
 }
@@ -374,6 +395,8 @@ export function harness(options: HarnessOptions = {}) {
     client,
     pending: new PendingTaskStore(directory),
     detectProject: async () => ({ cwd, branch: inGit ? (options.branch === undefined ? "main" : options.branch) : null, repository: local }),
+    detectWorkspace: async () => (options.workspaceRoot ? openWorkspace(options.workspaceRoot) : null),
+    stateDirectory: options.stateDirectory ?? directory,
     // The real task runner, with time that only moves when it waits.
     run: (taskOptions) => runTask({ ...taskOptions, sleep: async (ms) => void (clock += ms), now: () => clock }),
     // The real chat sender, with the same clock.

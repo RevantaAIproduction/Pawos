@@ -395,7 +395,8 @@ describe("OAuth", () => {
   it("the CLI runs no OAuth of its own: no client id, no secret, no callback listener, no browser launch", () => {
     for (const { file, source } of sources()) {
       expect(source).not.toMatch(/oauth\/authorize|code_challenge=|createServer\(|\.listen\(|redirect_uri/i);
-      if (source.includes("child_process")) expect(file).toBe("git/localRepository.ts");
+      // Programs are started in two places only: Git queries, and the local agent's command runner.
+      if (source.includes("child_process")) expect(["git/localRepository.ts", "local/process.ts"]).toContain(file.replace(/\\/g, "/"));
     }
   });
 });

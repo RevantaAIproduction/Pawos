@@ -82,3 +82,45 @@ export async function detectProject(cwd: string, git: GitRunner = runGit): Promi
   const branch = head.ok ? head.stdout.trim() : "";
   return { cwd, branch: branch || null, repository };
 }
+
+/**
+ * Git for the local tools (local/tools.ts): read-only queries in the project, with a time limit, an
+ * output limit and a way to stop them. Like `runGit` it starts Git directly with an argument list —
+ * no shell, so nothing in a path or a file name is ever interpreted.
+ */
+const GIT_TIMEOUT_MS = 15_000;
+const GIT_OUTPUT_BYTES = 4_000_000;
+
+export type GitAnswer = { ok: true; stdout: string } | { ok: false; reason: string; /** The end of what Git said, when it said why. */ detail?: string };
+export type LocalGit = (args: string[], cwd: string, signal?: AbortSignal, timeoutMs?: number) => Promise<GitAnswer>;
+
+/** Settings that keep a Git query from running anything the repository's configuration names. */
+export const GIT_SAFE_CONFIG = ["-c", "core.fsmonitor=false", "-c", "core.pager=cat", "-c", "color.ui=false"];
+
+export const runLocalGit: LocalGit = (args, cwd, signal, timeoutMs = GIT_TIMEOUT_MS) =>
+  new Promise((resolve) => {
+    execFile(
+      "git",
+      [...GIT_SAFE_CONFIG, ...args],
+      {
+        cwd,
+        timeout: timeoutMs,
+        maxBuffer: GIT_OUTPUT_BYTES,
+        windowsHide: true,
+        encoding: "utf8",
+        signal,
+        // Paths are paths, never pathspec magic; no locks are taken; Git never stops to ask for anything.
+        env: { ...process.env, GIT_LITERAL_PATHSPECS: "1", GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0", GIT_PAGER: "cat" },
+      },
+      (error, stdout, stderr) => {
+        if (!error) return resolve({ ok: true, stdout });
+        const failure = error as NodeJS.ErrnoException & { killed?: boolean };
+        if (failure.code === "ENOENT") return resolve({ ok: false, reason: "Git isn't installed, or isn't on your PATH." });
+        if (failure.name === "AbortError" || signal?.aborted) return resolve({ ok: false, reason: "Stopped." });
+        if (failure.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") return resolve({ ok: false, reason: "Git's answer was too large to read." });
+        if (failure.killed) return resolve({ ok: false, reason: "Git took too long to answer." });
+        const said = `${String(stderr ?? "").trim()}`.slice(-1500);
+        resolve({ ok: false, reason: "Git couldn't answer that here.", ...(said ? { detail: said } : {}) });
+      }
+    );
+  });

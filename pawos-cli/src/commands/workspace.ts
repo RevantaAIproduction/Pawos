@@ -62,6 +62,81 @@ export async function askPermission(prompter: Prompter, repository: string, prin
   }
 }
 
+/**
+ * Asked before PawOS works in the project on this computer. It says what will happen: files are
+ * read here, and what PawOS reads is sent to PawOS to think about. Changes are asked about one by one.
+ */
+export async function askLocalPermission(prompter: Prompter, project: string, print: (lines: Line[]) => void): Promise<Permission> {
+  for (;;) {
+    print([
+      blank(),
+      line("  ", seg("PawOS will read files in ", "muted"), clean(project, 200), seg(" on this computer and send what it reads to PawOS.", "muted")),
+      line("  ", seg("It shows you each change to a file, each command and each Git operation before going ahead. Secrets such as .env files are never read.", "muted")),
+    ]);
+    const answer = await prompter.ask("  Allow? [y] allow  [n] deny  [a] always allow\n\n  > ");
+    if (answer === null) return "deny";
+    const text = answer.trim().toLowerCase();
+    if (text === "y" || text === "yes" || text === "allow") return "allow";
+    if (text === "a" || text === "always" || text === "always allow") return "always";
+    if (text === "" || text === "n" || text === "no" || text === "deny") return "deny";
+    print([line("  ", "Please answer y, n or a.")]);
+  }
+}
+
+export const WRITE_QUESTION = "  Allow this change? [y] allow  [n] deny  [a] always allow\n\n  > ";
+export const COMMAND_QUESTION = "  Allow this command? [y] allow  [n] deny\n\n  > ";
+
+/**
+ * Asked before a program is run on this computer, after the command and its folder have been
+ * shown. Only an explicit yes runs it. There is no "always": each command is its own question.
+ */
+export async function askCommandPermission(prompter: Prompter, print: (lines: Line[]) => void): Promise<"allow" | "deny"> {
+  for (;;) {
+    const answer = await prompter.ask(COMMAND_QUESTION);
+    if (answer === null) return "deny";
+    const text = answer.trim().toLowerCase();
+    if (text === "y" || text === "yes" || text === "allow") return "allow";
+    if (text === "" || text === "n" || text === "no" || text === "deny") return "deny";
+    print([line("  ", "Please answer y or n.")]);
+  }
+}
+
+/**
+ * Asked before a Git operation, after it has been shown. The question names the operation
+ * ("Allow this commit? [y] commit [n] cancel"). Only an explicit yes goes ahead; there is no "always".
+ */
+export async function askYesOrCancel(prompter: Prompter, question: string, print: (lines: Line[]) => void): Promise<"allow" | "deny"> {
+  const word = /\[y\] (\w+)/.exec(question)?.[1] ?? "yes";
+  for (;;) {
+    const answer = await prompter.ask(question);
+    if (answer === null) return "deny";
+    const text = answer.trim().toLowerCase();
+    if (text === "y" || text === "yes" || text === word) return "allow";
+    if (text === "" || text === "n" || text === "no" || text === "cancel" || text === "keep") return "deny";
+    print([line("  ", "Please answer y or n.")]);
+  }
+}
+
+export const UNDO_QUESTION = "  Undo these changes? [y] undo  [n] keep\n\n  > ";
+
+export const DELETE_QUESTION = "  Delete it? [y] delete  [n] keep\n\n  > ";
+
+/**
+ * Asked before one change to a file on this computer, after the change has been shown. Only an
+ * explicit yes makes it. A delete is asked about every time: it has no "always", in any mode.
+ */
+export async function askChangePermission(prompter: Prompter, kind: "write" | "delete", print: (lines: Line[]) => void): Promise<Permission> {
+  for (;;) {
+    const answer = await prompter.ask(kind === "delete" ? DELETE_QUESTION : WRITE_QUESTION);
+    if (answer === null) return "deny";
+    const text = answer.trim().toLowerCase();
+    if (text === "y" || text === "yes" || text === (kind === "delete" ? "delete" : "allow")) return "allow";
+    if (kind === "write" && (text === "a" || text === "always" || text === "always allow")) return "always";
+    if (text === "" || text === "n" || text === "no" || text === "deny" || text === "keep") return "deny";
+    print([line("  ", kind === "delete" ? "Please answer y or n." : "Please answer y, n or a.")]);
+  }
+}
+
 /** PawOS's own limit on an attached text file (WEB_POLICY.maxAttachmentBytes); the server enforces it too. */
 export const MAX_ATTACHMENT_BYTES = 60_000;
 

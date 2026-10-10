@@ -15,7 +15,14 @@ import { blank, clean, cleanLines, indent, line, seg, type Line } from "../ui/te
 import { connectService, showConnections } from "./connections";
 import { accountRows } from "./status";
 import { classifyIntent } from "../intent/intent";
-import { MODE_SUMMARY, askPermission, listPreviousWork, modeLines, openPreviousWork, parseMode, readAttachment, type PermissionMode } from "./workspace";
+import { runLocalTask, type LocalOutcome, type LocalStep } from "../local/agent";
+import type { Proposal } from "../local/changes";
+import { applyRestore, latestCheckpoint, planRestore } from "../local/checkpoint";
+import type { CommandPlan } from "../local/commands";
+import type { GitPlan } from "../local/gitChanges";
+import { describeCall } from "../local/tools";
+import type { Workspace } from "../local/workspace";
+import { MODE_SUMMARY, UNDO_QUESTION, askChangePermission, askCommandPermission, askLocalPermission, askPermission, askYesOrCancel, listPreviousWork, modeLines, openPreviousWork, parseMode, readAttachment, type PermissionMode } from "./workspace";
 
 /** PawOS Web's own limit on a message (WEB_POLICY.maxMessageChars); the server enforces it too. */
 export const MAX_TASK_CHARS = 4000;
@@ -147,6 +154,297 @@ export async function followTask(ctx: CliContext, task: PendingTask, resume: boo
   return result;
 }
 
+/** The steps of a local task as they happen: what PawOS has looked at, and what it is looking at now. */
+function localProgress(ctx: CliContext, steps: LocalStep[]): Line[] {
+  const { glyphs } = ctx.term;
+  // The last few only: a long task doesn't scroll the screen away.
+  return steps.slice(-6).map((step) => {
+    const text = clean(describeCall(step.call), 160);
+    if (!step.result) return line("    ", seg(glyphs.active, "accent"), " ", text);
+    if (step.result.denied) return line("    ", seg(glyphs.failed, "warn"), " ", seg(`${text} (not allowed)`, "muted"));
+    if (step.change) return line("    ", seg(glyphs.done, "good"), " ", text);
+    if (step.git) return line("    ", seg(glyphs.done, "good"), " ", clean(step.git.summary, 160));
+    if (step.command) return line("    ", seg(step.result.ok ? glyphs.done : glyphs.failed, step.result.ok ? "good" : "warn"), " ", clean(step.command.display, 160), seg(`  ${commandEnding(step.command)}`, "muted"));
+    return line("    ", seg(step.result.ok ? glyphs.done : glyphs.failed, step.result.ok ? "good" : "muted"), " ", seg(text, "muted"));
+  });
+}
+
+/** One change, as the user sees it before deciding: what, where, new or existing, and the change itself. */
+export function renderProposal(ctx: CliContext, proposal: Proposal): Line[] {
+  const { glyphs } = ctx.term;
+  return [
+    blank(),
+    line("  ", seg(proposal.operation, proposal.risk === "delete" ? "warn" : "strong"), "  ", clean(proposal.relative, 400)),
+    ...proposal.facts.map((fact) => line("  ", seg(clean(fact, 300), "muted"))),
+    // Already made safe to print and bounded, line by line (local/changes.ts): indentation is kept.
+    ...proposal.preview.map((entry) => line("    ", seg(`${entry.sign} ${entry.text}`, entry.sign === "+" ? "good" : entry.sign === "-" ? "bad" : "muted"))),
+    ...(proposal.previewCut ? [line("    ", seg(`${glyphs.ellipsis} (more not shown)`, "muted"))] : []),
+    blank(),
+  ];
+}
+
+/** How a command ended, in a few words. */
+const commandEnding = (command: NonNullable<LocalStep["command"]>): string => (command.cancelled ? "stopped" : command.timedOut ? "timed out" : command.exitCode === null ? "did not finish" : `exit code ${command.exitCode}`);
+
+/**
+ * A command, as the user sees it before deciding: exactly what will run, and where. The folder is
+ * this computer's own path — it is shown here and never sent anywhere. Nothing of the environment
+ * is shown.
+ */
+export function renderCommand(plan: CommandPlan): Line[] {
+  return [
+    blank(),
+    line("  ", seg("PawOS wants to run:", "strong")),
+    blank(),
+    line("    ", clean(plan.display, 2000)),
+    blank(),
+    line("  ", seg("Directory:", "muted")),
+    line("    ", clean(plan.cwd, 600)),
+    ...(plan.reason ? [blank(), line("  ", seg(`PawOS always asks before this: ${clean(plan.reason, 300)}`, "warn"))] : []),
+    blank(),
+  ];
+}
+
+/**
+ * A Git operation, as the user sees it before deciding: what PawOS wants to do, and exactly what it
+ * covers — the files, the message, the branch, the remote.
+ */
+export function renderGitPlan(plan: GitPlan): Line[] {
+  return [
+    blank(),
+    line("  ", seg(clean(plan.heading, 200), "strong")),
+    ...plan.sections.flatMap((section) => [
+      blank(),
+      line("  ", seg(`${clean(section.label, 60)}:`, "muted")),
+      ...section.lines.map((text) => line("    ", clean(text, 400))),
+      ...(section.more ? [line("    ", seg(`and ${section.more} more`, "muted"))] : []),
+    ]),
+    blank(),
+  ];
+}
+
+/**
+ * The account of one local task, the same however it ended: the files created, modified and
+ * deleted; the commands, tests and builds that were run and how each ended; what was done in Git —
+ * a commit if one was made, a push if one was approved; the last test and build result; and
+ * whether the file changes can be taken back. Nothing is claimed that a step's result didn't show.
+ */
+export function localAccount(project: string, steps: LocalStep[]): { account: Line[]; changes: NonNullable<LocalStep["change"]>[]; ran: NonNullable<LocalStep["command"]>[]; git: NonNullable<LocalStep["git"]>[] } {
+  const looked = steps.filter((step) => step.result?.ok && !step.change && !step.command && !step.git).length;
+  const changes = steps.flatMap((step) => (step.change ? [step.change] : []));
+  const ran = steps.flatMap((step) => (step.command ? [step.command] : []));
+  const git = steps.flatMap((step) => (step.git ? [step.git] : []));
+  const count = (...operations: string[]) => changes.filter((change) => operations.includes(change.operation)).length;
+  const committed = git.some((entry) => entry.tool === "git_commit");
+  const pushed = git.some((entry) => entry.tool === "git_push");
+  const lastOf = (tool: string) => ran.filter((command) => command.tool === tool).at(-1);
+  const verdict = (label: string, command: NonNullable<LocalStep["command"]> | undefined): Line[] =>
+    command ? [line("  ", seg(`${label}: `, "muted"), seg(command.exitCode === 0 ? "passed" : `FAILED (${commandEnding(command)})`, command.exitCode === 0 ? "good" : "bad"), seg(`  the last run of ${clean(command.display, 120)}`, "muted"))] : [];
+
+  const account: Line[] = [];
+  if (changes.length > 0) {
+    account.push(
+      line("  ", seg(`PawOS made ${changes.length === 1 ? "1 change" : `${changes.length} changes`} in ${clean(project, 120)}:`, "muted")),
+      ...changes.slice(0, 12).map((change) => line("    ", seg(`${change.operation}  `, "muted"), clean(change.relative, 300))),
+      ...(changes.length > 12 ? [line("    ", seg(`and ${changes.length - 12} more`, "muted"))] : []),
+      line("  ", seg(`Created ${count("Create file")}, modified ${count("Edit file", "Replace file")}, deleted ${count("Delete file", "Delete folder")}.`, "muted")),
+      line(
+        "  ",
+        seg(
+          pushed
+            ? "What was pushed is listed under Git below."
+            : committed
+              ? "They are committed on this computer only. Nothing was pushed."
+              : git.length > 0
+                ? "They are on this computer only. Nothing was committed or pushed."
+                : ran.length > 0
+                  ? "The changes are on this computer only. PawOS did not commit or push them."
+                  : "They are on this computer only. Nothing was tested, committed or pushed.",
+          "muted"
+        )
+      )
+    );
+  } else account.push(line("  ", seg(`PawOS looked ${looked === 1 ? "once" : `${looked} times`} in ${clean(project, 120)}. Nothing was changed.`, "muted")));
+
+  if (ran.length > 0) {
+    account.push(
+      line("  ", seg(`PawOS ran ${ran.length === 1 ? "1 command" : `${ran.length} commands`} on this computer:`, "muted")),
+      ...ran.slice(0, 12).map((command) => line("    ", clean(command.display, 300), seg(`  ${commandEnding(command)}`, command.exitCode === 0 ? "muted" : "warn"))),
+      ...(ran.length > 12 ? [line("    ", seg(`and ${ran.length - 12} more`, "muted"))] : []),
+      ...verdict("Tests", lastOf("run_tests")),
+      ...verdict("Build", lastOf("build"))
+    );
+  }
+  if (git.length > 0) account.push(line("  ", seg("Git:", "muted")), ...git.slice(0, 12).map((entry) => line("    ", clean(entry.summary, 300))), ...(pushed ? [] : [line("    ", seg("Nothing was pushed.", "muted"))]));
+  if (changes.length > 0) {
+    account.push(
+      changes.every((change) => change.recoverable)
+        ? line("  ", seg("/undo puts these files back as they were before this task. It does not undo commands or commits.", "muted"))
+        : line("  ", seg("No recovery copy could be kept for this task, so /undo is not available for it.", "warn"))
+    );
+  }
+  return { account, changes, ran, git };
+}
+
+/**
+ * /undo: takes back the file changes of the most recent PawOS task in this project. It shows what
+ * it would do first, file by file, and always asks. A file the user has changed since is left
+ * alone and said to be.
+ */
+async function undoLastTask(ctx: CliContext, workspace: Workspace | null): Promise<void> {
+  const { term } = ctx;
+  if (!workspace) {
+    term.print([blank(), line("  ", seg("/undo works inside a project, where PawOS has changed files on this computer.", "muted")), blank()]);
+    return;
+  }
+  const forbidden = ctx.stateDirectory ? [ctx.stateDirectory] : [];
+  const found = latestCheckpoint(ctx.stateDirectory, workspace);
+  if (!found) {
+    term.print([blank(), line("  ", seg("There is nothing to undo here: no PawOS task has file changes left to take back.", "muted")), blank()]);
+    return;
+  }
+  const plan = planRestore(found, workspace, forbidden);
+  if (plan.refused) {
+    term.print([blank(), line("  ", seg(clean(plan.refused), "warn")), blank()]);
+    return;
+  }
+  const wording = { restore: "Restore", remove: "Remove (PawOS created it)", recreate: "Bring back", unchanged: "", conflict: "Leave alone", refused: "Leave alone" } as const;
+  const doing = plan.items.filter((item) => item.action === "restore" || item.action === "remove" || item.action === "recreate");
+  const leaving = plan.items.filter((item) => item.action === "conflict" || item.action === "refused");
+  term.print([
+    blank(),
+    line("  ", seg("PawOS can undo the file changes from this task:", "strong")),
+    line("    ", clean(found.manifest.goal, 200) || "(no description)"),
+    blank(),
+    ...doing.slice(0, 30).map((item) => line("    ", seg(`${wording[item.action]}  `, "muted"), clean(item.relative, 300))),
+    ...(doing.length > 30 ? [line("    ", seg(`and ${doing.length - 30} more`, "muted"))] : []),
+    ...leaving.slice(0, 30).map((item) => line("    ", seg("Leave alone  ", "warn"), clean(item.relative, 300), seg(`  ${clean(item.why, 200)}`, "muted"))),
+    blank(),
+  ]);
+  if (doing.length === 0) {
+    term.print([line("  ", seg("Nothing can be undone: every file has changed since, or is already as it was.", "muted")), blank()]);
+    return;
+  }
+  if ((await askYesOrCancel(ctx.prompter, UNDO_QUESTION, (lines) => term.print(lines))) !== "allow") {
+    term.print([blank(), line("  ", seg("Kept. Nothing was changed.", "muted")), blank()]);
+    return;
+  }
+  // Checked again, file by file, at the moment each is touched.
+  const outcome = applyRestore(found, workspace, forbidden);
+  term.print([
+    blank(),
+    line("  ", seg(term.glyphs.done, "good"), ` Put back ${outcome.restored.length === 1 ? "1 file" : `${outcome.restored.length} files`}.`),
+    ...outcome.skipped.slice(0, 30).map((item) => line("    ", seg("Left alone  ", "warn"), clean(item.relative, 300), seg(`  ${clean(item.why, 200)}`, "muted"))),
+    line("  ", seg("Commands that were run and commits that were made are not undone.", "muted")),
+    blank(),
+  ]);
+}
+
+/** What this session has been told about changes to files and running commands. */
+interface WriteConsent {
+  /** Writes and edits go ahead without a question (auto mode, or "always allow"). Deletes never do. */
+  writes: boolean;
+  /** Routine development commands run without a question (auto mode only). Anything else is still asked about. */
+  commands: boolean;
+  /** Staging, committing, branching and switching go ahead without a question (auto mode only). A push never does. */
+  git: boolean;
+}
+
+/**
+ * Runs one task in the project on this computer and shows it as it goes. PawOS decides each step;
+ * the CLI runs it here. Reading needs no question. A change to a file is shown first and made only
+ * on the user's yes; a delete is asked about every time, whatever the mode. Ctrl+C stops the task
+ * at once — there is nothing left running anywhere, because the work was happening here.
+ */
+async function followLocalTask(ctx: CliContext, workspace: Workspace, branch: string | null, goal: string, consent: WriteConsent): Promise<LocalOutcome> {
+  const { term } = ctx;
+  let live = new LiveStatus(term, ctx.timers);
+  const stop = new AbortController();
+  const stopListening = ctx.onInterrupt(() => stop.abort());
+  term.print([blank()]);
+  live.start(`PawOS is looking at ${clean(workspace.name, 120)}${term.glyphs.ellipsis}`);
+  try {
+    return await runLocalTask({
+      client: ctx.client,
+      workspace,
+      branch,
+      taskId: newRequestId(),
+      goal,
+      signal: stop.signal,
+      forbidden: ctx.stateDirectory ? [ctx.stateDirectory] : [],
+      stateDirectory: ctx.stateDirectory,
+      approveGit: async (plan) => {
+        live.stop();
+        term.print(renderGitPlan(plan));
+        let allowed: boolean;
+        // A push is always asked about. The rest go ahead unasked only in auto mode.
+        if (plan.level === "auto" && consent.git) {
+          term.print([line("  ", seg("Allowed: auto mode makes local Git changes without asking. A push is always asked about.", "muted")), blank()]);
+          allowed = true;
+        } else {
+          const answer = await askYesOrCancel(ctx.prompter, plan.question, (lines) => term.print(lines));
+          if (answer === "deny" && ctx.prompter.interrupted) stop.abort();
+          allowed = answer === "allow";
+          term.print([blank(), line("  ", seg(allowed ? "Allowed." : "Cancelled. Git was not changed.", "muted")), blank()]);
+        }
+        live = new LiveStatus(term, ctx.timers);
+        if (!stop.signal.aborted) live.start(`PawOS is ${allowed ? "working" : "thinking"}${term.glyphs.ellipsis}`);
+        return allowed ? "allow" : "deny";
+      },
+      approveCommand: async (plan) => {
+        live.stop();
+        term.print(renderCommand(plan));
+        let allowed: boolean;
+        // Only a routine development command, and only in auto mode, goes ahead without the question.
+        if (plan.level === "auto" && consent.commands) {
+          term.print([line("  ", seg("Allowed: auto mode runs routine development commands without asking.", "muted")), blank()]);
+          allowed = true;
+        } else {
+          const answer = await askCommandPermission(ctx.prompter, (lines) => term.print(lines));
+          if (answer === "deny" && ctx.prompter.interrupted) stop.abort();
+          allowed = answer === "allow";
+          term.print([blank(), line("  ", seg(allowed ? "Allowed." : "Denied. Nothing was run.", "muted")), blank()]);
+        }
+        live = new LiveStatus(term, ctx.timers);
+        if (!stop.signal.aborted) live.start(allowed ? `Running ${clean(plan.display, 120)}${term.glyphs.ellipsis} Ctrl+C stops it.` : `PawOS is thinking${term.glyphs.ellipsis}`);
+        return allowed ? "allow" : "deny";
+      },
+      approve: async (proposal) => {
+        // The progress display gives way to the change and the question, then comes back.
+        live.stop();
+        term.print(renderProposal(ctx, proposal));
+        let allowed: boolean;
+        if (proposal.risk === "write" && consent.writes) {
+          term.print([line("  ", seg("Allowed: you told PawOS not to ask before changing files in this session.", "muted")), blank()]);
+          allowed = true;
+        } else {
+          const answer = await askChangePermission(ctx.prompter, proposal.risk, (lines) => term.print(lines));
+          // Ctrl+C at the question is a no, and it stops the task.
+          if (answer === "deny" && ctx.prompter.interrupted) stop.abort();
+          if (answer === "always") {
+            consent.writes = true;
+            term.print([blank(), line("  ", seg("PawOS won't ask before changing files again in this session. It still asks before deleting. /mode ask turns it back on.", "muted"))]);
+          }
+          allowed = answer !== "deny";
+          term.print([blank(), line("  ", seg(allowed ? "Allowed." : proposal.risk === "delete" ? "Kept. Nothing was deleted." : "Denied. Nothing was changed.", "muted")), blank()]);
+        }
+        live = new LiveStatus(term, ctx.timers);
+        if (!stop.signal.aborted) live.start(`PawOS is thinking${term.glyphs.ellipsis}`);
+        return allowed ? "allow" : "deny";
+      },
+      onStep: (steps) => {
+        const current = steps.at(-1);
+        live.update(localProgress(ctx, steps), current && !current.result ? `${clean(describeCall(current.call), 160)}${term.glyphs.ellipsis}` : `PawOS is thinking${term.glyphs.ellipsis}`);
+      },
+    });
+  } catch (error) {
+    return { status: "failed", error, steps: [] };
+  } finally {
+    stopListening();
+    live.stop(); // finished, refused or stopped: the animation never outlives the task
+  }
+}
+
 /** One line for debug output: the endpoint, the HTTP status, PawOS's error code and failure class, and how long it took. */
 export function debugLine(error: unknown, elapsedMs: number): Line {
   const api = error instanceof PawosApiError ? error : null;
@@ -249,12 +547,14 @@ async function resolveCodeMode(ctx: CliContext, project: ProjectContext, account
 }
 
 export const COMMAND_HELP: [string, string][] = [
-  ["/code [request]", "Make changes in this project's GitHub repository"],
+  ["/code [request]", "Work on this project (on this computer when you are inside one)"],
+  ["/remote <request>", "Make a change in this project's GitHub repository"],
   ["/chat", "Talk to PawOS without changing anything"],
   ["/connections", "Show your connected services"],
   ["/connect <name>", "Connect a service to your PawOS account"],
   ["/mode [name]", "Ask before code changes, don't ask, or plan only"],
   ["/resume [number]", "Open earlier PawOS work and carry on with it"],
+  ["/undo", "Put back the files PawOS changed in its last task here"],
   ["/attach <file>", "Send a text file with your next message"],
   ["/status", "Show your account, plan and usage"],
   ["/help", "Show these commands"],
@@ -311,12 +611,20 @@ export async function interactive(ctx: CliContext, options: { signIn?: boolean }
   }
   const planLabel = account.capabilities.plan?.label ?? null;
 
-  // Code mode is extra, for a GitHub project. PawOS itself starts everywhere.
-  let code = await resolveCodeMode(ctx, project, account);
-  let mode: "code" | "chat" = "repository" in code ? "code" : "chat";
+  // Inside a project PawOS works on this computer: that is the default, and it is never swapped
+  // for GitHub behind the user's back. GitHub is asked about only when the user asks for it
+  // (/remote), so starting here asks nothing about repositories.
+  const workspace = (await ctx.detectWorkspace?.()) ?? null;
+  // Code mode on GitHub is extra, for a GitHub project. PawOS itself starts everywhere.
+  let code: CodeMode = workspace ? { unavailable: [] } : await resolveCodeMode(ctx, project, account);
+  let mode: "local" | "code" | "chat" = workspace ? "local" : "repository" in code ? "code" : "chat";
   let chatId: string | null = null;
   // Before a code change PawOS asks, unless the user has said not to. It is this session's setting only.
   let permission: PermissionMode = ctx.permissionMode ?? "ask";
+  // "Always allow" given to one question covers that question only: starting a local task (reading)
+  // and changing files are separate, and neither ever covers deleting.
+  let localStartAllowed = false;
+  const consent: WriteConsent = { writes: false, commands: false, git: false };
   let attachment: ChatAttachment | null = null;
   let earlierWork: RecentChat[] = [];
 
@@ -342,8 +650,16 @@ export async function interactive(ctx: CliContext, options: { signIn?: boolean }
   for (;;) {
     // Ctrl+C while PawOS was starting: nothing was lost, so just ask.
     if (ctx.takeInterrupt?.() && (await leaving())) break;
-    const hint: Line[] =
-      mode === "code" && "repository" in code
+    const hint: Line[] = workspace
+      ? mode === "local"
+        ? [
+            line("  ", seg(`Local mode: PawOS works in ${clean(workspace.name, 120)} on this computer. It asks before changing a file or running a command.`, "muted")),
+            line("  ", seg("/undo puts back the files it changed in its last task.", "muted")),
+            line("  ", seg("/remote <request> changes the GitHub repository instead. /chat to just talk.", "muted")),
+            blank(),
+          ]
+        : [line("  ", seg(`Chat. /code to work in ${clean(workspace.name, 120)} on this computer.`, "muted")), blank()]
+      : mode === "code" && "repository" in code
         ? [line("  ", seg(`Code mode: changes go to ${clean(code.repository, 200)} on GitHub. /chat to just talk.`, "muted")), blank()]
         : "repository" in code
           ? [line("  ", seg(`Chat. /code to make changes in ${clean(code.repository, 200)}.`, "muted")), blank()]
@@ -358,10 +674,33 @@ export async function interactive(ctx: CliContext, options: { signIn?: boolean }
     let content = answer.trim();
     if (!content) continue;
 
+    // "/remote <request>": this one change is made in the GitHub repository, by PawOS's servers —
+    // the way every code change worked before local mode. Only ever on the user's say-so.
+    let remote = false;
+    const remoteRequest = /^\/remote(?:\s+([\s\S]*))?$/i.exec(content);
+    if (remoteRequest) {
+      const wanted = (remoteRequest[1] ?? "").trim();
+      if (!wanted) {
+        term.print([blank(), line("  ", seg("Say what to change: /remote <request>. PawOS makes the change in the GitHub repository and pushes it.", "muted")), blank()]);
+        continue;
+      }
+      if (!("repository" in code)) code = await resolveCodeMode(ctx, project, account);
+      if (!("repository" in code)) {
+        term.print([blank(), line("  ", seg("Changes on GitHub aren't available here.", "warn")), ...code.unavailable.map(note), blank()]);
+        continue;
+      }
+      content = wanted;
+      remote = true;
+    }
+
     // "/code <request>": this one is a code change, whatever its wording — the user said so.
     let saidCode = false;
-    const requested = /^\/code\s+(\S[\s\S]*)$/i.exec(content);
-    if (requested) {
+    const requested = remote ? null : /^\/code\s+(\S[\s\S]*)$/i.exec(content);
+    if (requested && workspace) {
+      mode = "local";
+      content = requested[1]!.trim();
+      saidCode = true;
+    } else if (requested) {
       if (!("repository" in code)) code = await resolveCodeMode(ctx, project, account);
       if (!("repository" in code)) {
         term.print([blank(), line("  ", seg("Code changes aren't available here.", "warn")), ...code.unavailable.map(note), note("You can still ask PawOS anything."), blank()]);
@@ -389,6 +728,11 @@ export async function interactive(ctx: CliContext, options: { signIn?: boolean }
           term.print([blank()]);
           break;
         case "code":
+          if (workspace) {
+            mode = "local";
+            term.print([blank()]);
+            break;
+          }
           if (!("repository" in code)) code = await resolveCodeMode(ctx, project, account);
           if ("repository" in code) mode = "code";
           else term.print([blank(), line("  ", seg("Code changes aren't available here.", "warn")), ...code.unavailable.map(note), note("You can still ask PawOS anything."), blank()]);
@@ -414,6 +758,11 @@ export async function interactive(ctx: CliContext, options: { signIn?: boolean }
             break;
           }
           permission = chosen.mode;
+          // Choosing a mode starts from that mode: earlier "always allow" answers no longer apply.
+          localStartAllowed = false;
+          consent.writes = false;
+          consent.commands = false;
+          consent.git = false;
           term.print([
             blank(),
             line("  ", seg("Mode: ", "muted"), seg(permission, "strong"), seg(`  ${MODE_SUMMARY[permission]}`, "muted")),
@@ -460,6 +809,9 @@ export async function interactive(ctx: CliContext, options: { signIn?: boolean }
           ]);
           break;
         }
+        case "undo":
+          await undoLastTask(ctx, workspace);
+          break;
         case "status":
           try {
             term.print([blank(), line("  ", seg("PawOS Account", "strong")), blank(), ...(await accountRows(ctx, project)), blank()]);
@@ -484,11 +836,54 @@ export async function interactive(ctx: CliContext, options: { signIn?: boolean }
     // what this message is: a real task (an instruction to change the project) or conversation. Only a
     // real task goes on; a greeting, a question or a request to explain is answered as chat and never
     // reaches the repository. `/code <request>` is the user saying it is a task.
-    const decision = saidCode ? ({ intent: "task", reason: "directive" } as const) : classifyIntent(content);
-    if (ctx.debug && mode === "code" && "repository" in code) term.print([line("  ", seg(`debug: intent=${decision.intent} reason=${decision.reason}`, "muted"))]);
-    const codeTurn = mode === "code" && "repository" in code && decision.intent === "task";
-    const talking = mode === "code" && "repository" in code && !codeTurn;
-    const planOnly = codeTurn && permission === "plan";
+    const decision = saidCode || remote ? ({ intent: "task", reason: "directive" } as const) : classifyIntent(content);
+    const working = remote || mode === "local" || (mode === "code" && "repository" in code);
+    if (ctx.debug && working) term.print([line("  ", seg(`debug: intent=${decision.intent} reason=${decision.reason}${remote ? " target=remote" : mode === "local" ? " target=local" : ""}`, "muted"))]);
+    // Where a task goes is fixed by the mode the user can see, or by /remote: never chosen for them.
+    const localTurn = !remote && mode === "local" && workspace !== null && decision.intent === "task";
+    const codeTurn = (remote || mode === "code") && "repository" in code && decision.intent === "task";
+    const talking = working && !codeTurn && !localTurn;
+    const planOnly = (codeTurn || localTurn) && permission === "plan";
+    if (localTurn && workspace && permission === "ask" && !localStartAllowed) {
+      const allowed = await askLocalPermission(ctx.prompter, workspace.name, (lines) => term.print(lines));
+      if (allowed === "deny") {
+        term.print([blank(), line("  ", seg("Not started. Nothing was read or sent.", "muted")), blank()]);
+        continue;
+      }
+      if (allowed === "always") {
+        // This covers starting a task and reading. Changing a file is still asked about, each time.
+        localStartAllowed = true;
+        term.print([blank(), line("  ", seg("PawOS won't ask before starting again in this session. It still asks before changing files. /mode ask turns it back on.", "muted"))]);
+      }
+    }
+    if (localTurn && workspace && !planOnly) {
+      // Auto mode is the user saying "don't ask before code changes": it covers writes and edits. Never deletes.
+      if (permission === "auto") consent.writes = true;
+      // Commands follow the mode itself, never an earlier "always allow": ask mode asks before every one.
+      consent.commands = permission === "auto";
+      consent.git = permission === "auto";
+      const outcome = await followLocalTask(ctx, workspace, project.branch, content, consent);
+      // What was done here, said exactly — the same account however the task ended.
+      const { account, changes, ran, git } = localAccount(workspace.name, outcome.steps);
+      if (outcome.status === "finished") {
+        const summary = cleanLines(outcome.summary, 400);
+        term.print([...(term.caps.interactive ? [] : [blank()]), line("  ", seg("PawOS:", "muted")), ...(summary.length > 0 ? summary : ["(PawOS finished without an answer.)"]).map((text) => (text === "" ? blank() : line("  ", text))), blank(), ...account, blank()]);
+      } else if (outcome.status === "cancelled") {
+        term.print([...(term.caps.interactive ? [] : [blank()]), line("  ", seg("Stopped.", "strong"), " Nothing is still running."), ...account, blank()]);
+        if (await leaving()) return 130;
+      } else if (outcome.status === "stopped") {
+        term.print([...(term.caps.interactive ? [] : [blank()]), line("  ", seg(clean(outcome.reason), "warn")), ...account, blank()]);
+      } else {
+        unauthenticated = outcome.error instanceof PawosApiError && outcome.error.kind === "unauthenticated";
+        // PawOS said no (the plan, usage, or it could not answer). Said as it is — the task is not sent to GitHub instead.
+        term.print([...(term.caps.interactive ? [] : [blank()]), ...(unauthenticated ? [line("  ", seg(SESSION_EXPIRED_NOTICE, "warn"))] : renderRefusal(outcome.error, planLabel, baseUrl(ctx))), ...(changes.length > 0 || ran.length > 0 || git.length > 0 ? account : []), blank()]);
+      }
+      if (unauthenticated) {
+        if (!(await browserLogin(ctx))) return 1;
+        term.print([blank()]);
+      }
+      continue;
+    }
     if (codeTurn && "repository" in code && permission === "ask") {
       const decision = await askPermission(ctx.prompter, code.repository, (lines) => term.print(lines));
       if (decision === "deny") {
@@ -526,6 +921,7 @@ export async function interactive(ctx: CliContext, options: { signIn?: boolean }
         // PawOS said this needs its desktop app: it was not done here, and the CLI doesn't pretend otherwise.
         if (asked.result.requiresDesktop) term.print([line("  ", seg("PawOS says this needs the PawOS desktop app. Nothing was done from here.", "muted")), blank()]);
         // Said in Code mode but answered as conversation: say so, and how to ask for a change instead.
+        else if (talking && mode === "local") term.print([line("  ", seg("Answered as chat; nothing in the project was read or changed. To have PawOS work on it, say what to do or start with /code.", "muted")), blank()]);
         else if (talking) term.print([line("  ", seg("Answered as chat; nothing was changed. To change code, say what to change or start with /code.", "muted")), blank()]);
       } else {
         unauthenticated = asked.error instanceof PawosApiError && asked.error.kind === "unauthenticated";

@@ -28,6 +28,7 @@ export type WebCapabilityId =
   | "web.mcpRead"
   | "web.continueInDesktop"
   | "web.codeChanges"
+  | "web.localAgent"
   | "web.remoteWork"
   | "web.autonomousWork"
   | "web.browserWork";
@@ -117,6 +118,13 @@ export const WEB_CAPABILITY_RULES: readonly WebCapabilityRule[] = [
     description: "Change code in a connected GitHub repository and push it. Paw Go: small frontend changes; paid plans: frontend and backend.",
     availability: "available",
     tiers: ALL_TIERS,
+  },
+  {
+    id: "web.localAgent",
+    label: "Local project work",
+    description: "Work on a project on your own computer through the PawOS CLI. The same plans that include working on files in PawOS Desktop.",
+    availability: "available",
+    tiers: PAID_TIERS,
   },
   { id: "web.remoteWork", label: "Remote work sessions", description: "Run work in an isolated remote workspace.", availability: "future", tiers: [] },
   { id: "web.autonomousWork", label: "Autonomous Work", description: "Resolve tickets end to end from the web.", availability: "future", tiers: [] },

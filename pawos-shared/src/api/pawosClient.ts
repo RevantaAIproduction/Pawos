@@ -1,5 +1,6 @@
 import { AuthRequiredError, type FetchLike } from "../auth/types";
 import type { AccountOverview, Capabilities, CodeChange, ConnectStart, Integration, RepositoryReadiness, SendResult, RecentChat, ChatAttachment, ChatMessage } from "./types";
+import { parseTurn, type AgentTurnRequest, type AgentTurnResponse } from "../agent/protocol";
 
 /**
  * A PawOS client's only door to PawOS: the existing PawOS Web API, called as the signed-in account
@@ -41,6 +42,8 @@ const SEND_TIMEOUT_MS = 330_000;
  * longer than that for the answer only leaves the user looking at a spinner.
  */
 export const CHAT_TIMEOUT_MS = 90_000;
+/** One turn is one model call, which PawOS gives up on within a minute. */
+export const AGENT_TURN_TIMEOUT_MS = 90_000;
 
 interface Answer {
   status: number;
@@ -209,6 +212,20 @@ export class PawosClient {
   }
 
   /** GET /api/web/changes/<request id> — the change's live progress, or null when PawOS has no record of it yet. */
+  /**
+   * POST /api/web/agent/turn — one turn of a task done on this computer. The service answers with
+   * ONE tool from the fixed list for the client to run, or with the finished answer. The answer is
+   * held to the contract here: a tool that is not on the list is never handed on.
+   */
+  async agentTurn(body: AgentTurnRequest): Promise<AgentTurnResponse> {
+    const answer = await this.request("POST", "/api/web/agent/turn", body, AGENT_TURN_TIMEOUT_MS);
+    if (answer.status < 200 || answer.status >= 300 || answer.data.ok !== true) throw failure(answer.status, answer.data);
+    const turn = parseTurn(answer.data.turn);
+    if (!turn) throw new PawosApiError("server", "PawOS asked for a step this version can't run. Update the PawOS CLI and try again.", answer.status, "unreadable_step");
+    const turnsLeft = typeof answer.data.turnsLeft === "number" && Number.isFinite(answer.data.turnsLeft) ? Math.max(0, Math.floor(answer.data.turnsLeft)) : 0;
+    return { turn, turnsLeft };
+  }
+
   async getChange(requestId: string): Promise<CodeChange | null> {
     const answer = await this.request("GET", `/api/web/changes/${encodeURIComponent(requestId)}`);
     if (answer.status === 404) return null;

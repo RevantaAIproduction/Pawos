@@ -3,6 +3,7 @@ import { runCli } from "./cli";
 import { VERSION, apiConfig, configDirectory } from "./config";
 import type { CliContext } from "./context";
 import { detectProject } from "./git/localRepository";
+import { detectWorkspace } from "./local/workspace";
 import { DEFAULT_API_BASE_URL, PawosClient, SessionManager, runTask } from "./shared";
 import { PendingTaskStore } from "./state/pendingTask";
 import { createPrompter } from "./ui/prompts";
@@ -55,6 +56,8 @@ function createContext(): CliContext {
     pending: new PendingTaskStore(directory),
     // Wherever the user ran `pawos` — not where the package is installed.
     detectProject: () => detectProject(process.cwd()),
+    detectWorkspace: () => detectWorkspace(process.cwd()),
+    stateDirectory: directory,
     run: runTask,
     ...interrupts(),
     debug: Boolean(env.PAWOS_DEBUG),

@@ -1,5 +1,6 @@
 import type { CliSessionStore } from "./auth/sessionStore";
 import type { ProjectContext } from "./git/localRepository";
+import type { Workspace } from "./local/workspace";
 import type { ApiConfig, ChatOptions, PawosClient, SendResult, SessionManager, TaskOptions, TaskOutcome } from "./shared";
 import type { PendingTaskStore } from "./state/pendingTask";
 import type { Prompter } from "./ui/prompts";
@@ -18,10 +19,17 @@ export interface CliContext {
   config: ApiConfig;
   session: SessionManager;
   store: CliSessionStore;
-  client: Pick<PawosClient, "getCapabilities" | "getRepositoryReadiness" | "selectRepository" | "sendCodeChange" | "sendChat" | "recoverSend" | "getChange" | "getOverview" | "listIntegrations" | "startConnect" | "listChats" | "getChat">;
+  client: Pick<PawosClient, "getCapabilities" | "getRepositoryReadiness" | "selectRepository" | "sendCodeChange" | "sendChat" | "recoverSend" | "getChange" | "getOverview" | "listIntegrations" | "startConnect" | "listChats" | "getChat" | "agentTurn">;
   pending: PendingTaskStore;
   /** The folder the CLI was started in, its Git branch and its GitHub repository — read, never assumed. */
   detectProject: () => Promise<ProjectContext>;
+  /**
+   * The project on this computer PawOS may read: the Git work tree the CLI was started in, or null
+   * when it wasn't started inside one. Without it there is no local mode.
+   */
+  detectWorkspace?: () => Promise<Workspace | null>;
+  /** Where the CLI keeps its own files. The local agent never changes or deletes anything there. */
+  stateDirectory?: string;
   /** Sends one chat message and waits for the reply (the shared chat sender). Tests replace its timing only. */
   chat?: (options: ChatOptions) => Promise<SendResult>;
   /** Follows one task to its result (the shared task runner). */
