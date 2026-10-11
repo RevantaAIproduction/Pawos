@@ -95,7 +95,7 @@ export class GitHubPagesConnector implements HostingConnector {
       if (!step.ok) return { ok: false, reason: `git add failed: ${step.message}` };
 
       step = await runGit(
-        ['-c', 'user.email=paw@pawos.app', '-c', 'user.name=PawOS', 'commit', '-q', '-m', `Deploy ${new Date().toISOString()}`],
+        ['-c', 'user.email=pawos@revantaai.com', '-c', 'user.name=PawOS', 'commit', '-q', '-m', `Deploy ${new Date().toISOString()}`],
         tmpDir,
         token
       );

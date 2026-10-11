@@ -1,9 +1,12 @@
 /**
  * Mobile Authentication IPC Handlers
  * Runs in Electron main process. Handles:
- * 1. Web authorization URL generation
- * 2. Security Key generation (calls backend RPC)
- * 3. Security Key verification (calls backend RPC)
+ * 1. Security Key generation (calls backend RPC)
+ * 2. Security Key verification (calls backend RPC)
+ *
+ * There is no separate "web authorization" link. The phone authorizes on PawOS's website by
+ * opening the pairing link in the QR code (PairingService.ts -> /pair/<session>), which requires
+ * sign-in to the same account and an explicit confirmation there.
  *
  * Security model:
  * - Main process is auth authority, not renderer
@@ -14,7 +17,6 @@
 
 import { ipcMain } from 'electron';
 import { createClient } from '@supabase/supabase-js';
-import { deviceIdentityStore } from '../../device/DeviceIdentityStore';
 import type { SecurityKeyChallenge, SecurityKeyVerificationResult } from '../../../shared/mobilePresence/MobileAuthTypes';
 
 function getSupabaseClient() {
@@ -24,20 +26,6 @@ function getSupabaseClient() {
     throw new Error('Supabase not configured');
   }
   return createClient(url, anonKey);
-}
-
-/**
- * mobileAuth:getWebAuthorizationUrl
- * Returns the URL for web-based account authorization before pairing.
- * URL includes session ID and desktop device ID for binding.
- *
- * No secrets in URL — just identifiers for the backend to validate.
- */
-export async function getWebAuthorizationUrl(sessionId: string): Promise<string> {
-  const desktopIdentity = deviceIdentityStore.getIdentity();
-  const baseUrl = process.env.PAWOS_WEB_URL || 'https://pawos.app';
-
-  return `${baseUrl}/auth/mobile-pairing?session=${sessionId}&device=${desktopIdentity.deviceId}`;
 }
 
 /**
@@ -185,10 +173,6 @@ export async function verifySecurityKey(
  * Call this from src/main/ipc/ipc.ts during Electron initialization.
  */
 export function registerMobileAuthHandlers(): void {
-  ipcMain.handle('mobileAuth:getWebAuthorizationUrl', async (_event, sessionId: string) => {
-    return await getWebAuthorizationUrl(sessionId);
-  });
-
   ipcMain.handle('mobileAuth:generateSecurityKey', async (_event, sessionId: string) => {
     return await generateSecurityKey(sessionId);
   });

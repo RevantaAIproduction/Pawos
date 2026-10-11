@@ -19,7 +19,7 @@ export const MOBILE_ARTICLES: HelpArticle[] = [
     ],
     howItWorks:
       'From Settings → Devices, generate a pairing QR code and scan it with your phone\'s camera — it opens ' +
-      'pawos.app in your browser, where signing in completes the pairing. From then on your phone shows live ' +
+      'pawos.revantaai.com in your browser, where signing in completes the pairing. From then on your phone shows live ' +
       'device presence, receives push notifications, shows a preview of the desktop conversation, and can ' +
       'respond to approval requests, all without installing anything.',
     bestPractices: [],
@@ -28,7 +28,7 @@ export const MOBILE_ARTICLES: HelpArticle[] = [
     requirements: ['A Paw Pro (or higher) account', 'A modern mobile browser that supports installable web apps'],
     permissions: [],
     faq: [
-      { question: 'Is there a PawOS mobile app to download?', answer: 'No — mobile works through your phone\'s browser at pawos.app. You can add it to your home screen for an app-like experience, but there is nothing to install from an app store.' },
+      { question: 'Is there a PawOS mobile app to download?', answer: 'No — mobile works through your phone\'s browser at pawos.revantaai.com. You can add it to your home screen for an app-like experience, but there is nothing to install from an app store.' },
       { question: 'What can I see from my phone?', answer: 'A live preview of your desktop conversation, notifications, and approvals for pending requests.' },
       { question: 'Can a Paw Go account pair a phone?', answer: 'No — mobile pairing requires Paw Pro or higher.' },
     ],

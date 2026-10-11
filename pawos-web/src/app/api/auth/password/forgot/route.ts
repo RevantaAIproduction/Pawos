@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { siteOrigin } from "../../../../../lib/siteOrigin";
 import { createServiceClient } from "../../../../../lib/supabase/serviceClient";
 import { sendPasswordResetEmail } from "../../../../../lib/mail/accountMailer";
 
@@ -10,7 +11,9 @@ import { sendPasswordResetEmail } from "../../../../../lib/mail/accountMailer";
  * Answers the same whether or not the account exists, so it can't be used to find out who has one.
  * The link always points at PawOS's own address — never at the request's Host header.
  */
-const RESET_PAGE = `${(process.env.NEXT_PUBLIC_SITE_URL ?? "https://pawos.revantaai.com").replace(/\/+$/, "")}/reset-password`;
+// The same single source every other absolute link uses (lib/siteOrigin.ts): the configured address
+// only if it is a plain https origin, otherwise the official one.
+const RESET_PAGE = `${siteOrigin()}/reset-password`;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const WINDOW_MS = 15 * 60 * 1000;
 const hits = new Map<string, number[]>();

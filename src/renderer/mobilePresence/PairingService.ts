@@ -4,7 +4,12 @@ import { crossDeviceRuntimeClient } from './CrossDeviceRuntimeClient';
 import { syncEntitlementTier } from './EntitlementSyncProvider';
 import type { PairingSessionStart } from '../../shared/mobilePresence/MobilePresenceTypes';
 
-const SITE_URL = 'https://pawos.app';
+/**
+ * PawOS's own website, where a phone completes pairing. The QR code carries the pairing token, so
+ * this must only ever be PawOS's official address.
+ */
+export const PAIRING_SITE_URL = 'https://pawos.revantaai.com';
+const SITE_URL = PAIRING_SITE_URL;
 
 type BeginPairingRow = { session_id: string; token: string; expires_at: string };
 

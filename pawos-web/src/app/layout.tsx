@@ -1,4 +1,5 @@
 ﻿import type { Metadata, Viewport } from "next";
+import { OFFICIAL_SITE_ORIGIN } from "../lib/siteOrigin";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Nav } from "../components/layout/Nav";
@@ -18,7 +19,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const SITE_URL = "https://pawos.app";
+const SITE_URL = OFFICIAL_SITE_ORIGIN;
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

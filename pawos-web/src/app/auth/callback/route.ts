@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { trustedOrigin } from "../../../lib/siteOrigin";
 import { createClient } from "../../../lib/supabase/server";
 
 /**
@@ -13,20 +14,15 @@ import { createClient } from "../../../lib/supabase/server";
  */
 
 /**
- * `new URL(request.url).origin` isn't reliable behind this deployment's
- * nginx reverse proxy — it was observed resolving to the app's own local
- * bind address (http://localhost:3000) instead of the public domain, even
- * though nginx forwards the real Host header correctly (confirmed via
- * `proxy_set_header Host $host`). Reading the incoming Host header directly
- * (falling back to X-Forwarded-Host, standard for proxies that set it) sidesteps
- * whatever internal origin-resolution Next.js is doing and matches what nginx
- * actually sends.
+ * Where this route's redirects point. `new URL(request.url).origin` isn't reliable behind this
+ * deployment's nginx reverse proxy (it resolves to the app's local bind address), and the Host and
+ * X-Forwarded-Host headers are chosen by whoever sends the request — so neither is used.
  */
 function resolveOrigin(request: Request): string {
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-  const proto = request.headers.get("x-forwarded-proto") ?? "https";
-  if (host) return `${proto}://${host}`;
-  return new URL(request.url).origin;
+  // The site's own configured address (lib/siteOrigin.ts). It was once read from the Host and
+  // X-Forwarded-Host headers, which the caller chooses: that let a request decide where this
+  // route's redirects pointed.
+  return trustedOrigin(request);
 }
 
 /**

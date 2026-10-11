@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isSameSiteOrigin } from "../siteOrigin";
 import { getAccountContext, type AccountContext } from "./accountContext";
 import { ProfileError } from "./profile";
 
@@ -26,14 +27,8 @@ export async function requireAccount(): Promise<AccountGuard> {
 export function rejectCrossOrigin(request: Request): NextResponse | null {
   const origin = request.headers.get("origin");
   if (!origin) return null;
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-  let originHost: string | null = null;
-  try {
-    originHost = new URL(origin).host;
-  } catch {
-    originHost = null;
-  }
-  if (host && originHost === host) return null;
+  // Compared with the site's own address, not with a Host header the same request supplied.
+  if (isSameSiteOrigin(request, origin)) return null;
   return NextResponse.json({ ok: false, code: "forbidden", message: "Cross-origin request rejected." }, { status: 403 });
 }
 

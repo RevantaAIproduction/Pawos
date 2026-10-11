@@ -1,17 +1,10 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { relayConnectivityToDesktop } from "../desktopRelay";
+import { trustedOrigin } from "../siteOrigin";
 import { getAccountContext } from "./accountContext";
 import { isIntegrationEntitled } from "./integrations";
 import { WEB_OAUTH_STATE_COOKIE, WEB_OAUTH_STATE_COOKIE_PATH, completeWebOAuth, isWebOAuthState, webOAuthCookieValue } from "./webOAuth";
-
-/** Same reasoning as auth/callback/route.ts: behind the reverse proxy, request.url's origin is not the public one. */
-function resolveOrigin(request: Request): string {
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-  const proto = request.headers.get("x-forwarded-proto") ?? "https";
-  if (host) return `${proto}://${host}`;
-  return new URL(request.url).origin;
-}
 
 /**
  * One connector OAuth callback URL serves both apps:
@@ -34,7 +27,7 @@ export async function handleConnectorCallback(request: Request, connectorId: str
     return relayConnectivityToDesktop(code, providerError, state);
   }
 
-  const origin = resolveOrigin(request);
+  const origin = trustedOrigin(request);
   const finish = (status: "connected" | "denied" | "failed" | "expired" | "not_entitled" | "not_configured") => {
     const response = NextResponse.redirect(`${origin}/dashboard/integrations?integration=${connectorId}&status=${status}`);
     response.cookies.set(WEB_OAUTH_STATE_COOKIE, "", { path: WEB_OAUTH_STATE_COOKIE_PATH, maxAge: 0 });

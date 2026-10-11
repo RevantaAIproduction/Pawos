@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { trustedOrigin } from "../../../../lib/siteOrigin";
 import { createClient } from "../../../../lib/supabase/server";
 
 /**
@@ -17,16 +18,10 @@ import { createClient } from "../../../../lib/supabase/server";
  * Not used by the desktop app — see ../callback/route.ts for its relay.
  */
 
-/** Same reasoning as auth/callback/route.ts: behind the reverse proxy, request.url's origin is not the public one. */
-function resolveOrigin(request: Request): string {
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-  const proto = request.headers.get("x-forwarded-proto") ?? "https";
-  if (host) return `${proto}://${host}`;
-  return new URL(request.url).origin;
-}
-
 export async function GET(request: Request) {
-  const origin = resolveOrigin(request);
+  // The site's own configured address — never the request's Host or X-Forwarded-Host, which the
+  // caller chooses. This is what Supabase is told to send the browser back to.
+  const origin = trustedOrigin(request);
   const failed = (message: string) => NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(message)}`);
 
   try {

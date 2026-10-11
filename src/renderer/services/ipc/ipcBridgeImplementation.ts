@@ -756,9 +756,6 @@ export const ipc = {
   },
 
   // Mobile Authentication & Pairing (Phase 2)
-  async mobileAuth__getWebAuthorizationUrl(sessionId: string): Promise<string> {
-    return getBridge().mobileAuth__getWebAuthorizationUrl(sessionId);
-  },
   async mobileAuth__generateSecurityKey(sessionId: string): Promise<SecurityKeyChallenge> {
     return getBridge().mobileAuth__generateSecurityKey(sessionId);
   },

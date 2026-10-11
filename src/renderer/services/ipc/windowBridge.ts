@@ -504,8 +504,6 @@ export function contextBridge() {
       ipcApi.invoke('enterprise:getInquiry', inquiryId),
 
     // Mobile Authentication & Pairing (Phase 2)
-    mobileAuth__getWebAuthorizationUrl: async (sessionId: string): Promise<string> =>
-      ipcApi.invoke('mobileAuth:getWebAuthorizationUrl', sessionId),
     mobileAuth__generateSecurityKey: async (sessionId: string): Promise<SecurityKeyChallenge> =>
       ipcApi.invoke('mobileAuth:generateSecurityKey', sessionId),
     mobileAuth__verifySecurityKey: async (sessionId: string, keyPlain: string): Promise<{ success: boolean; deviceId?: string; sessionToken?: string; expiresAt?: string; error?: string }> =>

@@ -36,7 +36,7 @@ describe('pairingService', () => {
     expect(rpcMock).toHaveBeenCalledWith('begin_pairing_session', {});
     expect(result.sessionId).toBe('session-1');
     expect(result.token).toBe('tok-abc');
-    expect(result.pairingUrl).toBe('https://pawos.app/pair/session-1?token=tok-abc');
+    expect(result.pairingUrl).toBe('https://pawos.revantaai.com/pair/session-1?token=tok-abc');
     expect(result.qrDataUrl.startsWith('data:image/png;base64,')).toBe(true);
     expect(result.expiresAt).toBe('2026-01-01T00:05:00Z');
   });

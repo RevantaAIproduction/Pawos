@@ -5,7 +5,7 @@ import { Badge } from "../../components/ui/Badge";
 export const metadata: Metadata = { title: "Status", description: "PawOS system status." };
 
 const COMPONENTS = [
-  { name: "pawos.app (this website)", status: "Operational" as const },
+  { name: "pawos.revantaai.com (this website)", status: "Operational" as const },
   { name: "Desktop app (Windows)", status: "Early access" as const },
   { name: "Checkout & billing", status: "Operational" as const },
 ];

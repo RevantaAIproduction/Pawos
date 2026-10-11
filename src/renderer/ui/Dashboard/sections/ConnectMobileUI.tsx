@@ -62,12 +62,9 @@ export function ConnectMobileUI({ userId, onSuccess }: ConnectMobileUIProps) {
       setSessionId(session.sessionId);
       setQrDataUrl(session.qrDataUrl);
 
-      // Get web authorization URL from main process
-      const authUrl = await ipc.mobileAuth__getWebAuthorizationUrl(session.sessionId);
-
-      // Open web authorization in new window
-      // (In production: open BrowserWindow to authUrl, wait for redirect)
-      // For now, we'll simulate: just proceed to QR step
+      // The phone authorizes on PawOS's website by opening the pairing link in this QR code: that
+      // page requires sign-in to the same account and an explicit confirmation. There is no separate
+      // authorization link to open here.
       setState('qr');
     } catch (err) {
       setError(getErrorMessage(err));

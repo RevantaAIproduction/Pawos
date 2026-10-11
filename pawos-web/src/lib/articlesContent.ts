@@ -181,11 +181,11 @@ export const ARTICLES: Article[] = [
   },
   {
     slug: "release-announcement-pawos-web",
-    title: "Release Announcement: pawos.app is live",
+    title: "Release Announcement: pawos.revantaai.com is live",
     category: "Announcements",
     excerpt: "The PawOS documentation and marketing site is now public.",
     body: [
-      "This site — pawos.app — is now live: a full features catalog, a documentation system covering every runtime, a knowledge base, this blog, pricing, and (once builds are published) downloads.",
+      "This site — pawos.revantaai.com — is now live: a full features catalog, a documentation system covering every runtime, a knowledge base, this blog, pricing, and (once builds are published) downloads.",
       "The desktop application remains the product; this site exists to explain it honestly, including what it can't yet do. Expect this to keep growing alongside the app itself — new runtime capabilities, new deployment providers, and new documentation as features ship.",
     ],
   },

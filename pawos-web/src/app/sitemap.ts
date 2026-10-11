@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { OFFICIAL_SITE_ORIGIN } from "../lib/siteOrigin";
 import { FEATURES } from "../lib/featuresContent";
 import { DOCS } from "../lib/docsContent";
 import { RUNTIMES } from "../lib/runtimesContent";
@@ -7,7 +8,7 @@ import { LEGAL_DOCS } from "../lib/legalContent";
 
 export const dynamic = "force-static";
 
-const SITE_URL = "https://pawos.app";
+const SITE_URL = OFFICIAL_SITE_ORIGIN;
 
 const STATIC_ROUTES = [
   "",

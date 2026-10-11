@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isSameSiteOrigin } from "../../../../../lib/siteOrigin";
 import { createClient } from "../../../../../lib/supabase/server";
 import { isChallenge, isDeviceClient, issueDeviceHandoff } from "../../../../../lib/auth/deviceAuth";
 
@@ -16,14 +17,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, code: "forbidden", message: "Open this page in your browser to continue." }, { status: 403 });
   }
   const origin = request.headers.get("origin");
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-  let originHost: string | null = null;
-  try {
-    originHost = origin ? new URL(origin).host : null;
-  } catch {
-    originHost = null;
-  }
-  if (!originHost || !host || originHost !== host) {
+  // The page that sent this must be PawOS's own: compared with the site's configured address, not
+  // with a Host header the same request supplied.
+  if (!origin || !isSameSiteOrigin(request, origin)) {
     return NextResponse.json({ ok: false, code: "forbidden", message: "Open this page in your browser to continue." }, { status: 403 });
   }
 

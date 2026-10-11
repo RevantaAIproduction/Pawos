@@ -50,7 +50,7 @@ describe('pushNotificationService', () => {
       { title: 'Task completed', body: 'done' }
     );
 
-    expect(setVapidDetailsMock).toHaveBeenCalledWith('mailto:support@pawos.app', 'pub', 'priv');
+    expect(setVapidDetailsMock).toHaveBeenCalledWith('mailto:support@revantaai.com', 'pub', 'priv');
     expect(sendNotificationMock).toHaveBeenCalledWith(
       { endpoint: 'https://push.example/x', keys: { p256dh: 'p', auth: 'a' } },
       JSON.stringify({ title: 'Task completed', body: 'done' })

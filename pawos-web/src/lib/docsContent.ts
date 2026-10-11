@@ -27,7 +27,7 @@ export const DOCS: DocPage[] = [
       {
         paragraphs: [
           "PawOS is a native desktop application — an AI companion that runs on your machine, sees what you're working on, and can take real, confirmed action on files, terminals, browsers, and deployments.",
-          "It is not a browser-based chatbot. There is no PawOS web app for everyday use — the desktop app is the product, and pawos.app exists to explain it, document it, and let you download it.",
+          "It is not a browser-based chatbot. There is no PawOS web app for everyday use — the desktop app is the product, and pawos.revantaai.com exists to explain it, document it, and let you download it.",
         ],
       },
       {

@@ -11,7 +11,7 @@ function ensureConfigured(): boolean {
   const publicKey = process.env.VAPID_PUBLIC_KEY;
   const privateKey = process.env.VAPID_PRIVATE_KEY;
   if (!publicKey || !privateKey) return false;
-  webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:support@pawos.app', publicKey, privateKey);
+  webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:support@revantaai.com', publicKey, privateKey);
   configured = true;
   return true;
 }
