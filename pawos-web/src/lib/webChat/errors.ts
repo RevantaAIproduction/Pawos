@@ -28,7 +28,7 @@ export type WebChatFailureCode =
  * PawOS's own clients unless they ask for debug output. It carries no key, no prompt and no
  * provider text: just "it timed out", "it said HTTP 429", "it answered with nothing".
  */
-export type ModelFailureDetail = "model_timeout" | "model_empty_reply" | `model_http_${number}`;
+export type ModelFailureDetail = "model_timeout" | "model_empty_reply" | "model_unusable_reply" | `model_http_${number}`;
 
 export class WebChatError extends Error {
   constructor(

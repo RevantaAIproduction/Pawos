@@ -82,6 +82,7 @@ const SYSTEM_PROMPT = [
   "Every command is checked by the CLI and may be refused or put to the user first. Commands that install or change dependencies, or force anything, are always put to the user: only ask for them when the task needs them, and never to get around a refusal. A command's result gives its exit code and the end of its output; a non-zero exit code is a failure — never report a failing test or build as passing.",
   "Git is changed only with the Git tools (git_add, git_commit, git_branch, git_checkout, git_push). run_command refuses every Git command that is not a plain read, so never try Git changes there. There is no tool to force, reset, clean, rebase, merge, pull, delete a branch or rewrite history: if the task needs one of those, say so and leave it to the user. Do not stage, commit, switch branches or push unless the user's task asks for it; a push is always put to the user. Before committing, check what changed (git_status, git_diff) and stage only the files that belong to the task.",
   "The user is asked to approve each change on their computer before it happens, and sees the difference. Read a file before you change it, and prefer edit_file with a small, exact oldText over rewriting a whole file. If an edit fails because the text was not found, read the file again and retry with what is really there. If the user declines a change, do not ask for the same change again: carry on without it or finish and explain.",
+  "Each step has to be written in under a minute, so keep every write_file small: about 150 lines at most. Build something larger as several files (data, components, styles — one write_file each), or write a first part and add the rest with edit_file. Never put a whole application in one write_file.",
   "Work the task through to the end: look at the files that matter, decide what to change, make the changes in the project's real files, then check your work — run the build (and the tests, if the project has them), read any failure, fix what your changes broke, and run it again. Do not answer a request for a change with code for the user to paste: make the change with write_file or edit_file. Finish with a summary of what you actually changed and what the checks actually showed.",
   "A development server is started with start_process, never run_command (which would wait for it to end and then stop it). Report the local address exactly as the result gives it; if the result gives none, say so. open_browser only asks the user's browser to open a local page — you cannot see it, so never say a page looks right or was verified in the browser.",
   "Never claim a change was made, or a test passed, unless its result says so. Nothing here is committed or pushed unless a command you ran did it: say plainly what was and was not run. If a step was refused, denied by the user, cancelled or failed, say that in the summary.",
@@ -128,6 +129,15 @@ function userTurn(task: TaskState, mustFinish: boolean): string {
     .filter(Boolean)
     .join("\n\n");
 }
+
+/**
+ * One turn has to answer before the gateway in front of PawOS Web gives up on the request (60
+ * seconds), and a turn that writes a file needs most of that. So a turn gets one try with nearly
+ * the whole minute — the CLI asks again when the model was busy — rather than chat's two short ones.
+ */
+export const AGENT_TURN_TIMEOUT_MS = 55_000;
+/** Room for a whole file in one step, with the model's own reasoning counted against the same budget. */
+export const AGENT_TURN_OUTPUT_TOKENS = 16_384;
 
 export interface AgentTurnOutcome {
   turn: LocalTaskTurn;
@@ -176,21 +186,27 @@ export async function agentTurn(account: AccountContext, rawBody: unknown, now: 
     task.touchedAt = now;
   }
 
+  // When a turn produces no step, the task is put back as it was before the turn, so the client can
+  // send the very same request again: a first turn is forgotten, a later one waits for its result again.
+  const sameTurnAgain = () => {
+    if (parsed.kind === "start") tasks.delete(key);
+    else {
+      const pending = task.steps.at(-1);
+      if (pending) pending.result = null;
+    }
+  };
+
   // 3. One model call, on the plan's allowance (reserved before, settled after — or refused with 402).
   const mustFinish = task.turns >= limits.turns - 1;
   const model = changeModel(account, isWebUsageMetered(account), `agent-${parsed.taskId}`);
   task.turns += 1;
   let reply;
   try {
-    reply = await model(`turn-${task.turns}`, { system: SYSTEM_PROMPT, contents: [{ role: "user", parts: [{ text: userTurn(task, mustFinish) }] }], maxOutputTokens: 8192, json: true });
+    reply = await model(`turn-${task.turns}`, { system: SYSTEM_PROMPT, contents: [{ role: "user", parts: [{ text: userTurn(task, mustFinish) }] }], maxOutputTokens: AGENT_TURN_OUTPUT_TOKENS, json: true, timeoutMs: AGENT_TURN_TIMEOUT_MS });
   } catch (error) {
     // The turn didn't happen. A start that never got its first step is forgotten, so it can be started again.
     task.turns -= 1;
-    if (parsed.kind === "start") tasks.delete(key);
-    else {
-      const pending = task.steps.at(-1);
-      if (pending) pending.result = null; // the same result can be sent again
-    }
+    sameTurnAgain();
     throw error;
   }
 
@@ -205,10 +221,19 @@ export async function agentTurn(account: AccountContext, rawBody: unknown, now: 
     tasks.delete(key);
     return { turn: { kind: "finish", summary: String(args.summary) }, turnsLeft: 0 };
   }
-  if (mustFinish || !isAgentToolName(name) || !args) {
+  if (mustFinish) {
     tasks.delete(key);
-    if (mustFinish) return { turn: { kind: "finish", summary: `I stopped after ${limits.turns} steps without finishing.${note ? ` I was about to: ${note}` : ""}` }, turnsLeft: 0 };
-    throw new WebChatError("model_unavailable", "Paw couldn't work out the next step. Please try again.", 502);
+    return { turn: { kind: "finish", summary: `I stopped after ${limits.turns} steps without finishing.${note ? ` I was about to: ${note}` : ""}` }, turnsLeft: 0 };
+  }
+  if (!isAgentToolName(name) || !args) {
+    // A reply that isn't a step (cut short, not JSON, a tool that isn't on the list) is never passed
+    // on — and never repaired. But it doesn't throw away a task that may be halfway through changing
+    // files: the task stays where it was and the same turn can be asked again. The turn it used
+    // still counts, so asking again is bounded by the task's own limit.
+    sameTurnAgain();
+    // Sizes and the provider's fixed word only — never the reply itself, which may hold the user's code.
+    console.error(`[web-agent] unusable reply: ${reply.text.length} characters${reply.finishReason ? `, finish reason ${reply.finishReason}` : ""}${chosen ? "" : ", not JSON"}`);
+    throw new WebChatError("model_unavailable", "Paw couldn't work out the next step. Please try again.", 502, "model_unusable_reply");
   }
 
   const call: ToolCall = { id: `step-${task.steps.length + 1}`, name, args };

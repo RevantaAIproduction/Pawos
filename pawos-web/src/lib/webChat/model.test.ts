@@ -146,6 +146,15 @@ describe("generate", () => {
     expect(calls).toHaveLength(1);
   });
 
+  it("an empty reply logs why the provider stopped — its fixed word only", async () => {
+    answers = [new Response(JSON.stringify({ candidates: [{ finishReason: "MAX_TOKENS", content: { parts: [] } }] }), { status: 200 })];
+    await expect(generate(request)).rejects.toMatchObject({ detail: "model_empty_reply" });
+    expect(logged()).toEqual(["[web-chat] model answered with nothing (finish reason MAX_TOKENS)"]);
+    answers = [new Response(JSON.stringify({ candidates: [{ finishReason: "hii said AIza-secret", content: { parts: [] } }] }), { status: 200 })];
+    await expect(generate(request)).rejects.toMatchObject({ detail: "model_empty_reply" });
+    expect(logged()[1]).toBe("[web-chat] model answered with nothing");
+  });
+
   it("without a key it says chat isn't available, and calls nothing", async () => {
     delete process.env.GEMINI_API_KEY;
     await expect(generate(request)).rejects.toMatchObject({ code: "not_configured", status: 503 });

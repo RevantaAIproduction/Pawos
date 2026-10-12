@@ -36,6 +36,8 @@ export interface ModelUsage {
 
 export interface ModelReply {
   text: string;
+  /** Why the provider stopped (STOP, MAX_TOKENS, …) — its fixed word, when it gave one. */
+  finishReason?: string;
   usage: ModelUsage;
 }
 
@@ -108,17 +110,25 @@ export async function generate(request: GenerateRequest): Promise<ModelReply> {
   }
   if (!response) throw unavailable("model_timeout");
   const body = (await response.json().catch(() => ({}))) as {
-    candidates?: { content?: { parts?: { text?: string }[] } }[];
+    candidates?: { finishReason?: unknown; content?: { parts?: { text?: string }[] } }[];
     usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; cachedContentTokenCount?: number; thoughtsTokenCount?: number };
   };
   const text = (body.candidates?.[0]?.content?.parts ?? [])
     .map((part) => part.text ?? "")
     .join("")
     .trim();
-  if (!text) throw unavailable("model_empty_reply");
+  const reason = body.candidates?.[0]?.finishReason;
+  const finishReason = typeof reason === "string" && /^[A-Z_]{3,40}$/.test(reason) ? reason : undefined;
+  if (!text) {
+    // Why there was nothing — the provider's fixed word only (MAX_TOKENS, SAFETY, …): it is what
+    // tells a reply that ran out of room from one that was withheld.
+    console.error(`[web-chat] model answered with nothing${finishReason ? ` (finish reason ${finishReason})` : ""}`);
+    throw unavailable("model_empty_reply");
+  }
   const usage = body.usageMetadata ?? {};
   return {
     text,
+    ...(finishReason ? { finishReason } : {}),
     usage: {
       promptTokens: usage.promptTokenCount ?? 0,
       candidatesTokens: usage.candidatesTokenCount ?? 0,

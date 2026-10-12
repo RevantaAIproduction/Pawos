@@ -21,7 +21,7 @@ vi.mock("../../../../../lib/account/accountContext", async (importOriginal) => {
 vi.mock("../../../../../lib/supabase/serviceClient", () => ({ createServiceClient: () => state.backend.client(null, true) }));
 
 import { POST } from "./route";
-import { resetAgentTasks } from "../../../../../lib/webAgent/agent";
+import { AGENT_TURN_OUTPUT_TOKENS, AGENT_TURN_TIMEOUT_MS, resetAgentTasks } from "../../../../../lib/webAgent/agent";
 import { AGENT_SERVER_LIMITS, AGENT_TOOL_NAMES, parseTurnRequest, toolArgs } from "../../../../../lib/webAgent/protocol";
 import { WEB_CAPABILITY_RULES } from "../../../../../lib/webPolicy/webCapabilities";
 
@@ -220,6 +220,121 @@ describe("the turn: one model call, one tool from the fixed list", () => {
       expect(body.code).toBe("model_unavailable");
       expect(body.turn).toBeUndefined();
     }
+  });
+
+  it("a reply that isn't a step doesn't throw the task away: the same result can be sent again and the task carries on", async () => {
+    await start();
+    // Halfway through: a file was written, then the model's next reply is cut short.
+    modelReplies = [{ tool: "write_file", args: { path: "src/types.ts", content: "export type A = 1;" } }, '{"tool": "write_file", "args": {"path": "src/App.tsx", "content": "import', { tool: "bash", args: {} }, { tool: "edit_file", args: { path: "src/cart.ts", oldText: "a", newText: "b" } }];
+    expect((await (await result("step-1", "read it")).json()).turn.call.name).toBe("write_file");
+    const cut = await result("step-2", "Created src/types.ts (1 line).");
+    expect(cut.status).toBe(502);
+    expect(await cut.json()).toMatchObject({ code: "model_unavailable", detail: "model_unusable_reply" });
+    // Nothing was passed on, and the task is still there, waiting for that same result.
+    const again = await result("step-2", "Created src/types.ts (1 line).");
+    expect(again.status).toBe(502); // the tool that isn't on the list: still never passed on
+    const third = await (await result("step-2", "Created src/types.ts (1 line).")).json();
+    expect(third.turn).toEqual({ kind: "tool", call: { id: "step-3", name: "edit_file", args: { path: "src/cart.ts", oldText: "a", newText: "b" } }, note: null });
+    // The file that was written is still in what the model is shown.
+    expect(modelCalls.at(-1)!.user).toContain("Created src/types.ts (1 line).");
+    // A different step's result is still not accepted in its place.
+    expect((await result("step-2", "replayed")).status).toBe(409);
+  });
+
+  it("asking again is bounded: every unusable reply uses one of the task's turns", async () => {
+    await start();
+    modelReplies = ["not json at all"];
+    let tries = 0;
+    let last = 502;
+    while (last === 502 && tries < AGENT_SERVER_LIMITS.turns + 5) {
+      last = (await result("step-1", "read it")).status;
+      tries += 1;
+    }
+    // It ends by itself, with a finish — not a loop.
+    expect(last).toBe(200);
+    expect(tries).toBe(AGENT_SERVER_LIMITS.turns - 1);
+    expect(modelCalls).toHaveLength(AGENT_SERVER_LIMITS.turns);
+  });
+
+  it("a first turn that isn't a step is forgotten, so the task can be started again", async () => {
+    modelReplies = ["not json at all", { tool: "read_file", args: { path: "src/cart.ts" } }];
+    expect((await start()).status).toBe(502);
+    expect((await start()).status).toBe(200);
+  });
+
+  it("a turn gets one try with most of the gateway's minute, and room to write a file", async () => {
+    const timeouts: number[] = [];
+    const realTimeout = AbortSignal.timeout;
+    AbortSignal.timeout = (ms: number) => (timeouts.push(ms), realTimeout.call(AbortSignal, ms));
+    try {
+      await start();
+    } finally {
+      AbortSignal.timeout = realTimeout;
+    }
+    expect(timeouts).toEqual([AGENT_TURN_TIMEOUT_MS]);
+    expect(AGENT_TURN_TIMEOUT_MS).toBeLessThan(60_000);
+    expect(reserves()[0].args.p_max_output_tokens).toBe(AGENT_TURN_OUTPUT_TOKENS);
+    expect(modelCalls[0].system).toMatch(/keep every write_file small/);
+  });
+
+  it("a large file is passed on whole, exactly as written", async () => {
+    const content = Array.from({ length: 1500 }, (_, index) => `export const line${index} = "${"x".repeat(30)}";`).join("\n") + "\n";
+    expect(content.length).toBeGreaterThan(60_000);
+    modelReplies = [{ tool: "write_file", args: { path: "src/big.ts", content } }];
+    const body = await (await start()).json();
+    expect(body.turn.call).toEqual({ id: "step-1", name: "write_file", args: { path: "src/big.ts", content } });
+  });
+
+  it("a file past the size the contract allows is not passed on, cut or repaired — and the task survives it", async () => {
+    await start();
+    modelReplies = [{ tool: "write_file", args: { path: "src/huge.ts", content: "x".repeat(200_001) } }, { tool: "finish", args: { summary: "Done another way." } }];
+    const refused = await result("step-1", "read it");
+    expect(refused.status).toBe(502);
+    expect((await refused.json()).turn).toBeUndefined();
+    expect((await (await result("step-1", "read it")).json()).turn).toEqual({ kind: "finish", summary: "Done another way." });
+  });
+
+  it("a model that times out mid-task leaves the task exactly as it was: no turn used, the same result accepted again", async () => {
+    const first = await (await start()).json();
+    const answer = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementationOnce(async () => {
+      throw Object.assign(new Error("timed out"), { name: "TimeoutError" });
+    });
+    const failed = await result("step-1", "read it");
+    expect(failed.status).toBe(502);
+    expect(await failed.json()).toMatchObject({ code: "model_unavailable", detail: "model_timeout" });
+    vi.mocked(fetch).mockImplementation(answer);
+    modelReplies = [{ tool: "edit_file", args: { path: "src/cart.ts", oldText: "a", newText: "b" } }];
+    const next = await (await result("step-1", "read it")).json();
+    expect(next.turn.call).toMatchObject({ id: "step-2", name: "edit_file" });
+    expect(next.turnsLeft).toBe(first.turnsLeft - 1); // the turn that timed out was not counted
+    expect(modelCalls.at(-1)!.user.match(/--- Step 1:/g)).toHaveLength(1); // and its result is there once
+  });
+
+  it("a reply cut off at the output limit is logged by size and the provider's word only — never its text", async () => {
+    await start();
+    vi.mocked(fetch).mockImplementationOnce(async () => new Response(JSON.stringify({ candidates: [{ finishReason: "MAX_TOKENS", content: { parts: [{ text: '{"tool": "write_file", "args": {"path": "src/App.tsx", "content": "const secretSauce = 1' }] } }], usageMetadata: { promptTokenCount: 400, candidatesTokenCount: 8192 } }), { status: 200 }));
+    const cut = await result("step-1", "read it");
+    expect(await cut.json()).toMatchObject({ code: "model_unavailable", detail: "model_unusable_reply" });
+    const logged = (console.error as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((call) => String(call[0]));
+    expect(logged).toEqual([expect.stringMatching(/^\[web-agent\] unusable reply: \d+ characters, finish reason MAX_TOKENS, not JSON$/)]);
+    expect(logged.join()).not.toMatch(/secretSauce|App\.tsx|test-model-key/);
+    // The cut-off call was still paid for: usage is settled, not released.
+    expect(settles()).toHaveLength(2);
+  });
+
+  it("a task nobody has touched for a long time is forgotten: its result is refused, and it can't be revived", async () => {
+    await start();
+    const realNow = Date.now();
+    const clock = vi.spyOn(Date, "now").mockReturnValue(realNow + AGENT_SERVER_LIMITS.idleMs + 1000);
+    try {
+      const late = await result("step-1", "read it");
+      expect(late.status).toBe(404);
+      expect((await late.json()).code).toBe("not_found");
+    } finally {
+      clock.mockRestore();
+    }
+    expect(modelCalls).toHaveLength(1);
   });
 
   it("malformed arguments are refused, not repaired", async () => {
