@@ -121,6 +121,31 @@ describe("generate", () => {
     expect(JSON.stringify({ message: error.message, detail: error.detail })).not.toMatch(/AIza|invalid|API key/);
   });
 
+  it("logs the provider's error class beside the HTTP status — the fixed word only, never its message", async () => {
+    const failure = (status: number, error: unknown) => new Response(JSON.stringify({ error }), { status });
+    answers = [failure(503, { code: 503, message: "The model is overloaded for key AIza-secret.", status: "UNAVAILABLE" }), failure(429, { message: "Quota exceeded for hii", status: "RESOURCE_EXHAUSTED" })];
+    await expect(generate(request)).rejects.toMatchObject({ code: "model_unavailable", status: 502, detail: "model_http_429" });
+    expect(logged()[0]).toMatch(/^\[web-chat\] model call failed: HTTP 503 UNAVAILABLE after \d+ms \(attempt 1 of 2\)$/);
+    expect(logged()[1]).toMatch(/^\[web-chat\] model call failed: HTTP 429 RESOURCE_EXHAUSTED after \d+ms \(attempt 2 of 2\)$/);
+    // A class that isn't the provider's fixed word is not logged at all.
+    answers = [failure(400, { status: "API key AIza-secret is invalid" })];
+    await expect(generate(request)).rejects.toMatchObject({ detail: "model_http_400" });
+    expect(logged()[2]).toMatch(/^\[web-chat\] model call failed: HTTP 400 after \d+ms \(attempt 1 of 2\)$/);
+    for (const line of logged()) expect(line).not.toMatch(/AIza|overloaded|Quota|hii|test-model-key/);
+  });
+
+  it.each([[502], [504]])("a gateway failure upstream (HTTP %i) is asked once more, then reported as that status", async (status) => {
+    answers = [new Response("<html>bad gateway</html>", { status }), new Response("<html>bad gateway</html>", { status })];
+    await expect(generate(request)).rejects.toMatchObject({ code: "model_unavailable", status: 502, detail: `model_http_${status}` });
+    expect(calls).toHaveLength(2);
+  });
+
+  it("a reply that isn't the JSON it should be is an empty reply, not a crash", async () => {
+    answers = [new Response("<html>not json</html>", { status: 200 })];
+    await expect(generate(request)).rejects.toMatchObject({ code: "model_unavailable", detail: "model_empty_reply" });
+    expect(calls).toHaveLength(1);
+  });
+
   it("without a key it says chat isn't available, and calls nothing", async () => {
     delete process.env.GEMINI_API_KEY;
     await expect(generate(request)).rejects.toMatchObject({ code: "not_configured", status: 503 });

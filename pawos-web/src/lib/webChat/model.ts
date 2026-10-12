@@ -60,6 +60,17 @@ export const MODEL_ATTEMPTS = 2;
 
 const unavailable = (detail: ModelFailureDetail) => new WebChatError("model_unavailable", "Paw couldn't answer just now. Please try again.", 502, detail);
 
+/**
+ * The provider's own error class for a failed call (UNAVAILABLE, RESOURCE_EXHAUSTED, …), for the log
+ * only: it is what tells an overloaded model from a quota or a configuration problem behind the
+ * same HTTP status. Only that fixed word is kept — never the provider's message, which is free text.
+ */
+async function providerStatus(answer: Response): Promise<string> {
+  const body = (await answer.json().catch(() => null)) as { error?: { status?: unknown } } | null;
+  const status = body?.error?.status;
+  return typeof status === "string" && /^[A-Z_]{3,40}$/.test(status) ? ` ${status}` : "";
+}
+
 export async function generate(request: GenerateRequest): Promise<ModelReply> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new WebChatError("not_configured", "PawOS Web chat isn't available right now.", 503);
@@ -86,7 +97,7 @@ export async function generate(request: GenerateRequest): Promise<ModelReply> {
         break;
       }
       // How long and what status: what whoever reads the log needs to tell a quota problem from an outage.
-      console.error(`[web-chat] model call failed: HTTP ${answer.status} after ${Date.now() - started}ms (attempt ${attempt} of ${attempts})`);
+      console.error(`[web-chat] model call failed: HTTP ${answer.status}${await providerStatus(answer)} after ${Date.now() - started}ms (attempt ${attempt} of ${attempts})`);
       // "Busy" may clear on a second try; anything else (a bad key, a bad request) will not.
       if (last || !(answer.status === 429 || answer.status >= 500)) throw unavailable(`model_http_${answer.status}`);
     } catch (error) {

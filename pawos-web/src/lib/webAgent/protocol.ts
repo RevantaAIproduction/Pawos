@@ -8,7 +8,7 @@
  */
 
 /** Reading, changing files, running development commands, and a fixed set of Git operations. */
-export const AGENT_TOOL_NAMES = ["list_files", "read_file", "search_files", "git_status", "git_diff", "git_log", "write_file", "edit_file", "delete_path", "run_command", "run_tests", "build", "git_add", "git_commit", "git_branch", "git_checkout", "git_push", "finish"] as const;
+export const AGENT_TOOL_NAMES = ["list_files", "read_file", "search_files", "git_status", "git_diff", "git_log", "write_file", "edit_file", "delete_path", "run_command", "run_tests", "build", "git_add", "git_commit", "git_branch", "git_checkout", "git_push", "start_process", "stop_process", "process_status", "open_browser", "finish"] as const;
 export type AgentToolName = (typeof AGENT_TOOL_NAMES)[number];
 
 export function isAgentToolName(name: unknown): name is AgentToolName {
@@ -68,6 +68,12 @@ const ARGS: Record<AgentToolName, Record<string, { type: "string" | "number" | "
   git_branch: { name: { type: "string", required: true, max: 200 } },
   git_checkout: { branch: { type: "string", required: true, max: 200 }, create: { type: "boolean" } },
   git_push: { remote: { type: "string", max: 100 } },
+  // A program that keeps running (a development server): started like a command, then left running.
+  start_process: { command: { type: "string", required: true, max: 64 }, args: { type: "strings", max: 2000, maxItems: 64 }, cwd: { type: "string", max: 400 } },
+  stop_process: { id: { type: "string", required: true, max: 16 } },
+  process_status: { id: { type: "string", required: true, max: 16 } },
+  // A page served from the user's own computer, opened in their browser. The client refuses anything else.
+  open_browser: { url: { type: "string", required: true, max: 300 } },
   finish: { summary: { type: "string", required: true, max: 8000 } },
 };
 
@@ -107,7 +113,7 @@ export const AGENT_SERVER_LIMITS = {
   /** Characters of results kept for one task in total; older results are shortened past this. */
   transcriptChars: 220_000,
   /** Steps the model may take for one task. */
-  turns: 24,
+  turns: 60,
   /** A task that goes quiet is forgotten after this. */
   idleMs: 30 * 60 * 1000,
   /** Tasks one account may have in progress. */

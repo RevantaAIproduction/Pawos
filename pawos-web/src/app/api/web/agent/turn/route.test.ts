@@ -524,12 +524,55 @@ describe("Git operations are requests with typed inputs and nowhere to put a fla
   });
 });
 
+describe("a development server and the browser are requests too", () => {
+  it("each is passed on with exactly its inputs", async () => {
+    const cases: [unknown, unknown][] = [
+      [{ tool: "start_process", args: { command: "npm", args: ["run", "dev"], cwd: "web", detached: true, shell: true, env: { A: "b" } } }, { id: "step-1", name: "start_process", args: { command: "npm", args: ["run", "dev"], cwd: "web" } }],
+      [{ tool: "process_status", args: { id: "p1", pid: 4242 } }, { id: "step-1", name: "process_status", args: { id: "p1" } }],
+      [{ tool: "stop_process", args: { id: "p1", force: true, signal: "SIGKILL" } }, { id: "step-1", name: "stop_process", args: { id: "p1" } }],
+      [{ tool: "open_browser", args: { url: "http://localhost:5173/", approved: true, browser: "chrome" } }, { id: "step-1", name: "open_browser", args: { url: "http://localhost:5173/" } }],
+    ];
+    for (const [reply, expected] of cases) {
+      resetAgentTasks();
+      modelReplies = [reply];
+      const body = await (await start()).json();
+      expect(body.turn.call).toEqual(expected);
+      expect(JSON.stringify(body)).not.toMatch(/"(safe|approved|risk|autoApprove)"/);
+    }
+  });
+
+  it("malformed ones are refused, not repaired", async () => {
+    for (const reply of [{ tool: "start_process", args: { args: ["run", "dev"] } }, { tool: "start_process", args: { command: "npm", args: "run dev" } }, { tool: "stop_process", args: {} }, { tool: "process_status", args: { id: 1 } }, { tool: "open_browser", args: {} }, { tool: "open_browser", args: { url: "x".repeat(301) } }]) {
+      resetAgentTasks();
+      modelReplies = [reply];
+      expect((await start()).status, JSON.stringify(reply).slice(0, 60)).toBe(502);
+    }
+  });
+
+  it("the model is told to do the work, to start servers properly, and never to claim what it cannot see", async () => {
+    await start();
+    const system = modelCalls[0].system;
+    expect(system).toMatch(/Do not answer a request for a change with code for the user to paste: make the change with write_file or edit_file/);
+    expect(system).toMatch(/run the build \(and the tests, if the project has them\), read any failure, fix what your changes broke, and run it again/);
+    expect(system).toMatch(/A development server is started with start_process, never run_command/);
+    expect(system).toMatch(/Report the local address exactly as the result gives it; if the result gives none, say so/);
+    expect(system).toMatch(/you cannot see it, so never say a page looks right or was verified in the browser/);
+    expect(system).toMatch(/If a step was refused, denied by the user, cancelled or failed, say that in the summary/);
+  });
+
+  it("a task has room for a real piece of work, and still ends", () => {
+    expect(AGENT_SERVER_LIMITS.turns).toBe(60);
+  });
+});
+
 describe("the service only thinks", () => {
   it("the tool list is fixed: reading, changing files, finishing — nothing that runs a program or changes Git", () => {
-    expect([...AGENT_TOOL_NAMES]).toEqual(["list_files", "read_file", "search_files", "git_status", "git_diff", "git_log", "write_file", "edit_file", "delete_path", "run_command", "run_tests", "build", "git_add", "git_commit", "git_branch", "git_checkout", "git_push", "finish"]);
+    expect([...AGENT_TOOL_NAMES]).toEqual(["list_files", "read_file", "search_files", "git_status", "git_diff", "git_log", "write_file", "edit_file", "delete_path", "run_command", "run_tests", "build", "git_add", "git_commit", "git_branch", "git_checkout", "git_push", "start_process", "stop_process", "process_status", "open_browser", "finish"]);
     // Nothing that is a shell or installs software; and of Git, only these five fixed operations —
     // nothing that forces, resets, cleans, merges, rebases, pulls or deletes.
     expect(AGENT_TOOL_NAMES.filter((name) => /shell|bash|exec|install/.test(name))).toEqual([]);
+    // A development server and the browser are their own tools: started, asked about, stopped, opened.
+    expect(AGENT_TOOL_NAMES.filter((name) => /process|browser/.test(name))).toEqual(["start_process", "stop_process", "process_status", "open_browser"]);
     expect(AGENT_TOOL_NAMES.filter((name) => name.startsWith("git_") && !["git_status", "git_diff", "git_log"].includes(name))).toEqual(["git_add", "git_commit", "git_branch", "git_checkout", "git_push"]);
     expect(AGENT_TOOL_NAMES.filter((name) => /force|reset|clean|merge|rebase|pull|delete_branch|amend|revert|stash|tag/.test(name))).toEqual([]);
     expect(toolArgs("read_file", { path: "a.ts", startLine: 10, encoding: "base64" })).toEqual({ path: "a.ts", startLine: 10 });
