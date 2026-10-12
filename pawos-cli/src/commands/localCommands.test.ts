@@ -216,12 +216,15 @@ describe("auto mode", () => {
     expect(results(h)[0]).toMatchObject({ ok: true, exitCode: 0 });
   });
 
-  it("plan mode: no command is ever asked for", async () => {
+  it("plan mode: nothing is run — not a command, not the tests, not a server", async () => {
     const h = start({ answers: ["/mode plan", TASK, null] });
-    h.server.agentTurns = [cmd("step-1", "node", ["mark.js"])];
+    h.server.agentTurns = [cmd("step-1", "node", ["mark.js"]), toolTurn("step-2", "run_tests", {}), toolTurn("step-3", "start_process", { command: "node", args: ["slow.js"] }), toolTurn("step-4", "open_browser", { url: "http://localhost:5173/" }), finishTurn("The plan.")];
     await runCli([], h.ctx);
-    expect(h.server.agentCalls()).toHaveLength(0);
+    expect(results(h).map((result) => [result.ok, result.denied])).toEqual(Array.from({ length: 4 }, () => [false, true]));
+    expect(results(h)[0]!.output).toMatch(/plan mode/);
+    expect(asks(h)).toBe(0);
     expect(exists("ran.txt")).toBe(false);
+    expect(h.background.list()).toEqual([]);
   });
 });
 

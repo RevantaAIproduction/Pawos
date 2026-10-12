@@ -3,7 +3,7 @@ import * as os from "os";
 import * as path from "path";
 import { AGENT_CLIENT_LIMITS, toolRisk, type ToolCall, type ToolResult } from "../shared";
 import { classifyCommand, displayCommand, validateCommand, type AllowedCommand } from "./commandPolicy";
-import { runProcess, secretValues, type ProcessOptions, type ProcessOutcome } from "./process";
+import { runProcess, secretValues, type BackgroundProcesses, type ProcessOptions, type ProcessOutcome } from "./process";
 import { resolveInside, secretReason, type Workspace } from "./workspace";
 
 /**
@@ -31,7 +31,8 @@ const STDOUT_SENT = 11_000;
 const STDERR_SENT = 6_000;
 
 export interface CommandPlan {
-  tool: "run_command" | "run_tests" | "build";
+  /** start_process is a command that is left running (a development server) instead of being waited for. */
+  tool: "run_command" | "run_tests" | "build" | "start_process";
   bin: AllowedCommand;
   args: string[];
   /** The command as shown to the user and reported to PawOS: the program and its arguments. */
@@ -170,10 +171,39 @@ export function prepareCommand(call: ToolCall, workspace: Workspace): PreparedCo
   if (verdict.level === "refuse") return denied(call, verdict.reason ?? "PawOS doesn't run that.");
   // A test or build run through the package manager can take as long as one.
   if (call.name === "run_command" && /^(npm|yarn|pnpm|npx)$/.test(valid.command) && verdict.level === "auto") timeoutMs = TEST_TIMEOUT_MS;
+  // The same checks as any command: a program that keeps running is not a way around them.
   return {
     ok: true,
     plan: { tool: call.name as CommandPlan["tool"], bin: valid.command, args: valid.args, display: displayCommand(valid.command, valid.args), cwd: where.cwd, cwdRelative: where.relative, level: verdict.level, reason: verdict.reason, timeoutMs },
   };
+}
+
+/**
+ * Starts an allowed plan and leaves it running. It reports only what happened: that the program is
+ * running (or that it ended at once, with its exit code), and the local address it printed — if it
+ * printed one. An address is never made up.
+ */
+async function startPlanned(call: ToolCall, plan: CommandPlan, workspace: Workspace, environment: CommandEnvironment): Promise<ToolResult> {
+  const header = `$ ${plan.display}   (in ${plan.cwdRelative}, left running)`;
+  if (!environment.background) return { id: call.id, ok: false, output: `${header}\nKeeping a program running isn't available here.` };
+  const started = await environment.background.start(plan.bin, startArguments(plan), { cwd: plan.cwd, cwdRelative: plan.cwdRelative, display: plan.display, signal: environment.signal, readyMs: environment.readyMs });
+  if (!started.ok) return { id: call.id, ok: false, output: `${header}\n${started.reason}`, ...(started.cancelled ? { cancelled: true, exitCode: null } : {}) };
+  const { info } = started;
+  const printed = tail(scrubOutput(started.output, workspace).trimEnd(), STDOUT_SENT);
+  const output = printed.text ? `\n--- output so far${printed.cut ? " (the end of it)" : ""} ---\n${printed.text}` : "\n(it has printed nothing yet)";
+  if (!info.running) return { id: call.id, ok: false, exitCode: info.exitCode, output: `${header}\nIt ended straight away${info.exitCode === null ? "" : ` with exit code ${info.exitCode}`}. Nothing is running.${output}` };
+  const address = info.url ? `Local address: ${info.url}` : "It has not printed a local address yet. Use process_status to look again.";
+  return { id: call.id, ok: true, output: `${header}\nRunning as process ${info.id}. ${address}${output}`, ...(printed.cut ? { truncated: true } : {}) };
+}
+
+/** What a program PawOS left running is doing now: running or ended, its address, and the end of its output. */
+export function describeProcess(call: ToolCall, background: BackgroundProcesses | undefined, workspace: Workspace): ToolResult {
+  const id = typeof call.args.id === "string" ? call.args.id.trim() : "";
+  const found = background?.status(id);
+  if (!found) return { id: call.id, ok: false, output: `PawOS isn't keeping a process called ${id.slice(0, 16) || "that"} running. It can only see programs it started in this session.` };
+  const printed = tail(scrubOutput(found.output, workspace).trimEnd(), STDOUT_SENT);
+  const state = found.info.running ? "running" : `ended${found.info.exitCode === null ? "" : ` with exit code ${found.info.exitCode}`}`;
+  return { id: call.id, ok: true, output: `Process ${found.info.id} (${found.info.display}): ${state}.${found.info.url ? ` Local address: ${found.info.url}` : " No local address printed."}${printed.text ? `\n--- output${printed.cut ? " (the end of it)" : ""} ---\n${printed.text}` : "\n(it has printed nothing)"}` };
 }
 
 /** Git commands that print the contents of files: they are told to leave protected files out. */
@@ -254,6 +284,10 @@ const tail = (text: string, keep: number): { text: string; cut: boolean } => (te
 
 export interface CommandEnvironment {
   signal?: AbortSignal;
+  /** The programs this PawOS session keeps running. Without it, nothing can be left running. */
+  background?: BackgroundProcesses;
+  /** How long a started program is watched for its address (tests shorten it). */
+  readyMs?: number;
   /** Starts the program (tests replace it to see exactly what would be started). */
   run?: (bin: string, args: string[], options: ProcessOptions) => Promise<ProcessOutcome>;
 }
@@ -263,6 +297,7 @@ export interface CommandEnvironment {
  * end of what it printed — bounded, scrubbed, and never including this computer's environment.
  */
 export async function runPlanned(call: ToolCall, plan: CommandPlan, workspace: Workspace, environment: CommandEnvironment = {}): Promise<ToolResult> {
+  if (plan.tool === "start_process") return startPlanned(call, plan, workspace, environment);
   const outcome = await (environment.run ?? runProcess)(plan.bin, startArguments(plan), { cwd: plan.cwd, timeoutMs: plan.timeoutMs, signal: environment.signal });
   const header = `$ ${plan.display}   (in ${plan.cwdRelative})`;
   if (outcome.failedToStart) return { id: call.id, ok: false, output: `${header}\n${plan.bin} could not be run. ${outcome.failedToStart}`, exitCode: null };

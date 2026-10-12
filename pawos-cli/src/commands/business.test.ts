@@ -255,9 +255,11 @@ describe("billing", () => {
     const lines = renderRefusal(new PawosApiError("rejected", "Limit reached.", 402, "usage_limit_reached"), "Paw Pro", "https://pawos.revantaai.com/");
     const text = lines.map((entry) => entry.map((part) => (typeof part === "string" ? part : part.text)).join("")).join("\n");
     expect(text).toContain("https://pawos.revantaai.com/pricing");
-    for (const { source } of sources()) {
+    for (const { file, source } of sources()) {
       expect(source).not.toMatch(/razorpay|stripe|rzp_|sk_live|sk_test|card number|cvv|checkout\.js|payment_id|service_role/i);
-      expect(source).not.toMatch(/\bopen\(|start "" |xdg-open|shell\.openExternal/);
+      // Nothing opens the plans page (or any page). The local agent's own browser step lives in
+      // local/process.ts and opens only addresses on this computer — never pawos.revantaai.com.
+      if (file !== "local/process.ts") expect(source, file).not.toMatch(/\bopen\(|start "" |xdg-open|shell\.openExternal/);
     }
   });
 

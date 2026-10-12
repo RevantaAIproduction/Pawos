@@ -171,12 +171,35 @@ describe("the browser is never launched automatically", () => {
     expect(sources.length).toBeGreaterThan(10);
     for (const file of sources) {
       const source = fs.readFileSync(path.join(__dirname, file), "utf8");
-      expect(source).not.toMatch(/rundll32|xdg-open|FileProtocolHandler|openBrowser|PAWOS_NO_BROWSER/);
+      // Signing in never opens a browser. The one place a browser can be opened at all is the local
+      // agent's "open this local page" step (local/process.ts, called from local/agent.ts) — only for
+      // an address on this computer, and only after the user says yes to that address.
+      const mayOpenLocalPages = ["local/process.ts", "local/agent.ts"].includes(file.replace(/\\/g, "/"));
+      if (!mayOpenLocalPages) expect(source, file).not.toMatch(/rundll32|xdg-open|FileProtocolHandler|openBrowser|openInBrowser|explorer\.exe|PAWOS_NO_BROWSER/);
       // The CLI starts programs in two places only: Git queries, and the local agent's command runner —
       // which starts nothing that isn't on its short list of development tools (never a browser or a shell).
       if (source.includes("child_process")) expect(["git/localRepository.ts", "local/process.ts"]).toContain(file.replace(/\\/g, "/"));
       // The CLI's own files make no network request of their own: every request goes through the shared client.
       expect(source).not.toMatch(/\bfetch\(/);
+    }
+  });
+});
+
+describe("the local agent's browser step can't be used to open a sign-in or any outside page", () => {
+  it("only an address on this computer is ever opened", async () => {
+    const { localUrlProblem, openInBrowser } = await import("./local/process");
+    for (const url of ["https://pawos.test/auth/device?challenge=abc", "https://pawos.revantaai.com/pricing", "https://github.com/login/oauth/authorize", "http://localhost.evil.example/", "http://127.0.0.1.evil.example/", "http://user:pass@localhost:3000/", "file:///C:/Windows/win.ini", "javascript:alert(1)", "pawos://auth", "ms-settings:", "not a url", ""]) {
+      expect(localUrlProblem(url), url).toBeTruthy();
+      // Asked directly, the opener refuses too — and starts nothing.
+      expect(await openInBrowser(url)).toMatchObject({ ok: false });
+    }
+    expect(launched.programs).toEqual([]);
+    for (const url of ["http://localhost:5173/", "http://127.0.0.1:3000/cart", "http://[::1]:8080/", "https://localhost:8443/"]) expect(localUrlProblem(url), url).toBeNull();
+  });
+
+  it("the sign-in code never reaches for it", () => {
+    for (const file of ["auth/browserLogin.ts", "auth/sessionStore.ts", "commands/connections.ts", "commands/status.ts", "ui/account.ts"]) {
+      expect(fs.readFileSync(path.join(__dirname, file), "utf8"), file).not.toMatch(/openInBrowser|approveOpen|local\/process/);
     }
   });
 });

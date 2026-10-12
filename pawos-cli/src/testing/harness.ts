@@ -4,6 +4,7 @@ import * as path from "path";
 import { CliSessionStore, type Keyring } from "../auth/sessionStore";
 import type { CliContext } from "../context";
 import type { LocalRepository } from "../git/localRepository";
+import { BackgroundProcesses } from "../local/process";
 import { openWorkspace } from "../local/workspace";
 import { INTERRUPT } from "./keys";
 import { PawosClient, SessionManager, runTask, sendChatMessage, type AccountOverview, type CodeChange, type CodeChangeStep, type FetchLike, type Integration, type RepositoryReadiness } from "../shared";
@@ -384,6 +385,8 @@ export function harness(options: HarnessOptions = {}) {
   let interruptPending = false;
   let clock = 0;
   const prompter = new ScriptedPrompter(options.answers ?? [], (text) => chunks.push(text));
+  const background = new BackgroundProcesses();
+  let waited = 0;
 
   const ctx: CliContext = {
     term,
@@ -397,6 +400,8 @@ export function harness(options: HarnessOptions = {}) {
     detectProject: async () => ({ cwd, branch: inGit ? (options.branch === undefined ? "main" : options.branch) : null, repository: local }),
     detectWorkspace: async () => (options.workspaceRoot ? openWorkspace(options.workspaceRoot) : null),
     stateDirectory: options.stateDirectory ?? directory,
+    background,
+    sleep: async (ms) => void (waited += ms),
     // The real task runner, with time that only moves when it waits.
     run: (taskOptions) => runTask({ ...taskOptions, sleep: async (ms) => void (clock += ms), now: () => clock }),
     // The real chat sender, with the same clock.
@@ -435,6 +440,12 @@ export function harness(options: HarnessOptions = {}) {
     },
     listening: () => interruptHandlers.size,
     elapsed: () => clock,
-    cleanup: () => fs.rmSync(directory, { recursive: true, force: true }),
+    background,
+    /** How long the CLI has waited between tries, in total. */
+    waited: () => waited,
+    cleanup: () => {
+      void background.stopAll();
+      fs.rmSync(directory, { recursive: true, force: true });
+    },
   };
 }

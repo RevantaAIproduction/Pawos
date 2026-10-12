@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import { runGit, type GitRunner } from "../git/localRepository";
 
@@ -30,15 +31,53 @@ export function openWorkspace(root: string): Workspace | null {
   }
 }
 
+/** Whether `target` is `root` itself or inside it. */
+function within(root: string, target: string): boolean {
+  const relative = path.relative(root, target);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
 /**
- * The project the user is standing in: the top of the Git work tree that contains `cwd`. Outside a
- * Git repository there is no project, and PawOS reads nothing — it never falls back to the folder
- * it happens to be in (which could be a home directory).
+ * Why a folder that is not a Git repository can't be treated as a project, or null when it can.
+ * A project folder is somewhere a person keeps one project — never a whole drive, the home folder
+ * (or anything above it), or part of the operating system. Those hold far more than a project,
+ * and PawOS does not work across them.
  */
-export async function detectWorkspace(cwd: string, git: GitRunner = runGit): Promise<Workspace | null> {
+export function projectFolderProblem(folder: string, home: string = os.homedir(), env: NodeJS.ProcessEnv = process.env): string | null {
+  let real: string;
+  try {
+    real = fs.realpathSync.native(folder);
+    if (!fs.statSync(real).isDirectory()) return "It isn't a folder.";
+  } catch {
+    return "It doesn't exist.";
+  }
+  if (path.dirname(real) === real) return "It is a whole drive, not a project folder.";
+  let realHome = home;
+  try {
+    realHome = fs.realpathSync.native(home);
+  } catch {
+    // Compare with the path as given.
+  }
+  if (realHome && within(real, realHome)) return "It is your home folder (or above it), not a project folder.";
+  const system = [env.SystemRoot, env.ProgramFiles, env["ProgramFiles(x86)"], env.ProgramData, "/etc", "/usr", "/bin", "/sbin", "/var", "/System", "/Library", "/boot", "/dev", "/proc"].filter((entry): entry is string => Boolean(entry));
+  for (const place of system) {
+    if (path.isAbsolute(place) && (within(place, real) || within(real, place))) return "It is part of the operating system.";
+  }
+  return null;
+}
+
+/**
+ * The project the user is standing in. Inside a Git repository it is the top of the work tree.
+ * Outside one, it is the folder `pawos` was started in — as long as that is a project folder and
+ * not a drive, the home folder or part of the system (`projectFolderProblem`); there PawOS has no
+ * project and reads nothing. A folder without Git works the same way otherwise: the same boundary,
+ * the same protected files, the same questions before anything changes.
+ */
+export async function detectWorkspace(cwd: string, git: GitRunner = runGit, home: string = os.homedir()): Promise<Workspace | null> {
   const top = await git(["rev-parse", "--show-toplevel"], cwd);
   const root = top.ok ? top.stdout.trim() : "";
-  return root ? openWorkspace(root) : null;
+  if (root) return openWorkspace(root);
+  return projectFolderProblem(cwd, home) === null ? openWorkspace(cwd) : null;
 }
 
 /** Folders never entered or listed: Git's data, installed dependencies, and generated output. */

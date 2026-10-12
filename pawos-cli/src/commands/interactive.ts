@@ -14,7 +14,7 @@ import { LiveStatus } from "../ui/spinner";
 import { blank, clean, cleanLines, indent, line, seg, type Line } from "../ui/terminal";
 import { connectService, showConnections } from "./connections";
 import { accountRows } from "./status";
-import { classifyIntent } from "../intent/intent";
+import { classifyIntent, routeLocal } from "../intent/intent";
 import { runLocalTask, type LocalOutcome, type LocalStep } from "../local/agent";
 import type { Proposal } from "../local/changes";
 import { applyRestore, latestCheckpoint, planRestore } from "../local/checkpoint";
@@ -22,7 +22,7 @@ import type { CommandPlan } from "../local/commands";
 import type { GitPlan } from "../local/gitChanges";
 import { describeCall } from "../local/tools";
 import type { Workspace } from "../local/workspace";
-import { MODE_SUMMARY, UNDO_QUESTION, askChangePermission, askCommandPermission, askLocalPermission, askPermission, askYesOrCancel, listPreviousWork, modeLines, openPreviousWork, parseMode, readAttachment, type PermissionMode } from "./workspace";
+import { MODE_SUMMARY, OPEN_QUESTION, UNDO_QUESTION, askChangePermission, askCommandPermission, askLocalPermission, askPermission, askYesOrCancel, listPreviousWork, modeLines, openPreviousWork, parseMode, readAttachment, type PermissionMode } from "./workspace";
 
 /** PawOS Web's own limit on a message (WEB_POLICY.maxMessageChars); the server enforces it too. */
 export const MAX_TASK_CHARS = 4000;
@@ -194,12 +194,13 @@ const commandEnding = (command: NonNullable<LocalStep["command"]>): string => (c
 export function renderCommand(plan: CommandPlan): Line[] {
   return [
     blank(),
-    line("  ", seg("PawOS wants to run:", "strong")),
+    line("  ", seg(plan.tool === "start_process" ? "PawOS wants to start, and leave running:" : "PawOS wants to run:", "strong")),
     blank(),
     line("    ", clean(plan.display, 2000)),
     blank(),
     line("  ", seg("Directory:", "muted")),
     line("    ", clean(plan.cwd, 600)),
+    ...(plan.tool === "start_process" ? [blank(), line("  ", seg("It keeps running until you type /stop, PawOS stops it, or you leave PawOS.", "muted"))] : []),
     ...(plan.reason ? [blank(), line("  ", seg(`PawOS always asks before this: ${clean(plan.reason, 300)}`, "warn"))] : []),
     blank(),
   ];
@@ -274,6 +275,10 @@ export function localAccount(project: string, steps: LocalStep[]): { account: Li
       ...verdict("Tests", lastOf("run_tests")),
       ...verdict("Build", lastOf("build"))
     );
+  }
+  for (const step of steps) {
+    if (step.background) account.push(line("  ", seg("Left running: ", "muted"), clean(step.background.display, 200), seg(step.background.url ? `  ${clean(step.background.url, 200)}` : "  (it printed no local address)", "muted")));
+    if (step.opened) account.push(line("  ", seg(`Asked your browser to open ${clean(step.opened, 200)}. PawOS did not see the page.`, "muted")));
   }
   if (git.length > 0) account.push(line("  ", seg("Git:", "muted")), ...git.slice(0, 12).map((entry) => line("    ", clean(entry.summary, 300))), ...(pushed ? [] : [line("    ", seg("Nothing was pushed.", "muted"))]));
   if (changes.length > 0) {
@@ -356,7 +361,7 @@ interface WriteConsent {
  * on the user's yes; a delete is asked about every time, whatever the mode. Ctrl+C stops the task
  * at once — there is nothing left running anywhere, because the work was happening here.
  */
-async function followLocalTask(ctx: CliContext, workspace: Workspace, branch: string | null, goal: string, consent: WriteConsent): Promise<LocalOutcome> {
+async function followLocalTask(ctx: CliContext, workspace: Workspace, branch: string | null, goal: string, consent: WriteConsent, limits: { readOnly?: boolean; lookOnly?: boolean } = {}): Promise<LocalOutcome> {
   const { term } = ctx;
   let live = new LiveStatus(term, ctx.timers);
   const stop = new AbortController();
@@ -406,8 +411,24 @@ async function followLocalTask(ctx: CliContext, workspace: Workspace, branch: st
           term.print([blank(), line("  ", seg(allowed ? "Allowed." : "Denied. Nothing was run.", "muted")), blank()]);
         }
         live = new LiveStatus(term, ctx.timers);
-        if (!stop.signal.aborted) live.start(allowed ? `Running ${clean(plan.display, 120)}${term.glyphs.ellipsis} Ctrl+C stops it.` : `PawOS is thinking${term.glyphs.ellipsis}`);
+        if (!stop.signal.aborted) live.start(allowed ? `${plan.tool === "start_process" ? "Starting" : "Running"} ${clean(plan.display, 120)}${term.glyphs.ellipsis} Ctrl+C stops it.` : `PawOS is thinking${term.glyphs.ellipsis}`);
         return allowed ? "allow" : "deny";
+      },
+      background: ctx.background,
+      sleep: ctx.sleep,
+      onRetry: (attempt, of) => live.update([], `PawOS's model is busy — trying again (${attempt} of ${of})${term.glyphs.ellipsis}`),
+      readOnly: limits.readOnly === true,
+      lookOnly: limits.lookOnly === true,
+      approveOpen: async (url) => {
+        live.stop();
+        term.print([blank(), line("  ", seg("PawOS wants to open in your browser:", "strong")), blank(), line("    ", clean(url, 300)), blank(), line("  ", seg("PawOS can't see the page: it can only ask your browser to open it.", "muted")), blank()]);
+        // Opening a window on the user's screen is asked about every time, in every mode.
+        const answer = await askYesOrCancel(ctx.prompter, OPEN_QUESTION, (lines) => term.print(lines));
+        if (answer === "deny" && ctx.prompter.interrupted) stop.abort();
+        term.print([blank(), line("  ", seg(answer === "allow" ? "Allowed." : "Not opened.", "muted")), blank()]);
+        live = new LiveStatus(term, ctx.timers);
+        if (!stop.signal.aborted) live.start(`PawOS is thinking${term.glyphs.ellipsis}`);
+        return answer;
       },
       approve: async (proposal) => {
         // The progress display gives way to the change and the question, then comes back.
@@ -555,6 +576,7 @@ export const COMMAND_HELP: [string, string][] = [
   ["/mode [name]", "Ask before code changes, don't ask, or plan only"],
   ["/resume [number]", "Open earlier PawOS work and carry on with it"],
   ["/undo", "Put back the files PawOS changed in its last task here"],
+  ["/stop", "Stop the programs PawOS left running (a development server)"],
   ["/attach <file>", "Send a text file with your next message"],
   ["/status", "Show your account, plan and usage"],
   ["/help", "Show these commands"],
@@ -570,6 +592,16 @@ export const COMMAND_HELP: [string, string][] = [
  * adds context: inside a GitHub repository PawOS can also make code changes there.
  */
 export async function interactive(ctx: CliContext, options: { signIn?: boolean } = {}): Promise<number> {
+  try {
+    return await workspaceSession(ctx, options);
+  } finally {
+    // However the session ended, nothing PawOS started is left running after it.
+    const stopped = (await ctx.background?.stopAll().catch(() => [])) ?? [];
+    if (stopped.length > 0) ctx.term.print([line("  ", seg(`Stopped ${stopped.map((entry) => clean(entry.display, 80)).join(", ")}.`, "muted")), blank()]);
+  }
+}
+
+async function workspaceSession(ctx: CliContext, options: { signIn?: boolean } = {}): Promise<number> {
   const { term, session } = ctx;
   if (!ctx.config.ok) {
     term.print([blank(), bad(ctx, ctx.config.problem)]);
@@ -655,6 +687,7 @@ export async function interactive(ctx: CliContext, options: { signIn?: boolean }
         ? [
             line("  ", seg(`Local mode: PawOS works in ${clean(workspace.name, 120)} on this computer. It asks before changing a file or running a command.`, "muted")),
             line("  ", seg("/undo puts back the files it changed in its last task.", "muted")),
+            ...((ctx.background?.running() ?? []).map((entry) => line("  ", seg(`Still running: ${clean(entry.display, 80)}${entry.url ? `  ${clean(entry.url, 120)}` : ""}  (/stop to stop it)`, "muted")))),
             line("  ", seg("/remote <request> changes the GitHub repository instead. /chat to just talk.", "muted")),
             blank(),
           ]
@@ -809,6 +842,11 @@ export async function interactive(ctx: CliContext, options: { signIn?: boolean }
           ]);
           break;
         }
+        case "stop": {
+          const stopped = (await ctx.background?.stopAll()) ?? [];
+          term.print([blank(), ...(stopped.length > 0 ? stopped.map((entry) => line("  ", seg(term.glyphs.done, "good"), ` Stopped ${clean(entry.display, 120)}`)) : [line("  ", seg("PawOS isn't keeping anything running.", "muted"))]), blank()]);
+          break;
+        }
         case "undo":
           await undoLastTask(ctx, workspace);
           break;
@@ -840,10 +878,17 @@ export async function interactive(ctx: CliContext, options: { signIn?: boolean }
     const working = remote || mode === "local" || (mode === "code" && "repository" in code);
     if (ctx.debug && working) term.print([line("  ", seg(`debug: intent=${decision.intent} reason=${decision.reason}${remote ? " target=remote" : mode === "local" ? " target=local" : ""}`, "muted"))]);
     // Where a task goes is fixed by the mode the user can see, or by /remote: never chosen for them.
-    const localTurn = !remote && mode === "local" && workspace !== null && decision.intent === "task";
+    // In a project on this computer the agent is also the only thing that can LOOK, so everything
+    // about the project goes to it — a question, "run the build", "start the dev server" — and only
+    // conversation stays chat (intent/intent.ts, routeLocal). `/code <request>` is always work.
+    const local = !remote && mode === "local" && workspace !== null ? (saidCode ? ({ to: "agent", readOnly: false } as const) : routeLocal(content)) : null;
+    const localTurn = local !== null && local.to === "agent";
     const codeTurn = (remote || mode === "code") && "repository" in code && decision.intent === "task";
     const talking = working && !codeTurn && !localTurn;
-    const planOnly = (codeTurn || localTurn) && permission === "plan";
+    // Plan mode on GitHub talks the change through in chat. On this computer PawOS can do better
+    // without changing anything: it reads the project and plans from what is really there.
+    const planOnly = codeTurn && permission === "plan";
+    const readOnly = local !== null && local.to === "agent" && local.readOnly;
     if (localTurn && workspace && permission === "ask" && !localStartAllowed) {
       const allowed = await askLocalPermission(ctx.prompter, workspace.name, (lines) => term.print(lines));
       if (allowed === "deny") {
@@ -856,13 +901,15 @@ export async function interactive(ctx: CliContext, options: { signIn?: boolean }
         term.print([blank(), line("  ", seg("PawOS won't ask before starting again in this session. It still asks before changing files. /mode ask turns it back on.", "muted"))]);
       }
     }
-    if (localTurn && workspace && !planOnly) {
+    if (localTurn && workspace) {
+      if (permission === "plan") term.print([blank(), line("  ", seg("Plan mode: PawOS will read the project and plan this. Nothing will be changed.", "muted"))]);
       // Auto mode is the user saying "don't ask before code changes": it covers writes and edits. Never deletes.
       if (permission === "auto") consent.writes = true;
       // Commands follow the mode itself, never an earlier "always allow": ask mode asks before every one.
       consent.commands = permission === "auto";
       consent.git = permission === "auto";
-      const outcome = await followLocalTask(ctx, workspace, project.branch, content, consent);
+      const goal = permission === "plan" ? `Plan this without changing anything: look at the files involved, then describe the steps and the exact changes you would make.\n\n${content}` : content;
+      const outcome = await followLocalTask(ctx, workspace, project.branch, goal, consent, { readOnly, lookOnly: permission === "plan" });
       // What was done here, said exactly — the same account however the task ended.
       const { account, changes, ran, git } = localAccount(workspace.name, outcome.steps);
       if (outcome.status === "finished") {

@@ -108,7 +108,7 @@ describe("inside a project, local mode is the default", () => {
 });
 
 describe("conversation is not a task", () => {
-  it.each([["hii"], ["hello"], ["what is PawOS?"], ["explain this"], ["thanks"]])("%s → chat: the agent is not started and nothing is read", async (said) => {
+  it.each([["hii"], ["hello"], ["what is PawOS?"], ["thanks"], ["how are you?"], ["what can you do?"], ["what does my plan include?"]])("%s → chat: the agent is not started and nothing is read", async (said) => {
     const h = start({ answers: [said, null], permissionMode: "ask" });
     expect(await runCli([], h.ctx)).toBe(0);
     expect(h.server.agentCalls()).toHaveLength(0);
@@ -127,6 +127,41 @@ describe("conversation is not a task", () => {
     // /code brings the project back: the next task runs here.
     expect(h.server.agentCalls()).toHaveLength(1);
     expect(h.server.agentCalls()[0]!.body?.goal).toBe(TASK);
+  });
+});
+
+describe("work on the project goes to the agent, however it is phrased", () => {
+  it.each([["what does src/cart.ts do?"], ["explain how the cart total is computed"], ["why is the build failing?"], ["list the files here"], ["inspect this project"], ["run the build"], ["start the dev server"], ["explain this"], ["is there a test for the cart?"]])("%s → the agent, which can look", async (said) => {
+    const h = start({ answers: [said, null] });
+    h.server.agentTurns = [toolTurn("step-1", "read_file", { path: "src/cart.ts" }), finishTurn("It sums the items.")];
+    expect(await runCli([], h.ctx)).toBe(0);
+    expect(h.server.agentCalls()).toHaveLength(2);
+    expect(h.server.agentCalls()[0]!.body?.goal).toBe(said);
+    expect(h.server.chats()).toHaveLength(0);
+    expect(h.output()).toContain("It sums the items.");
+    expect(h.output()).not.toContain("Answered as chat");
+  });
+
+  it("'explain it, don't change anything' is read by the agent — with changes switched off", async () => {
+    const h = start({ answers: ["explain how the total works but don't change anything", null] });
+    h.server.agentTurns = [toolTurn("step-1", "read_file", { path: "src/cart.ts" }), toolTurn("step-2", "write_file", { path: "src/cart.ts", content: "gone" }), toolTurn("step-3", "delete_path", { path: "README.md" }), finishTurn("It adds the items up.")];
+    expect(await runCli([], h.ctx)).toBe(0);
+    const results = h.server.agentCalls().slice(1).map((call) => call.body!.result as { ok: boolean; denied?: boolean; output: string });
+    expect(results[0]!.ok).toBe(true);
+    expect(results[1]).toMatchObject({ ok: false, denied: true, output: expect.stringMatching(/asked for nothing to be changed/) });
+    expect(results[2]).toMatchObject({ ok: false, denied: true });
+    expect(fs.readFileSync(path.join(root, "src", "cart.ts"), "utf8")).toContain("items.reduce");
+    expect(fs.existsSync(path.join(root, "README.md"))).toBe(true);
+    // Nothing was put to the user, because nothing could change.
+    expect(h.prompter.prompts).toEqual(["  > ", "  > "]);
+  });
+
+  it("in ask mode a question about the project still waits for a yes before anything is read or sent", async () => {
+    const h = start({ answers: ["what does src/cart.ts do?", "n", null], permissionMode: "ask" });
+    expect(await runCli([], h.ctx)).toBe(0);
+    expect(h.prompter.prompts).toEqual(["  > ", PERMISSION, "  > "]);
+    expect(h.server.agentCalls()).toHaveLength(0);
+    expect(h.server.chats()).toHaveLength(0);
   });
 });
 
@@ -165,15 +200,20 @@ describe("permission still comes first", () => {
 
   it("/mode ask, auto and plan keep their meaning", async () => {
     const h = start({ answers: ["/mode plan", TASK, "/mode ask", TASK, "n", "/mode auto", TASK, null] });
-    h.server.agentTurns = [finishTurn("Looked.")];
+    h.server.agentTurns = [toolTurn("step-1", "read_file", { path: "src/cart.ts" }), toolTurn("step-2", "edit_file", { path: "src/cart.ts", oldText: "a + b", newText: "a - b" }), finishTurn("The plan: change the reducer in src/cart.ts."), finishTurn("Looked.")];
     expect(await runCli([], h.ctx)).toBe(0);
-    // plan: talked through, the agent is not started
-    expect(h.output()).toContain("Plan mode: PawOS will plan this with you. Nothing will be changed.");
-    expect(h.server.chats()).toHaveLength(1);
-    expect(String(h.server.chats()[0]!.body?.content)).toContain(TASK);
+    // plan: PawOS reads the project and plans from it — and changes nothing, whatever it is asked for.
+    expect(h.output()).toContain("Plan mode: PawOS will read the project and plan this. Nothing will be changed.");
+    expect(h.output()).toContain("The plan: change the reducer in src/cart.ts.");
+    const planned = h.server.agentCalls();
+    expect(String(planned[0]!.body?.goal)).toMatch(/^Plan this without changing anything/);
+    expect(String(planned[0]!.body?.goal)).toContain(TASK);
+    expect(planned[2]!.body?.result).toMatchObject({ id: "step-2", ok: false, denied: true, output: expect.stringMatching(/plan mode/) });
+    expect(fs.readFileSync(path.join(root, "src", "cart.ts"), "utf8")).toContain("a + b");
+    expect(h.server.chats()).toHaveLength(0);
     // ask: denied; auto: runs without a question
     expect(h.prompter.prompts.filter((prompt) => prompt === PERMISSION)).toHaveLength(1);
-    expect(h.server.agentCalls()).toHaveLength(1);
+    expect(h.server.agentCalls()).toHaveLength(4);
   });
 });
 

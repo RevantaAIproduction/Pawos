@@ -1,5 +1,6 @@
 import type { CliSessionStore } from "./auth/sessionStore";
 import type { ProjectContext } from "./git/localRepository";
+import type { BackgroundProcesses } from "./local/process";
 import type { Workspace } from "./local/workspace";
 import type { ApiConfig, ChatOptions, PawosClient, SendResult, SessionManager, TaskOptions, TaskOutcome } from "./shared";
 import type { PendingTaskStore } from "./state/pendingTask";
@@ -28,6 +29,10 @@ export interface CliContext {
    * when it wasn't started inside one. Without it there is no local mode.
    */
   detectWorkspace?: () => Promise<Workspace | null>;
+  /** Waits (between tries of a local task's turn). Tests replace it so they don't really wait. */
+  sleep?: (ms: number) => Promise<void>;
+  /** Programs the local agent left running (a development server). They end when PawOS does. */
+  background?: BackgroundProcesses;
   /** Where the CLI keeps its own files. The local agent never changes or deletes anything there. */
   stateDirectory?: string;
   /** Sends one chat message and waits for the reply (the shared chat sender). Tests replace its timing only. */

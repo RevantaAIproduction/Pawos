@@ -129,3 +129,30 @@ export function classifyIntent(text: string): IntentDecision {
 }
 
 export const isTask = (text: string): boolean => classifyIntent(text).intent === "task";
+
+/** Talk about PawOS itself, the account or the plan — not about the project in front of it. */
+const ABOUT_PAWOS = /\b(pawos|paw (go|pro|max|team)|who are you|how are you|what can you do|what are you|your (name|plan|pricing|price|limits?)|my (plan|account|subscription|usage|credits?|billing|invoice))\b/i;
+
+export type LocalRoute = { to: "agent"; readOnly: boolean } | { to: "chat" };
+
+/**
+ * Where a message goes when PawOS is working in a project on this computer.
+ *
+ * `classifyIntent` answers a narrower question — "is this an instruction to CHANGE the project?" —
+ * which is what matters before a change is pushed to GitHub. On this computer the agent is also the
+ * only thing that can look: "what does src/App.tsx do?", "why is the build failing?", "run the
+ * build", "start the dev server" all need the project, and plain chat cannot see it. So here
+ * everything about the project goes to the agent, and only conversation stays conversation: a
+ * greeting, thanks, a message with nothing to act on, or a question about PawOS itself.
+ *
+ * "Explain this, don't change anything" still goes to the agent — reading is the point — with
+ * changes switched off.
+ */
+export function routeLocal(text: string): LocalRoute {
+  const decision = classifyIntent(text);
+  if (decision.intent === "task") return { to: "agent", readOnly: false };
+  if (decision.reason === "empty" || decision.reason === "greeting" || decision.reason === "unspecific") return { to: "chat" };
+  if (decision.reason === "no_change_wanted") return { to: "agent", readOnly: true };
+  if (ABOUT_PAWOS.test(text)) return { to: "chat" };
+  return { to: "agent", readOnly: false };
+}

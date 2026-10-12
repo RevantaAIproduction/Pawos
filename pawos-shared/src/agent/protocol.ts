@@ -15,7 +15,7 @@
  */
 
 /** Reading, changing files, running development commands, and a fixed set of Git operations. */
-export const AGENT_TOOL_NAMES = ["list_files", "read_file", "search_files", "git_status", "git_diff", "git_log", "write_file", "edit_file", "delete_path", "run_command", "run_tests", "build", "git_add", "git_commit", "git_branch", "git_checkout", "git_push", "finish"] as const;
+export const AGENT_TOOL_NAMES = ["list_files", "read_file", "search_files", "git_status", "git_diff", "git_log", "write_file", "edit_file", "delete_path", "run_command", "run_tests", "build", "git_add", "git_commit", "git_branch", "git_checkout", "git_push", "start_process", "stop_process", "process_status", "open_browser", "finish"] as const;
 export type AgentToolName = (typeof AGENT_TOOL_NAMES)[number];
 
 /**
@@ -25,9 +25,11 @@ export type AgentToolName = (typeof AGENT_TOOL_NAMES)[number];
  *   delete   removes a file or a folder
  *   execute  runs a program
  *   git      changes the Git repository (stages, commits, branches, switches, pushes)
+ *   process  asks about, or stops, a program PawOS itself left running
+ *   open     opens a page in the user's browser
  *   control  ends the task; touches nothing
  */
-export type ToolRisk = "read" | "write" | "delete" | "execute" | "git" | "control";
+export type ToolRisk = "read" | "write" | "delete" | "execute" | "git" | "process" | "open" | "control";
 
 const RISK: Record<AgentToolName, ToolRisk> = {
   list_files: "read",
@@ -47,6 +49,10 @@ const RISK: Record<AgentToolName, ToolRisk> = {
   git_branch: "git",
   git_checkout: "git",
   git_push: "git",
+  start_process: "execute",
+  stop_process: "process",
+  process_status: "process",
+  open_browser: "open",
   finish: "control",
 };
 
@@ -125,6 +131,12 @@ const ARGS: Record<AgentToolName, Record<string, { type: "string" | "number" | "
   git_branch: { name: { type: "string", required: true, max: 200 } },
   git_checkout: { branch: { type: "string", required: true, max: 200 }, create: { type: "boolean" } },
   git_push: { remote: { type: "string", max: 100 } },
+  // A program that keeps running (a development server): started like a command, then left running.
+  start_process: { command: { type: "string", required: true, max: 64 }, args: { type: "strings", max: 2000, maxItems: 64 }, cwd: { type: "string", max: 400 } },
+  stop_process: { id: { type: "string", required: true, max: 16 } },
+  process_status: { id: { type: "string", required: true, max: 16 } },
+  // A page served from the user's own computer, opened in their browser. The client refuses anything else.
+  open_browser: { url: { type: "string", required: true, max: 300 } },
   finish: { summary: { type: "string", required: true, max: 8000 } },
 };
 
@@ -190,7 +202,7 @@ export const AGENT_CLIENT_LIMITS = {
   /** A single file larger than this is not read at all. */
   fileBytes: 512_000,
   /** Steps the client will run for one task, whatever the service asks. */
-  turns: 40,
+  turns: 80,
   /** How long one task may take. */
-  taskMs: 10 * 60 * 1000,
+  taskMs: 30 * 60 * 1000,
 } as const;

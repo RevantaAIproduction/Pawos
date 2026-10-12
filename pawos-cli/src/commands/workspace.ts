@@ -117,6 +117,7 @@ export async function askYesOrCancel(prompter: Prompter, question: string, print
   }
 }
 
+export const OPEN_QUESTION = "  Open it? [y] open  [n] cancel\n\n  > ";
 export const UNDO_QUESTION = "  Undo these changes? [y] undo  [n] keep\n\n  > ";
 
 export const DELETE_QUESTION = "  Delete it? [y] delete  [n] keep\n\n  > ";

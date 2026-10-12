@@ -5,9 +5,9 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { LocalGit } from "../git/localRepository";
 import { AGENT_CLIENT_LIMITS, AGENT_TOOL_NAMES, PawosApiError, PawosClient, isAgentToolName, parseToolCall, parseTurn, toolRisk, type AgentTurnRequest, type AgentTurnResponse, type ToolCall } from "../shared";
-import { runLocalTask } from "./agent";
+import { TURN_RETRY_DELAYS_MS, runLocalTask } from "./agent";
 import { READ_LINES, SEARCH_MATCHES, describeCall, executeTool } from "./tools";
-import { detectWorkspace, listFiles, openWorkspace, protectedReason, resolveInside, type Workspace } from "./workspace";
+import { detectWorkspace, listFiles, openWorkspace, projectFolderProblem, protectedReason, resolveInside, type Workspace } from "./workspace";
 
 /**
  * The local agent's own half: the workspace boundary, the protected files, the tools and the loop.
@@ -66,7 +66,7 @@ afterEach(() => fs.rmSync(outer, { recursive: true, force: true }));
 
 describe("the contract: a fixed list of tools, judged here", () => {
   it("the tools are exactly these, and PawOS Web's copy of the contract lists the same ones", () => {
-    expect([...AGENT_TOOL_NAMES]).toEqual(["list_files", "read_file", "search_files", "git_status", "git_diff", "git_log", "write_file", "edit_file", "delete_path", "run_command", "run_tests", "build", "git_add", "git_commit", "git_branch", "git_checkout", "git_push", "finish"]);
+    expect([...AGENT_TOOL_NAMES]).toEqual(["list_files", "read_file", "search_files", "git_status", "git_diff", "git_log", "write_file", "edit_file", "delete_path", "run_command", "run_tests", "build", "git_add", "git_commit", "git_branch", "git_checkout", "git_push", "start_process", "stop_process", "process_status", "open_browser", "finish"]);
     const web = fs.readFileSync(path.join(__dirname, "..", "..", "..", "pawos-web", "src", "lib", "webAgent", "protocol.ts"), "utf8");
     const listed = /export const AGENT_TOOL_NAMES = \[([^\]]*)\] as const;/.exec(web);
     expect(listed?.[1]?.split(",").map((name) => name.trim().replace(/"/g, ""))).toEqual([...AGENT_TOOL_NAMES]);
@@ -88,7 +88,10 @@ describe("the contract: a fixed list of tools, judged here", () => {
     // Reading Git is reading; only the five operations above change it.
     for (const name of ["git_status", "git_diff", "git_log"] as const) expect(toolRisk(name)).toBe("read");
     // Every tool has a risk, and it is one of these.
-    expect(AGENT_TOOL_NAMES.map(toolRisk).every((risk) => ["read", "write", "delete", "execute", "git", "control"].includes(risk))).toBe(true);
+    expect(toolRisk("start_process")).toBe("execute");
+    for (const name of ["stop_process", "process_status"] as const) expect(toolRisk(name)).toBe("process");
+    expect(toolRisk("open_browser")).toBe("open");
+    expect(AGENT_TOOL_NAMES.map(toolRisk).every((risk) => ["read", "write", "delete", "execute", "git", "process", "open", "control"].includes(risk))).toBe(true);
     // A push that claims to be a harmless read is still a push.
     expect(toolRisk(parseToolCall({ id: "s", name: "git_push", args: {}, risk: "read", approved: true })!.name)).toBe("git");
     // A command that claims to be a harmless read is still a command.
@@ -198,7 +201,13 @@ describe("the workspace boundary", () => {
   it("the project is the Git work tree the user is in — and outside one there is no project", async () => {
     expect((await detectWorkspace(path.join(root, "src")))?.root).toBe(workspace.root);
     expect(workspace.name).toBe("shop");
-    expect(await detectWorkspace(outer)).toBeNull();
+    // A folder that is not a Git repository is a project too: the folder PawOS was started in.
+    expect(await detectWorkspace(outer)).toEqual({ root: outer, name: path.basename(outer) });
+    const plain = path.join(outer, "plain-project");
+    fs.mkdirSync(path.join(plain, "src"), { recursive: true });
+    expect((await detectWorkspace(plain))?.root).toBe(plain);
+    // Started in a folder inside it, that folder is the project: with no repository there is no "top" to climb to.
+    expect((await detectWorkspace(path.join(plain, "src")))?.root).toBe(path.join(plain, "src"));
     expect(openWorkspace(path.join(root, "missing"))).toBeNull();
     expect(openWorkspace(path.join(root, "README.md"))).toBeNull();
   });
@@ -255,6 +264,47 @@ describe("the workspace boundary", () => {
     const read = await run("read_file", { path: "settings.txt" });
     expect(read).toMatchObject({ ok: false, denied: true });
     expect(read.output).not.toContain("sk-live");
+  });
+});
+
+describe("a project folder that isn't a Git repository", () => {
+  it("is never a drive, the home folder, anything above it, or part of the operating system", () => {
+    const home = os.homedir();
+    expect(projectFolderProblem(path.parse(home).root)).toBe("It is a whole drive, not a project folder.");
+    expect(projectFolderProblem(home)).toBe("It is your home folder (or above it), not a project folder.");
+    expect(projectFolderProblem(path.dirname(home))).toBeTruthy();
+    for (const place of [process.env.SystemRoot, process.env.ProgramFiles, process.platform === "win32" ? undefined : "/etc", process.platform === "win32" ? undefined : "/usr/bin"]) {
+      if (place && fs.existsSync(place)) expect(projectFolderProblem(place), place).toBe("It is part of the operating system.");
+    }
+    expect(projectFolderProblem(path.join(outer, "nowhere"))).toBe("It doesn't exist.");
+    expect(projectFolderProblem(path.join(root, "README.md"))).toBe("It isn't a folder.");
+    // A project folder — here, under a made-up home — is fine.
+    expect(projectFolderProblem(root, path.join(outer, "someone-elses-home"))).toBeNull();
+    expect(projectFolderProblem(outer, outer)).toBeTruthy();
+    expect(projectFolderProblem(outer, path.join(outer, "shop"))).toBeTruthy(); // the home folder is inside it
+  });
+
+  it("started in the home folder or a drive, there is no project and nothing is read", async () => {
+    const noGit = async () => ({ ok: false as const, missing: false });
+    expect(await detectWorkspace(os.homedir(), noGit)).toBeNull();
+    expect(await detectWorkspace(path.parse(os.homedir()).root, noGit)).toBeNull();
+    expect(await detectWorkspace(root, noGit, path.join(outer, "h"))).toEqual({ root, name: "shop" });
+    // Git missing altogether changes nothing: the folder is still the project.
+    expect(await detectWorkspace(root, async () => ({ ok: false as const, missing: true }), path.join(outer, "h"))).toEqual({ root, name: "shop" });
+  });
+
+  it("has the same boundary and the same protected files", async () => {
+    const plain = path.join(outer, "plain");
+    fs.mkdirSync(path.join(plain, "src"), { recursive: true });
+    fs.writeFileSync(path.join(plain, "src", "app.ts"), "export const app = 1;\n");
+    fs.writeFileSync(path.join(plain, ".env"), "KEY=sk-live-plain\n");
+    const project = (await detectWorkspace(plain, undefined, path.join(outer, "h")))!;
+    expect((await listFiles(project, project.root, 50)).files).toEqual(["src/app.ts"]);
+    expect((await executeTool(call("read_file", { path: "src/app.ts" }), project)).ok).toBe(true);
+    expect(await executeTool(call("read_file", { path: ".env" }), project)).toMatchObject({ ok: false, denied: true });
+    expect(await executeTool(call("read_file", { path: "../shop/README.md" }), project)).toMatchObject({ ok: false, denied: true });
+    // The Git tools say there is no repository; they don't fail the task.
+    expect(await executeTool(call("git_status"), project)).toMatchObject({ ok: false });
   });
 });
 
@@ -599,6 +649,62 @@ describe("the loop: PawOS names a step, the CLI runs it here", () => {
     expect(stopped.steps).toHaveLength(1);
   });
 
+  it("a model that is briefly unavailable doesn't end the task: the same turn is sent again", async () => {
+    const busy = () => new PawosApiError("server", "Paw couldn't answer just now. Please try again.", 502, "model_unavailable", "model_http_503");
+    const pawos = service([busy(), tool("step-1", "read_file", { path: "src/cart.ts" }), busy(), busy(), finish("It adds the items up.")]);
+    const waits: number[] = [];
+    const retries: string[] = [];
+    const outcome = await runLocalTask({ ...options(pawos.client), sleep: async (ms) => void waits.push(ms), onRetry: (attempt, of) => retries.push(`${attempt}/${of}`) });
+    expect(outcome.status).toBe("finished");
+    expect(outcome.status === "finished" && outcome.summary).toBe("It adds the items up.");
+    // The start was sent twice and the result three times — each retry the very same request.
+    expect(pawos.sent).toHaveLength(5);
+    expect(pawos.sent[1]).toEqual(pawos.sent[0]);
+    expect(pawos.sent[3]).toEqual(pawos.sent[2]);
+    expect(pawos.sent[4]).toEqual(pawos.sent[2]);
+    // The file was read once: a retried turn re-sends the result, it does not run the tool again.
+    expect(outcome.steps).toHaveLength(1);
+    expect(waits).toEqual([TURN_RETRY_DELAYS_MS[0], TURN_RETRY_DELAYS_MS[0], TURN_RETRY_DELAYS_MS[1]]);
+    expect(retries).toEqual(["1/3", "1/3", "2/3"]);
+  });
+
+  it("it gives up after a few tries, and says what PawOS said", async () => {
+    const busy = () => new PawosApiError("server", "Paw couldn't answer just now. Please try again.", 502, "model_unavailable");
+    const pawos = service([busy(), busy(), busy(), busy(), finish("never reached")]);
+    const outcome = await runLocalTask({ ...options(pawos.client), sleep: async () => undefined });
+    expect(outcome.status).toBe("failed");
+    expect(outcome.status === "failed" && (outcome.error as PawosApiError).code).toBe("model_unavailable");
+    expect(pawos.sent).toHaveLength(1 + TURN_RETRY_DELAYS_MS.length);
+  });
+
+  it("only that is retried: a refusal, a limit, an expired session and a bad request are final at once", async () => {
+    for (const error of [
+      new PawosApiError("forbidden", "Not on this plan.", 403, "capability_locked"),
+      new PawosApiError("payment", "Out of allowance.", 402, "usage_limit_reached"),
+      new PawosApiError("unauthenticated", "Sign in.", 401, "not_authenticated"),
+      new PawosApiError("rejected", "That isn't the result PawOS is waiting for.", 409, "invalid_message"),
+      new PawosApiError("rejected", "That task isn't in progress.", 404, "not_found"),
+      new PawosApiError("server", "Something went wrong.", 500, "failed"),
+      new PawosApiError("server", "PawOS asked for a step this version can't run.", 200, "unreadable_step"),
+      new Error("network down"),
+    ]) {
+      const pawos = service([error, finish("never")]);
+      let waited = 0;
+      const outcome = await runLocalTask({ ...options(pawos.client), sleep: async () => void (waited += 1) });
+      expect(outcome.status, error.message).toBe("failed");
+      expect(pawos.sent, error.message).toHaveLength(1);
+      expect(waited).toBe(0);
+    }
+  });
+
+  it("Ctrl+C while waiting to try again stops the task", async () => {
+    const stop = new AbortController();
+    const pawos = service([new PawosApiError("server", "busy", 503, "model_unavailable"), finish("never")]);
+    const outcome = await runLocalTask({ ...options(pawos.client), signal: stop.signal, sleep: () => new Promise(() => stop.abort()) });
+    expect(outcome.status).toBe("cancelled");
+    expect(pawos.sent).toHaveLength(1);
+  });
+
   it("describes each step in the project's own terms", () => {
     expect(describeCall(call("read_file", { path: "src/cart.ts" }))).toBe("Reading src/cart.ts");
     expect(describeCall(call("list_files"))).toBe("Listing the project's files");
@@ -612,6 +718,11 @@ describe("what the local runtime is made of", () => {
 
   it("only one file can change the project, and nothing runs a program", () => {
     expect(sources.map((entry) => entry.file).sort()).toEqual(["agent.ts", "changes.ts", "checkpoint.ts", "commandPolicy.ts", "commands.ts", "gitChanges.ts", "process.ts", "tools.ts", "workspace.ts"]);
+    // The programs it can start by name: Windows' process-tree stopper, and each system's own
+    // "open this address" launcher — which is only ever handed an address on this computer.
+    const process = sources.find((entry) => entry.file === "process.ts")!.source;
+    expect(process).toContain('const BROWSER_OPENERS: Record<string, string> = { win32: "explorer.exe", darwin: "open", linux: "xdg-open" };');
+    expect(process).toContain("if (localUrlProblem(url)) return Promise.resolve({ ok: false, reason: \"PawOS only opens pages served from this computer.\" });");
     for (const { file, source } of sources) {
       // Reading, the boundary, the loop, the command runner and the Git tools never write a file themselves:
       // every change goes through local/changes.ts, and only local/checkpoint.ts can put one back.

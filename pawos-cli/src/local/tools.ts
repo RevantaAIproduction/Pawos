@@ -219,6 +219,14 @@ export function describeCall(call: ToolCall): string {
       return `Editing ${named || "a file"}`;
     case "delete_path":
       return `Deleting ${named || "a path"}`;
+    case "start_process":
+      return `Starting ${typeof call.args.command === "string" ? call.args.command : "a program"}`;
+    case "stop_process":
+      return "Stopping a program";
+    case "process_status":
+      return "Checking a running program";
+    case "open_browser":
+      return "Opening the browser";
     case "git_add":
       return "Staging files";
     case "git_commit":

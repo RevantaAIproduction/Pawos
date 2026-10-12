@@ -3,6 +3,7 @@ import { runCli } from "./cli";
 import { VERSION, apiConfig, configDirectory } from "./config";
 import type { CliContext } from "./context";
 import { detectProject } from "./git/localRepository";
+import { BackgroundProcesses } from "./local/process";
 import { detectWorkspace } from "./local/workspace";
 import { DEFAULT_API_BASE_URL, PawosClient, SessionManager, runTask } from "./shared";
 import { PendingTaskStore } from "./state/pendingTask";
@@ -58,6 +59,7 @@ function createContext(): CliContext {
     detectProject: () => detectProject(process.cwd()),
     detectWorkspace: () => detectWorkspace(process.cwd()),
     stateDirectory: directory,
+    background: new BackgroundProcesses(),
     run: runTask,
     ...interrupts(),
     debug: Boolean(env.PAWOS_DEBUG),
@@ -69,6 +71,8 @@ async function main(): Promise<number> {
   try {
     return await runCli(process.argv.slice(2), ctx);
   } finally {
+    // Nothing PawOS started is left running after it, however it ended.
+    await ctx.background?.stopAll().catch(() => undefined);
     ctx.term.endLive(); // whatever happened, the cursor comes back
     ctx.prompter.close();
   }

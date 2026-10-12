@@ -2,7 +2,8 @@ import { AGENT_CLIENT_LIMITS, parseToolCall, toolRisk, type AgentTurnRequest, ty
 import { applyChange, prepareChange, type Proposal } from "./changes";
 import { TaskCheckpoint } from "./checkpoint";
 import { prepareGit, type GitEnvironment, type GitPlan, type PreparedGit } from "./gitChanges";
-import { prepareCommand, runPlanned, type CommandEnvironment, type CommandPlan } from "./commands";
+import { describeProcess, prepareCommand, runPlanned, type CommandEnvironment, type CommandPlan } from "./commands";
+import { localUrlProblem, openInBrowser, type BackgroundProcesses } from "./process";
 import { executeTool, type ToolEnvironment } from "./tools";
 import { listFiles, type Workspace } from "./workspace";
 
@@ -28,6 +29,10 @@ export interface LocalStep {
   result: ToolResult | null;
   /** Set when this step changed the project: what was done, and to which path. */
   change?: { operation: Proposal["operation"]; relative: string; /** A recovery copy was kept, so /undo can take this back. */ recoverable: boolean };
+  /** Set when this step left a program running: its id, the command, and the address it printed (if any). */
+  background?: { id: string; display: string; url: string | null };
+  /** Set when this step asked the browser to open a page. */
+  opened?: string;
   /** Set when this step changed the Git repository: which operation, and a few words on it. */
   git?: { tool: GitPlan["tool"]; summary: string };
   /** Set when this step ran a program: the command as shown, and how it ended. */
@@ -52,6 +57,10 @@ export interface LocalTaskOptions {
   /** Called as each step starts and again when it has its result. */
   onStep?: (steps: LocalStep[]) => void;
   now?: () => number;
+  /** Waits between tries of a turn (tests replace it so they don't really wait). */
+  sleep?: (ms: number) => Promise<void>;
+  /** Called when a turn is about to be sent again because PawOS's model was briefly unavailable. */
+  onRetry?: (attempt: number, of: number) => void;
   /**
    * Asked before every change to the project, with exactly what would happen. Only "allow" lets it
    * happen. Without this there is nobody to ask, and every change is refused.
@@ -73,6 +82,19 @@ export interface LocalTaskOptions {
   approveGit?: (plan: GitPlan) => Promise<"allow" | "deny">;
   /** Works out a Git operation (tests replace it to watch the loop; the real one is `prepareGit`). */
   prepareGit?: (call: ToolCall, workspace: Workspace, environment: GitEnvironment) => Promise<PreparedGit>;
+  /** The programs this PawOS session keeps running (a development server). Without it none can be started. */
+  background?: BackgroundProcesses;
+  /**
+   * Asked before a page is opened in the user's browser, with the address. Only "allow" opens it,
+   * and only a page served from this computer is ever put to the user at all.
+   */
+  approveOpen?: (url: string) => Promise<"allow" | "deny">;
+  /** Opens a local address in the browser (tests replace it; the real one is `openInBrowser`). */
+  openBrowser?: (url: string) => Promise<{ ok: true } | { ok: false; reason: string }>;
+  /** The user asked for nothing to be changed: files and Git are left exactly as they are. */
+  readOnly?: boolean;
+  /** Plan mode: nothing is run either — no command, no program left running, no browser. */
+  lookOnly?: boolean;
   /** Folders PawOS must never change (its own state directory). */
   forbidden?: string[];
   /**
@@ -84,6 +106,19 @@ export interface LocalTaskOptions {
   /** Runs a tool (tests replace it to watch the loop; the real one is `executeTool`). */
   execute?: (call: ToolCall, workspace: Workspace, environment: ToolEnvironment) => Promise<ToolResult>;
   limits?: Partial<typeof AGENT_CLIENT_LIMITS>;
+}
+
+export const LOOK_ONLY = "Not allowed: this is plan mode. Nothing is run or changed — read what you need and describe the plan.";
+export const READ_ONLY = "Not allowed: the user asked for nothing to be changed in this task. Answer from what you can read.";
+export const OPEN_DECLINED = "Not allowed: the user declined to open the browser. Give them the address instead.";
+
+/** How long to wait before sending a turn again when PawOS's model was briefly unavailable. */
+export const TURN_RETRY_DELAYS_MS = [2000, 5000, 12_000] as const;
+
+/** PawOS answered that its model could not be reached for this turn (and that the turn did not happen). */
+function isModelBusy(error: unknown): boolean {
+  const failure = error as { status?: unknown; code?: unknown } | null;
+  return failure !== null && typeof failure === "object" && failure.code === "model_unavailable" && (failure.status === 502 || failure.status === 503 || failure.status === 504);
 }
 
 export const GIT_DECLINED = "Not allowed: the user declined this Git operation. Do not ask for it again; finish and say what is left for them to do.";
@@ -110,12 +145,21 @@ export async function runLocalTask(options: LocalTaskOptions): Promise<LocalOutc
     if (signal?.aborted) resolve("cancelled");
     else signal?.addEventListener("abort", () => resolve("cancelled"), { once: true });
   });
+  const pause = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const turn = async (body: AgentTurnRequest): Promise<AgentTurnResponse | "cancelled" | { error: unknown }> => {
-    const request = client.agentTurn(body).then(
-      (answer) => answer,
-      (error: unknown) => ({ error })
-    );
-    return Promise.race([request, cancelled]);
+    for (let attempt = 0; ; attempt++) {
+      const request = client.agentTurn(body).then(
+        (answer) => answer,
+        (error: unknown) => ({ error })
+      );
+      const answer = await Promise.race([request, cancelled]);
+      // PawOS's model was briefly unavailable. PawOS says so only when the turn did not happen — the
+      // task is exactly where it was — so the same turn is sent again, a few times, a little later
+      // each time. Anything else (a refusal, a limit, an expired session) is final.
+      if (answer === "cancelled" || !("error" in answer) || !isModelBusy(answer.error) || attempt >= TURN_RETRY_DELAYS_MS.length) return answer;
+      options.onRetry?.(attempt + 1, TURN_RETRY_DELAYS_MS.length);
+      if ((await Promise.race([pause(TURN_RETRY_DELAYS_MS[attempt]!).then(() => "waited" as const), cancelled])) === "cancelled") return "cancelled";
+    }
   };
 
   if (signal?.aborted) return { status: "cancelled", steps };
@@ -140,7 +184,37 @@ export async function runLocalTask(options: LocalTaskOptions): Promise<LocalOutc
 
     let result: ToolResult;
     if (!call) result = { id: answer.turn.call.id, ok: false, denied: true, output: "Not allowed: that isn't something this version of PawOS can run." };
-    else if (toolRisk(call.name) === "write" || toolRisk(call.name) === "delete") {
+    else if (options.lookOnly && toolRisk(call.name) !== "read") result = { id: call.id, ok: false, denied: true, output: LOOK_ONLY };
+    else if (options.readOnly && ["write", "delete", "git"].includes(toolRisk(call.name))) result = { id: call.id, ok: false, denied: true, output: READ_ONLY };
+    else if (toolRisk(call.name) === "process") {
+      // Only programs this session started can be asked about or stopped: there is no way to name another.
+      if (call.name === "stop_process") {
+        const id = typeof call.args.id === "string" ? call.args.id.trim() : "";
+        const known = options.background?.status(id);
+        if (!known) result = describeProcess(call, options.background, workspace);
+        else {
+          const stopped = await options.background!.stop(id);
+          result = { id: call.id, ok: true, output: stopped ? `Stopped process ${id} (${known.info.display}). It and everything it started have ended.` : `Process ${id} (${known.info.display}) had already ended.` };
+        }
+      } else result = describeProcess(call, options.background, workspace);
+    } else if (toolRisk(call.name) === "open") {
+      const url = typeof call.args.url === "string" ? call.args.url.trim() : "";
+      const problem = localUrlProblem(url);
+      if (problem) result = { id: call.id, ok: false, denied: true, output: `Not allowed: ${problem}` };
+      else {
+        const answer = options.approveOpen ? await Promise.race([options.approveOpen(url), cancelled.then(() => "deny" as const)]) : "deny";
+        if (signal?.aborted) return { status: "cancelled", steps };
+        if (answer !== "allow") result = { id: call.id, ok: false, denied: true, output: OPEN_DECLINED };
+        else {
+          const opened = await (options.openBrowser ?? openInBrowser)(url);
+          // Said exactly: a request was made. Nothing here can see the browser or the page.
+          result = opened.ok
+            ? { id: call.id, ok: true, output: `Asked this computer to open ${url} in the default browser. PawOS cannot see the browser, so the page has not been checked.` }
+            : { id: call.id, ok: false, output: `The browser was not opened. ${opened.reason}` };
+          if (opened.ok) step.opened = url;
+        }
+      }
+    } else if (toolRisk(call.name) === "write" || toolRisk(call.name) === "delete") {
       // Risk comes from the tool's name, here. Nothing in the step can mark it as already approved.
       const prepared = await prepareChange(call, workspace, { forbidden: options.forbidden });
       if (signal?.aborted) return { status: "cancelled", steps };
@@ -194,7 +268,10 @@ export async function runLocalTask(options: LocalTaskOptions): Promise<LocalOutc
         else {
           // Ctrl+C reaches the program through the signal: it and everything it started are stopped
           // before this returns, so nothing is left running.
-          result = await (options.runCommand ?? runPlanned)(call, prepared.plan, workspace, { signal });
+          const before = new Set((options.background?.list() ?? []).map((entry) => entry.id));
+          result = await (options.runCommand ?? runPlanned)(call, prepared.plan, workspace, { signal, background: options.background });
+          const left = prepared.plan.tool === "start_process" ? (options.background?.list() ?? []).find((entry) => !before.has(entry.id) && entry.running) : undefined;
+          if (left) step.background = { id: left.id, display: left.display, url: left.url };
           step.command = { tool: prepared.plan.tool, display: prepared.plan.display, exitCode: result.exitCode ?? null, timedOut: result.timedOut === true, cancelled: result.cancelled === true };
           if (result.output.length > limits.resultChars) result = { ...result, output: `${result.output.slice(0, limits.resultChars)}\n… (cut short)`, truncated: true };
           sent += result.output.length;

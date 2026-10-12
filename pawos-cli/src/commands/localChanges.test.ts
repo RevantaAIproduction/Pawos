@@ -170,12 +170,17 @@ describe("writes need a yes", () => {
     expect(h.output()).toContain("+   return Math.max(0, items.reduce((a, b) => a + b, 0));");
   });
 
-  it("plan mode: nothing is asked for and nothing can change", async () => {
+  it("plan mode: PawOS may look, and nothing can change — no question is even asked", async () => {
     const h = start({ answers: ["/mode plan", TASK, null] });
-    h.server.agentTurns = [toolTurn("step-1", "edit_file", EDIT)];
+    h.server.agentTurns = [toolTurn("step-1", "read_file", { path: "src/cart.ts" }), toolTurn("step-2", "edit_file", EDIT), toolTurn("step-3", "write_file", { path: "src/new.ts", content: "x" }), toolTurn("step-4", "delete_path", { path: "README.md" }), finishTurn("The plan.")];
     await runCli([], h.ctx);
-    expect(h.server.agentCalls()).toHaveLength(0);
+    expect(results(h).map((result) => [result.ok, result.denied ?? false])).toEqual([[true, false], [false, true], [false, true], [false, true]]);
+    expect(results(h)[1]!.output).toMatch(/plan mode/);
+    expect(h.prompter.prompts).toEqual(["  > ", "  > ", "  > "]);
     expect(read("src/cart.ts")).toBe(CART);
+    expect(exists("src/new.ts")).toBe(false);
+    expect(exists("README.md")).toBe(true);
+    expect(h.output()).toContain("Nothing was changed.");
   });
 });
 
