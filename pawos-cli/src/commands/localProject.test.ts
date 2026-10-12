@@ -72,6 +72,12 @@ describe("a project folder that is not a Git repository", () => {
     expect(h.server.calls.filter((call) => call.method !== "GET" && !call.path.startsWith("/api/auth/"))).toEqual([]);
   });
 
+  it("pawos status calls it what it is: a local project, not just \"not a Git repository\"", async () => {
+    const h = start();
+    expect(await runCli(["status"], h.ctx)).toBe(0);
+    expect(h.output()).toMatch(/Folder\s+a local project \(not a Git repository\)/);
+  });
+
   it("the whole lifecycle: a multi-line task → read → change → build fails → fix → build passes → summary", async () => {
     const h = start({ answers: [TASK, "y", "y", "y", "y", "y", null], permissionMode: "ask" });
     h.server.agentTurns = [
@@ -322,6 +328,52 @@ describe("limits and sessions", () => {
     h.server.agentTurns = [finishTurn("Done.")];
     await runCli([], h.ctx);
     expect(h.server.agentCalls()[0]!.body!.goal).toBe(`Fix the storefront.\n${long}`);
+  });
+
+  it("a large file is written whole, exactly as PawOS sent it", async () => {
+    const content = Array.from({ length: 2000 }, (_, index) => `export const line${index} = "${"x".repeat(40)}";`).join("\n") + "\n";
+    const h = start({ answers: ["Add the catalog data", null], permissionMode: "auto" });
+    h.server.agentTurns = [toolTurn("step-1", "write_file", { path: "src/data/catalog.ts", content }), finishTurn("Added.")];
+    expect(await runCli([], h.ctx)).toBe(0);
+    expect(Buffer.byteLength(content)).toBeGreaterThan(100_000);
+    expect(read("src/data/catalog.ts")).toBe(content);
+    expect(results(h)[0]).toMatchObject({ ok: true, output: "Created src/data/catalog.ts (2,000 lines)." });
+  });
+
+  it("a file larger than PawOS writes is refused with the reason, and nothing is left half-written", async () => {
+    const h = start({ answers: ["Add the catalog data", null], permissionMode: "auto" });
+    // Inside what a step may carry, but more than PawOS writes to one file: refused, with the reason.
+    h.server.agentTurns = [toolTurn("step-1", "write_file", { path: "src/data/catalog.ts", content: "€".repeat(190_000) }), finishTurn("That was too large.")];
+    expect(await runCli([], h.ctx)).toBe(0);
+    expect(results(h)[0]!.ok).toBe(false);
+    expect(results(h)[0]!.output).toMatch(/larger than PawOS writes/);
+    expect(fs.existsSync(path.join(root, "src", "data", "catalog.ts"))).toBe(false);
+    expect(h.output()).not.toContain("PawOS made");
+  });
+
+  it("a step outside what a step may carry is not run at all, and the task ends saying so — not as done", async () => {
+    const h = start({ answers: ["Add the catalog data", null], permissionMode: "auto" });
+    h.server.agentTurns = [toolTurn("step-1", "write_file", { path: "src/data/catalog.ts", content: "x".repeat(600_000) }), finishTurn("never reached")];
+    expect(await runCli([], h.ctx)).toBe(0);
+    expect(results(h)).toHaveLength(0);
+    expect(fs.existsSync(path.join(root, "src", "data", "catalog.ts"))).toBe(false);
+    expect(h.output()).toContain("PawOS asked for a step this version can't run.");
+    expect(h.output()).not.toContain("never reached");
+  });
+
+  it("a turn tried again after a write does not write again: the file's result is re-sent, the change is counted once", async () => {
+    const busy = (detail: string) => reply({ code: "model_unavailable", message: "Paw couldn't work out the next step. Please try again.", detail }, 502);
+    const h = start({ answers: ["Add a note", null], permissionMode: "auto" });
+    h.server.agentTurns = [toolTurn("step-1", "write_file", { path: "NOTES.md", content: "one\n" }), busy("model_unusable_reply"), busy("model_timeout"), finishTurn("Added the note.")];
+    expect(await runCli([], h.ctx)).toBe(0);
+    const sent = h.server.agentCalls().slice(1).map((call) => JSON.stringify(call.body));
+    expect(sent).toHaveLength(3);
+    expect(new Set(sent).size).toBe(1); // the very same result, three times
+    // Written once: a second write would have reported "Replaced", and counted a second change.
+    expect(sent[0]).toContain("Created NOTES.md");
+    expect(read("NOTES.md")).toBe("one\n");
+    expect(h.output()).toContain("PawOS made 1 change in shopflow:");
+    expect(h.output()).toContain("Added the note.");
   });
 
   it("a model that is briefly unavailable is tried again, and the task carries on", async () => {

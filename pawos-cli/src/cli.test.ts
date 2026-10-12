@@ -70,8 +70,8 @@ describe("command routing", () => {
     const h = start();
     expect(await runCli(["help"], h.ctx)).toBe(0);
     for (const command of COMMANDS.filter((name) => name !== "help")) expect(h.output()).toContain(`pawos ${command}`);
-    // It says where code changes are made, and never claims to edit the files on this computer.
-    expect(h.output()).toContain("your connected GitHub project, not in the files on this computer.");
+    // It says where code changes are made: the project folder it is started in, or the GitHub project.
+    expect(h.output()).toContain("PawOS works on the files there; anywhere else, on your connected GitHub project.");
     expect(h.output()).toContain("Open PawOS, from any folder");
   });
 

@@ -6,10 +6,14 @@ import { clean, line, seg, type Line, type Tone } from "../ui/terminal";
 
 const row = (label: string, value: string, tone?: Tone): Line => line("  ", seg(label.padEnd(16), "muted"), seg(value, tone));
 
-function folderOf(project: ProjectContext): string {
+function folderOf(project: ProjectContext, localProject = false): string {
   const local = project.repository;
-  return local.kind === "github" ? local.fullName : local.kind === "notGit" ? "not a Git repository" : local.kind === "gitMissing" ? "Git isn't installed" : local.kind === "noRemote" ? "no Git remote" : "not a GitHub repository";
+  // A folder PawOS can work in is a project whether or not it is a Git repository.
+  return local.kind === "github" ? local.fullName : local.kind === "notGit" ? (localProject ? "a local project (not a Git repository)" : "not a Git repository") : local.kind === "gitMissing" ? "Git isn't installed" : local.kind === "noRemote" ? "no Git remote" : "not a GitHub repository";
 }
+
+const isLocalProject = async (ctx: CliContext, project: ProjectContext): Promise<boolean> =>
+  project.repository.kind === "notGit" && Boolean(await ctx.detectWorkspace?.().catch(() => null));
 
 /**
  * The account and the project, as rows. Everything about the account — plan, usage, credits,
@@ -35,7 +39,7 @@ export async function accountRows(ctx: CliContext, project: ProjectContext): Pro
     ...capabilityRow(capabilities, "web.mcpRead", "Connected tools"),
     ...connectionsRow(integrations),
     row("Session", storage),
-    row("Folder", folderOf(project)),
+    row("Folder", folderOf(project, await isLocalProject(ctx, project))),
     row("PawOS", repo.selected ? `${clean(repo.selected, 200)}${repo.defaultBranch ? ` (${clean(repo.defaultBranch, 100)})` : ""}` : clean(repo.message) || "no repository selected"),
   ];
   if (repo.selected && local.kind === "github") rows.push(row("Match", repo.mismatch ? "no — run pawos to choose" : "yes", repo.mismatch ? "warn" : "good"));
@@ -54,7 +58,7 @@ export async function status(ctx: CliContext): Promise<number> {
   const project = await ctx.detectProject();
   await session.initialize();
   if (session.status !== "signedIn") {
-    term.print([row("Account", "not signed in"), row("Folder", folderOf(project)), line(), line(seg("Run pawos login to sign in.", "muted"))]);
+    term.print([row("Account", "not signed in"), row("Folder", folderOf(project, await isLocalProject(ctx, project))), line(), line(seg("Run pawos login to sign in.", "muted"))]);
     return 1;
   }
 

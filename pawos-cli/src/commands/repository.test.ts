@@ -38,7 +38,7 @@ describe("matching repository", () => {
   it("says plainly where PawOS works", async () => {
     const help = start({});
     await runCli(["help"], help.ctx);
-    expect(help.output()).toContain("your connected GitHub project, not in the files on this computer.");
+    expect(help.output()).toContain("PawOS works on the files there; anywhere else, on your connected GitHub project.");
     // And it never claims to edit the files in the local folder.
     const h = start({ signedIn: true, answers: [null] });
     await runCli([], h.ctx);

@@ -21,8 +21,8 @@ export function usage(version: string): Line[] {
     command("pawos status", "Show your account, plan, usage and connections"),
     command("pawos version", "Show the version"),
     line(),
-    line(seg("Inside PawOS, /help lists what you can do. Code changes are made in", "muted")),
-    line(seg("your connected GitHub project, not in the files on this computer.", "muted")),
+    line(seg("Inside PawOS, /help lists what you can do. Started in a project folder,", "muted")),
+    line(seg("PawOS works on the files there; anywhere else, on your connected GitHub project.", "muted")),
   ];
 }
 
