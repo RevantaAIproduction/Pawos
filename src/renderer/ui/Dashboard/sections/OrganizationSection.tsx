@@ -4,6 +4,7 @@ import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import { organizationService, type PendingInvite } from '../../../organization/OrganizationService';
 import { canManageBilling, canManageMembers } from '../../../../shared/organization/OrgPermissions';
 import { isPersonalEmailDomain } from '../../../../shared/organization/PersonalEmailDomains';
+import { checkInviteEmail, organizationInviteDomain } from '../../../../shared/organization/OrganizationEmailDomain';
 import type { OrganizationRecord, OrganizationMember, OrgRole, OrgTier } from '../../../../shared/organization/OrganizationTypes';
 import type { SeatTier } from '../../../../shared/billing/BillingTypes';
 import type { AuthUser } from '../../../auth/AuthTypes';
@@ -352,11 +353,19 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
     }
   }
 
+  // The owner's email, for an organization whose own domain was never recorded (see
+  // OrganizationEmailDomain.ts): from the member list, or the signed-in account when it is the owner.
+  const ownerEmailOf = (organization: OrganizationRecord): string | null =>
+    members.find((m) => m.userId === organization.ownerUserId)?.email ?? (organization.ownerUserId === user.id ? user.email ?? null : null);
+
+  // The domain teammates must be on, as shown on this screen ('' while it isn't known yet).
+  const inviteDomain = org ? organizationInviteDomain(org.domain, ownerEmailOf(org)) : '';
+
   async function inviteMember() {
     if (!org || !inviteEmail.trim()) return;
-    const invitedDomain = inviteEmail.trim().split('@')[1]?.toLowerCase();
-    if (!invitedDomain || invitedDomain !== org.domain) {
-      setError(`This organization only accepts teammates with an @${org.domain} email.`);
+    const invite = checkInviteEmail(inviteEmail, org.domain, ownerEmailOf(org));
+    if (!invite.ok) {
+      setError(invite.reason);
       return;
     }
 
@@ -369,14 +378,14 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
           kind: 'additionalSeat',
           organizationId: org.id,
           seatTier: inviteSeatTier,
-          inviteEmail: inviteEmail.trim(),
+          inviteEmail: invite.email,
           inviteRole: inviteRole,
         });
         return;
       }
     }
 
-    await doInviteMember(inviteEmail.trim(), inviteRole, tier === 'team' ? inviteSeatTier : undefined);
+    await doInviteMember(invite.email, inviteRole, tier === 'team' ? inviteSeatTier : undefined);
   }
 
   async function doInviteMember(email: string, role: OrgRole, seatTier?: SeatTier) {
@@ -449,12 +458,13 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
   }
 
   async function reassignPendingSeat(memberId: string) {
-    const newEmail = reassignEmailInput.trim();
-    const invitedDomain = newEmail.split('@')[1]?.toLowerCase();
-    if (!org || !invitedDomain || invitedDomain !== org.domain) {
-      setError(`This organization only accepts teammates with an @${org?.domain} email.`);
+    if (!org) return;
+    const reassigned = checkInviteEmail(reassignEmailInput, org.domain, ownerEmailOf(org));
+    if (!reassigned.ok) {
+      setError(reassigned.reason);
       return;
     }
+    const newEmail = reassigned.email;
     setBusy(true);
     setError(null);
     try {
@@ -529,7 +539,7 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
           </div>
           <div>
             <p className={styles.cardBody}>Domain</p>
-            <p style={{ fontSize: 14, fontWeight: 600 }}>@{org.domain}</p>
+            <p style={{ fontSize: 14, fontWeight: 600 }}>{inviteDomain ? `@${inviteDomain}` : '—'}</p>
           </div>
           <div>
             <p className={styles.cardBody}>Plan</p>
@@ -571,7 +581,7 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
                   <div style={{ display: 'flex', gap: 6, marginTop: 4, alignItems: 'center' }}>
                     <input
                       style={{ ...inputStyle, fontSize: 12, padding: '4px 8px' }}
-                      placeholder={`teammate@${org?.domain}`}
+                      placeholder={`teammate@${inviteDomain || 'yourcompany.com'}`}
                       value={reassignEmailInput}
                       onChange={(e) => setReassignEmailInput(e.target.value)}
                     />
@@ -670,7 +680,7 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
         {canManageMembers(myRole) && (
           <div style={{ marginTop: 14 }}>
             <div style={{ display: 'flex', gap: 8 }}>
-              <input style={{ ...inputStyle, flex: 1 }} placeholder={`teammate@${org.domain}`} value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} />
+              <input style={{ ...inputStyle, flex: 1 }} placeholder={`teammate@${inviteDomain || 'yourcompany.com'}`} value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} />
               {tier === 'team' && (
                 <select style={inputStyle} value={inviteSeatTier} onChange={(e) => setInviteSeatTier(e.target.value as SeatTier)}>
                   <option value="standard">Standard seat ($20/mo)</option>
@@ -687,7 +697,7 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
               </button>
             </div>
             <p className={styles.cardBody} style={{ marginTop: 6, fontSize: 12 }}>
-              Only @{org.domain} emails can be invited to this organization.
+              {inviteDomain ? `Only @${inviteDomain} emails can be invited to this organization.` : 'Teammates must be on your organization’s email domain.'}
               {tier === 'team' && ' Choose Standard or Premium for their seat rate.'}
               {org.seatCount && org.seatCount > 0 && members.filter((m) => m.status === 'active').length >= org.seatCount && (
                 <span style={{ marginLeft: 6, color: '#e0c28c' }}>
