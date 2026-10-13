@@ -392,7 +392,7 @@ describe("limits and sessions", () => {
   it("a model that stays unavailable ends the task with PawOS's own message — and what was done is still accounted for", async () => {
     const busy = () => reply({ code: "model_unavailable", message: "Paw couldn't answer just now. Please try again." }, 502);
     const h = start({ answers: ["Fix the storefront heading", null], permissionMode: "auto" });
-    h.server.agentTurns = [toolTurn("step-1", "edit_file", { path: "src/App.tsx", oldText: "ShopFlow", newText: "ShopFlow Store" }), busy(), busy(), busy(), busy()];
+    h.server.agentTurns = [toolTurn("step-1", "edit_file", { path: "src/App.tsx", oldText: "ShopFlow", newText: "ShopFlow Store" }), ...Array.from({ length: 6 }, busy)];
     expect(await runCli([], h.ctx)).toBe(0);
     expect(h.output()).toContain("Paw couldn't answer just now. Please try again.");
     // The change that was made before the model went away is reported, not hidden.

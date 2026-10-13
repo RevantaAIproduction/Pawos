@@ -112,8 +112,13 @@ export const LOOK_ONLY = "Not allowed: this is plan mode. Nothing is run or chan
 export const READ_ONLY = "Not allowed: the user asked for nothing to be changed in this task. Answer from what you can read.";
 export const OPEN_DECLINED = "Not allowed: the user declined to open the browser. Give them the address instead.";
 
-/** How long to wait before sending a turn again when PawOS's model was briefly unavailable. */
-export const TURN_RETRY_DELAYS_MS = [2000, 5000, 12_000] as const;
+/**
+ * How long to wait before sending a turn again when PawOS's model was unavailable. A busy model
+ * often stays busy for several tries in a row, and giving up loses a task that may be halfway
+ * through — so the waits grow to well over a minute in all. It is still a fixed, short list:
+ * a model that stays away ends the task with PawOS's own message.
+ */
+export const TURN_RETRY_DELAYS_MS = [2000, 5000, 12_000, 25_000, 40_000] as const;
 
 /** PawOS answered that its model could not be reached for this turn (and that the turn did not happen). */
 function isModelBusy(error: unknown): boolean {

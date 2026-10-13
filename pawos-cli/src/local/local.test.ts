@@ -665,12 +665,15 @@ describe("the loop: PawOS names a step, the CLI runs it here", () => {
     // The file was read once: a retried turn re-sends the result, it does not run the tool again.
     expect(outcome.steps).toHaveLength(1);
     expect(waits).toEqual([TURN_RETRY_DELAYS_MS[0], TURN_RETRY_DELAYS_MS[0], TURN_RETRY_DELAYS_MS[1]]);
-    expect(retries).toEqual(["1/3", "1/3", "2/3"]);
+    expect(retries).toEqual([`1/${TURN_RETRY_DELAYS_MS.length}`, `1/${TURN_RETRY_DELAYS_MS.length}`, `2/${TURN_RETRY_DELAYS_MS.length}`]);
   });
 
   it("it gives up after a few tries, and says what PawOS said", async () => {
     const busy = () => new PawosApiError("server", "Paw couldn't answer just now. Please try again.", 502, "model_unavailable");
-    const pawos = service([busy(), busy(), busy(), busy(), finish("never reached")]);
+    const pawos = service([...Array.from({ length: TURN_RETRY_DELAYS_MS.length + 1 }, busy), finish("never reached")]);
+    // Bounded: a handful of tries, and under two minutes of waiting in all.
+    expect(TURN_RETRY_DELAYS_MS.length).toBeLessThanOrEqual(6);
+    expect(TURN_RETRY_DELAYS_MS.reduce((sum, ms) => sum + ms, 0)).toBeLessThanOrEqual(120_000);
     const outcome = await runLocalTask({ ...options(pawos.client), sleep: async () => undefined });
     expect(outcome.status).toBe("failed");
     expect(outcome.status === "failed" && (outcome.error as PawosApiError).code).toBe("model_unavailable");
