@@ -178,3 +178,26 @@ describe("applyVerifiedSeatPayment", () => {
     expect(await ask()).toMatchObject({ ok: false, status: 500 });
   });
 });
+
+describe("the pause on new seat orders does not take anything from a payment already made", () => {
+  it("a seat order paid before the pause is still verified and its seats added, once", async () => {
+    const { ADDITIONAL_SEAT_PURCHASES_PAUSED } = await import("./seatPurchase");
+    expect(ADDITIONAL_SEAT_PURCHASES_PAUSED).toBe(true);
+    const first = await applyVerifiedSeatPayment({ orderId: "order_1", paymentId: "pay_1", signature: "sig", callerUserId: OWNER });
+    expect(first).toMatchObject({ ok: true, applied: true, organizationId: ORG, seats: 1 });
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+    // The webhook reporting the same payment adds nothing more (the database applies a payment once).
+    mocks.rpc.mockResolvedValue({ data: { applied: false, seatCount: 4, paidPremiumSeats: 0 }, error: null });
+    expect(await applyVerifiedSeatPayment({ orderId: "order_1", paymentId: "pay_1" })).toMatchObject({ ok: true, applied: false, seatCount: 4 });
+  });
+
+  it("a payment that is not a verified, fully paid seat order still adds nothing", async () => {
+    mocks.fetchRazorpayOrder.mockResolvedValue({ id: "order_1", amount: standardPaise - 1, currency: "INR", status: "paid", notes: notes() });
+    expect((await applyVerifiedSeatPayment({ orderId: "order_1", paymentId: "pay_1" })).ok).toBe(false);
+    mocks.fetchRazorpayOrder.mockResolvedValue({ id: "order_1", amount: standardPaise, currency: "INR", status: "created", notes: notes() });
+    expect((await applyVerifiedSeatPayment({ orderId: "order_1", paymentId: "pay_1" })).ok).toBe(false);
+    mocks.verifySignature.mockReturnValue(false);
+    expect((await applyVerifiedSeatPayment({ orderId: "order_1", paymentId: "pay_1", signature: "forged", callerUserId: OTHER })).ok).toBe(false);
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+});

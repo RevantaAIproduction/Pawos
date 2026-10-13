@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { getRazorpayCredentials, razorpayAuthHeader } from "@/lib/billing/razorpay";
-import { buildSeatOrder } from "@/lib/billing/seatPurchase";
+import { ADDITIONAL_SEAT_PURCHASES_PAUSED, SEAT_PURCHASES_PAUSED_CODE, SEAT_PURCHASES_PAUSED_REASON, buildSeatOrder } from "@/lib/billing/seatPurchase";
 
 /**
  * POST /api/billing/checkout-seat { accessToken, organizationId, seatTier, seats? }
@@ -28,6 +28,12 @@ export async function POST(request: Request) {
   const { data: userData, error: userError } = await callerClient.auth.getUser(accessToken);
   if (userError || !userData.user) return NextResponse.json({ ok: false, reason: "Invalid or expired session." }, { status: 401 });
   const userId = userData.user.id;
+
+  // Paused: no new seat order is priced, created or sent to the payment processor (see
+  // ADDITIONAL_SEAT_PURCHASES_PAUSED). Checked after sign-in so only a signed-in caller learns it.
+  if (ADDITIONAL_SEAT_PURCHASES_PAUSED) {
+    return NextResponse.json({ ok: false, code: SEAT_PURCHASES_PAUSED_CODE, reason: SEAT_PURCHASES_PAUSED_REASON }, { status: 503 });
+  }
 
   const order = await buildSeatOrder({ callerClient, userId, organizationId: body?.organizationId, seatTier: body?.seatTier, seats: body?.seats });
   if (!order.ok) return NextResponse.json({ ok: false, reason: order.reason }, { status: order.status });

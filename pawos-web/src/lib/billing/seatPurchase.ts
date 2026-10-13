@@ -30,6 +30,24 @@ export const TEAM_SEAT_PRICE_PAISE: Record<SeatTier, number> = {
 
 export const MAX_SEATS_PER_PURCHASE = 100;
 
+/**
+ * New additional-seat purchases are paused.
+ *
+ * A seat order is a one-time payment, but what it buys does not end: the seat stays on the
+ * organization and its member's usage allowance is renewed every month. Until Team seats are billed
+ * on a recurring basis (with a paid-through date the seats respect), PawOS creates no new seat
+ * orders. Set this to false only together with that billing.
+ *
+ * It stops NEW orders only, at the one place they are created (POST /api/billing/checkout-seat).
+ * An order created and paid before the pause is still honoured by verify-seat-payment and the
+ * webhook — nobody is charged without receiving what they paid for — and nothing about existing
+ * organizations, seats, members or their allowances is touched.
+ */
+export const ADDITIONAL_SEAT_PURCHASES_PAUSED = true;
+export const SEAT_PURCHASES_PAUSED_CODE = "seat_purchases_paused";
+export const SEAT_PURCHASES_PAUSED_REASON =
+  "Adding seats is paused while Team billing is being updated. Your organization's current seats and members are not affected. To add seats now, contact PawOS sales at https://pawos.revantaai.com/support/sales.";
+
 /** Roles that may buy seats for an organization (the same set the database function accepts). */
 const SEAT_BUYER_ROLES = new Set(["owner", "organizationOwner", "organizationAdministrator", "billingAdministrator"]);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
