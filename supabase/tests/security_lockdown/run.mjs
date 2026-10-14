@@ -676,6 +676,175 @@ try {
   detects('the usage guard switched off', 'alter table organizations disable trigger trg_guard_organization_api_usage;', 'alter table organizations enable trigger trg_guard_organization_api_usage;', 'recorded Enterprise API usage cannot be lowered');
   check('verification: passes again once everything is restored', verificationRows().every((row) => row[2] === 't'));
 
+  // ── 20261014000000_org_members_provisioned_by_pawos.sql ──────────────────────────────────────
+  // Members of a Team or Enterprise organization are added by PawOS. Run last, on top of everything
+  // above (the seat limits, the owner rules) and the organization-domain rule, which must all still hold.
+  {
+    const PROVISIONING = '20261014000000_org_members_provisioned_by_pawos.sql';
+    const DOMAIN_RULE = '20260721000100_organization_domain_restriction.sql';
+    const GO_ORG = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
+    const ENT_ORG = 'bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb';
+    const OTHER_TEAM = 'cccccccc-3333-4333-8333-cccccccccccc';
+    const NEWCOMER = { id: 'dddddddd-4444-4444-8444-dddddddddddd', email: 'newcomer@paying-team.test' };
+    const blocked = (r) => !r.ok && /added by PawOS|reassigned by PawOS|allocated by PawOS/.test(r.err);
+    const count = (where) => Number(q(`select count(*) from organization_members where ${where}`));
+    const insertAs = (user, org, email, extra = `'member', 'invited'`) =>
+      asUser(user, `insert into organization_members (organization_id, email, role, status) values ('${org}', '${email}', ${extra}) returning status;`);
+
+    psqlFile(path.join(migrations, DOMAIN_RULE));
+    psql(
+      `update organizations set domain = 'paying-team.test', seat_count = 12 where id = '${PAID_ORG}';
+       insert into organizations (id, slug, name, tier, owner_user_id, domain, seat_count) values
+         ('${GO_ORG}', 'free-org', 'Free Org', 'go', '${PRO.id}', 'customer.test', null),
+         ('${ENT_ORG}', 'ent-org', 'Enterprise Org', 'enterprise', '${PRO.id}', 'customer.test', 30),
+         ('${OTHER_TEAM}', 'other-team', 'Other Team', 'team', '${ATTACKER.id}', 'attacker.test', 5);
+       insert into organization_members (organization_id, user_id, email, role, status, joined_at) values
+         ('${GO_ORG}', '${PRO.id}', '${PRO.email}', 'owner', 'active', now()),
+         ('${ENT_ORG}', '${PRO.id}', '${PRO.email}', 'organizationOwner', 'active', now()),
+         ('${OTHER_TEAM}', '${ATTACKER.id}', '${ATTACKER.email}', 'owner', 'active', now());
+       insert into organization_members (organization_id, email, role, status) values ('${PAID_ORG}', 'pending@paying-team.test', 'member', 'invited');
+       insert into auth.users (id, email, email_confirmed_at) values ('${NEWCOMER.id}', '${NEWCOMER.email}', now());`,
+      'provisioning fixtures'
+    );
+    const pendingRow = `(select id from organization_members where organization_id = '${PAID_ORG}' and email = 'pending@paying-team.test')`;
+
+    // Before: this is what a customer could do with a direct request.
+    check('provisioning (before): a Team owner could invite by a direct insert', insertAs(TEAM_OWNER, PAID_ORG, 'before@paying-team.test').ok);
+    check('provisioning (before): a Team owner could re-point a pending seat', asUser(TEAM_OWNER, `update organization_members set email = 'swapped@paying-team.test' where id = ${pendingRow} returning email;`).ok);
+
+    const membersBefore = q(`select md5(string_agg(m::text, ',' order by m.id::text)) from organization_members m`);
+    psqlFile(path.join(migrations, PROVISIONING));
+    psqlFile(path.join(migrations, PROVISIONING)); // safe to run twice
+    check('provisioning: applying the migration changes no existing membership', q(`select md5(string_agg(m::text, ',' order by m.id::text)) from organization_members m`) === membersBefore);
+    check('provisioning: the guard cannot be called by clients', !asUser(TEAM_OWNER, `select pawos_guard_managed_org_membership();`).ok);
+
+    // ── A customer can no longer add or re-point members in a Team or Enterprise organization.
+    const before = count(`true`);
+    for (const [who, user, org, email] of [
+      ['a Team owner', TEAM_OWNER, PAID_ORG, 'new1@paying-team.test'],
+      ['a Team billing administrator', TEAM_MEMBER, PAID_ORG, 'new2@paying-team.test'],
+      ['an Enterprise owner', PRO, ENT_ORG, 'new3@customer.test'],
+      ['an ordinary member', INVITEE, PAID_ORG, 'new4@paying-team.test'],
+      ['someone outside the organization', ATTACKER, PAID_ORG, 'new5@paying-team.test'],
+    ]) {
+      const r = insertAs(user, org, email);
+      check(`provisioning: ${who} cannot invite by a direct insert`, !r.ok && /added by PawOS|42501|row-level security/i.test(r.err), reason(r));
+    }
+    const asActive = asUser(TEAM_OWNER, `insert into organization_members (organization_id, user_id, email, role, status) values ('${PAID_ORG}', '${NEWCOMER.id}', '${NEWCOMER.email}', 'member', 'active');`);
+    check('provisioning: a Team owner cannot add an account directly as an active member', !asActive.ok, reason(asActive));
+    const repoint = asUser(TEAM_OWNER, `update organization_members set email = 'someone-else@paying-team.test' where id = ${pendingRow} returning email;`);
+    check('provisioning: a Team owner cannot re-point a pending seat at another address', blocked(repoint), reason(repoint));
+    const seatChange = asUser(TEAM_OWNER, `update organization_members set seat_tier = 'premium' where id = ${pendingRow} returning seat_tier;`);
+    check('provisioning: a Team owner cannot change a seat between Standard and Premium', !seatChange.ok && /allocated by PawOS|Premium seat/.test(seatChange.err), reason(seatChange));
+    psql(`update organization_members set status = 'removed' where organization_id = '${PAID_ORG}' and email = 'before@paying-team.test' and false;`, 'noop');
+    psql(`insert into organization_members (organization_id, email, role, status) values ('${PAID_ORG}', 'gone@paying-team.test', 'member', 'removed');`, 'a removed member');
+    const revive = asUser(TEAM_OWNER, `update organization_members set status = 'invited' where organization_id = '${PAID_ORG}' and email = 'gone@paying-team.test' returning status;`);
+    check('provisioning: a removed member cannot be brought back by the customer', blocked(revive), reason(revive));
+    const reinvite = asUser(TEAM_OWNER, `update organization_members set status = 'invited', user_id = null where id = ${member(TEAM_MEMBER)} returning status;`);
+    check('provisioning: an active member cannot be turned back into an invitation', !reinvite.ok, reason(reinvite));
+    check('provisioning: none of those attempts added or changed a membership', count(`true`) === before + 1 && count(`email = 'pending@paying-team.test' and seat_tier is null and status = 'invited'`) === 1, `rows ${count('true')} (expected ${before + 1})`);
+
+    // ── What still works for the customer.
+    const caseOnly = asUser(TEAM_OWNER, `update organization_members set email = 'PENDING@paying-team.test' where id = ${pendingRow} returning email;`);
+    check('provisioning: rewriting the same address in another case is not a reassignment', caseOnly.ok, reason(caseOnly));
+    const roleChange = asUser(TEAM_OWNER, `update organization_members set role = 'workspaceAdministrator' where id = ${member(INVITEE)} returning role;`);
+    check('provisioning: an owner can still change a member\'s role', roleChange.ok && roleChange.out.includes('workspaceAdministrator'), reason(roleChange));
+    const remove = asUser(TEAM_OWNER, `update organization_members set status = 'removed' where id = ${member(INVITEE)} returning status;`);
+    check('provisioning: an owner can still remove a member', remove.ok && remove.out.includes('removed'), reason(remove));
+    const memberRemoves = asUser(INVITEE, `update organization_members set status = 'removed' where id = ${member(TEAM_MEMBER)} returning status;`);
+    check('provisioning: an ordinary member still cannot remove anyone', !memberRemoves.ok || !memberRemoves.out.includes('removed'), reason(memberRemoves));
+    const ownerRemoved = asUser(TEAM_MEMBER, `update organization_members set status = 'removed' where id = ${member(TEAM_OWNER)} returning status;`);
+    check('provisioning: the owner\'s own membership is still protected from a manager', !ownerRemoved.ok || !ownerRemoved.out.includes('removed'), reason(ownerRemoved));
+    const otherOrg = asUser(ATTACKER, `update organization_members set status = 'removed' where id = ${member(TEAM_MEMBER)} returning status;`);
+    check('provisioning: another organization\'s owner still cannot touch this one', !otherOrg.ok || !otherOrg.out.includes('removed'), reason(otherOrg));
+
+    // ── PawOS provisions with the service role — and is held to the other rules.
+    const provision = asService(`insert into organization_members (organization_id, email, role, status, seat_tier) values ('${PAID_ORG}', '${NEWCOMER.email}', 'member', 'invited', 'standard')`);
+    check('provisioning: PawOS (service role) can invite a member', provision.ok && count(`email = '${NEWCOMER.email}' and status = 'invited'`) === 1, reason(provision));
+    const offDomain = asService(`insert into organization_members (organization_id, email, role, status) values ('${PAID_ORG}', 'someone@gmail.com', 'member', 'invited')`);
+    check('provisioning: PawOS is still held to the organization\'s email domain', !offDomain.ok && /not on this organization/.test(offDomain.err), reason(offDomain));
+    for (const bad of ['not-an-email', 'two@paying-team.test@evil.io', 'spa ce@paying-team.test', '@paying-team.test', 'nodot@localhost', '']) {
+      const r = asService(`insert into organization_members (organization_id, email, role, status) values ('${PAID_ORG}', '${bad}', 'member', 'invited')`);
+      check(`provisioning: a malformed address is refused even from PawOS: ${JSON.stringify(bad)}`, !r.ok && /valid email address|not on this organization/.test(r.err), reason(r));
+    }
+    const reassignByPawos = asService(`update organization_members set email = 'reassigned@paying-team.test' where id = ${pendingRow}`);
+    check('provisioning: PawOS can reassign a pending seat', reassignByPawos.ok && count(`email = 'reassigned@paying-team.test'`) === 1, reason(reassignByPawos));
+    const reassignOffDomain = asService(`update organization_members set email = 'reassigned@elsewhere.io' where organization_id = '${PAID_ORG}' and email = 'reassigned@paying-team.test'`);
+    check('provisioning: … but not to an address off the organization\'s domain', !reassignOffDomain.ok && /not on this organization/.test(reassignOffDomain.err) && count(`email = 'reassigned@paying-team.test'`) === 1, reason(reassignOffDomain));
+
+    // ── The person PawOS invited can still accept, and only they can.
+    const stranger = accept(ATTACKER);
+    check('provisioning: someone else cannot accept that invitation', count(`email = '${NEWCOMER.email}' and status = 'active'`) === 0, reason(stranger));
+    const accepted = accept(NEWCOMER);
+    check('provisioning: the invited person can accept their own invitation', count(`email = '${NEWCOMER.email}' and status = 'active' and user_id = '${NEWCOMER.id}'`) === 1, reason(accepted));
+    psql(`update organizations set seat_count = (select count(*) from organization_members where organization_id = '${PAID_ORG}' and status = 'active') where id = '${PAID_ORG}';
+          insert into organization_members (organization_id, email, role, status) values ('${PAID_ORG}', '${SQUATTER.email.replace('@revantaai.com', '@paying-team.test')}', 'member', 'invited');`, 'fill the seats');
+    check('provisioning: the paid-seat limit still applies to acceptance (covered above) and is untouched', q(`select tgenabled from pg_trigger where tgname = 'trg_guard_organization_member_seats'`) === 'O');
+
+    // ── The same rules hold with the seat/owner guard switched off: this migration does not lean on it.
+    psql(`alter table organization_members disable trigger trg_guard_organization_member_seats;
+          insert into organization_members (organization_id, email, role, status) values ('${PAID_ORG}', 'solo-pending@paying-team.test', 'member', 'invited'), ('${PAID_ORG}', 'solo-gone@paying-team.test', 'member', 'removed');
+          insert into organization_members (organization_id, email, role, status) values ('${GO_ORG}', 'mover@customer.test', 'member', 'invited');
+          update organizations set owner_user_id = '${TEAM_OWNER.id}', domain = 'paying-team.test' where id = '${GO_ORG}';
+          update organization_members set email = 'mover@paying-team.test' where organization_id = '${GO_ORG}' and email = 'mover@customer.test';`, 'guard off + fixtures');
+    const soloRow = `(select id from organization_members where organization_id = '${PAID_ORG}' and email = 'solo-pending@paying-team.test')`;
+    const soloState = () => q(`select md5(string_agg(m::text, ',' order by m.id::text)) from organization_members m where organization_id = '${PAID_ORG}'`);
+    const stateBefore = soloState();
+    const alone = {
+      'insert an invitation': insertAs(TEAM_OWNER, PAID_ORG, 'solo-new@paying-team.test'),
+      're-point a pending seat': asUser(TEAM_OWNER, `update organization_members set email = 'solo-other@paying-team.test' where id = ${soloRow} returning id;`),
+      'change a seat type': asUser(TEAM_OWNER, `update organization_members set seat_tier = 'premium' where id = ${soloRow} returning id;`),
+      'reactivate a removed member': asUser(TEAM_OWNER, `update organization_members set status = 'invited' where organization_id = '${PAID_ORG}' and email = 'solo-gone@paying-team.test' returning id;`),
+      'activate a pending seat for another account': asUser(TEAM_OWNER, `update organization_members set user_id = '${ATTACKER.id}', status = 'active' where id = ${soloRow} returning id;`),
+      'activate a pending seat for themselves': asUser(TEAM_OWNER, `update organization_members set status = 'active' where id = ${soloRow} returning id;`),
+      'attach an account without activating': asUser(TEAM_OWNER, `update organization_members set user_id = '${ATTACKER.id}' where id = ${soloRow} returning id;`),
+      'email + role + status in one update': asUser(TEAM_OWNER, `update organization_members set email = 'solo-x@paying-team.test', role = 'workspaceAdministrator', status = 'invited' where id = ${soloRow} returning id;`),
+      'seat type hidden behind a role change': asUser(TEAM_OWNER, `update organization_members set role = 'workspaceAdministrator', seat_tier = 'premium' where id = ${soloRow} returning id;`),
+      'email changed only by adding spaces and a second address': asUser(TEAM_OWNER, `update organization_members set email = 'solo-pending@paying-team.test, x@paying-team.test' where id = ${soloRow} returning id;`),
+      'move a membership in from their own free organization': asUser(TEAM_OWNER, `update organization_members set organization_id = '${PAID_ORG}' where organization_id = '${GO_ORG}' and email = 'mover@paying-team.test' returning id;`),
+      'move a membership out to their own free organization': asUser(TEAM_OWNER, `update organization_members set organization_id = '${GO_ORG}' where id = ${soloRow} returning id;`),
+    };
+    for (const [what, r] of Object.entries(alone)) {
+      check(`provisioning (seat guard off): a Team owner cannot ${what}`, !r.ok && /added by PawOS|reassigned by PawOS|allocated by PawOS|accepting their own invitation|valid email address|not on this organization/.test(r.err), reason(r));
+    }
+    check('provisioning (seat guard off): none of those attempts changed the organization\'s memberships', soloState() === stateBefore);
+    // Acceptance, with only this trigger and the domain rule in force.
+    const SOLO = { id: 'eeeeeeee-5555-4555-8555-eeeeeeeeeeee', email: 'solo-pending@paying-team.test' };
+    psql(`insert into auth.users (id, email, email_confirmed_at) values ('${SOLO.id}', '${SOLO.email}', now());`, 'solo account');
+    const wrongAccount = accept(ATTACKER);
+    check('provisioning (seat guard off): another account cannot accept the invitation', count(`email = '${SOLO.email}' and status = 'active'`) === 0, reason(wrongAccount));
+    const soloAccept = accept(SOLO);
+    check('provisioning (seat guard off): the invited account accepts its own invitation', soloAccept.ok && count(`email = '${SOLO.email}' and status = 'active' and user_id = '${SOLO.id}'`) === 1, reason(soloAccept));
+    const selfLeave = asUser(TEAM_OWNER, `update organization_members set status = 'removed' where id = ${soloRow} returning status;`);
+    check('provisioning (seat guard off): an owner can still remove that member', selfLeave.ok && selfLeave.out.includes('removed'), reason(selfLeave));
+    psql(`alter table organization_members enable trigger trg_guard_organization_member_seats;
+          update organizations set owner_user_id = '${PRO.id}', domain = 'customer.test' where id = '${GO_ORG}';
+          delete from organization_members where organization_id = '${GO_ORG}' and email = 'mover@paying-team.test';`, 'guard back on');
+    check('provisioning: the seat guard is enabled again', q(`select tgenabled from pg_trigger where tgname = 'trg_guard_organization_member_seats'`) === 'O');
+
+    // ── Service-role provisioning is still held to the paid-seat limits.
+    psql(`update organizations set seat_count = (select count(*) from organization_members where organization_id = '${PAID_ORG}' and status = 'active'), paid_premium_seats = 0 where id = '${PAID_ORG}';`, 'no free seats');
+    const overSeats = asService(`insert into organization_members (organization_id, user_id, email, role, status) values ('${PAID_ORG}', null, 'over@paying-team.test', 'member', 'invited')`);
+    check('provisioning: PawOS can still record an invitation when seats are full (a seat is taken on acceptance)', overSeats.ok, reason(overSeats));
+    psql(`insert into auth.users (id, email, email_confirmed_at) values ('ffffffff-6666-4666-8666-ffffffffffff', 'over@paying-team.test', now());`, 'over account');
+    const overAccept = accept({ id: 'ffffffff-6666-4666-8666-ffffffffffff', email: 'over@paying-team.test' });
+    check('provisioning: … and accepting it beyond the paid seats is still refused', !overAccept.ok && /paid seats/.test(overAccept.err), reason(overAccept));
+    const triggers = q(`select string_agg(tgname, ',' order by tgname) from pg_trigger where tgrelid = 'public.organization_members'::regclass and not tgisinternal and tgtype & 2 = 2`);
+    check('provisioning: the row triggers that run before a write, in the order Postgres fires them', triggers === 'trg_enforce_member_email_domain,trg_guard_managed_org_membership,trg_guard_organization_member_delete,trg_guard_organization_member_seats', triggers);
+
+    // ── Other tiers are unchanged.
+    const goInvite = insertAs(PRO, GO_ORG, 'teammate@customer.test');
+    check('provisioning: a free organization\'s owner still invites their own teammates', goInvite.ok && goInvite.out.includes('invited'), reason(goInvite));
+    const goOffDomain = insertAs(PRO, GO_ORG, 'teammate@gmail.com');
+    check('provisioning: … still only on the organization\'s domain', !goOffDomain.ok && /not on this organization/.test(goOffDomain.err), reason(goOffDomain));
+    const goReassign = asUser(PRO, `update organization_members set email = 'renamed@customer.test' where organization_id = '${GO_ORG}' and user_id = '${PRO.id}' returning email;`);
+    check('provisioning: a free organization can still change an address on its own rows', goReassign.ok && goReassign.out.includes('renamed@customer.test'), reason(goReassign));
+    const goMalformed = insertAs(PRO, GO_ORG, 'no-format-rule-here');
+    check('provisioning: the address-format rule is not applied to other tiers (their existing rules decide)', !/valid email address/.test(goMalformed.err), reason(goMalformed));
+    const goOutsider = insertAs(ATTACKER, GO_ORG, 'x@customer.test');
+    check('provisioning: … and still not by someone outside it', !goOutsider.ok, reason(goOutsider));
+  }
+
   console.log(`\n${results.join('\n')}`);
   console.log(`\n${results.length - failed}/${results.length} checks passed.`);
 } catch (error) {

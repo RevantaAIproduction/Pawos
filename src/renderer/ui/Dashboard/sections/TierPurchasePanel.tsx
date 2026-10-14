@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { initiateRazorpayTierPayment } from './TierPaymentHandler';
 import type { SubscriptionTierId, ProMaxVariant } from '../../../../shared/billing/BillingTypes';
+import { PAWOS_SALES_EMAIL } from '../../../../shared/organization/OrganizationContactRequest';
 
 interface TierPurchasePanelProps {
   currentTier: SubscriptionTierId;
@@ -115,7 +116,7 @@ export function TierPurchasePanel({ currentTier, userEmail, onPaymentComplete }:
 
             if (isContactSales) {
               const subject = encodeURIComponent(`${tierLabel} Plan Inquiry`);
-              const mailtoLink = `mailto:pawos@revantaai.com?subject=${subject}`;
+              const mailtoLink = `mailto:${PAWOS_SALES_EMAIL}?subject=${subject}`;
 
               return (
                 <a

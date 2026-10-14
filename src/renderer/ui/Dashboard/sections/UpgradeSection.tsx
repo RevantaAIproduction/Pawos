@@ -72,12 +72,14 @@ export function UpgradeSection({ onBack }: { onBack: () => void }) {
 
   const startCheckout = (tier: SubscriptionTierId, seatTier?: SeatTier, seatCount?: number) => {
     setMessage(null);
-    if (tier === 'enterprise') {
-      setShowEnterpriseCheckout(true);
-    } else {
-      setTierCheckoutTier(tier as Exclude<SubscriptionTierId, 'go'>);
-      setTierCheckoutOptions({ seatTier, seatCount });
+    // Team and Enterprise are arranged with PawOS sales: there is no checkout to start, whichever
+    // control asked for one.
+    if (tier === 'team' || tier === 'enterprise') {
+      setSalesPlan(tier);
+      return;
     }
+    setTierCheckoutTier(tier as Exclude<SubscriptionTierId, 'go'>);
+    setTierCheckoutOptions({ seatTier, seatCount });
   };
 
   const individualPlans = (pricing?.plans ?? []).filter((p) => !p.seatBased && p.id !== 'go');

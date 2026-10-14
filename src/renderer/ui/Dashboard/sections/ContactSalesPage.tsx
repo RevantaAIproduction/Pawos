@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import styles from '../dashboard.module.css';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
+import { PAWOS_SALES_EMAIL } from '../../../../shared/organization/OrganizationContactRequest';
 
 /**
  * Contact sales for Team and Enterprise — the same page as the website's /support/sales
@@ -10,7 +11,7 @@ import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 
 export type SalesPlanId = 'team' | 'enterprise';
 
-const SALES_EMAIL = 'sales@revantaai.com';
+const SALES_EMAIL = PAWOS_SALES_EMAIL;
 
 const PLANS: Record<SalesPlanId, { name: string; price: string; detail: string; subject: string }> = {
   team: {

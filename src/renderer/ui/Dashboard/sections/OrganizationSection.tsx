@@ -5,6 +5,7 @@ import { organizationService, type PendingInvite } from '../../../organization/O
 import { canManageBilling, canManageMembers } from '../../../../shared/organization/OrgPermissions';
 import { isPersonalEmailDomain } from '../../../../shared/organization/PersonalEmailDomains';
 import { checkInviteEmail, organizationInviteDomain } from '../../../../shared/organization/OrganizationEmailDomain';
+import { isManagedByPawos, organizationContactMailto, planLabel } from '../../../../shared/organization/OrganizationContactRequest';
 import type { OrganizationRecord, OrganizationMember, OrgRole, OrgTier } from '../../../../shared/organization/OrganizationTypes';
 import type { SeatTier } from '../../../../shared/billing/BillingTypes';
 import type { AuthUser } from '../../../auth/AuthTypes';
@@ -30,6 +31,15 @@ import { AdminLogoManager } from '../../components/AdminLogoManager';
 import { OrganizationLogo } from '../../components/OrganizationLogo';
 import { credentialVaultService } from '../../../organization/CredentialVaultService';
 import { SectionHub, SectionDetail, type SectionTileDef } from '../SectionHub';
+import {
+  ContactPawosNote,
+  MemberAvatar,
+  MemberTable,
+  OrganizationSummaryCard,
+  OrganizationTabs,
+  removalQuestion,
+  type OrganizationTab,
+} from './ManagedOrganizationViews';
 import {
   builtinJobRoleRef,
   customJobRoleRef,
@@ -115,6 +125,10 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const [customJobRoles, setCustomJobRoles] = useState<OrgJobRole[]>([]);
   const [roleFilter, setRoleFilter] = useState<string>('all');
+  // Team / Enterprise layout: the selected tab, the copy-ID acknowledgement, and the result of the last action.
+  const [orgTab, setOrgTab] = useState<string>('overview');
+  const [copiedOrgId, setCopiedOrgId] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (user.isGuest) return;
@@ -361,8 +375,30 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
   // The domain teammates must be on, as shown on this screen ('' while it isn't known yet).
   const inviteDomain = org ? organizationInviteDomain(org.domain, ownerEmailOf(org)) : '';
 
+  // Team and Enterprise organizations are set up and changed by PawOS: members, seats and plan changes
+  // go through PawOS sales. The invite form, seat reassignment and seat-change requests below exist
+  // only for an organization on another tier; the database refuses them for these two as well.
+  const managedByPawos = isManagedByPawos(org?.tier);
+  const owner = org ? members.find((m) => m.userId === org.ownerUserId) ?? null : null;
+  const activeSeats = members.filter((m) => m.status === 'active').length;
+  const contactPawos = () => {
+    if (!org) return;
+    void ipc.actionExecute({
+      type: 'openUrl',
+      url: organizationContactMailto({
+        organizationName: org.name,
+        tier: org.tier,
+        ownerName: owner?.displayName ?? (org.ownerUserId === user.id ? user.name : null),
+        ownerEmail: ownerEmailOf(org),
+        domain: inviteDomain,
+        seatCount: org.seatCount,
+        occupiedSeats: activeSeats,
+      }),
+    });
+  };
+
   async function inviteMember() {
-    if (!org || !inviteEmail.trim()) return;
+    if (!org || managedByPawos || !inviteEmail.trim()) return;
     const invite = checkInviteEmail(inviteEmail, org.domain, ownerEmailOf(org));
     if (!invite.ok) {
       setError(invite.reason);
@@ -429,7 +465,7 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
   }
 
   async function requestSeatChange(member: OrganizationMember) {
-    if (!org) return;
+    if (!org || managedByPawos) return;
     const currentSeat = member.seatTier === 'premium' ? 'Premium' : 'Standard';
     const requestedSeat = currentSeat === 'Premium' ? 'Standard' : 'Premium';
     const reason = window.prompt(
@@ -458,7 +494,7 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
   }
 
   async function reassignPendingSeat(memberId: string) {
-    if (!org) return;
+    if (!org || managedByPawos) return;
     const reassigned = checkInviteEmail(reassignEmailInput, org.domain, ownerEmailOf(org));
     if (!reassigned.ok) {
       setError(reassigned.reason);
@@ -513,6 +549,276 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
     );
   }
 
+  const renderOrgSection = (sectionId: string) => (
+    <>
+      {sectionId === 'activity' && <ActivityDashboardCard organizationId={org.id} orgMembers={members} />}
+      {sectionId === 'tasks' && <OrganizationTasksCard organizationId={org.id} members={members} />}
+      {sectionId === 'remoteAssistance' && (
+        <RemoteAssistancePanel organizationId={org.id} workspaceId={null} currentUser={user} orgMembers={members} />
+      )}
+      {sectionId === 'roles' && <RolesCapabilityCard organizationId={org.id} roleOptions={roleOptions} />}
+      {sectionId === 'jobRoles' && <OrganizationRolesCard organizationId={org.id} orgMembers={members} />}
+      {sectionId === 'temporaryPermissions' && (
+        <TemporaryPermissionCard organizationId={org.id} orgMembers={members} />
+      )}
+      {sectionId === 'workspace' && (
+        <OrganizationWorkspaceCard organizationId={org.id} orgMembers={members} currentUser={user} />
+      )}
+      {sectionId === 'crm' && <CrmCard organizationId={org.id} />}
+      {sectionId === 'credits' && (
+        <>
+          {/* The shared credit pool is Enterprise-only: Paw Team members each use their own seat. */}
+          {tier === 'enterprise' && <CreditPoolCard organizationId={org.id} orgMembers={members} />}
+          <AutonomousTaskBillingCard organizationId={org.id} />
+          {/* Owners and billing admins buy Paw Compute and give it to members; members see what they were given. */}
+          {canManageBilling(myRole) ? (
+            <div style={{ marginTop: 16 }}>
+              <GivePawComputePanel
+                organizationId={org.id}
+                organizationName={org.name}
+                members={members}
+                currentUserId={user.id}
+                userEmail={user.email ?? ''}
+              />
+            </div>
+          ) : (
+            <GivenToYouCard organizationId={org.id} currentUserId={user.id} members={members} />
+          )}
+        </>
+      )}
+      {sectionId === 'governance' && (
+        <>
+          <GovernancePolicyCard organizationId={org.id} />
+          <ApprovalQueueCard organizationId={org.id} />
+        </>
+      )}
+      {sectionId === 'credentialVault' && <CredentialVaultCard organizationId={org.id} />}
+      {sectionId === 'sso' && (
+        <SsoSettingsCard organizationId={org.id} tier={tier === 'enterprise' ? 'enterprise' : 'team'} />
+      )}
+      {sectionId === 'branding' && canManageBilling(myRole) && accessToken && (
+        <AdminLogoManager
+          organizationId={org.id}
+          accessToken={accessToken}
+          organizationName={org.name}
+        />
+      )}
+      {sectionId === 'auditLog' && <AuditLogCard organizationId={org.id} />}
+    </>
+  );
+
+  // ── Team and Enterprise: the organization dashboard ────────────────────────────────────────────
+  if (managedByPawos) {
+    const enterprise = org.tier === 'enterprise';
+    const current = members.filter((m) => m.status !== 'removed');
+    const pendingCount = current.filter((m) => m.status === 'invited').length;
+    const canContact = canManageMembers(myRole) || canManageBilling(myRole);
+    const ownerName = owner?.displayName ?? (org.ownerUserId === user.id ? user.name ?? null : null);
+    const administrators = current.filter((m) => m.status === 'active' && canManageMembers(m.role));
+    // Everything the hub used to list is still here, grouped; a tab is shown only when it has something in it.
+    const TOOL_TILES = ORG_SECTION_TILES.filter((t) => ['activity', 'tasks', 'remoteAssistance', 'workspace', 'crm'].includes(t.id));
+    const tabs: OrganizationTab[] = [
+      { id: 'overview', label: 'Overview' },
+      { id: 'members', label: 'Members' },
+      { id: 'details', label: 'Organization Details' },
+      { id: 'usage', label: 'Usage & Credits' },
+      { id: 'security', label: 'Security' },
+      { id: 'roles', label: 'Roles & Permissions' },
+      { id: 'auditLog', label: 'Audit Log' },
+      { id: 'tools', label: 'Workspace & Tools' },
+    ];
+    const copyOrgId = async () => {
+      try {
+        await navigator.clipboard.writeText(org.slug);
+        setCopiedOrgId(true);
+        window.setTimeout(() => setCopiedOrgId(false), 2000);
+      } catch {
+        // Clipboard blocked: the ID is on screen to copy by hand.
+      }
+    };
+    // Removal asks first, naming the person, and reports what actually happened.
+    const confirmAndRemove = async (member: OrganizationMember) => {
+      if (!canManageMembers(myRole)) return;
+      if (member.userId !== null && member.userId === org.ownerUserId) return; // the owner's own membership is not removed here
+      if (!window.confirm(removalQuestion(member, org.name))) return;
+      setBusy(true);
+      setError(null);
+      setNotice(null);
+      try {
+        await removeMember(member.id);
+        setNotice(`${member.displayName ?? member.email} was removed from ${org.name}.`);
+      } catch (e) {
+        setError(`Could not remove ${member.email}: ${getErrorMessage(e)}`);
+      } finally {
+        setBusy(false);
+      }
+    };
+    const updateRole = async (memberId: string, role: OrgRole) => {
+      setError(null);
+      setNotice(null);
+      try {
+        await changeRole(memberId, role);
+      } catch (e) {
+        setError(`Could not change that role: ${getErrorMessage(e)}`);
+      }
+    };
+    const selectTab = (id: string) => {
+      setOrgTab(id);
+      setSelectedSection(null);
+      setError(null);
+      setNotice(null);
+    };
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }} data-testid="org-managed-dashboard">
+        <OrganizationSummaryCard
+          summary={{
+            name: org.name,
+            plan: planLabel(org.tier),
+            organizationId: org.slug,
+            domain: inviteDomain,
+            ownerName,
+            ownerEmail: ownerEmailOf(org),
+            activeMembers: activeSeats,
+            pendingMembers: pendingCount,
+            seatCount: org.seatCount ?? null,
+          }}
+          logo={
+            accessToken ? (
+              <OrganizationLogo organizationId={org.id} accessToken={accessToken} fallbackName={org.name} size="medium" />
+            ) : (
+              <MemberAvatar name={org.name} email={org.slug} size={64} />
+            )
+          }
+          canContact={canContact}
+          onContact={contactPawos}
+          onCopyId={copyOrgId}
+          copied={copiedOrgId}
+        />
+
+        <OrganizationTabs tabs={tabs} active={orgTab} onSelect={selectTab} />
+
+        {error && <p role="alert" style={{ color: '#e08c8c', fontSize: 12.5, margin: 0 }}>{error}</p>}
+        {notice && <p role="status" style={{ color: '#8ce0a8', fontSize: 12.5, margin: 0 }}>{notice}</p>}
+
+        {orgTab === 'overview' && (
+          <>
+            <ContactPawosNote canContact={canContact} onContact={contactPawos} withButton={false} />
+            <div className={styles.card}>
+              <h3 className={styles.cardTitle}>{enterprise ? 'Owner and administrators' : 'Owner and admins'}</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
+                {administrators.map((m) => (
+                  <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <MemberAvatar name={m.displayName} email={m.email} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 600, overflowWrap: 'anywhere' }}>{m.displayName ?? m.email}</div>
+                      {m.displayName && <div style={{ fontSize: 12, color: '#96969e', overflowWrap: 'anywhere' }}>{m.email}</div>}
+                    </div>
+                    <span style={{ fontSize: 12, color: '#96969e' }}>{m.role}</span>
+                  </div>
+                ))}
+                {administrators.length === 0 && <p className={styles.cardBody}>No administrators are listed for this organization yet.</p>}
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+                <button type="button" className={styles.chip} onClick={() => selectTab('members')}>View all members</button>
+                <button type="button" className={styles.chip} onClick={() => selectTab('usage')}>Usage & credits</button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {orgTab === 'members' && (
+          <div className={styles.card}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+              <h3 className={styles.cardTitle}>Members</h3>
+              <span style={{ fontSize: 12, color: '#96969e' }}>
+                {org.seatCount && org.seatCount > 0 ? `${activeSeats} of ${org.seatCount} seats in use` : `${activeSeats} active`}
+                {pendingCount > 0 ? ` · ${pendingCount} pending` : ''}
+              </span>
+            </div>
+            <MemberTable
+              members={members}
+              showSeatType={!enterprise}
+              canManage={canManageMembers(myRole)}
+              roleOptions={roleOptions}
+              ownerUserId={org.ownerUserId}
+              busy={busy}
+              onChangeRole={(memberId, role) => void updateRole(memberId, role)}
+              onRemove={(member) => void confirmAndRemove(member)}
+            />
+            <div style={{ marginTop: 14 }}>
+              <ContactPawosNote canContact={canContact} onContact={contactPawos} withButton />
+            </div>
+            {!canManageBilling(myRole) && (
+              <p className={styles.cardBody} style={{ marginTop: 10 }}>
+                Billing is managed by your organization's owner or billing administrator.
+              </p>
+            )}
+          </div>
+        )}
+
+        {orgTab === 'details' && (
+          <>
+            <div className={styles.card} data-testid="org-details">
+              <h3 className={styles.cardTitle}>Organization details</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 16, marginTop: 12 }}>
+                {(
+                  [
+                    ['Name', org.name],
+                    ['Plan', planLabel(org.tier)],
+                    ['Organization ID', org.slug],
+                    ['Domain', inviteDomain ? `@${inviteDomain}` : null],
+                    ['Owner', ownerName],
+                    ['Owner email', ownerEmailOf(org)],
+                    ['Seats', org.seatCount && org.seatCount > 0 ? `${activeSeats} of ${org.seatCount} in use` : null],
+                    ['Members', `${activeSeats} active${pendingCount > 0 ? `, ${pendingCount} pending` : ''}`],
+                  ] as [string, string | null][]
+                )
+                  .filter(([, value]) => Boolean(value))
+                  .map(([name, value]) => (
+                    <div key={name} style={{ minWidth: 0 }}>
+                      <p className={styles.cardBody}>{name}</p>
+                      <p style={{ fontSize: 14, fontWeight: 600, overflowWrap: 'anywhere' }}>{value}</p>
+                    </div>
+                  ))}
+              </div>
+            </div>
+            {renderOrgSection('branding')}
+          </>
+        )}
+
+        {orgTab === 'usage' && renderOrgSection('credits')}
+
+        {orgTab === 'security' && (
+          <>
+            {renderOrgSection('sso')}
+            {renderOrgSection('governance')}
+            {renderOrgSection('credentialVault')}
+            {renderOrgSection('temporaryPermissions')}
+          </>
+        )}
+
+        {orgTab === 'roles' && (
+          <>
+            {renderOrgSection('roles')}
+            {renderOrgSection('jobRoles')}
+          </>
+        )}
+
+        {orgTab === 'auditLog' && renderOrgSection('auditLog')}
+
+        {orgTab === 'tools' &&
+          (selectedSection ? (
+            <SectionDetail title={TOOL_TILES.find((t) => t.id === selectedSection)?.title ?? ''} onBack={() => setSelectedSection(null)}>
+              {renderOrgSection(selectedSection)}
+            </SectionDetail>
+          ) : (
+            <SectionHub tiles={TOOL_TILES} onSelect={setSelectedSection} />
+          ))}
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div className={styles.card}>
@@ -543,8 +849,23 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
           </div>
           <div>
             <p className={styles.cardBody}>Plan</p>
-            <p style={{ fontSize: 14, fontWeight: 600 }}>{tier === 'enterprise' ? 'Enterprise' : 'Team'}</p>
+            <p style={{ fontSize: 14, fontWeight: 600 }}>{planLabel(org.tier) || (tier === 'enterprise' ? 'Enterprise' : 'Team')}</p>
           </div>
+          {(owner?.displayName || ownerEmailOf(org)) && (
+            <div data-testid="org-owner">
+              <p className={styles.cardBody}>Owner</p>
+              <p style={{ fontSize: 14, fontWeight: 600 }}>{owner?.displayName ?? ownerEmailOf(org)}</p>
+              {owner?.displayName && ownerEmailOf(org) && <p style={{ fontSize: 12, color: '#96969e' }}>{ownerEmailOf(org)}</p>}
+            </div>
+          )}
+          {typeof org.seatCount === 'number' && org.seatCount > 0 && (
+            <div data-testid="org-seats">
+              <p className={styles.cardBody}>Seats</p>
+              <p style={{ fontSize: 14, fontWeight: 600 }}>
+                {activeSeats} of {org.seatCount} in use
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -595,7 +916,7 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
                 ) : (
                   <div style={{ fontSize: 12, color: '#96969e' }}>
                     {m.email} · {m.status === 'invited' ? 'Pending — awaiting sign-in' : 'Active'}
-                    {m.status === 'invited' && canManageMembers(myRole) && (
+                    {m.status === 'invited' && canManageMembers(myRole) && !managedByPawos && (
                       <button
                         type="button"
                         onClick={() => { setReassigningMemberId(m.id); setReassignEmailInput(m.email); }}
@@ -619,11 +940,11 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
                       color: '#c8c8d2',
                       whiteSpace: 'nowrap',
                     }}
-                    title="Seat type is fixed at invite time. Changing it goes through a support-approved request, never edited directly here."
+                    title={managedByPawos ? 'Seats are allocated by PawOS. Contact PawOS to change a seat.' : 'Seat type is fixed at invite time. Changing it goes through a support-approved request, never edited directly here.'}
                   >
                     {m.seatTier === 'premium' ? 'Premium seat' : 'Standard seat'}
                   </span>
-                  {m.status !== 'invited' && canManageBilling(myRole) && (
+                  {m.status !== 'invited' && canManageBilling(myRole) && !managedByPawos && (
                     <button
                       type="button"
                       disabled={busy}
@@ -669,7 +990,7 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
             </div>
           ))}
           {members.filter((m) => m.status !== 'removed').length === 0 && (
-            <p className={styles.cardBody}>No members yet — invite your first teammate below.</p>
+            <p className={styles.cardBody}>{managedByPawos ? 'No members yet — contact PawOS to add your team.' : 'No members yet — invite your first teammate below.'}</p>
           )}
           {members.filter((m) => m.status !== 'removed').length > 0 &&
             members.filter((m) => m.status !== 'removed' && (roleFilter === 'all' || m.jobRoleRef === roleFilter)).length === 0 && (
@@ -677,7 +998,22 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
             )}
         </div>
 
-        {canManageMembers(myRole) && (
+        {managedByPawos && (
+          <div data-testid="org-contact-pawos" style={{ marginTop: 14, padding: '12px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}>
+            <p style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>Members and seats are managed by PawOS</p>
+            <p className={styles.cardBody} style={{ marginTop: 4, fontSize: 12 }}>
+              To add or invite members, change seats, or adjust your plan or credits, contact PawOS. The PawOS team reviews the request and confirms the plan and pricing; changes appear here once they are made.
+            </p>
+            {(canManageMembers(myRole) || canManageBilling(myRole)) ? (
+              <button type="button" className={styles.primaryButton} style={{ marginTop: 10 }} onClick={contactPawos}>
+                Contact PawOS
+              </button>
+            ) : (
+              <p className={styles.cardBody} style={{ marginTop: 8, fontSize: 12 }}>Ask your organization's owner or administrator to contact PawOS.</p>
+            )}
+          </div>
+        )}
+        {canManageMembers(myRole) && !managedByPawos && (
           <div style={{ marginTop: 14 }}>
             <div style={{ display: 'flex', gap: 8 }}>
               <input style={{ ...inputStyle, flex: 1 }} placeholder={`teammate@${inviteDomain || 'yourcompany.com'}`} value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} />
@@ -721,64 +1057,12 @@ export function OrganizationSection({ user, onOpenSupportMessages }: { user: Aut
           title={ORG_SECTION_TILES.find((t) => t.id === selectedSection)?.title ?? ''}
           onBack={() => setSelectedSection(null)}
         >
-          {selectedSection === 'activity' && <ActivityDashboardCard organizationId={org.id} orgMembers={members} />}
-          {selectedSection === 'tasks' && <OrganizationTasksCard organizationId={org.id} members={members} />}
-          {selectedSection === 'remoteAssistance' && (
-            <RemoteAssistancePanel organizationId={org.id} workspaceId={null} currentUser={user} orgMembers={members} />
-          )}
-          {selectedSection === 'roles' && <RolesCapabilityCard organizationId={org.id} roleOptions={roleOptions} />}
-          {selectedSection === 'jobRoles' && <OrganizationRolesCard organizationId={org.id} orgMembers={members} />}
-          {selectedSection === 'temporaryPermissions' && (
-            <TemporaryPermissionCard organizationId={org.id} orgMembers={members} />
-          )}
-          {selectedSection === 'workspace' && (
-            <OrganizationWorkspaceCard organizationId={org.id} orgMembers={members} currentUser={user} />
-          )}
-          {selectedSection === 'crm' && <CrmCard organizationId={org.id} />}
-          {selectedSection === 'credits' && (
-            <>
-              {/* The shared credit pool is Enterprise-only: Paw Team members each use their own seat. */}
-              {tier === 'enterprise' && <CreditPoolCard organizationId={org.id} orgMembers={members} />}
-              <AutonomousTaskBillingCard organizationId={org.id} />
-              {/* Owners and billing admins buy Paw Compute and give it to members; members see what they were given. */}
-              {canManageBilling(myRole) ? (
-                <div style={{ marginTop: 16 }}>
-                  <GivePawComputePanel
-                    organizationId={org.id}
-                    organizationName={org.name}
-                    members={members}
-                    currentUserId={user.id}
-                    userEmail={user.email ?? ''}
-                  />
-                </div>
-              ) : (
-                <GivenToYouCard organizationId={org.id} currentUserId={user.id} members={members} />
-              )}
-            </>
-          )}
-          {selectedSection === 'governance' && (
-            <>
-              <GovernancePolicyCard organizationId={org.id} />
-              <ApprovalQueueCard organizationId={org.id} />
-            </>
-          )}
-          {selectedSection === 'credentialVault' && <CredentialVaultCard organizationId={org.id} />}
-          {selectedSection === 'sso' && (
-            <SsoSettingsCard organizationId={org.id} tier={tier === 'enterprise' ? 'enterprise' : 'team'} />
-          )}
-          {selectedSection === 'branding' && canManageBilling(myRole) && accessToken && (
-            <AdminLogoManager
-              organizationId={org.id}
-              accessToken={accessToken}
-              organizationName={org.name}
-            />
-          )}
-          {selectedSection === 'auditLog' && <AuditLogCard organizationId={org.id} />}
+          {renderOrgSection(selectedSection)}
         </SectionDetail>
       ) : (
         <SectionHub tiles={ORG_SECTION_TILES} onSelect={setSelectedSection} />
       )}
-      {seatCheckoutIntent && (
+      {seatCheckoutIntent && !managedByPawos && (
         <NativeBillingCheckoutModal
           intent={seatCheckoutIntent}
           onClose={() => setSeatCheckoutIntent(null)}
