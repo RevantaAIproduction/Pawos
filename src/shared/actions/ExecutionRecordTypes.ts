@@ -73,10 +73,23 @@ export type ExecutionTimelineEntry = {
   endedAt: number;
 };
 
+/**
+ * 'awaiting_approval': the request stopped at a step that needs the user's "allow"; settled when they
+ * answer (allow → completed, the step continues as the next request; deny/unanswered → cancelled).
+ * 'cancelling': the user cancelled; the main process has not yet confirmed the running step stopped.
+ * 'cancelled': cancellation confirmed. 'interrupted': PawOS closed (or crashed) while the record was
+ * still in progress — set only by startup reconciliation (ExecutionMemoryStore), never guessed as
+ * completed or failed. 'abandoned': stopped by a block (entitlement, usage, security) or a barge-in.
+ */
+export type ExecutionRecordStatus = 'in_progress' | 'awaiting_approval' | 'cancelling' | 'completed' | 'failed' | 'abandoned' | 'cancelled' | 'interrupted';
+
+/** The step running right now, as the runtime reported it when it started — cleared when it ends. */
+export type ExecutionCurrentOperation = { actionType: string; label: string; startedAt: number };
+
 export type ExecutionRecord = {
   id: string;
   goal: string;
-  status: 'in_progress' | 'completed' | 'failed' | 'abandoned';
+  status: ExecutionRecordStatus;
   startedAt: number;
   completedAt?: number;
   durationMs?: number;
@@ -107,4 +120,21 @@ export type ExecutionRecord = {
    *  one real cross-system link between local Work History and the autonomous run it belongs to. Never
    *  set for a normal, human-driven conversation turn. See AutonomousOrchestrator.ts. */
   externalRunId?: string;
+  /** The chat this execution belongs to, once the chat has an id (a new chat gets one when its first turn is saved). */
+  sessionId?: string;
+  /** The project folder open for this execution, if any. */
+  projectFolder?: string;
+  /** Last real activity (an action started or finished, a live progress event). */
+  lastActivityAt?: number;
+  currentOperation?: ExecutionCurrentOperation | null;
+  /** Bumped on every write from the renderer; the store ignores a write older than the one it has (out-of-order / duplicate delivery). */
+  revision?: number;
+  /** The Task Card's id for this request (joins the live task steps to this record). */
+  taskRecordId?: string;
+  /** Set once the user cancels. `confirmedAt` only after the main process confirmed nothing is still running. */
+  cancellation?: { requestedAt: number; confirmedAt?: number; nonCancellableAction?: string | null; stillRunningAction?: string | null };
 };
+
+/** Statuses after which a record never changes again (except a late cancellation confirmation). */
+export const TERMINAL_EXECUTION_STATUSES: readonly ExecutionRecordStatus[] = ['completed', 'failed', 'abandoned', 'cancelled', 'interrupted'];
+export const isTerminalExecutionStatus = (status: ExecutionRecordStatus): boolean => TERMINAL_EXECUTION_STATUSES.includes(status);

@@ -1,4 +1,5 @@
 import type { AuthMethod, ConnectivityScope } from '../../shared/connectivity/ConnectivityTypes';
+import { accountSession } from '../auth/AccountSession';
 
 export interface StoredCredential {
   connectorId: string;
@@ -52,9 +53,38 @@ function credentialKey(connectorId: string, scope: ConnectivityScope): string {
  * exposure. The public API below is already the final shape; only
  * `store()`/`read()`/`rotate()`/`revoke()`'s internals change once Section
  * 17 lands, nothing above this layer needs to.
+ *
+ * Account boundary: every credential here belongs to the signed-in account the main process has
+ * verified itself (`accountSession.verifiedUserId`) — never to a user id a renderer put in a
+ * scope. A credential for any other account is never returned, and is refused on write (the
+ * connector that tried is told, so it can forget the token it is holding — see
+ * connectivity/accountBoundary.ts). The whole cache is cleared when the account changes.
  */
 class CredentialVaultBridge {
   private credentials = new Map<string, StoredCredential>();
+  private refusedWriteListeners = new Set<(connectorId: string) => void>();
+
+  /** Whether `scope` is the verified signed-in account. */
+  private ownsScope(scope: ConnectivityScope): boolean {
+    const userId = accountSession.verifiedUserId;
+    return userId !== null && scope.userId === userId;
+  }
+
+  private refuse(connectorId: string): never {
+    for (const listener of this.refusedWriteListeners) listener(connectorId);
+    throw new Error(`Not storing a credential for '${connectorId}': it isn't for the account signed in to PawOS.`);
+  }
+
+  /** Told when a write for another account is refused (an in-flight connect or refresh that outlived its account). */
+  onRefusedWrite(listener: (connectorId: string) => void): () => void {
+    this.refusedWriteListeners.add(listener);
+    return () => this.refusedWriteListeners.delete(listener);
+  }
+
+  /** Forgets every credential held in this process (the signed-in account changed). */
+  clear(): void {
+    this.credentials.clear();
+  }
 
   async store(
     connectorId: string,
@@ -63,6 +93,7 @@ class CredentialVaultBridge {
     authMethod: AuthMethod,
     opts?: { refreshToken?: string; expiresAt?: number; grantedScopes?: string[] }
   ): Promise<void> {
+    if (!this.ownsScope(scope)) this.refuse(connectorId);
     this.credentials.set(credentialKey(connectorId, scope), {
       connectorId,
       scope,
@@ -76,15 +107,18 @@ class CredentialVaultBridge {
   }
 
   async read(connectorId: string, scope: ConnectivityScope): Promise<StoredCredential | undefined> {
+    if (!this.ownsScope(scope)) return undefined;
     return this.credentials.get(credentialKey(connectorId, scope));
   }
 
-  /** The most recently written credential for a connector, whichever scope it was stored under —
-   *  for callers (the MCP gateway) that act for the signed-in user without being handed a scope. */
+  /** The signed-in account's most recently written credential for a connector, whichever of its
+   *  scopes (personal or organization) it was stored under — for callers (the MCP gateway) that act
+   *  for the signed-in user without being handed a scope. Never another account's. */
   async readLatest(connectorId: string): Promise<StoredCredential | undefined> {
     let latest: StoredCredential | undefined;
     for (const credential of this.credentials.values()) {
-      if (credential.connectorId === connectorId && (!latest || credential.updatedAt >= latest.updatedAt)) latest = credential;
+      if (credential.connectorId !== connectorId || !this.ownsScope(credential.scope)) continue;
+      if (!latest || credential.updatedAt >= latest.updatedAt) latest = credential;
     }
     return latest;
   }
@@ -107,6 +141,7 @@ class CredentialVaultBridge {
     newSecret: string,
     opts?: { refreshToken?: string; expiresAt?: number; grantedScopes?: string[] }
   ): Promise<void> {
+    if (!this.ownsScope(scope)) this.refuse(connectorId);
     const existing = this.credentials.get(credentialKey(connectorId, scope));
     if (!existing) {
       throw new Error(`Cannot rotate — no credential stored for connector '${connectorId}' in this scope.`);

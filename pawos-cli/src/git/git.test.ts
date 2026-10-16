@@ -2,11 +2,14 @@ import { execFileSync } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { runCli } from "../cli";
 import { githubRepositoryFromRemote } from "../shared";
 import { harness } from "../testing/harness";
 import { detectLocalRepository, explainLocalRepository, type GitRunner } from "./localRepository";
+
+// Real Git on Windows takes seconds per test, more under a full parallel run: the 5-second default is too tight.
+vi.setConfig({ testTimeout: 30_000 });
 
 /** Finding the GitHub repository of the folder `pawos` was started in. */
 const directories: string[] = [];

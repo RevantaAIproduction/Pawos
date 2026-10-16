@@ -22,6 +22,10 @@ const STATUS_LABELS: Record<ExecutionRecord['status'], string> = {
   completed: 'Completed',
   failed: 'Failed',
   abandoned: 'Stopped',
+  cancelling: 'Cancelling',
+  awaiting_approval: 'Awaiting approval',
+  cancelled: 'Cancelled',
+  interrupted: 'Interrupted',
 };
 
 /**

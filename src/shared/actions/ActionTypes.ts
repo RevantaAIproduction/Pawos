@@ -52,6 +52,10 @@ export type ActionRequest = {
   approvalId?: string;
   /** Set on actions issued by an autonomous (Ticket Balance-billed) run — excluded from the weekly code-file cap. */
   autonomousRunId?: string;
+  /** The ExecutionRecord (one per user request) this action belongs to — set by the renderer's
+   *  ConversationRuntime. Lets the main process cancel exactly that execution's running work
+   *  (action:cancel) and attribute file changes to it. Absent = an action outside any tracked task. */
+  executionId?: string;
 } & (
   | { type: 'openUrl'; url: string }
   | { type: 'openApp'; appId: KnownAppId; path?: string }
@@ -793,6 +797,7 @@ export type ActionResult =
       reason:
         | 'not-implemented'
         | 'requires-confirmation'
+        | 'account-restricted'
         | 'coding-mode-restricted'
         | 'infra-mode-restricted'
         | 'entitlement-restricted'
@@ -881,18 +886,19 @@ export const DESTRUCTIVE_ACTION_TYPES: ActionRequest['type'][] = [
 ];
 
 /**
- * Coding Intelligence Runtime Phase 2 — Paw Go/Pro gate. Everything here is
+ * Coding Intelligence Runtime Phase 2 — execution gate. Everything here is
  * refused up front with a fixed message (see DesktopExecutionEngine.execute()),
- * before the destructive-action gate above is ever reached, whenever either
- * (a) the subscription tier itself lacks the 'advancedRuntimes' entitlement
- * (Go tier — always refused, regardless of the local mode file) or (b) the
- * tier has it but the user's own local CodingModeStore preference is still
- * 'go' (a safety default even Pro+ users can choose). Read-only coding
+ * before the destructive-action gate above is ever reached, whenever (a) no
+ * account is signed in (verified by the main process), (b) the subscription
+ * tier lacks the 'advancedRuntimes' entitlement (regardless of the local mode
+ * file; Paw Go's tier has included it since 406663d), or (c) the user's own
+ * local CodingModeStore preference is still 'go' — planning & analysis only,
+ * a safety default any plan can choose. Read-only coding
  * actions (analyzeProject, explainRelationship, queryProvenance, gitDiff,
  * listProcesses, and the new Phase 2.3
  * AnalyzeProjectStructurePlugin/AnalyzeFileImpactPlugin) are deliberately NOT
- * here — Paw Go's "read-only Coding Canvas / Project Memory / Coding Memory /
- * dependency & file-impact analysis" stays available.
+ * here — the read-only Coding Canvas / Project Memory / Coding Memory /
+ * dependency & file-impact analysis stays available in every case.
  */
 export const CODING_EXECUTION_ACTION_TYPES: ActionRequest['type'][] = [
   'writeFile',
@@ -923,9 +929,10 @@ export const CODING_EXECUTION_ACTION_TYPES: ActionRequest['type'][] = [
 /**
  * Infrastructure Runtime — "read-only investigation mode" gate. Refused
  * before the destructive-action confirmation gate is ever reached, same
- * tier-then-local-toggle order as Paw Go/Pro above: unconditionally when the
- * tier lacks 'advancedRuntimes' (Go — regardless of InfraModeStore's local
- * file), otherwise only in 'investigate' mode. Read-only infra actions
+ * account-then-tier-then-local-toggle order as the coding gate above:
+ * unconditionally when no account is signed in or the tier lacks
+ * 'advancedRuntimes' (regardless of InfraModeStore's local file), otherwise
+ * only in 'investigate' mode. Read-only infra actions
  * (investigateTicket, getDeploymentStatus, listConfiguredInfraConnectors)
  * are deliberately NOT here — investigation always stays available.
  */

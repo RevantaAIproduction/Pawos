@@ -175,9 +175,11 @@ describe("boundaries the code must keep", () => {
 
   it("every future or desktop-only capability has no Web API route", () => {
     // Each /api/web route serves display (capabilities) or an available capability:
-    // handoff → web.continueInDesktop, github + changes → web.codeChanges, agent → web.localAgent.
+    // handoff → web.continueInDesktop, github + changes → web.codeChanges, agent → web.localAgent,
+    // images → web.imageGeneration.
     const routes = fs.readdirSync(path.join(SRC, "app", "api", "web")).sort();
-    expect(routes).toEqual(["agent", "capabilities", "changes", "github", "handoff"]);
+    expect(routes).toEqual(["agent", "capabilities", "changes", "github", "handoff", "images"]);
+    for (const tier of ["go", "pro", "proMax", "team", "enterprise"] as const) expect(webCapabilityStatus({ tier }, "web.imageGeneration")).toBe("available");
     expect(webCapabilityStatus({ tier: "pro" }, "web.localAgent")).toBe("available");
     expect(webCapabilityStatus({ tier: "go" }, "web.localAgent")).not.toBe("available");
     expect(webCapabilityStatus({ tier: "go" }, "web.continueInDesktop")).toBe("available");

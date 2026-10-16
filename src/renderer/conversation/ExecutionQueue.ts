@@ -63,6 +63,18 @@ export class ExecutionQueue {
     return true;
   }
 
+  /** Cancels every not-yet-started item (its execution was cancelled) — running items are left to the main process's action:cancel. */
+  cancelQueued(): number {
+    let cancelled = 0;
+    for (const item of this.items) {
+      if (item.state === 'queued') {
+        item.state = 'cancelled';
+        cancelled += 1;
+      }
+    }
+    return cancelled;
+  }
+
   list(): QueuedAction[] {
     return [...this.items];
   }

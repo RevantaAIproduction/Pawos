@@ -1029,3 +1029,64 @@
   text-overflow: ellipsis;
   max-width: 200px;
 }
+
+/* A task is running in another chat; this chat is shown read-only. */
+.backgroundTaskBanner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0 12px 8px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 12px;
+}
+
+.backgroundTaskBannerEmphasis {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.backgroundTaskText {
+  flex: 1 1 220px;
+  min-width: 0;
+  margin: 0;
+}
+
+.backgroundTaskGoal {
+  display: inline-block;
+  max-width: 28ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.backgroundTaskActions {
+  display: flex;
+  gap: 6px;
+}
+
+.backgroundTaskButton {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.backgroundTaskButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.backgroundTaskButton:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.45);
+  outline-offset: 1px;
+}

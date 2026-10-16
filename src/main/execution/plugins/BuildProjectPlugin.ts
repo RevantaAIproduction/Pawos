@@ -5,6 +5,7 @@ import type { ObservationEvent, BuildStatus } from '../../../shared/actions/Exec
 import { BasePlugin } from '../BasePlugin';
 import { describeFailure } from '../describeFailure';
 import { processManager } from '../ProcessManager';
+import { registerStop } from '../ExecutionCancellation';
 import { observeProcess } from '../verification/ProcessVerification';
 import { workspaceMemoryStore } from '../WorkspaceMemoryStore';
 
@@ -65,6 +66,11 @@ export class BuildProjectPlugin extends BasePlugin {
 
     const startResult = await processManager.start(request.buildCommand, request.cwd, 'build');
     if (!startResult.ok) return { ok: false, reason: 'failed', message: startResult.message };
+    // Cancelling this execution stops this build's process tree (ProcessManager.stop → taskkill /T).
+    const buildProcessId = startResult.info.id;
+    registerStop(async () => {
+      await processManager.stop(buildProcessId);
+    });
 
     const state: BuildState = {
       processId: startResult.info.id,

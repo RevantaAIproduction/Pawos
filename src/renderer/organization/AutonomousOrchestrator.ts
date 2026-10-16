@@ -607,6 +607,10 @@ export class HeadlessTurnRunner implements AutonomousTurnRunner {
       speechSynthesis: noopTextToSpeech,
       reasoningRuntime,
       executeAction: (request: ActionRequest) => bridge.actionExecute(request),
+      // Cancelling this run's turn (cancel, barge-in, close) stops its main-process work too, exactly
+      // as in chat — only this run's own execution, confirmed before it is reported cancelled.
+      cancelExecution: (executionId: string) => bridge.actionCancel(executionId),
+      onCancelSettled: (listener: (executionId: string) => void) => bridge.onActionCancelSettled(listener) ?? (() => {}),
       checkActionRequirements: (request: ActionRequest) => bridge.actionCheckRequirements(request),
       persistExecution: (record: ExecutionRecord) => {
         latestRecord = record;
@@ -663,6 +667,9 @@ export class HeadlessTurnRunner implements AutonomousTurnRunner {
     const session = this.sessions.get(autonomousRunId);
     if (!session) return null;
     if (!granted) {
+      // Settle the waiting step (its Work History record becomes Cancelled, its pending approval is
+      // cleared) instead of leaving it open; nothing is running at this point, so nothing is killed.
+      session.runtime.cancel();
       this.sessions.delete(autonomousRunId);
       return { kind: 'finished', executionRecord: null };
     }

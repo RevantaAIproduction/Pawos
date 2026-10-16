@@ -1,6 +1,6 @@
 import type { ConversationTaskAction, ConversationTaskRecord } from './ConversationTypes';
 
-export type TaskPanelStatus = 'running' | 'waiting' | 'done' | 'failed' | 'stopped';
+export type TaskPanelStatus = 'running' | 'waiting' | 'done' | 'failed' | 'stopped' | 'cancelling' | 'cancelled';
 
 export type TaskPanelStep = {
   id: string;
@@ -8,7 +8,7 @@ export type TaskPanelStep = {
   commandLine: string;
   /** Folder / file the step ran in or touched. */
   path?: string;
-  status: 'running' | 'done' | 'failed' | 'waiting';
+  status: 'running' | 'done' | 'failed' | 'waiting' | 'stopped';
   output: string;
 };
 
@@ -25,15 +25,21 @@ function str(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value : undefined;
 }
 
-function stepFor(action: ConversationTaskAction): TaskPanelStep {
+function stepFor(action: ConversationTaskAction, taskStatus: ConversationTaskRecord['status']): TaskPanelStep {
   const request = action.request as unknown as Record<string, unknown>;
   const result = action.result;
   const data = (result?.data ?? {}) as Record<string, unknown>;
   const command = str(request.command);
   const waiting = result?.ok === false && result.reason === 'requires-confirmation';
-  const status: TaskPanelStep['status'] = !action.endedAt ? 'running' : waiting ? 'waiting' : result?.ok === false ? 'failed' : 'done';
+  // A step still open when its task was cancelled: its late result is discarded, so it never "finishes" here.
+  const cancelledStep = !action.endedAt && (taskStatus === 'cancelling' || taskStatus === 'cancelled');
+  const status: TaskPanelStep['status'] = cancelledStep ? 'stopped' : !action.endedAt ? 'running' : waiting ? 'waiting' : result?.ok === false ? 'failed' : 'done';
 
-  const output = !action.endedAt
+  const output = cancelledStep
+    ? taskStatus === 'cancelling'
+      ? 'Stopping…'
+      : 'Stopped by cancel.'
+    : !action.endedAt
     ? 'running…'
     : waiting
       ? 'Waiting for you to reply "allow" in chat.'
@@ -50,6 +56,7 @@ function stepFor(action: ConversationTaskAction): TaskPanelStep {
 
 export function taskPanelStatus(task: ConversationTaskRecord): TaskPanelStatus {
   if (task.status === 'running') return 'running';
+  if (task.status === 'cancelling' || task.status === 'cancelled') return task.status;
   const last = task.actions[task.actions.length - 1];
   if (last?.result?.ok === false && last.result.reason === 'requires-confirmation') return 'waiting';
   if (task.status === 'completed') return 'done';
@@ -61,7 +68,7 @@ export function taskPanelStatus(task: ConversationTaskRecord): TaskPanelStatus {
 export function buildTaskPanelEntries(history: ConversationTaskRecord[] | undefined, removed: ReadonlySet<string>): TaskPanelEntry[] {
   return (history ?? [])
     .filter((task) => !removed.has(task.id))
-    .map((task) => ({ id: task.id, goal: task.goal, status: taskPanelStatus(task), steps: task.actions.map(stepFor) }))
+    .map((task) => ({ id: task.id, goal: task.goal, status: taskPanelStatus(task), steps: task.actions.map((action) => stepFor(action, task.status)) }))
     .reverse();
 }
 

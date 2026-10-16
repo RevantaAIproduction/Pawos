@@ -10,6 +10,7 @@ import { usageStore } from '../billing/UsageStore';
 import { usageEngine } from '../billing/UsageEngine';
 import { creditStore } from '../billing/CreditStore';
 import { codingModeStore } from './CodingModeStore';
+import { accountSession } from '../auth/AccountSession';
 import { DesktopExecutionEngine } from './DesktopExecutionEngine';
 import { enforceCodingRuntimeSecurity } from './CodingRuntimeSecurity';
 import { workspaceMemoryStore } from './WorkspaceMemoryStore';
@@ -66,6 +67,8 @@ describe('Individual Coding Runtime real acceptance path', () => {
 
     subscriptionStore.confirmPurchase('pro', { runtimeIds: ['coding'], orderId: 'acceptance-paid-coding' });
     codingModeStore.setMode('pro');
+    // A signed-in customer: the main process has verified the account (execution needs one).
+    vi.spyOn(accountSession, 'verifiedUserId', 'get').mockReturnValue('acceptance-user');
     projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pawos-individual-coding-acceptance-'));
     session = createLocalCodingRuntimeSession({ id: `acceptance:${projectRoot}`, rootPath: projectRoot, createdAt: Date.now() });
     engine = new DesktopExecutionEngine();
@@ -202,5 +205,7 @@ describe('Individual Coding Runtime real acceptance path', () => {
     const finalUsage = usageEngine.getUnifiedUsageSummary().find((item) => item.capability === 'codeExecution')?.used ?? 0;
     expect(finalUsage).toBeGreaterThan(initialUsage);
     expect(actions.some((action) => action.result.ok && action.result.data && 'usage' in (action.result.data as Record<string, unknown>))).toBe(false);
-  }, 90_000);
+    // ~20 s on an idle machine; ~12 real commands (each with a fresh PowerShell environment read), two
+    // builds, a server start and health checks slow several-fold when the full suite runs in parallel.
+  }, 240_000);
 });

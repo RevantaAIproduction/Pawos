@@ -197,6 +197,11 @@ class ConnectorMcpGateway {
     this.clients.get(connectorId)?.dropSession();
     this.clients.delete(connectorId);
   }
+
+  /** Forgets every connector's cached session (the signed-in account changed). */
+  resetAll(): void {
+    for (const connectorId of [...this.clients.keys()]) this.reset(connectorId);
+  }
 }
 
 export const connectorMcpGateway = new ConnectorMcpGateway();

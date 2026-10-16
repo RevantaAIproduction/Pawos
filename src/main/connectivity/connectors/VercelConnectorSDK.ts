@@ -1,4 +1,5 @@
 import type { ConnectorSDK } from '../../../shared/connectivity/ConnectorSDK';
+import { AccountBound, assertCurrentAccountOperation, bindToAccountEpoch, isStaleAccountOperation } from '../accountEpoch';
 import type { ConnectivityScope, ConnectorConnection, ConnectorStatus, NormalizedConnectivityEvent } from '../../../shared/connectivity/ConnectivityTypes';
 import { VercelConnector } from '../../infrastructure/connectors/hosting/VercelConnector';
 import { infrastructureConnectorRegistry } from '../../infrastructure/InfrastructureConnectorRegistry';
@@ -50,8 +51,24 @@ export class VercelConnectorSDK implements ConnectorSDK {
     ],
   };
 
-  private credential: VercelCredential | undefined;
-  private currentStatus: ConnectorStatus = { state: 'disconnected', capabilities: [] };
+  // Account-bound (connectivity/accountEpoch.ts): a token obtained for an account that is no longer
+  // signed in is never published here, and reads after an account change find nothing.
+  private readonly credentialSlot = new AccountBound<VercelCredential | undefined>(undefined, 'refuse', 'a Vercel credential');
+  private get credential(): VercelCredential | undefined {
+    return this.credentialSlot.get();
+  }
+  private set credential(value: VercelCredential | undefined) {
+    this.credentialSlot.set(value);
+  }
+  private readonly statusSlot = new AccountBound<ConnectorStatus>({ state: 'disconnected', capabilities: [] }, 'ignore', 'a Vercel status');
+  private get currentStatus(): ConnectorStatus {
+    return this.statusSlot.get();
+  }
+  private set currentStatus(value: ConnectorStatus) {
+    this.statusSlot.set(value);
+  }
+  // Every method runs as an operation of the account signed in when it was called.
+  private readonly accountEpochBinding = bindToAccountEpoch(this);
 
   private registerLiveConnector(): void {
     infrastructureConnectorRegistry.register('hosting', new VercelConnector(this.credential?.accessToken));
@@ -97,9 +114,20 @@ export class VercelConnectorSDK implements ConnectorSDK {
     };
   }
 
+  /** The local half of disconnect(): forgets the token held in memory — no provider revoke, no vault change. */
+  forgetLocalSession(): void {
+    // Called from an operation of an account no longer signed in: this connector may now hold the
+    // new account's session, which that operation must not clear (its own work was already refused).
+    if (isStaleAccountOperation()) return;
+    this.credential = undefined;
+    infrastructureConnectorRegistry.register('hosting', new VercelConnector(undefined));
+    this.currentStatus = { state: 'disconnected', capabilities: [] };
+  }
+
   async disconnect(scope: ConnectivityScope): Promise<void> {
     this.credential = undefined;
     await credentialVaultBridge.revoke(this.definition.id, scope);
+    assertCurrentAccountOperation('a Vercel disconnect');
     infrastructureConnectorRegistry.register('hosting', new VercelConnector(undefined));
     this.currentStatus = { state: 'disconnected', capabilities: [] };
   }

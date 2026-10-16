@@ -105,6 +105,8 @@ export function contextBridge() {
 
   return {
     actionExecute: async (request: ActionRequest): Promise<ActionResult> => ipcApi.invoke('action:execute', request),
+    actionCancel: async (executionId: string): Promise<import('../../../shared/actions/ExecutionLifecycle').ExecutionCancelResult> =>
+      ipcApi.invoke('action:cancel', executionId),
     onOrganizationUsageRecordRequest: (cb: (request: OrganizationUsageRecordRequest) => void) => {
       const handler = (_: any, request: OrganizationUsageRecordRequest) => cb(request);
       ipcApi?.on(ORGANIZATION_USAGE_RECORD_REQUEST_CHANNEL, handler);
@@ -329,6 +331,14 @@ export function contextBridge() {
       ipcApi.invoke('billing:verifyNativeUsageCreditsPayment', params),
     billingCreateNativeSeatCheckout: async (organizationId: string, seatTier: 'standard' | 'premium', accessToken?: string): Promise<NativeCreditsCheckoutResult> =>
       ipcApi.invoke('billing:createNativeSeatCheckout', organizationId, seatTier, accessToken),
+    imagesGetAllowance: async (accessToken: string): Promise<import('../../../shared/images/ImageGenerationTypes').ImageAllowanceResult> =>
+      ipcApi.invoke('images:allowance', accessToken),
+    imagesGenerate: async (
+      request: import('../../../shared/images/ImageGenerationTypes').ImageGenerateRequest,
+      accessToken: string,
+    ): Promise<import('../../../shared/images/ImageGenerationTypes').ImageGenerateResult> => ipcApi.invoke('images:generate', request, accessToken),
+    imagesSave: async (imageId: string, accessToken: string): Promise<import('../../../shared/images/ImageGenerationTypes').ImageSaveResult> =>
+      ipcApi.invoke('images:save', imageId, accessToken),
     billingVerifyNativeSeatPayment: async (params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string }): Promise<NativeCreditsVerificationResult> =>
       ipcApi.invoke('billing:verifyNativeSeatPayment', params),
     billingGetUsageCreditsConfig: async (): Promise<import('../../../shared/billing/UsageBucketTypes').UsageCreditsPurchaseConfig> => ipcApi.invoke('billing:getUsageCreditsConfig'),
@@ -385,12 +395,22 @@ export function contextBridge() {
     executionSetSelected: async (executionId: string | null): Promise<{ ok: boolean }> => ipcApi.invoke('execution:setSelected', executionId),
     executionGetSelected: async (): Promise<string | null> => ipcApi.invoke('execution:getSelected'),
     browserGetCapabilities: async (): Promise<BrowserCapabilityReport[]> => ipcApi.invoke('browser:getCapabilities'),
-    onExecutionUpdated: (cb: () => void) => on('execution:updated', cb),
+    onExecutionUpdated: (cb: (executionId?: string) => void) => on('execution:updated', (id?: unknown) => cb(typeof id === 'string' ? id : undefined)),
+    executionGet: async (id: string): Promise<ExecutionRecord | null> => ipcApi.invoke('execution:get', id),
+    accountSetSession: async (accessToken: string | null): Promise<{ signedIn: boolean }> => ipcApi.invoke('account:setSession', accessToken),
+    onActionCancelSettled: (cb: (executionId: string) => void) => on('action:cancelSettled', cb),
 
     onProcessOutput: (cb: (event: ProcessOutputEvent) => void) => on('process:output', cb),
     onProcessExit: (cb: (event: ProcessExitEvent) => void) => on('process:exit', cb),
     onWorkspaceFileChanged: (cb: (event: WorkspaceFileChangeEvent) => void) => on('workspace:fileChanged', cb),
     onWorkspaceObservation: (cb: (event: WorkspaceObservationEvent) => void) => on('workspace:observation', cb),
+    onCodeChange: (cb: (event: import('../../../shared/actions/CodeChangeTypes').CodeChangeEvent) => void) => on('workspace:codeChange', cb),
+    codeChangesList: async (opts?: { limit?: number }): Promise<import('../../../shared/actions/CodeChangeTypes').CodeChangeSummary[]> => ipcApi.invoke('code-changes:list', opts),
+    codeChangesGet: async (executionId: string): Promise<import('../../../shared/actions/CodeChangeTypes').CodeChangeSummary | null> => ipcApi.invoke('code-changes:get', executionId),
+    codeChangesDiff: async (executionId: string, relPath: string, context?: number): Promise<import('../../../shared/actions/CodeChangeTypes').CodeChangeDiff> =>
+      ipcApi.invoke('code-changes:diff', executionId, relPath, context),
+    codeChangesRevert: async (executionId: string, relPath: string): Promise<import('../../../shared/actions/CodeChangeTypes').CodeChangeRevertResult> =>
+      ipcApi.invoke('code-changes:revert', executionId, relPath),
 
     communicationSaveAudio: async (communicationId: string, base64Data: string, mimeType: string): Promise<{ ok: boolean; data?: { audioPath: string }; message?: string }> =>
       ipcApi.invoke('communication:saveAudio', communicationId, base64Data, mimeType),

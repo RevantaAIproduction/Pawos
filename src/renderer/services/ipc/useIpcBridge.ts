@@ -33,6 +33,9 @@ export function useIpcBridge() {
   return useMemo(
     () => ({
       executeAction: async (request: ActionRequest): Promise<ActionResult> => ipc.actionExecute(request),
+      cancelExecution: async (executionId: string): Promise<import('../../../shared/actions/ExecutionLifecycle').ExecutionCancelResult> =>
+        ipc.actionCancel(executionId),
+      onCancelSettled: (cb: (executionId: string) => void) => ipc.onActionCancelSettled(cb),
       checkActionRequirements: async (request: ActionRequest): Promise<ActionRequirement[]> =>
         ipc.actionCheckRequirements(request),
       describeAction: async (request: ActionRequest): Promise<string> => ipc.actionDescribe(request),
@@ -104,7 +107,7 @@ export function useIpcBridge() {
       listExecutions: async (): Promise<ExecutionRecord[]> => ipc.executionList(),
       executionSetSelected: async (executionId: string | null): Promise<{ ok: boolean }> => ipc.executionSetSelected(executionId),
       executionGetSelected: async (): Promise<string | null> => ipc.executionGetSelected(),
-      onExecutionUpdated: (cb: () => void) => ipc.onExecutionUpdated(cb),
+      onExecutionUpdated: (cb: (executionId?: string) => void) => ipc.onExecutionUpdated(cb),
       getBrowserCapabilities: async (): Promise<BrowserCapabilityReport[]> => ipc.browserGetCapabilities(),
 
       onProcessOutput: (cb: (event: ProcessOutputEvent) => void) => ipc.onProcessOutput(cb),

@@ -59,8 +59,13 @@ export interface LocalTaskOptions {
   now?: () => number;
   /** Waits between tries of a turn (tests replace it so they don't really wait). */
   sleep?: (ms: number) => Promise<void>;
-  /** Called when a turn is about to be sent again because PawOS's model was briefly unavailable. */
-  onRetry?: (attempt: number, of: number) => void;
+  /** Randomness for the jitter in those waits (tests fix it). */
+  random?: () => number;
+  /**
+   * Called when a turn is about to be sent again: PawOS's model was briefly unavailable ("busy"), or
+   * its reply was cut off at the output limit and PawOS is asking for a smaller step ("cutOff").
+   */
+  onRetry?: (attempt: number, of: number, why: "busy" | "cutOff") => void;
   /**
    * Asked before every change to the project, with exactly what would happen. Only "allow" lets it
    * happen. Without this there is nobody to ask, and every change is refused.
@@ -119,6 +124,14 @@ export const OPEN_DECLINED = "Not allowed: the user declined to open the browser
  * a model that stays away ends the task with PawOS's own message.
  */
 export const TURN_RETRY_DELAYS_MS = [2000, 5000, 12_000, 25_000, 40_000] as const;
+/**
+ * PawOS says how long to wait before sending a turn again (its own backoff, or the model provider's
+ * request) and keeps one budget for the step across every send. The CLI follows that wait — up to
+ * TURN_RETRY_MAX_WAIT_MS for one wait, and TURN_RETRY_TOTAL_MS for all of a turn's waits — and
+ * without one uses its own schedule above, jittered (50–100% of each step).
+ */
+export const TURN_RETRY_MAX_WAIT_MS = 60_000;
+export const TURN_RETRY_TOTAL_MS = 150_000;
 
 /** PawOS answered that its model could not be reached for this turn (and that the turn did not happen). */
 function isModelBusy(error: unknown): boolean {
@@ -151,7 +164,12 @@ export async function runLocalTask(options: LocalTaskOptions): Promise<LocalOutc
     else signal?.addEventListener("abort", () => resolve("cancelled"), { once: true });
   });
   const pause = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const random = options.random ?? Math.random;
   const turn = async (body: AgentTurnRequest): Promise<AgentTurnResponse | "cancelled" | { error: unknown }> => {
+    // The turn's retry budget is real time from its first send — the requests themselves (each can
+    // take most of a minute) as well as the waits between them.
+    const began = now();
+    let waited = 0;
     for (let attempt = 0; ; attempt++) {
       const request = client.agentTurn(body).then(
         (answer) => answer,
@@ -162,8 +180,14 @@ export async function runLocalTask(options: LocalTaskOptions): Promise<LocalOutc
       // task is exactly where it was — so the same turn is sent again, a few times, a little later
       // each time. Anything else (a refusal, a limit, an expired session) is final.
       if (answer === "cancelled" || !("error" in answer) || !isModelBusy(answer.error) || attempt >= TURN_RETRY_DELAYS_MS.length) return answer;
-      options.onRetry?.(attempt + 1, TURN_RETRY_DELAYS_MS.length);
-      if ((await Promise.race([pause(TURN_RETRY_DELAYS_MS[attempt]!).then(() => "waited" as const), cancelled])) === "cancelled") return "cancelled";
+      const asked = (answer.error as { retryAfterMs?: unknown }).retryAfterMs;
+      const wait = typeof asked === "number" && asked >= 0 ? asked : Math.round(TURN_RETRY_DELAYS_MS[attempt]! * (0.5 + 0.5 * random()));
+      // A wait longer than the CLI keeps waiting, or one that would end past the turn's total: the failure stands.
+      const spent = Math.max(now() - began, waited);
+      if (wait > TURN_RETRY_MAX_WAIT_MS || spent + wait > TURN_RETRY_TOTAL_MS) return answer;
+      waited += wait;
+      options.onRetry?.(attempt + 1, TURN_RETRY_DELAYS_MS.length, (answer.error as { detail?: unknown }).detail === "model_reply_truncated" ? "cutOff" : "busy");
+      if ((await Promise.race([pause(wait).then(() => "waited" as const), cancelled])) === "cancelled") return "cancelled";
     }
   };
 

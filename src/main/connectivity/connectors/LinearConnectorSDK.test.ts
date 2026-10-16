@@ -10,6 +10,13 @@ import { credentialVaultBridge } from '../CredentialVaultBridge';
 import { connectorRegistry } from '../ConnectorRegistry';
 import { oauthManager } from '../OAuthManager';
 import { infrastructureConnectorRegistry } from '../../infrastructure/InfrastructureConnectorRegistry';
+import { accountSession } from '../../auth/AccountSession';
+
+// The verified signed-in account (the main process's own session) is the one these scopes name:
+// connector credentials belong to the signed-in account only (see CredentialVaultBridge).
+beforeEach(() => {
+  vi.spyOn(accountSession, 'verifiedUserId', 'get').mockReturnValue('u-linear-lifecycle');
+});
 
 /**
  * Linear OAuth token lifecycle. No real credentials and no real network: `fetch` is a fake that

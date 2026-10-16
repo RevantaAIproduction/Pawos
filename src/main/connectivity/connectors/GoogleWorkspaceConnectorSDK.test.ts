@@ -24,6 +24,13 @@ vi.mock('../../infrastructure/GuestConnectorCredentialStore', () => ({
 import { GoogleWorkspaceConnectorSDK } from './GoogleWorkspaceConnectorSDK';
 import { officeConnectorRegistry } from '../../office/OfficeConnectorRegistry';
 import { credentialVaultBridge } from '../CredentialVaultBridge';
+import { accountSession } from '../../auth/AccountSession';
+
+// The verified signed-in account (the main process's own session) is the one these scopes name:
+// connector credentials belong to the signed-in account only (see CredentialVaultBridge).
+beforeEach(() => {
+  vi.spyOn(accountSession, 'verifiedUserId', 'get').mockReturnValue('u1');
+});
 
 const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar';
 const DRIVE_READONLY_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';

@@ -48,6 +48,17 @@ export interface GenerateRequest {
   /** Ask for a JSON reply. */
   json?: boolean;
   timeoutMs?: number;
+  /**
+   * How much the model reasons before it answers. The model's reasoning is counted against
+   * maxOutputTokens and against the time a call has: left at the provider's default, a step that
+   * only has to name a tool or write out a file can spend the whole call reasoning and answer with
+   * nothing. Unset = the provider's default.
+   */
+  thinking?: "low";
+  /** Most provider calls this request may make (a caller's own budget); unset = this module's default. */
+  attempts?: number;
+  /** Told of every call made to the provider, answered or not — so a caller can keep a budget across requests. */
+  onAttempt?: () => void;
 }
 
 /**
@@ -60,52 +71,154 @@ export interface GenerateRequest {
 export const MODEL_ATTEMPT_TIMEOUT_MS = 26_000;
 export const MODEL_ATTEMPTS = 2;
 
-const unavailable = (detail: ModelFailureDetail) => new WebChatError("model_unavailable", "Paw couldn't answer just now. Please try again.", 502, detail);
+/**
+ * Set when the provider refused a request because of the thinking setting (HTTP 400): the setting
+ * is left out from then on, so a model that doesn't take it costs one extra call, once — not an
+ * outage. Process-wide, like the model itself.
+ */
+let thinkingRefused = false;
+export function resetModelState(): void {
+  thinkingRefused = false;
+}
+
+const unavailable = (detail: ModelFailureDetail, retryAfterMs?: number) => new WebChatError("model_unavailable", "Paw couldn't answer just now. Please try again.", 502, detail, retryAfterMs);
 
 /**
  * The provider's own error class for a failed call (UNAVAILABLE, RESOURCE_EXHAUSTED, …), for the log
  * only: it is what tells an overloaded model from a quota or a configuration problem behind the
  * same HTTP status. Only that fixed word is kept — never the provider's message, which is free text.
  */
-async function providerStatus(answer: Response): Promise<string> {
-  const body = (await answer.json().catch(() => null)) as { error?: { status?: unknown } } | null;
+async function providerError(answer: Response): Promise<{ word: string; retryAfterMs: number | null }> {
+  const body = (await answer.json().catch(() => null)) as { error?: { status?: unknown; details?: unknown } } | null;
   const status = body?.error?.status;
-  return typeof status === "string" && /^[A-Z_]{3,40}$/.test(status) ? ` ${status}` : "";
+  return { word: typeof status === "string" && /^[A-Z_]{3,40}$/.test(status) ? ` ${status}` : "", retryAfterMs: retryAfter(answer, body?.error?.details) };
 }
+
+/**
+ * How long the provider asked to be left alone, if it said: the Retry-After header (seconds, or a
+ * date) or Google's RetryInfo ("retryDelay": "12s"). Null when it said nothing usable.
+ */
+function retryAfter(answer: Response, details: unknown): number | null {
+  const header = answer.headers.get("retry-after");
+  if (header) {
+    const seconds = Number(header);
+    if (Number.isFinite(seconds) && seconds >= 0) return Math.round(seconds * 1000);
+    const date = Date.parse(header);
+    if (Number.isFinite(date)) return Math.max(0, date - modelClock.now());
+  }
+  if (Array.isArray(details)) {
+    for (const detail of details) {
+      const delay = (detail as { retryDelay?: unknown } | null)?.retryDelay;
+      const match = typeof delay === "string" ? /^(\d+(?:\.\d+)?)s$/.exec(delay) : null;
+      if (match) return Math.round(Number(match[1]) * 1000);
+    }
+  }
+  return null;
+}
+
+/**
+ * Statuses a short wait can fix: the provider is rate-limiting, overloaded or briefly failing.
+ * Anything else — a bad request, a bad key, a model that doesn't exist — fails the same way again.
+ */
+const transient = (status: number) => status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+
+/** Exponential backoff with full jitter: before try n+1, a random wait up to base × 2^(n-1), capped. */
+export const RETRY_BASE_MS = 1_000;
+export const RETRY_MAX_DELAY_MS = 4_000;
+/** A call with a deadline of its own (an agent turn) gets this many tries inside that deadline. */
+export const DEADLINE_ATTEMPTS = 3;
+/**
+ * With less than this left of a deadline, another try couldn't produce a reply worth having: the
+ * call fails instead, and its caller (the CLI, for an agent turn) decides whether to ask again.
+ */
+export const MIN_ATTEMPT_MS = 20_000;
+
+/** The clock and the waiting, replaceable in tests. */
+export const modelClock = {
+  now: () => Date.now(),
+  sleep: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+  random: () => Math.random(),
+};
 
 export async function generate(request: GenerateRequest): Promise<ModelReply> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new WebChatError("not_configured", "PawOS Web chat isn't available right now.", 503);
-  const attempts = request.timeoutMs === undefined ? MODEL_ATTEMPTS : 1;
-  const timeoutMs = request.timeoutMs ?? MODEL_ATTEMPT_TIMEOUT_MS;
+  // Chat: a few short tries. A call with its own deadline (an agent turn): tries inside that one
+  // deadline, each given what is left of it — never past it, so the gateway's minute is kept.
+  const deadlineMode = request.timeoutMs !== undefined;
+  const attempts = Math.max(1, Math.min(request.attempts ?? Number.POSITIVE_INFINITY, deadlineMode ? DEADLINE_ATTEMPTS : MODEL_ATTEMPTS));
+  const deadline = deadlineMode ? modelClock.now() + request.timeoutMs! : Number.POSITIVE_INFINITY;
+  /**
+   * The wait before another try, or null when there should be none: no tries left, a wait the
+   * provider asked for that is longer than we can give, or not enough of the deadline left after it.
+   */
+  const nextWait = (attempt: number, asked: number | null): number | null => {
+    if (attempt >= attempts) return null;
+    if (asked !== null && asked > RETRY_MAX_DELAY_MS && !deadlineMode) return null;
+    const wait = asked ?? Math.round(modelClock.random() * Math.min(RETRY_MAX_DELAY_MS, RETRY_BASE_MS * 2 ** (attempt - 1)));
+    if (deadlineMode && deadline - modelClock.now() - wait < MIN_ATTEMPT_MS) return null;
+    return wait;
+  };
   let response: Response | null = null;
   for (let attempt = 1; attempt <= attempts && !response; attempt++) {
-    const started = Date.now();
-    const last = attempt === attempts;
+    const started = modelClock.now();
+    const timeoutMs = deadlineMode ? Math.max(1, deadline - started) : MODEL_ATTEMPT_TIMEOUT_MS;
     try {
-      const answer = await fetch(`${modelBaseUrl()}/models/${WEB_MODEL}:generateContent`, {
-        method: "POST",
-        // The key goes in a header, never in the URL.
-        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: request.system }] },
-          contents: request.contents,
-          generationConfig: { maxOutputTokens: request.maxOutputTokens, ...(request.json ? { responseMimeType: "application/json" } : {}) },
-        }),
-        signal: AbortSignal.timeout(timeoutMs),
-      });
+      const send = (thinking: boolean) =>
+        fetch(`${modelBaseUrl()}/models/${WEB_MODEL}:generateContent`, {
+          method: "POST",
+          // The key goes in a header, never in the URL.
+          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: request.system }] },
+            contents: request.contents,
+            generationConfig: {
+              maxOutputTokens: request.maxOutputTokens,
+              ...(request.json ? { responseMimeType: "application/json" } : {}),
+              ...(thinking ? { thinkingConfig: { thinkingLevel: request.thinking } } : {}),
+            },
+          }),
+          // What is left of this try's time: the repeat without the thinking setting gets no more.
+          signal: AbortSignal.timeout(Math.max(1, timeoutMs - (modelClock.now() - started))),
+        });
+      const withThinking = request.thinking !== undefined && !thinkingRefused;
+      request.onAttempt?.();
+      let answer = await send(withThinking);
+      if (answer.status === 400 && withThinking) {
+        // The provider says the request is wrong, and the thinking setting is the one thing in it
+        // that not every model takes. Ask once without it; if that works, never send it again.
+        request.onAttempt?.();
+        const plain = await send(false);
+        if (plain.ok) {
+          thinkingRefused = true;
+          console.error("[web-chat] the model refused the thinking setting; it is left out from now on");
+        }
+        answer = plain;
+      }
       if (answer.ok) {
         response = answer;
         break;
       }
+      const failure = await providerError(answer);
       // How long and what status: what whoever reads the log needs to tell a quota problem from an outage.
-      console.error(`[web-chat] model call failed: HTTP ${answer.status}${await providerStatus(answer)} after ${Date.now() - started}ms (attempt ${attempt} of ${attempts})`);
-      // "Busy" may clear on a second try; anything else (a bad key, a bad request) will not.
-      if (last || !(answer.status === 429 || answer.status >= 500)) throw unavailable(`model_http_${answer.status}`);
+      console.error(`[web-chat] model call failed: HTTP ${answer.status}${failure.word} after ${modelClock.now() - started}ms (attempt ${attempt} of ${attempts})${failure.retryAfterMs !== null ? `, provider asked to wait ${failure.retryAfterMs}ms` : ""}`);
+      // "Busy" may clear on another try; anything else (a bad key, a bad request) will not.
+      const wait = transient(answer.status) ? nextWait(attempt, failure.retryAfterMs) : null;
+      // The provider's own suggested wait goes with the failure, for whoever may ask again later.
+      if (wait === null) throw unavailable(`model_http_${answer.status}`, transient(answer.status) && failure.retryAfterMs !== null ? failure.retryAfterMs : undefined);
+      console.error(`[web-chat] trying the model again in ${wait}ms`);
+      await modelClock.sleep(wait);
     } catch (error) {
       if (error instanceof WebChatError) throw error;
-      console.error(`[web-chat] model call got no answer after ${Date.now() - started}ms (attempt ${attempt} of ${attempts})`);
-      if (last) throw unavailable("model_timeout");
+      // No answer at all: the try ran out of time, or the connection failed.
+      console.error(`[web-chat] model call got no answer after ${modelClock.now() - started}ms (attempt ${attempt} of ${attempts})`);
+      // A try with a deadline is given all that is left of it: running out of time is the end of the deadline.
+      const name = (error as { name?: unknown } | null)?.name;
+      if (deadlineMode && (name === "TimeoutError" || name === "AbortError")) throw unavailable("model_timeout");
+      const wait = nextWait(attempt, null);
+      if (wait === null) throw unavailable("model_timeout");
+      console.error(`[web-chat] trying the model again in ${wait}ms`);
+      await modelClock.sleep(wait);
     }
   }
   if (!response) throw unavailable("model_timeout");
@@ -124,6 +237,11 @@ export async function generate(request: GenerateRequest): Promise<ModelReply> {
     // tells a reply that ran out of room from one that was withheld.
     console.error(`[web-chat] model answered with nothing${finishReason ? ` (finish reason ${finishReason})` : ""}`);
     throw unavailable("model_empty_reply");
+  }
+  // A reply without usage counts has an unknown cost, not a zero one. The zeros below are what
+  // settle_usage is told, and it charges a settlement with no prompt tokens at the full reservation.
+  if (typeof body.usageMetadata?.promptTokenCount !== "number" || body.usageMetadata.promptTokenCount <= 0) {
+    console.error("[web-chat] the model reported no usage for a completed call; it is settled at its full reservation");
   }
   const usage = body.usageMetadata ?? {};
   return {

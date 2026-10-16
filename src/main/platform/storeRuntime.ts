@@ -35,3 +35,29 @@ export const STORE_STARTUP_TASK_ID = 'PawOSStartup';
  * (Partner Center > Product identity). Fixed for that identity; used to read the startup task state.
  */
 export const STORE_PACKAGE_FAMILY_NAME = 'PawosAI.PawOS_y5w6824kw3wcj';
+
+/** Must match `appx.applicationId` in electron-builder.yml (the <Application Id> in the package manifest). */
+export const STORE_APPLICATION_ID = 'PawOS';
+
+/**
+ * The Store build's Application User Model ID — what Windows itself calls the installed app
+ * (`Get-StartApps` shows it): the package family name, "!", the application id. The Start tile and
+ * the taskbar icon belong to this identity.
+ */
+export const STORE_APP_USER_MODEL_ID = `${STORE_PACKAGE_FAMILY_NAME}!${STORE_APPLICATION_ID}`;
+
+/** Must match `appId` in electron-builder.yml: the identity the direct-download installer's shortcuts carry. */
+export const DIRECT_APP_USER_MODEL_ID = 'com.pawos.pet';
+
+/**
+ * The identity the running process tells Electron it has. Electron files the jump list (and
+ * notifications) under whatever it was told — and when told nothing, under its own default
+ * ("electron.app.PawOS"), which no shortcut or tile carries.
+ *
+ * - Direct download: the installer shortcut's identity.
+ * - Microsoft Store: the package's own identity. This does not override the package — it names it,
+ *   so PawOS's jump list lands on the Start tile and taskbar icon Windows already shows.
+ */
+export function appUserModelId(proc: { windowsStore?: boolean } = process): string {
+  return isStoreRuntime(proc) ? STORE_APP_USER_MODEL_ID : DIRECT_APP_USER_MODEL_ID;
+}

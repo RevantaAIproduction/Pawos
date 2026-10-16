@@ -1,4 +1,5 @@
 import type { ConnectorSDK } from '../../../shared/connectivity/ConnectorSDK';
+import { AccountBound, assertCurrentAccountOperation, bindToAccountEpoch, isStaleAccountOperation } from '../accountEpoch';
 import type { ConnectivityScope, ConnectorConnection, ConnectorStatus, NormalizedConnectivityEvent } from '../../../shared/connectivity/ConnectivityTypes';
 import { LinearConnector } from '../../infrastructure/connectors/projectManagement/LinearConnector';
 import { LinearMcpReadTransport } from '../../infrastructure/connectors/projectManagement/LinearMcpReadTransport';
@@ -61,10 +62,32 @@ export class LinearConnectorSDK implements ConnectorSDK {
     capabilityDescriptors: [{ id: 'readIssues', label: 'Read issues', description: 'Fetch or search Linear issues and projects.' }],
   };
 
-  private credential: LinearCredential | undefined;
+  // Account-bound (connectivity/accountEpoch.ts): a token obtained for an account that is no longer
+  // signed in is never published here, and reads after an account change find nothing.
+  private readonly credentialSlot = new AccountBound<LinearCredential | undefined>(undefined, 'refuse', 'a Linear credential');
+  private get credential(): LinearCredential | undefined {
+    return this.credentialSlot.get();
+  }
+  private set credential(value: LinearCredential | undefined) {
+    this.credentialSlot.set(value);
+  }
   /** The scope the live credential belongs to — needed to refresh from a ticket read, which carries no scope. */
-  private scope: ConnectivityScope | undefined;
-  private currentStatus: ConnectorStatus = { state: 'disconnected', capabilities: [] };
+  private readonly scopeSlot = new AccountBound<ConnectivityScope | undefined>(undefined, 'refuse', 'a Linear scope');
+  private get scope(): ConnectivityScope | undefined {
+    return this.scopeSlot.get();
+  }
+  private set scope(value: ConnectivityScope | undefined) {
+    this.scopeSlot.set(value);
+  }
+  private readonly statusSlot = new AccountBound<ConnectorStatus>({ state: 'disconnected', capabilities: [] }, 'ignore', 'a Linear status');
+  private get currentStatus(): ConnectorStatus {
+    return this.statusSlot.get();
+  }
+  private set currentStatus(value: ConnectorStatus) {
+    this.statusSlot.set(value);
+  }
+  // Every method runs as an operation of the account signed in when it was called.
+  private readonly accountEpochBinding = bindToAccountEpoch(this);
   /** Single-flight: Linear rotates refresh tokens, so two overlapping refreshes would invalidate each other. */
   private refreshInFlight: Promise<void> | undefined;
   /** Read-only Remote MCP transport, shared across re-registrations so its session survives a token refresh. */
@@ -175,11 +198,25 @@ export class LinearConnectorSDK implements ConnectorSDK {
     };
   }
 
+  /** The local half of disconnect(): forgets the token held in memory — no provider revoke, no vault change. */
+  forgetLocalSession(): void {
+    // Called from an operation of an account no longer signed in: this connector may now hold the
+    // new account's session, which that operation must not clear (its own work was already refused).
+    if (isStaleAccountOperation()) return;
+    this.refreshInFlight = undefined;
+    this.credential = undefined;
+    this.scope = undefined;
+    this.mcp.reset();
+    infrastructureConnectorRegistry.register('projectManagement', new LinearConnector(undefined));
+    this.currentStatus = { state: 'disconnected', capabilities: [] };
+  }
+
   async disconnect(scope: ConnectivityScope): Promise<void> {
     this.credential = undefined;
     this.scope = undefined;
     this.mcp.reset();
     await credentialVaultBridge.revoke(this.definition.id, scope);
+    assertCurrentAccountOperation('a Linear disconnect');
     infrastructureConnectorRegistry.register('projectManagement', new LinearConnector(undefined));
     this.currentStatus = { state: 'disconnected', capabilities: [] };
   }

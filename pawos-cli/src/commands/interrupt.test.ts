@@ -354,7 +354,7 @@ describe("the terminal is handed back in its normal state", () => {
   }
   const settle = () => new Promise((resolve) => setImmediate(resolve));
 
-  it("Ctrl+C at a prompt: the question ends with nothing submitted, ^C is shown, and raw mode is switched off", async () => {
+  it("Ctrl+C at a prompt: the question ends with nothing submitted, ^C is shown, and the terminal is normal again when PawOS closes", async () => {
     const { input, output, written } = keyboard();
     const prompter = createPrompter(input, output);
     const asked = prompter.ask("  > ");
@@ -364,9 +364,11 @@ describe("the terminal is handed back in its normal state", () => {
     input.write(String.fromCharCode(3)); // Ctrl+C
     expect(await asked).toBeNull();
     expect(prompter.interrupted).toBe(true);
-    expect(input.isRaw).toBe(false); // the terminal is back in its normal mode
+    // Between questions PawOS keeps reading the keyboard itself (see "typed while PawOS works")…
+    expect(input.isRaw).toBe(true);
     expect(written.join("")).toContain("^C\n");
     prompter.close();
+    expect(input.isRaw).toBe(false); // …and hands the terminal back in its normal mode when it closes
   });
 
   it("after cancelling the exit, the next prompt works normally and leaves the terminal normal again", async () => {
@@ -381,16 +383,15 @@ describe("the terminal is handed back in its normal state", () => {
     await settle();
     input.write("n\r");
     expect(await confirm).toBe(false);
-    expect(input.isRaw).toBe(false);
 
     const next = prompter.ask("  > ");
     await settle();
     input.write("hii\r");
     expect(await next).toBe("hii");
     expect(prompter.interrupted).toBe(false);
-    expect(input.isRaw).toBe(false);
-    expect(input.modes.filter((raw) => raw).length).toBe(input.modes.filter((raw) => !raw).length); // every switch on was switched off
     prompter.close();
+    expect(input.isRaw).toBe(false);
+    expect(input.modes.at(-1)).toBe(false); // the last switch was back to normal
   });
 
   it("after choosing to exit, nothing is left in raw mode or still reading", async () => {

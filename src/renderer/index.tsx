@@ -6,11 +6,14 @@ import { installRendererCrashGuard } from './platform/RendererCrashGuard';
 import { installOrganizationUsageBridge } from './billing/OrganizationUsageBridge';
 import { installConnectivityCredentialBridge } from './connectivity/ConnectivityCredentialBridge';
 import { seedManagedGeminiKey } from './ai/seedManagedGeminiKey';
+import { startAccountSessionSync } from './auth/accountSessionSync';
 
 async function init() {
   installRendererCrashGuard();
   installOrganizationUsageBridge();
   installConnectivityCredentialBridge();
+  // Main verifies the signed-in session itself; it scopes Work History and file-change records per account.
+  startAccountSessionSync();
 
   const container = document.getElementById('root');
   if (!container) throw new Error('Missing #root');

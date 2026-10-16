@@ -30,6 +30,22 @@ type ReadConnectivityCredentialRow = {
 };
 
 /**
+ * The Supabase client, once the scope is confirmed to be this window's own signed-in account.
+ * The credential RPCs read and write as `auth.uid()` — the session's account — whatever user id a
+ * scope names; mid-switch that session can already be the next account while the main process
+ * still has the previous one verified. A credential for any other account (or none) never reaches
+ * Supabase from here.
+ */
+async function clientForAccountOf(scope: ConnectivityScope) {
+  const supabase = await getSupabaseClient();
+  const { data } = await supabase.auth.getSession();
+  if (!data.session || data.session.user.id !== scope.userId) {
+    throw new Error("That connector credential isn't for the account signed in to PawOS.");
+  }
+  return supabase;
+}
+
+/**
  * Section 17's persistence layer for `CredentialVaultBridge` (main
  * process, still entirely in-memory). Mirrors `CredentialVaultService.ts`
  * (Phase 6's org vault) exactly: metadata-only direct select is safe to
@@ -42,7 +58,7 @@ export const connectivityCredentialService = {
   /** Never returns a secret — just which connectors have a stored
    *  credential, for hydration to decide what's worth decrypting. */
   async listMetadata(scope: ConnectivityScope): Promise<ConnectivityCredentialMetadata[]> {
-    const supabase = await getSupabaseClient();
+    const supabase = await clientForAccountOf(scope);
     let query = supabase
       .from('connectivity_credentials')
       .select('connector_id, auth_method, expires_at, updated_at')
@@ -65,7 +81,7 @@ export const connectivityCredentialService = {
     secret: string,
     opts?: { refreshToken?: string; expiresAt?: number }
   ): Promise<void> {
-    const supabase = await getSupabaseClient();
+    const supabase = await clientForAccountOf(scope);
     const { error } = await supabase.rpc('store_connectivity_credential', {
       p_connector_id: connectorId,
       p_organization_id: scope.organizationId ?? null,
@@ -82,7 +98,7 @@ export const connectivityCredentialService = {
    *  own `StoredCredential | undefined` semantics (never throws for
    *  "not found"). */
   async read(scope: ConnectivityScope, connectorId: string): Promise<DecryptedConnectivityCredential | null> {
-    const supabase = await getSupabaseClient();
+    const supabase = await clientForAccountOf(scope);
     const { data, error } = await supabase.rpc('read_connectivity_credential', {
       p_connector_id: connectorId,
       p_organization_id: scope.organizationId ?? null,
@@ -99,7 +115,7 @@ export const connectivityCredentialService = {
   },
 
   async revoke(scope: ConnectivityScope, connectorId: string): Promise<void> {
-    const supabase = await getSupabaseClient();
+    const supabase = await clientForAccountOf(scope);
     let query = supabase.from('connectivity_credentials').delete().eq('user_id', scope.userId).eq('connector_id', connectorId);
     query = scope.organizationId ? query.eq('organization_id', scope.organizationId) : query.is('organization_id', null);
     const { error } = await query;

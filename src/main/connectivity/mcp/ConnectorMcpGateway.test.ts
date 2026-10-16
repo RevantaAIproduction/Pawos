@@ -19,6 +19,13 @@ import { MCP_PROVIDERS, baseConnectorId, isMcpCredentialId, mcpCredentialId } fr
 import { connectorMcpPlugin } from '../../execution/plugins/infrastructure/ConnectorMcpPlugin';
 import { CONNECTOR_REQUIRED_FEATURE } from '../../../shared/connectivity/ConnectivityTypes';
 import type { ConnectorSDK } from '../../../shared/connectivity/ConnectorSDK';
+import { accountSession } from '../../auth/AccountSession';
+
+// The verified signed-in account (the main process's own session) is the one these scopes name:
+// connector credentials belong to the signed-in account only (see CredentialVaultBridge).
+beforeEach(() => {
+  vi.spyOn(accountSession, 'verifiedUserId', 'get').mockReturnValue('u-mcp');
+});
 
 /**
  * Every provider's MCP path against fake servers — no real credentials, no real network. One fake

@@ -1,10 +1,17 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import { connectorRegistry } from './ConnectorRegistry';
 import { connectionManager } from './ConnectionManager';
 import { capabilityRequirementResolver } from './CapabilityRequirementResolver';
 import type { ConnectorSDK } from '../../shared/connectivity/ConnectorSDK';
 import type { ConnectorConnection } from '../../shared/connectivity/ConnectivityTypes';
 import type { ActionResult } from '../../shared/actions/ActionTypes';
+import { accountSession } from '../auth/AccountSession';
+
+// The verified signed-in account (the main process's own session) is the one these scopes name:
+// connector credentials belong to the signed-in account only (see CredentialVaultBridge).
+beforeEach(() => {
+  vi.spyOn(accountSession, 'verifiedUserId', 'get').mockReturnValue('u1');
+});
 
 const CONNECTOR_ID = 'fake-productivity-connector';
 

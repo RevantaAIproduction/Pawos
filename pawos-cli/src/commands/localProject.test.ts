@@ -386,7 +386,9 @@ describe("limits and sessions", () => {
     expect(h.output()).not.toContain("Paw couldn't answer just now");
     // The result of the read was sent three times in all; the file was read once.
     expect(h.server.agentCalls()).toHaveLength(5);
-    expect(h.waited()).toBe(2000 + 5000);
+    // The schedule's first two steps, each jittered to between half and all of itself.
+    expect(h.waited()).toBeGreaterThanOrEqual((2000 + 5000) / 2);
+    expect(h.waited()).toBeLessThanOrEqual(2000 + 5000);
   });
 
   it("a model that stays unavailable ends the task with PawOS's own message — and what was done is still accounted for", async () => {

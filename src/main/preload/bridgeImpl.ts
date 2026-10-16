@@ -98,6 +98,8 @@ import type {
 export function contextBridge() {
   const api = {
     actionExecute: (request: ActionRequest) => ipcRenderer.invoke("action:execute", request) as Promise<ActionResult>,
+    actionCancel: (executionId: string) =>
+      ipcRenderer.invoke("action:cancel", executionId) as Promise<import('../../shared/actions/ExecutionLifecycle').ExecutionCancelResult>,
     onOrganizationUsageRecordRequest: (cb: (request: OrganizationUsageRecordRequest) => void) => {
       const handler = (_: Electron.IpcRendererEvent, request: OrganizationUsageRecordRequest) => cb(request);
       ipcRenderer.on(ORGANIZATION_USAGE_RECORD_REQUEST_CHANNEL, handler);
@@ -339,6 +341,12 @@ export function contextBridge() {
       ipcRenderer.invoke("billing:verifyNativeUsageCreditsPayment", params) as Promise<NativeCreditsVerificationResult>,
     billingCreateNativeSeatCheckout: (organizationId: string, seatTier: 'standard' | 'premium', accessToken?: string) =>
       ipcRenderer.invoke("billing:createNativeSeatCheckout", organizationId, seatTier, accessToken) as Promise<NativeCreditsCheckoutResult>,
+    imagesGetAllowance: (accessToken: string) =>
+      ipcRenderer.invoke("images:allowance", accessToken) as Promise<import('../../shared/images/ImageGenerationTypes').ImageAllowanceResult>,
+    imagesGenerate: (request: import('../../shared/images/ImageGenerationTypes').ImageGenerateRequest, accessToken: string) =>
+      ipcRenderer.invoke("images:generate", request, accessToken) as Promise<import('../../shared/images/ImageGenerationTypes').ImageGenerateResult>,
+    imagesSave: (imageId: string, accessToken: string) =>
+      ipcRenderer.invoke("images:save", imageId, accessToken) as Promise<import('../../shared/images/ImageGenerationTypes').ImageSaveResult>,
     billingVerifyNativeSeatPayment: (params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string }) =>
       ipcRenderer.invoke("billing:verifyNativeSeatPayment", params) as Promise<NativeCreditsVerificationResult>,
     billingGetUsageCreditsConfig: () => ipcRenderer.invoke("billing:getUsageCreditsConfig") as Promise<import('../../shared/billing/UsageBucketTypes').UsageCreditsPurchaseConfig>,
@@ -407,8 +415,18 @@ export function contextBridge() {
     executionList: () => ipcRenderer.invoke("execution:list") as Promise<ExecutionRecord[]>,
     executionSetSelected: (executionId: string | null) => ipcRenderer.invoke("execution:setSelected", executionId) as Promise<{ ok: boolean }>,
     executionGetSelected: () => ipcRenderer.invoke("execution:getSelected") as Promise<string | null>,
-    onExecutionUpdated: (cb: () => void) => {
-      ipcRenderer.on("execution:updated", () => cb());
+    /** `executionId` is the record that changed; absent = reload everything (e.g. the account changed). */
+    onExecutionUpdated: (cb: (executionId?: string) => void) => {
+      const handler = (_: any, executionId?: string) => cb(typeof executionId === 'string' ? executionId : undefined);
+      ipcRenderer.on("execution:updated", handler);
+      return () => ipcRenderer.removeListener("execution:updated", handler);
+    },
+    executionGet: (id: string) => ipcRenderer.invoke("execution:get", id) as Promise<ExecutionRecord | null>,
+    accountSetSession: (accessToken: string | null) => ipcRenderer.invoke("account:setSession", accessToken) as Promise<{ signedIn: boolean }>,
+    onActionCancelSettled: (cb: (executionId: string) => void) => {
+      const handler = (_: any, executionId: string) => cb(executionId);
+      ipcRenderer.on("action:cancelSettled", handler);
+      return () => ipcRenderer.removeListener("action:cancelSettled", handler);
     },
 
     browserGetCapabilities: () => ipcRenderer.invoke("browser:getCapabilities") as Promise<BrowserCapabilityReport[]>,
@@ -425,6 +443,16 @@ export function contextBridge() {
     onWorkspaceObservation: (cb: (event: WorkspaceObservationEvent) => void) => {
       ipcRenderer.on("workspace:observation", (_: any, payload: WorkspaceObservationEvent) => cb(payload));
     },
+    onCodeChange: (cb: (event: import('../../shared/actions/CodeChangeTypes').CodeChangeEvent) => void) => {
+      const handler = (_: any, payload: import('../../shared/actions/CodeChangeTypes').CodeChangeEvent) => cb(payload);
+      ipcRenderer.on("workspace:codeChange", handler);
+      return () => ipcRenderer.removeListener("workspace:codeChange", handler);
+    },
+    codeChangesList: (opts?: { limit?: number }) => ipcRenderer.invoke("code-changes:list", opts) as Promise<import('../../shared/actions/CodeChangeTypes').CodeChangeSummary[]>,
+    codeChangesGet: (executionId: string) => ipcRenderer.invoke("code-changes:get", executionId) as Promise<import('../../shared/actions/CodeChangeTypes').CodeChangeSummary | null>,
+    codeChangesDiff: (executionId: string, relPath: string, context?: number) => ipcRenderer.invoke("code-changes:diff", executionId, relPath, context) as Promise<import('../../shared/actions/CodeChangeTypes').CodeChangeDiff>,
+    codeChangesRevert: (executionId: string, relPath: string) =>
+      ipcRenderer.invoke("code-changes:revert", executionId, relPath) as Promise<import('../../shared/actions/CodeChangeTypes').CodeChangeRevertResult>,
 
     communicationSaveAudio: (communicationId: string, base64Data: string, mimeType: string) =>
       ipcRenderer.invoke("communication:saveAudio", communicationId, base64Data, mimeType) as Promise<{ ok: boolean; data?: { audioPath: string }; message?: string }>,

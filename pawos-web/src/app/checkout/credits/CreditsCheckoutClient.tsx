@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { MIN_TICKET_BALANCE_TOPUP_USD, MAX_TICKET_BALANCE_TOPUP_USD, TICKET_BALANCE_TOPUP_PRESETS_USD, TICKET_PRICING_TIERS } from "@/lib/billing/razorpay";
@@ -11,6 +12,8 @@ declare global {
 }
 
 const RAZORPAY_CHECKOUT_SCRIPT_URL = "https://checkout.razorpay.com/v1/checkout.js";
+/** PawOS's own contact-sales page (src/app/support/sales). */
+const SALES_CONTACT_PATH = "/support/sales";
 
 function loadRazorpayScript(): Promise<boolean> {
   return new Promise((resolve) => {
@@ -37,6 +40,8 @@ export function CreditsCheckoutClient() {
   const [amountUsd, setAmountUsd] = useState(TICKET_BALANCE_TOPUP_PRESETS_USD[0]);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
+  // The amount typed was more than one purchase can be.
+  const [overLimit, setOverLimit] = useState(false);
   // Seeded from the code defaults, then replaced by the real, env-configurable values (see
   // getTicketPricingConfig() in razorpay.ts) the moment they load.
   const [pricingConfig, setPricingConfig] = useState({
@@ -158,7 +163,10 @@ export function CreditsCheckoutClient() {
           <button
             key={n}
             type="button"
-            onClick={() => setAmountUsd(n)}
+            onClick={() => {
+              setOverLimit(false);
+              setAmountUsd(n);
+            }}
             className={`rounded-xl border px-4 py-3 text-sm font-semibold ${
               amountUsd === n ? "border-blue-400 bg-blue-500/10 text-blue-200" : "border-neutral-800 text-neutral-300 hover:text-neutral-100"
             }`}
@@ -177,11 +185,13 @@ export function CreditsCheckoutClient() {
           min={pricingConfig.minTopupUsd}
           max={pricingConfig.maxTopupUsd}
           value={amountUsd}
-          onChange={(e) =>
-            setAmountUsd(
-              Math.min(pricingConfig.maxTopupUsd, Math.max(pricingConfig.minTopupUsd, Number(e.target.value) || pricingConfig.minTopupUsd))
-            )
-          }
+          onChange={(e) => {
+            const requested = Number(e.target.value) || pricingConfig.minTopupUsd;
+            // More than one purchase can be: the amount is held at the maximum, and the customer is
+            // told why and where to ask for more — it is never split into several payments.
+            setOverLimit(requested > pricingConfig.maxTopupUsd);
+            setAmountUsd(Math.min(pricingConfig.maxTopupUsd, Math.max(pricingConfig.minTopupUsd, requested)));
+          }}
           className="w-24 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-1.5 text-center text-sm"
         />
       </div>
@@ -197,6 +207,16 @@ export function CreditsCheckoutClient() {
       {amountUsd >= 10000 && (
         <p className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
           {amountUsd >= 20000 ? "Maximum credit purchase" : "Large credit purchase"} — verify this USD amount carefully before continuing.
+        </p>
+      )}
+      {overLimit && (
+        <p role="status" data-testid="credits-limit-contact-sales" className="mt-4 rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-sm text-neutral-400">
+          One purchase can add up to ${pricingConfig.maxTopupUsd.toLocaleString("en-US")}, so the amount has been set to that. For larger credit
+          requirements,{" "}
+          <Link href={SALES_CONTACT_PATH} className="font-medium text-blue-400 hover:underline">
+            contact Revanta AI sales
+          </Link>
+          .
         </p>
       )}
       {message && <p className="mt-6 text-sm text-neutral-400">{message}</p>}

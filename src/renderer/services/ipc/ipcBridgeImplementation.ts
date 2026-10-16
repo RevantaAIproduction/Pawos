@@ -91,6 +91,10 @@ export const ipc = {
   async actionExecute(request: ActionRequest): Promise<ActionResult> {
     return getBridge().actionExecute(request);
   },
+  /** Cancels one execution's running work in the main process; resolves once it is confirmed stopped (or the wait ends). */
+  async actionCancel(executionId: string): Promise<import('../../../shared/actions/ExecutionLifecycle').ExecutionCancelResult> {
+    return getBridge().actionCancel(executionId);
+  },
   onOrganizationUsageRecordRequest(cb: (request: OrganizationUsageRecordRequest) => void): () => void {
     return getBridge().onOrganizationUsageRecordRequest(cb);
   },
@@ -462,6 +466,18 @@ export const ipc = {
   async billingCreateNativeSeatCheckout(organizationId: string, seatTier: 'standard' | 'premium', accessToken?: string): Promise<NativeCreditsCheckoutResult> {
     return getBridge().billingCreateNativeSeatCheckout(organizationId, seatTier, accessToken);
   },
+  async imagesGetAllowance(accessToken: string): Promise<import('../../../shared/images/ImageGenerationTypes').ImageAllowanceResult> {
+    return getBridge().imagesGetAllowance(accessToken);
+  },
+  async imagesGenerate(
+    request: import('../../../shared/images/ImageGenerationTypes').ImageGenerateRequest,
+    accessToken: string,
+  ): Promise<import('../../../shared/images/ImageGenerationTypes').ImageGenerateResult> {
+    return getBridge().imagesGenerate(request, accessToken);
+  },
+  async imagesSave(imageId: string, accessToken: string): Promise<import('../../../shared/images/ImageGenerationTypes').ImageSaveResult> {
+    return getBridge().imagesSave(imageId, accessToken);
+  },
   async billingVerifyNativeSeatPayment(params: { accessToken?: string; orderId?: string; paymentId?: string; signature?: string }): Promise<NativeCreditsVerificationResult> {
     return getBridge().billingVerifyNativeSeatPayment(params);
   },
@@ -582,8 +598,21 @@ export const ipc = {
   async executionList(): Promise<ExecutionRecord[]> {
     return getBridge().executionList();
   },
-  onExecutionUpdated(cb: () => void) {
-    getBridge().onExecutionUpdated(cb);
+  /** `executionId`: the record that changed (absent = reload everything). Returns an unsubscribe function. */
+  onExecutionUpdated(cb: (executionId?: string) => void): () => void {
+    return getBridge().onExecutionUpdated(cb) ?? (() => {});
+  },
+  /** One Work History record of the signed-in account (null if it isn't theirs or doesn't exist). */
+  async executionGet(id: string): Promise<ExecutionRecord | null> {
+    return getBridge().executionGet(id);
+  },
+  /** Hands the current Supabase access token (or null when signed out) to main, which verifies it. */
+  async accountSetSession(accessToken: string | null): Promise<{ signedIn: boolean }> {
+    return getBridge().accountSetSession(accessToken);
+  },
+  /** A cancelled execution whose last running step has really returned. Returns an unsubscribe function. */
+  onActionCancelSettled(cb: (executionId: string) => void): () => void {
+    return getBridge().onActionCancelSettled(cb) ?? (() => {});
   },
   async browserGetCapabilities(): Promise<BrowserCapabilityReport[]> {
     return getBridge().browserGetCapabilities();
@@ -599,6 +628,22 @@ export const ipc = {
   },
   onWorkspaceObservation(cb: (event: WorkspaceObservationEvent) => void) {
     getBridge().onWorkspaceObservation(cb);
+  },
+  /** Live per-task file changes (metadata only). Returns an unsubscribe function. */
+  onCodeChange(cb: (event: import('../../../shared/actions/CodeChangeTypes').CodeChangeEvent) => void): () => void {
+    return getBridge().onCodeChange(cb) ?? (() => {});
+  },
+  async codeChangesList(opts?: { limit?: number }): Promise<import('../../../shared/actions/CodeChangeTypes').CodeChangeSummary[]> {
+    return getBridge().codeChangesList(opts);
+  },
+  async codeChangesGet(executionId: string): Promise<import('../../../shared/actions/CodeChangeTypes').CodeChangeSummary | null> {
+    return getBridge().codeChangesGet(executionId);
+  },
+  async codeChangesDiff(executionId: string, relPath: string, context?: number): Promise<import('../../../shared/actions/CodeChangeTypes').CodeChangeDiff> {
+    return getBridge().codeChangesDiff(executionId, relPath, context);
+  },
+  async codeChangesRevert(executionId: string, relPath: string): Promise<import('../../../shared/actions/CodeChangeTypes').CodeChangeRevertResult> {
+    return getBridge().codeChangesRevert(executionId, relPath);
   },
   async communicationSaveAudio(communicationId: string, base64Data: string, mimeType: string) {
     return getBridge().communicationSaveAudio(communicationId, base64Data, mimeType);

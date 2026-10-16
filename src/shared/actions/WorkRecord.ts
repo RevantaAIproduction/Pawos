@@ -37,7 +37,7 @@ function section<T>(items: T[], note?: string): WorkRecordSection<T> {
 }
 
 function stateFromExecution(record: ExecutionRecord): WorkRecordState {
-  if (record.status === 'in_progress') {
+  if (record.status === 'in_progress' || record.status === 'cancelling' || record.status === 'awaiting_approval') {
     const hasTesting = record.verificationResults.length > 0 || (record.verificationEvidence?.length ?? 0) > 0;
     return hasTesting ? 'TESTING' : record.timeline.length > 0 ? 'BUILDING' : 'APPROVED';
   }
@@ -55,6 +55,14 @@ function completionFromExecution(record: ExecutionRecord): WorkRecord['completio
       nextAction: record.nextAction ?? 'Review the failed step and retry after fixing the blocker.',
     };
   }
+  if (record.status === 'cancelled') {
+    return { status: 'STOPPED', reason: record.stoppedReason ?? 'Cancelled.', nextAction: record.nextAction ?? 'Review the changes made before the cancel.' };
+  }
+  if (record.status === 'interrupted') {
+    return { status: 'STOPPED', reason: record.stoppedReason ?? 'PawOS closed before this task finished.', nextAction: record.nextAction };
+  }
+  if (record.status === 'cancelling') return { status: 'INCOMPLETE', reason: 'Cancelling — waiting for the running step to stop.' };
+  if (record.status === 'awaiting_approval') return { status: 'INCOMPLETE', reason: 'Waiting for your approval to continue.' };
   if (record.status === 'abandoned') {
     return {
       status: 'STOPPED',
@@ -131,7 +139,12 @@ function timeline(record: ExecutionRecord): WorkRecordTimelineItem[] {
       {
         timestamp: record.startedAt,
         label: record.status === 'in_progress' ? 'Work record created' : 'Work recorded',
-        status: record.status === 'failed' ? 'failed' : record.status === 'abandoned' ? 'stopped' : 'completed',
+        status:
+          record.status === 'failed'
+            ? 'failed'
+            : record.status === 'abandoned' || record.status === 'cancelled' || record.status === 'interrupted' || record.status === 'cancelling'
+              ? 'stopped'
+              : 'completed',
       },
     ];
   }

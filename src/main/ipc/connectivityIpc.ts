@@ -16,6 +16,8 @@ import { connectorMcpGateway } from '../connectivity/mcp/ConnectorMcpGateway';
 import { mcpOAuthFlow } from '../connectivity/mcp/McpOAuthFlow';
 import { baseConnectorId, getMcpProvider } from '../../shared/connectivity/McpProviders';
 import { SlackConnector } from '../infrastructure/connectors/communication/SlackConnector';
+import { accountSession } from '../auth/AccountSession';
+import { installConnectivityAccountBoundary } from '../connectivity/accountBoundary';
 import type {
   ConnectivityScope,
   ConnectorDefinition,
@@ -47,6 +49,18 @@ function isConnectivityScope(value: unknown): value is ConnectivityScope {
   if (!isNonEmptyString(candidate.userId)) return false;
   if (candidate.organizationId !== undefined && typeof candidate.organizationId !== 'string') return false;
   return true;
+}
+
+/**
+ * A scope from the renderer only names an account: it may be used only when it is the account the
+ * main process has verified itself (accountSession), never on the renderer's word. Waits for a
+ * verification already in flight, so connections restored right after sign-in are not refused.
+ */
+async function requireSignedInScope(channel: string, scope: ConnectivityScope): Promise<void> {
+  const signedIn = await accountSession.whenSettled();
+  if (!signedIn || scope.userId !== signedIn) {
+    throw new Error(`${channel}: that isn't the account signed in to PawOS.`);
+  }
 }
 
 /**
@@ -111,37 +125,42 @@ function safeHandleWithEvent<T>(channel: string, handler: (evt: IpcMainInvokeEve
  * in this file (`pairing:`, `billing:`, `communication:`, etc.).
  */
 export function registerConnectivityIpc(): void {
+  installConnectivityAccountBoundary();
+
   safeHandle<ConnectorDefinition[]>('connectivity:listConnectors', () => {
     return connectivityRuntime.connectors.list().map((sdk) => sdk.definition);
   });
 
-  safeHandle<ConnectorConnection[]>('connectivity:listConnections', (scope: unknown) => {
+  safeHandle<ConnectorConnection[]>('connectivity:listConnections', async (scope: unknown) => {
     if (!isConnectivityScope(scope)) {
       throw new Error("connectivity:listConnections requires a valid scope ({ userId, organizationId? }).");
     }
+    await requireSignedInScope('connectivity:listConnections', scope);
     return connectivityRuntime.connections.listConnections(scope);
   });
 
-  safeHandleWithEvent<ConnectorConnection>('connectivity:connect', (evt, connectorId: unknown, scope: unknown) => {
+  safeHandleWithEvent<ConnectorConnection>('connectivity:connect', async (evt, connectorId: unknown, scope: unknown) => {
     if (!isNonEmptyString(connectorId)) {
       throw new Error('connectivity:connect requires a non-empty connectorId string.');
     }
     if (!isConnectivityScope(scope)) {
       throw new Error("connectivity:connect requires a valid scope ({ userId, organizationId? }).");
     }
+    await requireSignedInScope('connectivity:connect', scope);
     assertConnectorEntitled(connectorId);
     return connectivityRuntime.connections.connect(connectorId, scope, undefined, evt.sender);
   });
 
   // Strictly read-only — see ConnectorSDK.getStatus's contract. The Connections page uses this
   // one, and only this one, on mount/repeated visits; it must never trigger connect()/authenticate().
-  safeHandle<ConnectorStatus>('connectivity:getStatus', (connectorId: unknown, scope: unknown) => {
+  safeHandle<ConnectorStatus>('connectivity:getStatus', async (connectorId: unknown, scope: unknown) => {
     if (!isNonEmptyString(connectorId)) {
       throw new Error('connectivity:getStatus requires a non-empty connectorId string.');
     }
     if (!isConnectivityScope(scope)) {
       throw new Error("connectivity:getStatus requires a valid scope ({ userId, organizationId? }).");
     }
+    await requireSignedInScope('connectivity:getStatus', scope);
     return connectivityRuntime.connections.getConnectorStatus(connectorId, scope);
   });
 
@@ -160,13 +179,14 @@ export function registerConnectivityIpc(): void {
   // reconnect. Deliberately the same isConnectorEntitled() check as connect()/apiTokens:save()/
   // oauth:begin() — one source of truth for "is this connector currently allowed," not a second,
   // parallel rule for the restore path.
-  safeHandleWithEvent<ConnectorStatus>('connectivity:restore', (evt, connectorId: unknown, scope: unknown, credential: unknown) => {
+  safeHandleWithEvent<ConnectorStatus>('connectivity:restore', async (evt, connectorId: unknown, scope: unknown, credential: unknown) => {
     if (!isNonEmptyString(connectorId)) {
       throw new Error('connectivity:restore requires a non-empty connectorId string.');
     }
     if (!isConnectivityScope(scope)) {
       throw new Error("connectivity:restore requires a valid scope ({ userId, organizationId? }).");
     }
+    await requireSignedInScope('connectivity:restore', scope);
     // A connector's separate MCP credential (`<connector>:mcp`) is gated by that connector's own feature.
     assertConnectorEntitled(baseConnectorId(connectorId));
     return connectivityRuntime.connections.restore(connectorId, scope, credential, evt.sender);
@@ -246,10 +266,11 @@ export function registerConnectivityIpc(): void {
     return postLinearCommentIdempotent(supabase, linearInput as IdempotentLinearCommentInput);
   });
 
-  safeHandle<DeploymentProfile>('connectivity:deploymentProfiles:create', (scope: unknown, name: unknown, config: unknown) => {
+  safeHandle<DeploymentProfile>('connectivity:deploymentProfiles:create', async (scope: unknown, name: unknown, config: unknown) => {
     if (!isConnectivityScope(scope)) {
       throw new Error("connectivity:deploymentProfiles:create requires a valid scope ({ userId, organizationId? }).");
     }
+    await requireSignedInScope('connectivity:deploymentProfiles:create', scope);
     if (!isNonEmptyString(name)) {
       throw new Error('connectivity:deploymentProfiles:create requires a non-empty name string.');
     }
@@ -266,10 +287,11 @@ export function registerConnectivityIpc(): void {
     return connectivityRuntime.deploymentProfiles.getProfile(profileId);
   });
 
-  safeHandle<DeploymentProfile[]>('connectivity:deploymentProfiles:list', (scope: unknown) => {
+  safeHandle<DeploymentProfile[]>('connectivity:deploymentProfiles:list', async (scope: unknown) => {
     if (!isConnectivityScope(scope)) {
       throw new Error("connectivity:deploymentProfiles:list requires a valid scope ({ userId, organizationId? }).");
     }
+    await requireSignedInScope('connectivity:deploymentProfiles:list', scope);
     return connectivityRuntime.deploymentProfiles.listProfiles(scope);
   });
 
@@ -305,13 +327,14 @@ export function registerConnectivityIpc(): void {
     return connectivityRuntime.apiTokens.validate(connectorId, token);
   });
 
-  safeHandle<void>('connectivity:apiTokens:save', (connectorId: unknown, scope: unknown, token: unknown) => {
+  safeHandle<void>('connectivity:apiTokens:save', async (connectorId: unknown, scope: unknown, token: unknown) => {
     if (!isNonEmptyString(connectorId)) {
       throw new Error('connectivity:apiTokens:save requires a non-empty connectorId string.');
     }
     if (!isConnectivityScope(scope)) {
       throw new Error("connectivity:apiTokens:save requires a valid scope ({ userId, organizationId? }).");
     }
+    await requireSignedInScope('connectivity:apiTokens:save', scope);
     if (!isNonEmptyString(token)) {
       throw new Error('connectivity:apiTokens:save requires a non-empty token string.');
     }
@@ -326,6 +349,7 @@ export function registerConnectivityIpc(): void {
     if (!isConnectivityScope(scope)) {
       throw new Error("connectivity:oauth:begin requires a valid scope ({ userId, organizationId? }).");
     }
+    await requireSignedInScope('connectivity:oauth:begin', scope);
     assertConnectorEntitled(connectorId);
     const handle = await connectivityRuntime.oauth.beginAuthorization(connectorId, scope);
     // Deliberately NOT returned: `handle.result` — a Promise can't cross
@@ -349,7 +373,7 @@ export function registerConnectivityIpc(): void {
   // into the live runtime, preserving its persisted id — see
   // DeploymentProfileManager.hydrateProfile()'s own doc comment for why
   // createProfile() can't be reused for this.
-  safeHandle<void>('connectivity:deploymentProfiles:hydrate', (profile: unknown) => {
+  safeHandle<void>('connectivity:deploymentProfiles:hydrate', async (profile: unknown) => {
     if (!profile || typeof profile !== 'object') {
       throw new Error('connectivity:deploymentProfiles:hydrate requires a DeploymentProfile object.');
     }
@@ -360,6 +384,7 @@ export function registerConnectivityIpc(): void {
     if (!isConnectivityScope(candidate.scope)) {
       throw new Error("connectivity:deploymentProfiles:hydrate requires a valid scope ({ userId, organizationId? }).");
     }
+    await requireSignedInScope('connectivity:deploymentProfiles:hydrate', candidate.scope as ConnectivityScope);
     if (!isNonEmptyString(candidate.name)) {
       throw new Error('connectivity:deploymentProfiles:hydrate requires a non-empty name.');
     }
@@ -379,6 +404,7 @@ export function registerConnectivityIpc(): void {
   safeHandleWithEvent<{ connected: boolean }>('connectivity:mcp:connect', async (evt, connectorId: unknown, scope: unknown) => {
     if (!isNonEmptyString(connectorId)) throw new Error('connectivity:mcp:connect requires a non-empty connectorId string.');
     if (!isConnectivityScope(scope)) throw new Error("connectivity:mcp:connect requires a valid scope ({ userId, organizationId? }).");
+    await requireSignedInScope('connectivity:mcp:connect', scope);
     const provider = getMcpProvider(connectorId);
     if (!provider || provider.auth !== 'mcpSignIn') throw new Error(`'${connectorId}' has no separate MCP sign-in.`);
     assertConnectorEntitled(connectorId);
@@ -393,6 +419,7 @@ export function registerConnectivityIpc(): void {
   safeHandleWithEvent<void>('connectivity:mcp:disconnect', async (evt, connectorId: unknown, scope: unknown) => {
     if (!isNonEmptyString(connectorId)) throw new Error('connectivity:mcp:disconnect requires a non-empty connectorId string.');
     if (!isConnectivityScope(scope)) throw new Error("connectivity:mcp:disconnect requires a valid scope ({ userId, organizationId? }).");
+    await requireSignedInScope('connectivity:mcp:disconnect', scope);
     connectivityRuntime.connections.rememberCredentialPersistSender(evt.sender);
     await mcpOAuthFlow.disconnect(connectorId, scope);
     connectorMcpGateway.reset(connectorId);
@@ -408,6 +435,7 @@ export function registerConnectivityIpc(): void {
     if (!isConnectivityScope(scope)) {
       throw new Error("connectivity:getStoredCredential requires a valid scope ({ userId, organizationId? }).");
     }
+    await requireSignedInScope('connectivity:getStoredCredential', scope);
     if (connectorId === linearConnectorSDK.definition.id) {
       // Linear access tokens expire: refresh first so write-back never receives a lapsed token, and
       // keep the refresh token in the main process — the renderer only needs the access token.
@@ -420,10 +448,11 @@ export function registerConnectivityIpc(): void {
 
   // Jira-specific metadata (cloudId, siteUrl) — needed for API calls since these are derived from token
   // Not stored in main vault to keep credential storage generic; stored separately by JiraConnectorSDK
-  safeHandle<JiraMetadata | undefined>('connectivity:getJiraMetadata', (scope: unknown) => {
+  safeHandle<JiraMetadata | undefined>('connectivity:getJiraMetadata', async (scope: unknown) => {
     if (!isConnectivityScope(scope)) {
       throw new Error("connectivity:getJiraMetadata requires a valid scope ({ userId, organizationId? }).");
     }
+    await requireSignedInScope('connectivity:getJiraMetadata', scope);
     return jiraMetadataStore.read(scope);
   });
 
@@ -475,6 +504,7 @@ export function registerConnectivityIpc(): void {
     if (!slackInput || !isConnectivityScope(slackInput.scope) || !isNonEmptyString(slackInput.channel) || !isNonEmptyString(slackInput.text)) {
       throw new Error('connectivity:slack:postMessage requires {scope, channel, text}.');
     }
+    await requireSignedInScope('connectivity:slack:postMessage', slackInput.scope);
     assertConnectorEntitled('slack');
     const credential = await credentialVaultBridge.read('slack', slackInput.scope);
     if (!credential) {

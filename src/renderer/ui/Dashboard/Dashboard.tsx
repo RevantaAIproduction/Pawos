@@ -27,6 +27,7 @@ import { useAutonomousWorkAuthorization } from './AutonomousWorkAuthorizationMod
 import type { SectionId } from './sections';
 import { useIpcBridge } from '../../services/ipc/useIpcBridge';
 import type { AuthUser } from '../../auth/AuthTypes';
+import { useConnectivityBootstrap } from '../../connectivity/useConnectivityBootstrap';
 import type { EffectiveTierId } from '../../../shared/billing/BillingTypes';
 import { autonomousTaskBillingService } from '../../organization/AutonomousTaskBillingService';
 import { ipc as ipcBridge } from '../../services/ipc/ipcBridgeImplementation';
@@ -59,6 +60,10 @@ export function Dashboard({
   onCompletePasswordReset: (resetToken: string, newPassword: string) => Promise<{ ok: boolean; reason?: string }>;
 }) {
   const ipc = useIpcBridge();
+  // Restores every persisted connector credential once per signed-in session — here, in the
+  // signed-in shell, so connectors are live from startup (not only after Settings is opened). The
+  // Dashboard renders only for a signed-in account; sign-out resets it (accountSessionSync).
+  useConnectivityBootstrap(user ? { userId: user.id } : null);
   // Team / Enterprise members don't buy: their organization's owner or billing admins do.
   const { billing: orgBilling } = useOrganizationBilling(user);
   const purchasesByAdmin = !!orgBilling && !orgBilling.isAdmin;

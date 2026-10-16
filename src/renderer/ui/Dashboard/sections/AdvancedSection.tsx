@@ -59,8 +59,10 @@ export function AdvancedSection() {
       <div className={styles.card}>
         <h3 className={styles.cardTitle}>Coding mode</h3>
         <p className={styles.cardBody}>
-          Paw Go is planning &amp; analysis only (read-only Coding Canvas, no execution). Paw Pro
-          unlocks full code generation, execution, builds, tests, and browser preview.
+          A local safety switch on this device — not a purchased plan. Planning &amp; analysis only keeps
+          PawOS read-only (Coding Canvas, analysis, no execution). Full execution lets it generate and edit
+          code, run commands, build, test, and open a browser preview — when you're signed in on a plan
+          that includes running code on this device.
         </p>
         <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
           <button
@@ -68,14 +70,14 @@ export function AdvancedSection() {
             className={codingMode === 'go' ? styles.chipActive : styles.chip}
             onClick={() => changeCodingMode('go')}
           >
-            Paw Go — planning &amp; analysis
+            Planning &amp; analysis only
           </button>
           <button
             type="button"
             className={codingMode === 'pro' ? styles.chipActive : styles.chip}
             onClick={() => changeCodingMode('pro')}
           >
-            Paw Pro — full execution
+            Full execution
           </button>
         </div>
         <p className={styles.cardBody} style={{ marginTop: 8, fontSize: '0.85em', opacity: 0.75 }}>

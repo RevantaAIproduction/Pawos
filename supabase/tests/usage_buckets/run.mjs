@@ -31,6 +31,15 @@ const PREREQUISITES = [
   '20260926000000_pawos_subscriptions_billing_frequency.sql',
 ];
 const UNDER_TEST = '20261001000000_usage_buckets.sql';
+// Applied on top, before the scenario tests, so every earlier scenario also runs against it.
+const DISPLAY_AND_UNREPORTED = '20261013000000_usage_display_percent_and_unreported_usage.sql';
+const TEAM_SEATS = '20261004070000_team_seat_usage.sql';
+// IMAGE_RECOVERY=1: the image-generation migrations (the second redefines the shared bucket
+// housekeeping) are applied before the scenario tests, so every scenario below also runs against them.
+const WITH_IMAGE_RECOVERY = process.env.IMAGE_RECOVERY === '1';
+const IMAGE_MIGRATIONS = ['20261015000000_image_generation.sql', '20261016000000_image_generation_recovery.sql'];
+const ORG_STAND_INS = `create table if not exists public.organizations (id uuid primary key, tier text not null);
+             create table if not exists public.organization_members (organization_id uuid not null references public.organizations(id), user_id uuid not null, seat_tier text, status text not null default 'active', primary key (organization_id, user_id));`;
 
 // SQL always goes to psql over stdin as UTF-8 (Windows command-line arguments are not UTF-8).
 const env = { ...process.env, PGCLIENTENCODING: 'UTF8' };
@@ -171,7 +180,22 @@ try {
   // Migration validation: applying it a second time must also succeed (idempotent DDL).
   psqlFile(path.join(migrations, UNDER_TEST));
 
+  psqlFile(path.join(migrations, DISPLAY_AND_UNREPORTED));
+  psqlFile(path.join(migrations, DISPLAY_AND_UNREPORTED)); // safe to run twice
+
+  if (WITH_IMAGE_RECOVERY) {
+    psqlQuery(ORG_STAND_INS);
+    for (const file of IMAGE_MIGRATIONS) psqlFile(path.join(migrations, file));
+    console.log('With the image-generation migrations applied (IMAGE_RECOVERY=1).');
+  }
   psqlFile(path.join(here, 'tests.sql'));
+
+  // Team seats: stand-ins for the two organization tables the seat migration reads, then the real
+  // seat migration, then the display / unreported-usage / seat / bucket-order scenarios.
+  psqlQuery(ORG_STAND_INS);
+  psqlFile(path.join(migrations, TEAM_SEATS));
+  psqlFile(path.join(migrations, DISPLAY_AND_UNREPORTED)); // and after the seat migration it still applies cleanly
+  psqlFile(path.join(here, 'display_and_unreported.sql'));
 
   // R: two simultaneous reservations against a bucket that can fund only one. Session A holds its
   // transaction open for 2 s after reserving; session B starts 0.5 s later and must wait, then see

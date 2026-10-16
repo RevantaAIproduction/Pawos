@@ -9,7 +9,7 @@ import { openWorkspace } from "../local/workspace";
 import { INTERRUPT } from "./keys";
 import { PawosClient, SessionManager, runTask, sendChatMessage, type AccountOverview, type CodeChange, type CodeChangeStep, type FetchLike, type Integration, type RepositoryReadiness } from "../shared";
 import { PendingTaskStore } from "../state/pendingTask";
-import type { Prompter } from "../ui/prompts";
+import type { AskOptions, Prompter } from "../ui/prompts";
 import type { Timers } from "../ui/spinner";
 import { Terminal, type TerminalCapabilities } from "../ui/terminal";
 
@@ -293,13 +293,16 @@ export class MemoryKeyring implements Keyring {
  */
 export class ScriptedPrompter implements Prompter {
   prompts: string[] = [];
+  /** The options each question was asked with, in the same order as `prompts`. */
+  options: AskOptions[] = [];
   interrupted = false;
   constructor(
     private answers: (string | null | typeof INTERRUPT)[],
     private readonly echo: (text: string) => void
   ) {}
-  async ask(prompt: string): Promise<string | null> {
+  async ask(prompt: string, options: AskOptions = {}): Promise<string | null> {
     this.prompts.push(prompt);
+    this.options.push(options);
     this.echo(prompt);
     const next = this.answers.length > 0 ? this.answers.shift()! : null;
     this.interrupted = next === INTERRUPT;

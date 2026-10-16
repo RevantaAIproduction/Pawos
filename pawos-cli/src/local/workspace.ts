@@ -156,6 +156,67 @@ const OUTSIDE = "It is outside the project.";
 /** Forward slashes, whatever the platform — the form paths take in everything sent to PawOS. */
 const portable = (relative: string) => relative.split(path.sep).join("/");
 
+/**
+ * A full path to something inside the project (C:\shopflow\src\App.tsx, as a user or the model may
+ * write it) becomes the same path relative to the project; anything else is returned as it was, for
+ * the usual checks to refuse. Only a path starting at the project's own top folder is turned round
+ * — compared the way this computer compares paths (letter case ignored on Windows) — and every
+ * check after this one still applies, including where links really lead.
+ */
+export function relativeToProject(root: string, requested: string): string {
+  if (!path.isAbsolute(requested)) return requested;
+  const relative = path.relative(root, path.resolve(requested));
+  if (relative.startsWith("..") || path.isAbsolute(relative)) return requested;
+  return relative === "" ? "." : relative;
+}
+
+/** Characters and names Windows does not allow in a file or folder name. */
+const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])(\..*)?$/i;
+/**
+ * Why a new file or folder can't have this name on this computer, or null. Checked before anything
+ * is written, so the answer is a clear reason instead of an operating-system error.
+ */
+export function invalidNameReason(relative: string, platform: string = process.platform): string | null {
+  if (platform !== "win32") return null;
+  for (const part of relative.split(/[\\/]/)) {
+    if (part === "" || part === "." || part === "..") continue;
+    if (/[<>:"|?*\u0000-\u001f]/.test(part)) return `"${part}" can't be a file or folder name on Windows (it has one of < > : " | ? * or a control character).`;
+    if (/[. ]$/.test(part)) return `"${part}" can't be a file or folder name on Windows (it ends with a dot or a space).`;
+    if (WINDOWS_RESERVED.test(part)) return `"${part}" can't be a file or folder name on Windows (it is a reserved device name).`;
+  }
+  return null;
+}
+
+/**
+ * What a file-system error means, in PawOS's own words. Never the error's own text: it can carry the
+ * full path on this computer.
+ */
+export function fileErrorReason(error: unknown, fallback: string): string {
+  switch ((error as NodeJS.ErrnoException | null)?.code) {
+    case "EACCES":
+    case "EPERM":
+      return "This computer didn't allow it (permission denied).";
+    case "EBUSY":
+      return "The file is in use by another program (it is locked). Close it there and try again.";
+    case "ENOENT":
+      return "That path doesn't exist.";
+    case "EISDIR":
+      return "That is a folder, not a file.";
+    case "ENOTDIR":
+      return "Part of that path is a file, not a folder.";
+    case "ENAMETOOLONG":
+      return "That path is too long for this computer.";
+    case "EINVAL":
+      return "That isn't a valid file name on this computer.";
+    case "ENOSPC":
+      return "The disk is full.";
+    case "EROFS":
+      return "That drive is read-only.";
+    default:
+      return fallback;
+  }
+}
+
 function contained(root: string, target: string): string | null {
   const relative = path.relative(root, target);
   if (relative === "") return "";
@@ -170,7 +231,7 @@ function contained(root: string, target: string): string | null {
  * protected one.
  */
 export function resolveInside(workspace: Workspace, requested: string): Resolved {
-  const wanted = requested.trim();
+  const wanted = relativeToProject(workspace.root, requested.trim());
   if (wanted.includes("\0")) return { ok: false, reason: OUTSIDE };
   // Absolute paths, drive letters, UNC paths and "~" are never relative to the project.
   if (path.isAbsolute(wanted) || path.win32.isAbsolute(wanted) || /^[A-Za-z]:/.test(wanted) || wanted.startsWith("~")) return { ok: false, reason: OUTSIDE };
@@ -211,7 +272,8 @@ export function resolveForChange(workspace: Workspace, requested: string, forbid
   const inside = resolveInside(workspace, requested);
   if (!inside.ok) return inside;
   if (inside.relative === "") return { ok: false, reason: "The project's top folder itself can't be changed or deleted." };
-  const lexical = path.resolve(workspace.root, requested.trim());
+  const wanted = relativeToProject(workspace.root, requested.trim());
+  const lexical = path.resolve(workspace.root, wanted);
   let found: fs.Stats | null;
   try {
     found = fs.lstatSync(lexical);
@@ -222,6 +284,9 @@ export function resolveForChange(workspace: Workspace, requested: string, forbid
 
   let absolute = inside.absolute;
   if (!found) {
+    // A name this computer can't create is refused here, in plain words, before anything is written.
+    const badName = invalidNameReason(wanted);
+    if (badName) return { ok: false, reason: badName };
     // Not there yet. Find the folder it would be created under and see where that really is.
     let parent = path.dirname(lexical);
     while (!fs.existsSync(parent) && path.dirname(parent) !== parent) parent = path.dirname(parent);

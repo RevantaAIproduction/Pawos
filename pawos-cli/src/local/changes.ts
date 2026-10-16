@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { AGENT_CLIENT_LIMITS, toolRisk, type ToolCall, type ToolResult } from "../shared";
-import { protectedReason, resolveForChange, type Workspace } from "./workspace";
+import { fileErrorReason, protectedReason, resolveForChange, type Workspace } from "./workspace";
 
 /**
  * The local tools that change the project: write_file, edit_file and delete_path.
@@ -291,7 +291,7 @@ export async function prepareChange(call: ToolCall, workspace: Workspace, enviro
     // PawOS's own wording: an operating-system error can carry the full path on this computer.
     const code = (error as NodeJS.ErrnoException | null)?.code;
     if (code === "EEXIST") return failed(call, "A file appeared there in the meantime, so nothing was written.");
-    return failed(call, code === "EACCES" || code === "EPERM" ? "This computer didn't allow that change." : "PawOS couldn't make that change.");
+    return failed(call, `PawOS couldn't make that change. ${fileErrorReason(error, "")}`.trim());
   }
 }
 
@@ -332,6 +332,7 @@ export async function applyChange(call: ToolCall, proposal: Proposal): Promise<T
   } catch (error) {
     const code = (error as NodeJS.ErrnoException | null)?.code;
     if (code === "EEXIST") return lost(call, "A file appeared there in the meantime, so nothing was written.");
-    return lost(call, code === "EACCES" || code === "EPERM" || code === "EBUSY" ? "This computer didn't allow that change. Nothing else was touched." : "PawOS couldn't make that change.");
+    const reason = fileErrorReason(error, "");
+    return lost(call, reason ? `PawOS couldn't make that change. ${reason} Nothing else was touched.` : "PawOS couldn't make that change.");
   }
 }

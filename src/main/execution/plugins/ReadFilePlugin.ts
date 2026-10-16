@@ -29,7 +29,7 @@ const DEFAULT_MAX_CHARS = 20_000;
 const SECRET_FILE_PATTERN =
   /^\.env(\..+)?$|^id_rsa(\.pub)?$|^id_ed25519(\.pub)?$|^id_ecdsa(\.pub)?$|^id_dsa(\.pub)?$|\.pem$|\.key$|\.crt$|\.cer$|\.pfx$|\.p12$|\.jks$|^\.aws$|^\.azure$|^\.gcp$|^service-account[^.]*\.json$/i;
 
-function isSecretFile(filePath: string): boolean {
+export function isSecretFile(filePath: string): boolean {
   return SECRET_FILE_PATTERN.test(path.basename(filePath));
 }
 

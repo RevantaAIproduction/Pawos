@@ -132,15 +132,54 @@ describe('EntitlementService — Paw Compute usage-limit enforcement (paid tiers
     expect(snap.usageSummary?.buckets).toHaveLength(1);
   });
 
-  it('Team Premium seats have a larger 5h rolling window than Team Standard', () => {
+  // Paw Team stopped using a 5-hour window when each member got their own seat's allowance on the
+  // server buckets (Standard = the Pro allowance, Premium = the Pro Max 5x allowance — see
+  // supabase/migrations/20261004070000_team_seat_usage.sql). A Premium seat is larger than a Standard
+  // one through that allowance, not through a local window.
+  it('Team seats, like Pro, have no 5-hour window or active-hour caps — and are never the organization pool', () => {
     vi.spyOn(usageEventStore, 'list').mockReturnValue([]);
+    vi.spyOn(usageBucketClient, 'getCachedSummary').mockReturnValue(null);
+    for (const seatTier of ['standard', 'premium'] as const) {
+      vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'team', status: 'active', seatTier });
+      const snap = entitlementService.getSnapshot();
+      expect(snap.limit5hPc).toBeNull();
+      expect(snap.activeHours5h).toBeNull();
+      expect(snap.activeHoursWeekly).toBeNull();
+      expect(snap.seatTier).toBe(seatTier);
+      expect(entitlementService.isPooledUsage()).toBe(false);
+    }
+  });
+
+  it('a Team Premium seat has a larger allowance than a Team Standard seat, from the server summary', () => {
+    vi.spyOn(usageEventStore, 'list').mockReturnValue([]);
+    const summaryFor = (productKey: string, label: string, pcTotal: number, weeklyPcLimit: number) => ({
+      plan: { productKey, label },
+      bucketFunded: true,
+      buckets: [{ id: 'seat', type: 'monthly_plan' as const, label, amountPaidCents: pcTotal, pcTotal, pcUsed: 0, pcRemaining: pcTotal, percentUsed: 0, status: 'active' as const, startsAt: null, expiresAt: null, resetsAt: null, productKey }],
+      weeklyPacing: { percentUsed: 0, reached: false, resetsAt: new Date(Date.now() + 86_400_000).toISOString(), pcLimit: weeklyPcLimit },
+      creditsPcRemaining: 0,
+      limitReached: false,
+      limitReason: null,
+      limitResetsAt: null,
+    });
+
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'team', status: 'active', seatTier: 'standard' });
+    vi.spyOn(usageBucketClient, 'getCachedSummary').mockReturnValue(summaryFor('team_standard_monthly', 'Team Standard seat', 2000, 1000));
     const standardSnap = entitlementService.getSnapshot();
+    expect(entitlementService.isBucketMetered()).toBe(true);
 
     vi.spyOn(subscriptionStore, 'get').mockReturnValue({ tier: 'team', status: 'active', seatTier: 'premium' });
+    vi.spyOn(usageBucketClient, 'getCachedSummary').mockReturnValue(summaryFor('team_premium_monthly', 'Team Premium seat', 10000, 5000));
     const premiumSnap = entitlementService.getSnapshot();
 
-    expect((premiumSnap.limit5hPc as number)).toBeGreaterThan((standardSnap.limit5hPc as number));
+    // $20 seat → 2,000 PC a month, 1,000 a week; $100 seat → 10,000 PC a month, 5,000 a week.
+    expect(standardSnap.limitMonthlyPc).toBe(2000);
+    expect(standardSnap.limitWeeklyPc).toBe(1000);
+    expect(premiumSnap.limitMonthlyPc).toBe(10000);
+    expect(premiumSnap.limitWeeklyPc).toBe(5000);
+    expect(premiumSnap.limitMonthlyPc as number).toBeGreaterThan(standardSnap.limitMonthlyPc as number);
+    expect(standardSnap.limit5hPc).toBeNull();
+    expect(premiumSnap.limit5hPc).toBeNull();
   });
 
   it('bucket-funded detection follows the server summary, not the tier name', () => {

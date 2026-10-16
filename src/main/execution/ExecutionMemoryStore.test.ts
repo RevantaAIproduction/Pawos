@@ -44,10 +44,11 @@ describe('ExecutionMemoryStore', () => {
     const { executionMemoryStore } = await import('./ExecutionMemoryStore');
     executionMemoryStore.init();
 
-    executionMemoryStore.record(record());
-    executionMemoryStore.record(record({ status: 'completed', completedAt: 5, summary: 'Done.' }));
+    // Work History is per verified account (ExecutionMemoryStore.reconcile.test.ts covers isolation).
+    executionMemoryStore.record(record(), 'user-1');
+    executionMemoryStore.record(record({ status: 'completed', completedAt: 5, summary: 'Done.' }), 'user-1');
 
-    const records = executionMemoryStore.list();
+    const records = executionMemoryStore.list('user-1');
     expect(records).toHaveLength(1);
     expect(records[0]).toMatchObject({ id: 'work-1', status: 'completed', summary: 'Done.' });
   });

@@ -679,6 +679,8 @@ function statusMeta(status: ConversationTaskRecord['status']): { icon: string; l
   if (status === 'stopped') return { icon: '■', label: 'Stopped', className: styles.statusStopped ?? styles.statusInterrupted ?? '' };
   if (status === 'failed') return { icon: '✗', label: 'Failed', className: styles.statusFailed ?? '' };
   if (status === 'interrupted') return { icon: '⏸', label: 'Interrupted', className: styles.statusInterrupted ?? '' };
+  if (status === 'cancelling') return { icon: '■', label: 'Cancelling', className: styles.statusInterrupted ?? '' };
+  if (status === 'cancelled') return { icon: '■', label: 'Cancelled', className: styles.statusStopped ?? styles.statusInterrupted ?? '' };
   return { icon: '[done]', label: 'Completed', className: styles.statusCompleted ?? '' };
 }
 

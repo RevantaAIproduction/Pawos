@@ -1,4 +1,5 @@
 import type { ConnectorSDK } from '../../../shared/connectivity/ConnectorSDK';
+import { AccountBound, assertCurrentAccountOperation, bindToAccountEpoch, isStaleAccountOperation } from '../accountEpoch';
 import type { ConnectivityScope, ConnectorConnection, ConnectorStatus, NormalizedConnectivityEvent } from '../../../shared/connectivity/ConnectivityTypes';
 import { JiraConnector } from '../../infrastructure/connectors/projectManagement/JiraConnector';
 import { infrastructureConnectorRegistry } from '../../infrastructure/InfrastructureConnectorRegistry';
@@ -68,10 +69,26 @@ export class JiraConnectorSDK implements ConnectorSDK {
     ],
   };
 
-  private credential: JiraCredential | undefined;
+  // Account-bound (connectivity/accountEpoch.ts): a token obtained for an account that is no longer
+  // signed in is never published here, and reads after an account change find nothing.
+  private readonly credentialSlot = new AccountBound<JiraCredential | undefined>(undefined, 'refuse', 'a Jira credential');
+  private get credential(): JiraCredential | undefined {
+    return this.credentialSlot.get();
+  }
+  private set credential(value: JiraCredential | undefined) {
+    this.credentialSlot.set(value);
+  }
   /** Populated only by authenticate()/connect()/disconnect()/refresh() — getStatus() only ever
    *  reads this field, never derives or fetches it itself. */
-  private currentStatus: ConnectorStatus = { state: 'disconnected', capabilities: [] };
+  private readonly statusSlot = new AccountBound<ConnectorStatus>({ state: 'disconnected', capabilities: [] }, 'ignore', 'a Jira status');
+  private get currentStatus(): ConnectorStatus {
+    return this.statusSlot.get();
+  }
+  private set currentStatus(value: ConnectorStatus) {
+    this.statusSlot.set(value);
+  }
+  // Every method runs as an operation of the account signed in when it was called.
+  private readonly accountEpochBinding = bindToAccountEpoch(this);
 
   private registerLiveConnector(): void {
     const c = this.credential;
@@ -131,13 +148,28 @@ export class JiraConnectorSDK implements ConnectorSDK {
     };
   }
 
+  /** The local half of disconnect(): forgets the token held in memory — no provider revoke, no vault change. */
+  forgetLocalSession(): void {
+    // Called from an operation of an account no longer signed in: this connector may now hold the
+    // new account's session, which that operation must not clear (its own work was already refused).
+    if (isStaleAccountOperation()) return;
+    this.credential = undefined;
+    infrastructureConnectorRegistry.register('projectManagement', new JiraConnector(undefined, undefined));
+    this.currentStatus = { state: 'disconnected', capabilities: [] };
+  }
+
   async disconnect(scope: ConnectivityScope): Promise<void> {
     if (this.credential) {
       await oauthManager.revokeToken(this.definition.id, this.credential.accessToken).catch(() => {});
     }
+    // The provider call can take a while: if the account changed meanwhile, this connector may
+    // now hold the new account's session — nothing below may touch it.
+    assertCurrentAccountOperation('a Jira disconnect');
     this.credential = undefined;
     await credentialVaultBridge.revoke(this.definition.id, scope);
+    assertCurrentAccountOperation('a Jira disconnect');
     await jiraMetadataStore.clear(scope);
+    assertCurrentAccountOperation('a Jira disconnect');
     // No unregister() exists on InfrastructureConnectorRegistry (deliberately not added this
     // pass) — replacing the live connector with an unconfigured instance is an honest, equivalent
     // way to report "not connected" without widening that registry's API.

@@ -1,7 +1,10 @@
 // @ts-nocheck
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ConversationRuntime } from './ConversationRuntime';
-import type { ConversationSnapshot } from './ConversationTypes';
+import type { ConversationMessage, ConversationSnapshot } from './ConversationTypes';
+import { restoreConversationSnapshot } from './RestoreConversationAdapter';
+import { decideChatOpen, decideSubmit, shouldHandOffToViewedChat, type ActiveTaskInfo } from './backgroundTaskNavigation';
+import type { ConversationSession } from '../../shared/conversation/ConversationSessionTypes';
 import { createSttProvider, createTtsProvider, type TtsProviderConfig } from './SpeechProviderRegistry';
 import { ReasoningRuntime } from '../reasoning/ReasoningRuntime';
 import type { ReasoningProvider } from '../reasoning/ReasoningProvider';
@@ -134,6 +137,16 @@ export function useConversationController(args?: {
 
   // Session management
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  // Background-task navigation (see backgroundTaskNavigation.ts): the running task's own chat, and
+  // the chat being viewed read-only while it runs (session null = a new, empty chat).
+  const [activeTask, setActiveTask] = useState<ActiveTaskInfo | null>(null);
+  const [viewedConversation, setViewedConversation] = useState<{ session: ConversationSession | null; messages: ConversationMessage[] } | null>(null);
+  const [blockedSubmitAt, setBlockedSubmitAt] = useState<number | null>(null);
+  const taskChatIdRef = useRef<string | null>(null);
+  const viewedConversationRef = useRef(viewedConversation);
+  viewedConversationRef.current = viewedConversation;
+  // currentSessionId is the runtime's chat; it is not changed while another chat is only viewed.
+  taskChatIdRef.current = currentSessionId;
   const [currentSessionPromptCount, setCurrentSessionPromptCount] = useState(0);
   const [sessionLimitModalOpen, setSessionLimitModalOpen] = useState(false);
   const [preservedPrompt, setPreservedPrompt] = useState<{ text: string; context?: SubmittedInputContext } | null>(null);
@@ -294,6 +307,13 @@ export function useConversationController(args?: {
 
   // Handle New Chat - creates empty session
   const handleNewChat = useCallback(() => {
+    // A task is running: view an empty new chat instead of cancelling the task.
+    const running = runtimeRef.current?.getActiveTask() ?? null;
+    if (decideChatOpen(running, taskChatIdRef.current, null) === 'view') {
+      setViewedConversation({ session: null, messages: [] });
+      setBlockedSubmitAt(null);
+      return;
+    }
     setSessionLimitModalOpen(false);
     setPreservedPrompt(null);
     setCurrentSessionId(null);
@@ -306,8 +326,23 @@ export function useConversationController(args?: {
   // Reopen a past chat from the Chats panel — its messages back on screen, the AI remembers it,
   // and new messages keep going into that same chat.
   const openSession = useCallback(async (id: string) => {
+    const running = runtimeRef.current?.getActiveTask() ?? null;
+    const decision = decideChatOpen(running, taskChatIdRef.current, id);
+    if (decision === 'return') {
+      setViewedConversation(null);
+      setBlockedSubmitAt(null);
+      return;
+    }
     const session = await ipc.getSession(id).catch(() => undefined);
     if (!session) return;
+    // Decide again after loading: the task may have ended in the meantime — then this is a real switch.
+    const stillRunning = runtimeRef.current?.getActiveTask() ?? null;
+    if (decision === 'view' && decideChatOpen(stillRunning, taskChatIdRef.current, id) === 'view') {
+      // Read-only view of another chat; the task, its chat and its project folder are untouched.
+      setViewedConversation({ session, messages: restoreConversationSnapshot(session)?.messages ?? [] });
+      setBlockedSubmitAt(null);
+      return;
+    }
     setSessionLimitModalOpen(false);
     setPreservedPrompt(null);
     chatGenerationRef.current += 1;
@@ -319,9 +354,19 @@ export function useConversationController(args?: {
 
   // "+" in the chat list: a new chat in that project, or a plain chat (resume, questions) for null.
   const startNewChat = useCallback((folder: string | null) => {
+    if (runtimeRef.current?.getActiveTask()) {
+      handleNewChat();
+      return;
+    }
     setProjectFolder(folder);
     handleNewChat();
   }, [setProjectFolder, handleNewChat]);
+
+  /** Back to the running task's own chat. */
+  const returnToTask = useCallback(() => {
+    setViewedConversation(null);
+    setBlockedSubmitAt(null);
+  }, []);
 
   // Handle Continue as New Session - creates new session with preserved prompt
   const handleContinueAsNewSession = useCallback(() => {
@@ -340,6 +385,16 @@ export function useConversationController(args?: {
     setPreservedPrompt(null);
     runtimeRef.current?.submitTranscript(text, context);
   }, [preservedPrompt]);
+
+  // The task ended while another chat was being viewed: that chat now becomes the real one.
+  useEffect(() => {
+    const viewed = viewedConversation;
+    if (!viewed || !shouldHandOffToViewedChat(activeTask, true)) return;
+    setViewedConversation(null);
+    setBlockedSubmitAt(null);
+    if (viewed.session) void openSession(viewed.session.id);
+    else handleNewChat();
+  }, [activeTask, viewedConversation, openSession, handleNewChat]);
 
   // Update active session name when currentSessionId changes
   useEffect(() => {
@@ -484,6 +539,8 @@ export function useConversationController(args?: {
         }
       },
       executeAction: withAutonomousTaskBilling(withGovernanceGate((request) => ipc.executeAction(request))),
+      cancelExecution: (executionId) => ipc.cancelExecution(executionId),
+      onCancelSettled: (listener) => ipc.onCancelSettled(listener),
       checkActionRequirements: (request) => ipc.checkActionRequirements(request),
       getExecutionMode: () => executionModeRef.current,
       isBypassPermissionsEnabled: () => bypassPermissionsEnabledRef.current,
@@ -567,7 +624,16 @@ export function useConversationController(args?: {
     });
 
     runtimeRef.current.setProjectFolder(projectFolderRef.current);
-    const unsubscribe = runtimeRef.current.subscribe(setSnapshot);
+    const runtimeForTask = runtimeRef.current;
+    const unsubscribe = runtimeRef.current.subscribe((next) => {
+      setSnapshot(next);
+      const task = runtimeForTask.getActiveTask();
+      setActiveTask((previous) =>
+        previous?.executionId === task?.executionId && previous?.sessionId === task?.sessionId && previous?.waitingForApproval === task?.waitingForApproval && !!previous === !!task
+          ? previous
+          : task
+      );
+    });
 
     // Re-point at the newly-configured provider the moment Settings changes
     // it (e.g. the Gemini key finishes loading from .env after this effect
@@ -661,6 +727,11 @@ export function useConversationController(args?: {
   const lastInputSourceRef = useRef<SubmittedInputContext['source']>(undefined);
   const submitTranscript = useCallback(
     (text: string, context?: SubmittedInputContext) => {
+      // One task at a time: a new request from another chat never replaces the running task.
+      if (decideSubmit(runtimeRef.current?.getActiveTask() ?? null, viewedConversationRef.current !== null) === 'blocked') {
+        setBlockedSubmitAt(Date.now());
+        return;
+      }
       // Large prompt handling: if text has >700 lines, create a temporary attachment
       let finalContext = context;
       const lines = text.split('\n');
@@ -846,6 +917,14 @@ export function useConversationController(args?: {
     selectModel,
     streamingActive,
     streamingElapsedSeconds,
+
+    // Background-task navigation (one active task; other chats are viewed read-only while it runs)
+    activeTask,
+    viewedConversation,
+    /** The chat shown on screen: the viewed one, or the runtime's own. */
+    displayedSessionId: viewedConversation && activeTask ? viewedConversation.session?.id ?? null : currentSessionId,
+    blockedSubmitAt,
+    returnToTask,
 
     // Session management
     currentSessionId,

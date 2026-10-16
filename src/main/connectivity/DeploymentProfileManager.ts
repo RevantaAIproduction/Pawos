@@ -1,5 +1,12 @@
 import { randomUUID } from 'crypto';
 import type { ConnectivityScope, DeploymentProfile, DeploymentProfileConfig } from '../../shared/connectivity/ConnectivityTypes';
+import { accountSession } from '../auth/AccountSession';
+
+/** Whether `scope` is the account the main process has verified itself (never a renderer's word). */
+function isSignedInScope(scope: ConnectivityScope | undefined): boolean {
+  const userId = accountSession.verifiedUserId;
+  return userId !== null && scope?.userId === userId;
+}
 
 function scopeKey(scope: ConnectivityScope): string {
   return `${scope.userId}:${scope.organizationId ?? ''}`;
@@ -22,11 +29,31 @@ function scopeKey(scope: ConnectivityScope): string {
  * in-memory Map today, standing in for the `deployment_profiles` Supabase
  * table until Section 17's migration lands. The public API below is
  * already final; only the internals of these five methods change then.
+ *
+ * Account boundary: a profile belongs to the account signed in when it was created or hydrated.
+ * Every operation — including get/update/delete by id — sees only the verified signed-in
+ * account's profiles; another account's id behaves exactly like an id that doesn't exist (a
+ * guessed or forged id reveals nothing and changes nothing). All profiles are forgotten when the
+ * account changes (connectivity/accountBoundary.ts).
  */
 class DeploymentProfileManager {
   private profiles = new Map<string, DeploymentProfile>();
 
+  /** The profile with this id, if it belongs to the signed-in account. */
+  private owned(profileId: string): DeploymentProfile | undefined {
+    const profile = this.profiles.get(profileId);
+    return profile && isSignedInScope(profile.scope) ? profile : undefined;
+  }
+
+  /** Forgets every profile held in this process (the signed-in account changed). */
+  forgetAll(): void {
+    this.profiles.clear();
+  }
+
   async createProfile(scope: ConnectivityScope, name: string, config: DeploymentProfileConfig, opts?: { isDefault?: boolean }): Promise<DeploymentProfile> {
+    if (!isSignedInScope(scope)) {
+      throw new Error("Cannot create a deployment profile for an account that isn't signed in to PawOS.");
+    }
     const trimmedName = name.trim();
     if (!trimmedName) {
       throw new Error('Deployment profile name must not be empty.');
@@ -50,16 +77,17 @@ class DeploymentProfileManager {
   }
 
   async getProfile(profileId: string): Promise<DeploymentProfile | undefined> {
-    return this.profiles.get(profileId);
+    return this.owned(profileId);
   }
 
   async listProfiles(scope: ConnectivityScope): Promise<DeploymentProfile[]> {
+    if (!isSignedInScope(scope)) return [];
     const key = scopeKey(scope);
     return [...this.profiles.values()].filter((p) => scopeKey(p.scope) === key);
   }
 
   async updateProfile(profileId: string, patch: Partial<Pick<DeploymentProfile, 'name' | 'config' | 'isDefault'>>): Promise<DeploymentProfile> {
-    const existing = this.profiles.get(profileId);
+    const existing = this.owned(profileId);
     if (!existing) {
       throw new Error(`Cannot update — no deployment profile found with id '${profileId}'.`);
     }
@@ -89,7 +117,8 @@ class DeploymentProfileManager {
   }
 
   async deleteProfile(profileId: string): Promise<void> {
-    this.profiles.delete(profileId);
+    // Another account's id is treated like an unknown id: nothing happens.
+    if (this.owned(profileId)) this.profiles.delete(profileId);
   }
 
   /**
@@ -105,6 +134,14 @@ class DeploymentProfileManager {
    * overwrite, don't throw.
    */
   async hydrateProfile(profile: DeploymentProfile): Promise<void> {
+    if (!isSignedInScope(profile.scope)) {
+      throw new Error("Cannot restore a deployment profile for an account that isn't signed in to PawOS.");
+    }
+    // Re-hydrating the account's own profile overwrites it; an id another account holds is never taken over.
+    const existing = this.profiles.get(profile.id);
+    if (existing && !isSignedInScope(existing.scope)) {
+      throw new Error('Cannot restore that deployment profile.');
+    }
     this.profiles.set(profile.id, profile);
   }
 

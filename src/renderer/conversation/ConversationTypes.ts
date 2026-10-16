@@ -39,7 +39,8 @@ export type ConversationTaskAction = {
  * wrongly read an interrupted task as 'completed'. See finalizeTask in
  * ConversationRuntime.ts, the one place this is ever set.
  */
-export type ConversationTaskStatus = 'running' | 'completed' | 'failed' | 'interrupted' | 'stopped';
+/** 'cancelling': cancel requested, the main process has not confirmed the running step stopped. 'cancelled': confirmed. */
+export type ConversationTaskStatus = 'running' | 'completed' | 'failed' | 'interrupted' | 'stopped' | 'cancelling' | 'cancelled';
 
 /**
  * One user request that triggered real desktop work ("Install Java.") —

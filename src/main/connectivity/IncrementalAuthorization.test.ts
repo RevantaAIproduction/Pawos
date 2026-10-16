@@ -25,6 +25,13 @@ import { connectionManager } from './ConnectionManager';
 import { capabilityRequirementResolver } from './CapabilityRequirementResolver';
 import { credentialVaultBridge } from './CredentialVaultBridge';
 import type { ActionResult } from '../../shared/actions/ActionTypes';
+import { accountSession } from '../auth/AccountSession';
+
+// The verified signed-in account (the main process's own session) is the one these scopes name:
+// connector credentials belong to the signed-in account only (see CredentialVaultBridge).
+beforeEach(() => {
+  vi.spyOn(accountSession, 'verifiedUserId', 'get').mockReturnValue('integration-user');
+});
 
 function capabilitiesOf(blockingResult: ActionResult | undefined) {
   return blockingResult && !blockingResult.ok ? blockingResult.confirmation?.capabilities : undefined;

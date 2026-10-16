@@ -159,6 +159,16 @@ export function describeLaunchFailure(
 
   if (result.reason === 'requires-confirmation') return null;
 
+  // Not a plan problem and not something a retry fixes: signing in, or the local Coding/Infra mode
+  // switch in Settings. The message from the main process says which.
+  if (result.reason === 'account-restricted' || result.reason === 'coding-mode-restricted' || result.reason === 'infra-mode-restricted') {
+    return {
+      title: 'BUILD BLOCKED',
+      message: result.message ?? 'Execution is turned off on this device.',
+      actions: ['none'],
+    };
+  }
+
   return {
     title: 'BUILD STOPPED',
     message: result.message ?? 'The runtime reported a failure. Review the command output or retry the step.',

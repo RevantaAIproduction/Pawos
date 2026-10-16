@@ -7,6 +7,13 @@ import { connectorRegistry } from './ConnectorRegistry';
 import { credentialVaultBridge } from './CredentialVaultBridge';
 import { oauthManager } from './OAuthManager';
 import type { ConnectorSDK } from '../../shared/connectivity/ConnectorSDK';
+import { accountSession } from '../auth/AccountSession';
+
+// The verified signed-in account (the main process's own session) is the one these scopes name:
+// connector credentials belong to the signed-in account only (see CredentialVaultBridge).
+beforeEach(() => {
+  vi.spyOn(accountSession, 'verifiedUserId', 'get').mockReturnValue('u1');
+});
 
 function fakeConnector(id: string, opts?: { useLoopbackRedirect?: boolean; clientSecretEnvVar?: string }): ConnectorSDK {
   return {

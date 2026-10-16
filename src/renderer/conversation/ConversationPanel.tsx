@@ -33,6 +33,9 @@ import { useActivityStream } from './ActivitySidebar/useActivityStream';
 import { LiveStatus } from './LiveStatus/LiveStatus';
 import { ExtensionRenderer, type ExtensionRendererProps } from './extensions/ExtensionRenderer';
 import { TasksPanel } from './TasksPanel';
+import { ChangesView } from './changes/ChangesView';
+import { useTaskCenterData } from './useTaskCenterData';
+import { buildTaskCenterEntries } from './tasksCenterModel';
 import { ChatEvidence } from './ChatEvidence';
 import { ChatWidget } from './ChatWidget';
 import { ChatResume } from './ChatResume';
@@ -55,6 +58,7 @@ import { executionStrategyStore, type ExecutionStrategy } from './ExecutionStrat
 import { ProjectContextBar } from './ProjectContextBar';
 import { CompanionHamburger } from './CompanionHamburger';
 import { PlusMenu } from './PlusMenu';
+import { ImageGeneratorDialog } from '../ui/images/ImageGeneratorDialog';
 import { AcceptEditsControl } from './AcceptEditsControl';
 import { ModelSelectorWidget } from './ModelSelectorWidget';
 import { ContextualPlanPanel } from './ContextualPlanPanel';
@@ -152,7 +156,6 @@ const WORKSPACE_PANEL_LABELS: Record<WorkspacePanelTab, string> = {
 
 const FILE_WRITE_ACTION_TYPES = new Set(['writeFile', 'copyPath', 'duplicatePath', 'compressPath', 'extractArchive', 'mergeFolders', 'splitFile', 'printBrowserPageToPdf']);
 const FILE_CHANGE_ACTION_TYPES = new Set(['movePath', 'deletePath', 'restorePath']);
-const FILE_CREATE_ACTION_TYPES = new Set(['createFolder']);
 const FILE_PATH_KEYS = ['path', 'to', 'entry', 'url', 'cwd'] as const;
 
 function getRequestField(request: unknown, keys: readonly string[]): string | undefined {
@@ -182,26 +185,6 @@ function getTaskEditedFiles(task?: ConversationTaskRecord): { path: string; labe
       (FILE_WRITE_ACTION_TYPES.has(action.type) && action.result?.ok && overwritten !== false) ||
       (action.type === 'applyCodeEdit' && action.result?.ok);
     if (!changed) continue;
-    const path = getRequestField(action.request, FILE_PATH_KEYS);
-    if (!path) continue;
-    const normalized = path.toLowerCase();
-    if (seen.has(normalized)) continue;
-    seen.add(normalized);
-    files.push({ path, label: getPathBasename(path), action });
-  }
-  return files;
-}
-
-function getTaskCreatedFiles(task?: ConversationTaskRecord): { path: string; label: string; action: ConversationTaskAction }[] {
-  if (!task) return [];
-  const files: { path: string; label: string; action: ConversationTaskAction }[] = [];
-  const seen = new Set<string>();
-  for (const action of [...task.actions].reverse()) {
-    const overwritten = action.result?.ok ? (action.result.data as { overwritten?: boolean } | undefined)?.overwritten : undefined;
-    const created =
-      (FILE_CREATE_ACTION_TYPES.has(action.type) && action.result?.ok) ||
-      (FILE_WRITE_ACTION_TYPES.has(action.type) && action.result?.ok && overwritten === false);
-    if (!created) continue;
     const path = getRequestField(action.request, FILE_PATH_KEYS);
     if (!path) continue;
     const normalized = path.toLowerCase();
@@ -354,6 +337,9 @@ export function ConversationPanel({
   streamingActive = false,
   streamingElapsedSeconds = 0,
   onCancel,
+  backgroundTask,
+  onReturnToTask,
+  activeExecutionId,
   onOpenSidebar,
   activeTask,
   projectFolder,
@@ -409,6 +395,14 @@ export function ConversationPanel({
   onRequestMoreCompute?: () => void;
   pawCreditsBalanceUsd?: number;
   onCancel?: () => void;
+  /**
+   * Set while a task runs in another chat and this one is only being viewed (read-only): the
+   * banner explains it and offers Return to task / Cancel task; sending keeps the draft.
+   */
+  backgroundTask?: { goal: string; waitingForApproval: boolean; blockedAt: number | null } | null;
+  onReturnToTask?: () => void;
+  /** The execution this window is running (or waiting for approval on) — the only one a Cancel can reach. */
+  activeExecutionId?: string | null;
   onUseCredits?: () => void;
   redeemingCredits?: boolean;
   redeemCreditsError?: string | null;
@@ -507,10 +501,19 @@ export function ConversationPanel({
     }
   };
   const [usageDropdownOpen, setUsageDropdownOpen] = useState(false);
+  const [imageGeneratorOpen, setImageGeneratorOpen] = useState(false);
   // Incognito Mode (Go tier only): Private session, doesn't persist data or history
   // BUT still calculates Paw Computes usage in real-time (no free pass)
   const [incognitoMode, setIncognitoMode] = useState(false);
   const [activeWorkspacePanel, setActiveWorkspacePanel] = useState<WorkspacePanelTab | null>(null);
+  // Tasks Center + Changes view data (every chat's tasks, their file-change ledgers), live while either tab is open.
+  const taskCenter = useTaskCenterData(activeWorkspacePanel === 'tasks' || activeWorkspacePanel === 'worktree');
+  const taskCenterEntries = useMemo(
+    () => buildTaskCenterEntries(taskCenter.records, taskCenter.changes, activeExecutionId ?? null, taskCenter.now),
+    [taskCenter.records, taskCenter.changes, activeExecutionId, taskCenter.now]
+  );
+  /** The task whose file changes the Worktree/Changes view shows (null = the most recent for this project). */
+  const [changesExecutionId, setChangesExecutionId] = useState<string | null>(null);
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
   // Side panel (Tasks / Terminal / Browser / Files / Worktree): drag-resizable, width remembered, can maximize.
   const [sidePanelWidth, setSidePanelWidth] = useState<number>(() => {
@@ -1053,7 +1056,6 @@ export function ConversationPanel({
   const hasProject = Boolean(projectFolder);
   const inProject = (filePath: string) => (projectFolder ? isInsideFolder(filePath, projectFolder) : false);
   const editedFiles = useMemo(() => getTaskEditedFiles(latestTask).filter((f) => inProject(f.path)), [latestTask, projectFolder]);
-  const createdFiles = useMemo(() => getTaskCreatedFiles(latestTask).filter((f) => inProject(f.path)), [latestTask, projectFolder]);
   // The project sub-folder being browsed in Files / Worktree (never above the project root).
   const [browseDir, setBrowseDir] = useState<string | null>(null);
   const currentDir = browseDir && projectFolder && isInsideFolder(browseDir, projectFolder) ? browseDir : projectFolder ?? null;
@@ -1206,6 +1208,12 @@ export function ConversationPanel({
     // voice turn (source left undefined — see categorizeTurn), anything else was typed.
     const dictated = lastSyncedVoiceDraftRef.current.trim() !== '' && text === lastSyncedVoiceDraftRef.current.trim();
     const inputSource: SubmittedInputContext['source'] = wasPasted ? 'pasted' : dictated ? undefined : 'typed';
+
+    // A task is running in another chat: this chat is read-only until it ends. The draft stays.
+    if (backgroundTask) {
+      onSendTranscript(text);
+      return;
+    }
 
     // If task is running and text is not empty, queue the message instead of sending
     if (snapshot.state === 'performingAction' && text) {
@@ -1635,17 +1643,22 @@ export function ConversationPanel({
         <div className={activeWorkspacePanel === 'terminal' ? `${styles.panelContent} ${styles.panelContentFlush}` : styles.panelContent}>
           {activeWorkspacePanel === 'tasks' && (
             <TasksPanel
-              entries={taskPanelEntries}
+              tasks={taskCenterEntries}
+              loading={taskCenter.loading}
+              error={taskCenter.error}
+              now={taskCenter.now}
+              steps={taskPanelEntries}
+              currentSessionId={activeChatId ?? null}
               focusTaskId={focusedTaskId}
-              onStopTask={(entry) => {
-                // A task waiting for "allow" is stopped by answering "deny"; a running one is cancelled.
-                if (entry.status === 'waiting') onSendTranscript('deny');
-                else onCancel?.();
-              }}
-              onRemoveAll={() => {
-                if (taskPanelEntries.some((entry) => entry.status === 'running')) onCancel?.();
-                setRemovedTaskIds(new Set((snapshot.taskHistory ?? []).map((task) => task.id)));
-              }}
+              onCancelActive={() => onCancel?.()}
+              onOpenChat={onOpenChat ? (sessionId) => {
+                const task = taskCenterEntries.find((entry) => entry.sessionId === sessionId);
+                onOpenChat(sessionId, task?.projectFolder ?? null);
+              } : undefined}
+              onViewChanges={hasProject ? (executionId) => {
+                setChangesExecutionId(executionId);
+                setActiveWorkspacePanel('worktree');
+              } : undefined}
             />
           )}
           {activeWorkspacePanel === 'terminal' && <TerminalView cwd={projectFolder ?? null} />}
@@ -1685,14 +1698,14 @@ export function ConversationPanel({
           {activeWorkspacePanel === 'worktree' && hasProject && (
             <div className={styles.workspaceSurface}>
               <div className={styles.metaRow}><span>Root</span><strong title={projectFolder ?? undefined}>{projectFolder}</strong></div>
-              <section className={styles.workspaceSection}>
-                <h3>Created in this project</h3>
-                {renderFileList(createdFiles, 'No files created in this project yet.')}
-              </section>
-              <section className={styles.workspaceSection}>
-                <h3>Edited in this project</h3>
-                {renderFileList(editedFiles, 'No files edited in this project yet.')}
-              </section>
+              <ChangesView
+                projectFolder={projectFolder ?? null}
+                tasks={taskCenterEntries}
+                summaries={taskCenter.changes}
+                selectedExecutionId={changesExecutionId}
+                onSelectExecution={setChangesExecutionId}
+                onOpenFile={(absPath) => void ipc.executeAction({ type: 'openFile', path: absPath })}
+              />
             </div>
           )}
         </div>
@@ -2013,6 +2026,33 @@ export function ConversationPanel({
       )}
 
       {/* â• BOTTOM COMPOSER â• */}
+      {backgroundTask && (
+        <div
+          className={`${styles.backgroundTaskBanner} ${backgroundTask.blockedAt ? styles.backgroundTaskBannerEmphasis : ''}`}
+          role="status"
+          aria-live="polite"
+          data-testid="background-task-banner"
+        >
+          <p className={styles.backgroundTaskText}>
+            {backgroundTask.blockedAt
+              ? 'Only one task runs at a time. '
+              : ''}
+            PawOS is {backgroundTask.waitingForApproval ? 'waiting for your approval on' : 'working on'} “
+            <span className={styles.backgroundTaskGoal} title={backgroundTask.goal}>{backgroundTask.goal}</span>” in another chat. This chat is read-only until it finishes.
+          </p>
+          <div className={styles.backgroundTaskActions}>
+            <button type="button" className={styles.backgroundTaskButton} onClick={onReturnToTask} data-testid="return-to-task">
+              Return to task
+            </button>
+            {onCancel && (
+              <button type="button" className={styles.backgroundTaskButton} onClick={onCancel} data-testid="cancel-background-task">
+                Cancel task
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* "N running tasks" — the one task indicator in the chat; opens the Tasks sidebar. */}
       {runningTaskCount > 0 && (
         <div className={styles.runningTasksRow}>
@@ -2137,7 +2177,16 @@ export function ConversationPanel({
             onAddFolder={() => void addPickedFolder()}
             onAddConnector={() => {}}
             onAddSlashCommand={() => {}}
+            onGenerateImage={() => setImageGeneratorOpen(true)}
           />
+          {imageGeneratorOpen && (
+            <ImageGeneratorDialog
+              initialPrompt={draft.trim()}
+              onClose={() => setImageGeneratorOpen(false)}
+              onUpgrade={onUpgrade}
+              onBuyCredits={onBuyCompute}
+            />
+          )}
 
           <AcceptEditsControl
             currentStrategy={executionStrategy}

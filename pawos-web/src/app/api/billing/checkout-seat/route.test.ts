@@ -95,6 +95,29 @@ describe("additional seats are paused", () => {
     expect(outbound).toEqual([]);
   });
 
+  it("this route reads the session from the request body only: a website cookie or an Authorization header is not a sign-in here", async () => {
+    // What a browser signed in to the PawOS website sends: its session cookie, and no accessToken.
+    const fromBrowser = await POST(
+      new Request("https://pawos.test/api/billing/checkout-seat", {
+        method: "POST",
+        headers: { "content-type": "application/json", cookie: "sb-project-auth-token=signed-in-on-the-website", authorization: "Bearer a-real-looking-token" },
+        body: JSON.stringify({ organizationId: ORG, seatTier: "standard", seats: 1 }),
+      })
+    );
+    expect(fromBrowser.status).toBe(401);
+    expect(await fromBrowser.json()).toEqual({ ok: false, reason: "Missing access token." });
+    // The same owner, with the session token in the body (as the desktop app sends it), reaches the pause.
+    const withToken = await post({ accessToken: "token", organizationId: ORG, seatTier: "standard", seats: 1 });
+    expect(withToken.status).toBe(503);
+    expect((await withToken.json()).code).toBe(SEAT_PURCHASES_PAUSED_CODE);
+    // A token PawOS does not recognise is a different 401, so the two can be told apart.
+    state.user = null;
+    const badToken = await post({ accessToken: "expired", organizationId: ORG, seatTier: "standard", seats: 1 });
+    expect(badToken.status).toBe(401);
+    expect(await badToken.json()).toEqual({ ok: false, reason: "Invalid or expired session." });
+    expect(outbound).toEqual([]);
+  });
+
   it("the message says existing seats are unaffected and where to ask for more — on PawOS's own domain", () => {
     expect(SEAT_PURCHASES_PAUSED_REASON).toMatch(/current seats and members are not affected/);
     expect(SEAT_PURCHASES_PAUSED_REASON).toContain("https://pawos.revantaai.com/support/sales");

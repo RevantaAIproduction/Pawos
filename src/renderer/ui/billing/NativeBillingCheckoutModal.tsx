@@ -6,6 +6,7 @@ import { ipc } from '../../services/ipc/ipcBridgeImplementation';
 import { HighValueOrderForm, type HighValueOrderData } from './HighValueOrderForm';
 import { PaymentEvidenceUpload } from './PaymentEvidenceUpload';
 import { billingWebPost } from './billingWebApi';
+import { CreditsLimitSalesNote, creditsLimitMessage } from './CreditsLimitSalesNote';
 import {
   formatInr,
   formatUsd,
@@ -229,17 +230,22 @@ function PresetAmountPicker({
 }) {
   const [custom, setCustom] = useState('');
   const [customErr, setCustomErr] = useState<string | null>(null);
+  // The custom amount is over the most one purchase can be: the sales note is shown with the error.
+  const [overLimit, setOverLimit] = useState(false);
 
   function applyCustom() {
     const v = Number.parseFloat(custom);
     if (!Number.isFinite(v) || v < min) {
+      setOverLimit(false);
       setCustomErr(`Minimum is ${formatUsd(min)}.`);
       return;
     }
     if (v > max) {
-      setCustomErr(`Maximum is ${formatUsd(max)}.`);
+      setOverLimit(true);
+      setCustomErr(creditsLimitMessage(max));
       return;
     }
+    setOverLimit(false);
     setCustomErr(null);
     onSelect(Math.round(v * 100) / 100);
   }
@@ -252,7 +258,7 @@ function PresetAmountPicker({
             key={p}
             type="button"
             disabled={disabled}
-            onClick={() => { setCustom(''); setCustomErr(null); onSelect(p); }}
+            onClick={() => { setCustom(''); setCustomErr(null); setOverLimit(false); onSelect(p); }}
             style={{
               padding: '7px 14px',
               borderRadius: 999,
@@ -308,6 +314,7 @@ function PresetAmountPicker({
         </button>
       </div>
       {customErr && <div style={{ fontSize: 12, color: '#e08c8c' }}>{customErr}</div>}
+      {overLimit && <CreditsLimitSalesNote maxUsd={max} />}
       <div style={{ fontSize: 11.5, color: 'var(--pawos-text-secondary)' }}>
         Min {formatUsd(min)} · Max {formatUsd(max)}
       </div>

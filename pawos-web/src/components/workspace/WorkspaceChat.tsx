@@ -11,6 +11,7 @@ import type { CodeChangeReadiness } from "../../lib/webCode/repository";
 import type { CodeChangeView } from "../../lib/webCode/codeChange";
 import { TaskPanel, useCodeChange } from "./TaskPanel";
 import { HandoffSheet } from "./HandoffSheet";
+import { ImageGeneratorSheet } from "./ImageGeneratorSheet";
 import { RepoPickerSheet } from "./RepoPickerSheet";
 import { RepoStatus } from "./RepoStatus";
 
@@ -212,6 +213,7 @@ export function WorkspaceChat({
   const [connection, setConnection] = useState<Connection>("online");
   const [notice, setNotice] = useState<Notice | null>(null);
   const [handoffOpen, setHandoffOpen] = useState(false);
+  const [imageOpen, setImageOpen] = useState(false);
   // Chat by default; a chat that holds a code change reopens in Code (e.g. after the change finishes).
   const [mode, setMode] = useState<Mode>(initialChange && initialFrontendChanges.state !== "locked" ? "change" : "ask");
   const [frontendChanges, setFrontendChanges] = useState(initialFrontendChanges);
@@ -814,6 +816,21 @@ export function WorkspaceChat({
               </svg>
             </button>
             )}
+            {/* Generate an image: every plan; what it costs (and whether it can) is decided on the server. */}
+            <button
+              type="button"
+              onClick={() => setImageOpen(true)}
+              disabled={busy}
+              aria-label="Generate an image"
+              data-testid="open-image-generator"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-neutral-300 transition hover:bg-neutral-800 disabled:opacity-50 md:h-8 md:w-8"
+            >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="16" rx="2.5" />
+                <circle cx="9" cy="10" r="1.6" />
+                <path d="M21 16l-5-5-8 8" />
+              </svg>
+            </button>
             <span className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-neutral-500">
               {/* Connection state only when there is something to say. */}
               {connection !== "online" ? (
@@ -886,6 +903,7 @@ export function WorkspaceChat({
       </div>
 
       {handoffOpen && chatId && <HandoffSheet chatId={chatId} onClose={closeHandoff} />}
+      {imageOpen && <ImageGeneratorSheet initialPrompt={changeMode ? "" : draft.trim()} onClose={() => setImageOpen(false)} />}
       {repoPickerOpen && (
         <RepoPickerSheet
           current={frontendChanges.state === "ready" ? frontendChanges.repository : null}

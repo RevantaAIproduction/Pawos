@@ -7,6 +7,7 @@ interface PlusMenuProps {
   onAddFolder?: () => void;
   onAddConnector?: () => void;
   onAddSlashCommand?: () => void;
+  onGenerateImage?: () => void;
 }
 
 export function PlusMenu({
@@ -15,6 +16,7 @@ export function PlusMenu({
   onAddFolder,
   onAddConnector,
   onAddSlashCommand,
+  onGenerateImage,
 }: PlusMenuProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -60,6 +62,19 @@ export function PlusMenu({
           >
             📁 Add folder
           </button>
+          {onGenerateImage && (
+            <button
+              className={styles.menuItem}
+              onClick={() => {
+                setMenuOpen(false);
+                onGenerateImage();
+              }}
+              title="Generate an image"
+              data-testid="open-image-generator"
+            >
+              🎨 Generate image
+            </button>
+          )}
           <div className={styles.divider} />
           <button className={styles.menuItem} onClick={onAddSlashCommand}>
             / Slash commands

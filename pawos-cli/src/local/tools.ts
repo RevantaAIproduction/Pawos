@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import { AGENT_CLIENT_LIMITS, toolRisk, type ToolCall, type ToolResult } from "../shared";
 import { runLocalGit, type LocalGit } from "../git/localRepository";
-import { listFiles, protectedReason, resolveInside, type Workspace } from "./workspace";
+import { fileErrorReason, listFiles, protectedReason, resolveInside, type Workspace } from "./workspace";
 
 /**
  * The local tools: what PawOS can do on this computer, one call at a time.
@@ -187,7 +187,7 @@ export async function executeTool(call: ToolCall, workspace: Workspace, environm
   } catch (error) {
     if (signal?.aborted || (error as { name?: string } | null)?.name === "AbortError") return failed(call, "Stopped.");
     // The reason is PawOS's own wording: an operating-system error can carry the full path on this computer.
-    return failed(call, "PawOS couldn't read that.");
+    return failed(call, `PawOS couldn't read that. ${fileErrorReason(error, "")}`.trim());
   }
 }
 

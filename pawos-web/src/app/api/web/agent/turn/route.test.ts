@@ -21,7 +21,8 @@ vi.mock("../../../../../lib/account/accountContext", async (importOriginal) => {
 vi.mock("../../../../../lib/supabase/serviceClient", () => ({ createServiceClient: () => state.backend.client(null, true) }));
 
 import { POST } from "./route";
-import { AGENT_TURN_OUTPUT_TOKENS, AGENT_TURN_TIMEOUT_MS, resetAgentTasks } from "../../../../../lib/webAgent/agent";
+import { AGENT_CUTOFF_RETRIES, AGENT_TURN_OUTPUT_TOKENS, AGENT_TURN_TIMEOUT_MS, RESEND_AFTER_CUTOFF_MS, RESEND_BASE_MS, RESEND_PROVIDER_MAX_MS, STEP_PROVIDER_CALLS, STEP_RETRY_WINDOW_MS, TURN_PROVIDER_CALLS, agentClock, resetAgentTasks } from "../../../../../lib/webAgent/agent";
+import { modelClock } from "../../../../../lib/webChat/model";
 import { AGENT_SERVER_LIMITS, AGENT_TOOL_NAMES, parseTurnRequest, toolArgs } from "../../../../../lib/webAgent/protocol";
 import { WEB_CAPABILITY_RULES } from "../../../../../lib/webPolicy/webCapabilities";
 
@@ -241,19 +242,26 @@ describe("the turn: one model call, one tool from the fixed list", () => {
     expect((await result("step-2", "replayed")).status).toBe(409);
   });
 
-  it("asking again is bounded: every unusable reply uses one of the task's turns", async () => {
-    await start();
+  it("asking again is bounded by the step's budget: unusable replies end with a final error, not a loop", async () => {
+    const first = await (await start()).json();
     modelReplies = ["not json at all"];
-    let tries = 0;
+    const statuses: number[] = [];
     let last = 502;
-    while (last === 502 && tries < AGENT_SERVER_LIMITS.turns + 5) {
-      last = (await result("step-1", "read it")).status;
-      tries += 1;
+    while (last === 502 && statuses.length < AGENT_SERVER_LIMITS.turns + 5) {
+      const answer = await result("step-1", "read it");
+      last = answer.status;
+      statuses.push(last);
+      if (last === 502) expect((await answer.json()).retryAfterMs).toBeGreaterThanOrEqual(0); // with a suggested wait
     }
-    // It ends by itself, with a finish — not a loop.
-    expect(last).toBe(200);
-    expect(tries).toBe(AGENT_SERVER_LIMITS.turns - 1);
-    expect(modelCalls).toHaveLength(AGENT_SERVER_LIMITS.turns);
+    // The step's sixth provider call spends its budget: that failure is final.
+    expect(statuses).toEqual([502, 502, 502, 502, 502, 503]);
+    expect(modelCalls).toHaveLength(1 + STEP_PROVIDER_CALLS);
+    // Sending the same step again is refused at once: no provider call, whatever client sends it.
+    const again = await result("step-1", "read it");
+    expect(again.status).toBe(503);
+    expect((await again.json()).code).toBe("model_retries_exhausted");
+    expect(modelCalls).toHaveLength(1 + STEP_PROVIDER_CALLS);
+    expect(first.turnsLeft).toBeGreaterThan(0);
   });
 
   it("a first turn that isn't a step is forgotten, so the task can be started again", async () => {
@@ -271,10 +279,18 @@ describe("the turn: one model call, one tool from the fixed list", () => {
     } finally {
       AbortSignal.timeout = realTimeout;
     }
-    expect(timeouts).toEqual([AGENT_TURN_TIMEOUT_MS]);
+    // One try, given what is left of the turn's deadline (the milliseconds already spent come off it).
+    expect(timeouts).toHaveLength(1);
+    expect(timeouts[0]).toBeLessThanOrEqual(AGENT_TURN_TIMEOUT_MS);
+    expect(timeouts[0]).toBeGreaterThan(AGENT_TURN_TIMEOUT_MS - 1000);
     expect(AGENT_TURN_TIMEOUT_MS).toBeLessThan(60_000);
     expect(reserves()[0].args.p_max_output_tokens).toBe(AGENT_TURN_OUTPUT_TOKENS);
     expect(modelCalls[0].system).toMatch(/keep every write_file small/);
+    // And the turn's time and tokens go to the step, not to open-ended reasoning.
+    const sent = JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]!.body)) as { generationConfig: Record<string, unknown> };
+    // What is sent is what the usage engine granted, which may be less than was asked for — and the
+    // model's reasoning comes out of that same grant.
+    expect(sent.generationConfig).toEqual({ maxOutputTokens: state.backend.reserveResult.maxOutputTokens, responseMimeType: "application/json", thinkingConfig: { thinkingLevel: "low" } });
   });
 
   it("a large file is passed on whole, exactly as written", async () => {
@@ -315,9 +331,9 @@ describe("the turn: one model call, one tool from the fixed list", () => {
     await start();
     vi.mocked(fetch).mockImplementationOnce(async () => new Response(JSON.stringify({ candidates: [{ finishReason: "MAX_TOKENS", content: { parts: [{ text: '{"tool": "write_file", "args": {"path": "src/App.tsx", "content": "const secretSauce = 1' }] } }], usageMetadata: { promptTokenCount: 400, candidatesTokenCount: 8192 } }), { status: 200 }));
     const cut = await result("step-1", "read it");
-    expect(await cut.json()).toMatchObject({ code: "model_unavailable", detail: "model_unusable_reply" });
+    expect(await cut.json()).toMatchObject({ code: "model_unavailable", detail: "model_reply_truncated" });
     const logged = (console.error as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((call) => String(call[0]));
-    expect(logged).toEqual([expect.stringMatching(/^\[web-agent\] unusable reply: \d+ characters, finish reason MAX_TOKENS, not JSON$/)]);
+    expect(logged).toEqual([expect.stringMatching(/^\[web-agent\] reply cut off at the output limit: \d+ characters, 8192 reply and 0 reasoning tokens \(cut-off 1 for this step\)$/)]);
     expect(logged.join()).not.toMatch(/secretSauce|App\.tsx|test-model-key/);
     // The cut-off call was still paid for: usage is settled, not released.
     expect(settles()).toHaveLength(2);
@@ -705,5 +721,282 @@ describe("the service only thinks", () => {
   it("the model key is never in a response", async () => {
     const text = JSON.stringify(await (await start()).json());
     expect(text).not.toContain("test-model-key");
+  });
+});
+
+/**
+ * A reply the provider stopped at the output limit is incomplete. It is never passed on as a step —
+ * not even when what arrived happens to parse — and the task is left exactly where it was: no step
+ * added, the result it was waiting for kept once, nothing already run asked for again. The same step
+ * is asked for again, smaller, a bounded number of times; then the task stops with a clear reason.
+ */
+describe("replies cut off at the output limit, and tries that run out of time", () => {
+  const cutOff = (text = '{"tool": "write_file", "args": {"path": "src/App.tsx", "content": "export function App() {\\n  return <main>') =>
+    new Response(JSON.stringify({ candidates: [{ finishReason: "MAX_TOKENS", content: { parts: [{ text }] } }], usageMetadata: { promptTokenCount: 400, candidatesTokenCount: 7000, thoughtsTokenCount: 1000 } }), { status: 200 });
+  const cutOffNext = (text?: string) =>
+    vi.mocked(fetch).mockImplementationOnce(async (_input, init) => {
+      const sent = JSON.parse(String(init?.body)) as { systemInstruction: { parts: { text: string }[] }; contents: { parts: { text?: string }[] }[] };
+      modelCalls.push({ system: sent.systemInstruction.parts[0].text, user: sent.contents.flatMap((content) => content.parts.map((part) => part.text ?? "")).join("\n") });
+      return cutOff(text);
+    });
+  const SMALLER = /was cut off: it did not fit in the reply limit, so nothing was run\. Make this step much smaller\./;
+
+  const realSleep = modelClock.sleep;
+  beforeEach(() => {
+    modelClock.sleep = async () => undefined; // provider retries in these tests wait for nothing
+  });
+  afterEach(() => {
+    modelClock.sleep = realSleep;
+  });
+
+  it("even a cut-off reply that parses as a complete step is refused — nothing incomplete is ever run", async () => {
+    await start();
+    cutOffNext(JSON.stringify({ tool: "write_file", args: { path: "src/App.tsx", content: "export function App() {}" } }));
+    const cut = await result("step-1", "read it");
+    expect(cut.status).toBe(502);
+    expect(await cut.json()).toMatchObject({ code: "model_unavailable", detail: "model_reply_truncated" });
+  });
+
+  it("the same step is asked for again, smaller — the task kept as it was, with no step added and nothing run twice", async () => {
+    const first = await (await start()).json();
+    cutOffNext();
+    expect((await result("step-1", "file contents")).status).toBe(502);
+    // The CLI sends the very same result again; the model is told why and asked for a smaller step.
+    modelReplies = [{ tool: "write_file", args: { path: "src/data/products.ts", content: "export const products = [];\n" } }];
+    const next = await (await result("step-1", "file contents")).json();
+    expect(next.turn.call).toMatchObject({ id: "step-2", name: "write_file", args: { path: "src/data/products.ts" } });
+    expect(modelCalls.at(-1)!.user).toMatch(SMALLER);
+    expect(modelCalls.at(-1)!.user.match(/--- Step 1:/g)).toHaveLength(1); // the result it waited for, once
+    expect(next.turnsLeft).toBe(first.turnsLeft - 2); // the cut-off call counted against the task's turns
+    // Once a step has come back whole, the next turn carries no such note.
+    modelReplies = [{ tool: "build", args: {} }];
+    await result("step-2", "Created src/data/products.ts (1 line).");
+    expect(modelCalls.at(-1)!.user).not.toMatch(/cut off/);
+  });
+
+  it(`after ${AGENT_CUTOFF_RETRIES} smaller tries are cut off too, the task stops with a reason — not retried, and nothing incomplete run`, async () => {
+    await start();
+    for (let attempt = 1; attempt <= AGENT_CUTOFF_RETRIES; attempt++) {
+      cutOffNext();
+      const again = await result("step-1", "file contents");
+      expect(again.status).toBe(502);
+      expect(await again.json()).toMatchObject({ code: "model_unavailable", detail: "model_reply_truncated" });
+    }
+    cutOffNext();
+    const stopped = await result("step-1", "file contents");
+    expect(stopped.status).toBe(422);
+    const body = await stopped.json();
+    expect(body).toMatchObject({ code: "step_too_large", detail: "model_reply_truncated" });
+    expect(body.message).toMatch(/too large to write in one reply.*everything done before it is kept.*smaller parts/);
+    expect(modelCalls.at(-1)!.user).toMatch(/Your last 2 replies for this step were cut off/);
+    // Every cut-off call was still paid for (the provider produced those tokens): settled, never released.
+    expect(settles()).toHaveLength(1 + AGENT_CUTOFF_RETRIES + 1);
+  });
+
+  it("a first turn that was cut off: started again, it is told to be smaller", async () => {
+    cutOffNext();
+    expect((await start()).status).toBe(502);
+    expect((await start()).status).toBe(200); // the task was forgotten, so it can be started again
+    expect(modelCalls.at(-1)!.user).toMatch(SMALLER);
+  });
+
+  it("a try that ran out of time: the next try at the same step is told to keep it quick and small", async () => {
+    await start();
+    vi.mocked(fetch).mockImplementationOnce(async () => {
+      throw Object.assign(new Error("timed out"), { name: "TimeoutError" });
+    });
+    const timedOut = await result("step-1", "read it");
+    expect(timedOut.status).toBe(502);
+    expect(await timedOut.json()).toMatchObject({ detail: "model_timeout" });
+    await result("step-1", "read it");
+    expect(modelCalls.at(-1)!.user).toMatch(/Your last try at this step took too long and was stopped/);
+  });
+
+  it("a busy provider inside one turn: tried again within the turn, and the step comes once", async () => {
+    await start();
+    vi.mocked(fetch).mockImplementationOnce(async () => new Response(JSON.stringify({ error: { status: "UNAVAILABLE" } }), { status: 503 }));
+    modelReplies = [{ tool: "edit_file", args: { path: "src/cart.ts", oldText: "a", newText: "b" } }];
+    const next = await (await result("step-1", "read it")).json();
+    expect(next.turn.call).toMatchObject({ id: "step-2", name: "edit_file" });
+    expect(reserves()).toHaveLength(2); // one reservation per turn, whatever its tries
+  });
+});
+
+/**
+ * One budget for one step, shared by every retry on the way: this service asking the provider again
+ * inside a turn, and the client sending the same turn again. Held here, so it holds for any client.
+ */
+describe("the retry budget for one step", () => {
+  const providerAnswer = (status: number, headers: Record<string, string> = {}, error: unknown = { status: "UNAVAILABLE" }) => new Response(JSON.stringify({ error }), { status, headers });
+  let providerCalls: number;
+  /** From now on the provider answers with `make()` (a fresh response each call), counting its calls. */
+  const providerSays = (make: () => Response) => {
+    vi.mocked(fetch).mockImplementation(async () => {
+      providerCalls += 1;
+      return make();
+    });
+  };
+  const realSleep = modelClock.sleep;
+  const realRandom = agentClock.random;
+  beforeEach(() => {
+    providerCalls = 0;
+    modelClock.sleep = async () => undefined;
+    agentClock.random = () => 0;
+  });
+  afterEach(() => {
+    modelClock.sleep = realSleep;
+    agentClock.random = realRandom;
+  });
+
+  it(`a provider that stays busy: at most ${STEP_PROVIDER_CALLS} provider calls for the step, ${TURN_PROVIDER_CALLS} per send — then a final error`, async () => {
+    await start();
+    providerSays(() => providerAnswer(503));
+    const statuses: number[] = [];
+    for (let send = 0; send < 6; send++) statuses.push((await result("step-1", "read it")).status);
+    expect(statuses).toEqual([502, 502, 503, 503, 503, 503]);
+    expect(providerCalls).toBe(STEP_PROVIDER_CALLS); // 18 before: 3 per send × 6 sends
+  });
+
+  it("each retryable failure tells the client how long to wait: exponential, jittered, capped — in the body and the Retry-After header", async () => {
+    await start();
+    providerSays(() => providerAnswer(503));
+    agentClock.random = () => 0; // the low end of the jitter: half the step
+    const first = await result("step-1", "read it");
+    expect(first.headers.get("retry-after")).toBe(String(Math.ceil((RESEND_BASE_MS * 0.5) / 1000)));
+    expect((await first.json()).retryAfterMs).toBe(RESEND_BASE_MS * 0.5);
+    agentClock.random = () => 1; // the high end: the full step, which doubles
+    expect((await (await result("step-1", "read it")).json()).retryAfterMs).toBe(RESEND_BASE_MS * 2);
+  });
+
+  it("the provider's own Retry-After is passed on when it fits", async () => {
+    await start();
+    providerSays(() => providerAnswer(429, { "retry-after": "5" }, { status: "RESOURCE_EXHAUSTED" }));
+    const answer = await result("step-1", "read it");
+    expect(answer.status).toBe(502);
+    expect((await answer.json()).retryAfterMs).toBe(5000);
+    expect(answer.headers.get("retry-after")).toBe("5");
+  });
+
+  it("a provider that asks for longer than PawOS will wait: the step ends now, with no further calls", async () => {
+    await start();
+    providerSays(() => providerAnswer(429, { "retry-after": String(RESEND_PROVIDER_MAX_MS / 1000 + 60) }, { status: "RESOURCE_EXHAUSTED" }));
+    const answer = await result("step-1", "read it");
+    expect(answer.status).toBe(503);
+    expect((await answer.json()).code).toBe("model_retries_exhausted");
+    expect(providerCalls).toBe(1);
+  });
+
+  it(`after ${STEP_RETRY_WINDOW_MS / 1000} s of failing, the step is not asked for again`, async () => {
+    await start();
+    providerSays(() => providerAnswer(503));
+    expect((await result("step-1", "read it")).status).toBe(502);
+    const calls = providerCalls;
+    const realNow = Date.now();
+    const clock = vi.spyOn(Date, "now").mockReturnValue(realNow + STEP_RETRY_WINDOW_MS + 1000);
+    try {
+      const late = await result("step-1", "read it");
+      expect(late.status).toBe(503);
+      expect((await late.json()).code).toBe("model_retries_exhausted");
+    } finally {
+      clock.mockRestore();
+    }
+    expect(providerCalls).toBe(calls);
+  });
+
+  it("a failure near the end of the window whose wait would run past it is final — no wait is suggested that the step can't use", async () => {
+    await start();
+    providerSays(() => providerAnswer(503));
+    const realNow = Date.now();
+    const clock = vi.spyOn(Date, "now").mockReturnValue(realNow);
+    try {
+      expect((await result("step-1", "read it")).status).toBe(502); // the window starts here
+      clock.mockReturnValue(realNow + STEP_RETRY_WINDOW_MS - 500); // inside the window, but less than any wait from its end
+      const late = await result("step-1", "read it");
+      expect(late.status).toBe(503);
+      expect((await late.json()).code).toBe("model_retries_exhausted");
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it.each([[400], [401], [403], [404]])("a permanent provider error (HTTP %i) is final at once: one call, nothing to send again", async (status) => {
+    await start();
+    providerSays(() => providerAnswer(status, {}, { status: "INVALID_ARGUMENT" }));
+    const answer = await result("step-1", "read it");
+    expect(answer.status).toBe(500); // no PawOS client sends a 500 again
+    const body = await answer.json();
+    expect(body).toMatchObject({ code: "model_unavailable", detail: `model_http_${status}` });
+    expect(body.retryAfterMs).toBeUndefined();
+    expect(answer.headers.get("retry-after")).toBeNull();
+    // A 400 is asked once more without the reasoning setting (see generate); nothing beyond that.
+    expect(providerCalls).toBe(status === 400 ? 2 : 1);
+  });
+
+  it("resubmitting can't reset the budget: starting the same task again after its first step ran out is refused at once", async () => {
+    providerSays(() => providerAnswer(503));
+    const statuses: number[] = [];
+    for (let send = 0; send < 3; send++) statuses.push((await start()).status);
+    expect(statuses).toEqual([502, 502, 503]);
+    expect(providerCalls).toBe(STEP_PROVIDER_CALLS);
+    for (let send = 0; send < 3; send++) {
+      const again = await start();
+      expect(again.status).toBe(503);
+      expect((await again.json()).code).toBe("model_retries_exhausted");
+    }
+    expect(providerCalls).toBe(STEP_PROVIDER_CALLS); // terminal: not one more call
+  });
+
+  it("resubmitting can't reset the budget: the pending result sent with other output, or a finished step's result, changes nothing", async () => {
+    await start();
+    providerSays(() => providerAnswer(503));
+    for (let send = 0; send < 3; send++) await result("step-1", "read it");
+    expect(providerCalls).toBe(STEP_PROVIDER_CALLS);
+    // Same step, different output: still the same step, still out of budget — and no provider call.
+    const altered = await result("step-1", "different output this time", { truncated: true });
+    expect(altered.status).toBe(503);
+    // A step that isn't the one being waited for is refused outright.
+    expect((await result("step-0", "x")).status).toBe(409);
+    expect((await result("step-2", "x")).status).toBe(409);
+    expect(providerCalls).toBe(STEP_PROVIDER_CALLS);
+  });
+
+  it("a completed step is never issued again: its result sent again after the next step was issued is refused, and nothing is replayed", async () => {
+    await start(); // step-1 issued
+    modelReplies = [{ tool: "write_file", args: { path: "src/new.ts", content: "export const x = 1;\n" } }];
+    const second = await (await result("step-1", "read it")).json();
+    expect(second.turn.call.id).toBe("step-2");
+    const calls = modelCalls.length;
+    const replay = await result("step-1", "read it");
+    expect(replay.status).toBe(409);
+    expect(modelCalls).toHaveLength(calls); // no model call, so no step could be issued
+    // The write was issued once, as step-2; the task still waits for exactly its result.
+    modelReplies = [{ tool: "build", args: {} }];
+    const third = await (await result("step-2", "Created src/new.ts (1 line).")).json();
+    expect(third.turn.call).toMatchObject({ id: "step-3", name: "build" });
+    expect(modelCalls.at(-1)!.user.match(/write_file/g)?.length).toBeGreaterThanOrEqual(1);
+    expect(modelCalls.at(-1)!.user.match(/--- Step 2: write_file/g)).toHaveLength(1);
+  });
+
+  it("a cut-off reply suggests a short wait — the provider isn't busy, the step was too big", async () => {
+    await start();
+    providerSays(() => new Response(JSON.stringify({ candidates: [{ finishReason: "MAX_TOKENS", content: { parts: [{ text: '{"tool": "write_file"' }] } }], usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 8000 } }), { status: 200 }));
+    expect((await (await result("step-1", "read it")).json()).retryAfterMs).toBe(RESEND_AFTER_CUTOFF_MS);
+  });
+
+  it("a step that comes back whole ends its strain: the next step starts with a whole budget", async () => {
+    await start();
+    let busy = true;
+    vi.mocked(fetch).mockImplementation(async () => {
+      providerCalls += 1;
+      if (busy) return providerAnswer(503);
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ tool: "edit_file", args: { path: "src/cart.ts", oldText: "a", newText: "b" } }) }] } }], usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5 } }), { status: 200 });
+    });
+    expect((await result("step-1", "read it")).status).toBe(502); // 2 of the step's calls
+    expect((await result("step-1", "read it")).status).toBe(502); // 4
+    busy = false;
+    expect((await result("step-1", "read it")).status).toBe(200); // step 2 issued, on the 5th call
+    busy = true;
+    expect((await result("step-2", "edited")).status).toBe(502); // a new step: its own budget, not the 6th call of the old one
+    expect((await result("step-2", "edited")).status).toBe(502);
   });
 });

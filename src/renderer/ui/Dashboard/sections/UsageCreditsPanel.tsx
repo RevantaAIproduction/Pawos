@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { initiateRazorpayCreditsPayment } from './CreditsPaymentHandler';
 import { ipc } from '../../../services/ipc/ipcBridgeImplementation';
 import type { UsageCreditsPurchaseConfig } from '../../../../shared/billing/UsageBucketTypes';
+import { CreditsLimitSalesNote, creditsLimitMessage } from '../../billing/CreditsLimitSalesNote';
 
 interface UsageCreditsProps {
   userEmail: string;
@@ -49,6 +50,9 @@ export function UsageCreditsPanel({ userEmail, onPaymentComplete }: UsageCredits
   const inrAmount = config ? Math.round(amountUsd * config.usdInrRate) : 0;
   const purchasedPc = config ? Math.round(amountUsd * config.pcPerUsd) : 0;
 
+  // The amount asked for is over the most one purchase can be: the sales note is shown with the error.
+  const [overLimit, setOverLimit] = useState(false);
+
   const validateAmount = () => {
     if (!config) {
       setMessage(`[error] ${purchaseConfig && !purchaseConfig.ok ? purchaseConfig.reason : 'Credit purchases are unavailable right now.'}`);
@@ -59,9 +63,11 @@ export function UsageCreditsPanel({ userEmail, onPaymentComplete }: UsageCredits
       return false;
     }
     if (amountUsd > config.maxTopupUsd) {
-      setMessage(`[error] Maximum $${config.maxTopupUsd.toLocaleString()} per transaction`);
+      setMessage(`[error] ${creditsLimitMessage(config.maxTopupUsd)}`);
+      setOverLimit(true);
       return false;
     }
+    setOverLimit(false);
     setMessage(null);
     return true;
   };
@@ -127,7 +133,7 @@ export function UsageCreditsPanel({ userEmail, onPaymentComplete }: UsageCredits
           <input
             type="number"
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            onChange={(e) => { setAmount(e.target.value); setOverLimit(false); }}
             min={config?.minTopupUsd}
             max={config?.maxTopupUsd}
             step="1"
@@ -148,7 +154,7 @@ export function UsageCreditsPanel({ userEmail, onPaymentComplete }: UsageCredits
             {presets.map((p) => (
               <button
                 key={p}
-                onClick={() => setAmount(String(p))}
+                onClick={() => { setAmount(String(p)); setOverLimit(false); }}
                 style={{
                   padding: '6px 12px',
                   backgroundColor: amount === String(p) ? '#1967D2' : '#404040',
@@ -217,6 +223,7 @@ export function UsageCreditsPanel({ userEmail, onPaymentComplete }: UsageCredits
             {message}
           </p>
         )}
+        {overLimit && config && <CreditsLimitSalesNote maxUsd={config.maxTopupUsd} />}
       </div>
     );
   }

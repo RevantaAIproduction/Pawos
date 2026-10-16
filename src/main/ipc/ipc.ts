@@ -70,6 +70,16 @@ import type {
   NativeTierVerificationResult,
 } from '../../shared/billing/BillingTypes';
 import { ALL_RUNTIME_ENTITLEMENT_IDS } from '../../shared/billing/RuntimeCatalog';
+import { ImageGenerationClient, imageFileExtension, isImageId } from '../images/ImageGenerationClient';
+import { cancelExecution, inFlightAction, onCancelledExecutionSettled, waitUntilIdle } from '../execution/ExecutionCancellation';
+import { accountSession } from '../auth/AccountSession';
+import { withSignedInAccount } from './shellAccess';
+import type { ExecutionCancelResult } from '../../shared/actions/ExecutionLifecycle';
+import type { CodeChangeDiff, CodeChangeEvent, CodeChangeRevertResult, CodeChangeSummary } from '../../shared/actions/CodeChangeTypes';
+import { codeChangeStore } from '../execution/codeChanges/codeChangeStore';
+/** How long action:cancel waits for the running step to return before answering "still cancelling". */
+const CANCEL_CONFIRM_WAIT_MS = 15_000;
+import type { ImageAllowanceResult, ImageGenerateRequest, ImageGenerateResult, ImageSaveResult } from '../../shared/images/ImageGenerationTypes';
 import type { AiUsageCategory } from '../../shared/billing/AiUsageCategories';
 
 const PAWOS_BILLING_API_BASE_URL = 'https://pawos.revantaai.com';
@@ -195,6 +205,16 @@ export function registerIpc(opts: {
   ipcMain.handle('action:execute', (evt, request: ActionRequest) =>
     desktopExecutionEngine.execute(request, { pooledUsageRecorder: createRendererOrganizationUsageRecorder(evt.sender) })
   );
+  // Cancels exactly one execution's running work (its command / build process tree) and waits a
+  // bounded time for its running step to return. Never touches other executions or processes.
+  ipcMain.handle('action:cancel', async (_evt, executionId: unknown): Promise<ExecutionCancelResult> => {
+    if (typeof executionId !== 'string' || !/^[A-Za-z0-9-]{8,64}$/.test(executionId)) {
+      return { confirmed: false, hadRunningAction: false, runningActionType: null, stopped: 0, nonCancellable: false, stillRunning: null };
+    }
+    const cancelled = await cancelExecution(executionId);
+    const confirmed = await waitUntilIdle(executionId, CANCEL_CONFIRM_WAIT_MS);
+    return { ...cancelled, confirmed, stillRunning: confirmed ? null : inFlightAction(executionId) };
+  });
   ipcMain.handle('action:reportResult', (_evt, request: ActionRequest, result: ActionResult) =>
     desktopExecutionEngine.describeDone(request, result)
   );
@@ -202,21 +222,28 @@ export function registerIpc(opts: {
   // Phase 5 shared terminal: relays a remote helper's typed input into the
   // host's real local shell process, gated entirely client-side by the
   // `terminal` control grant before this is ever called.
-  ipcMain.handle('process:writeStdin', (_evt, processId: string, data: string) => processManager.writeStdin(processId, data));
+  // Typing into a shell is execution: a verified signed-in account only (see shellAccess.ts).
+  ipcMain.handle('process:writeStdin', (_evt, processId: string, data: string) =>
+    withSignedInAccount(() => processManager.writeStdin(processId, data))
+  );
 
   // Phase 5 shared terminal: spawns a real persistent interactive shell,
   // deliberately outside the AI-action allowlist (see ProcessManager's
   // startInteractiveShell doc comment) — gated by human-to-human Remote
   // Assistance consent, not the AI command allowlist.
-  ipcMain.handle('remoteAssistance:startSharedTerminal', (_evt, cwd: string, label: string) => processManager.startInteractiveShell(cwd, label));
+  ipcMain.handle('remoteAssistance:startSharedTerminal', (_evt, cwd: string, label: string) =>
+    withSignedInAccount(() => processManager.startInteractiveShell(cwd, label))
+  );
 
   // The chat's Terminal panel: the USER's own real PowerShell (they type every command themselves —
   // the AI never writes to it), same persistent shell as above. Starts in the open project folder, or
   // the home folder when none is open / the folder no longer exists.
-  ipcMain.handle('terminal:startUserShell', (_evt, cwd?: string) => {
-    const startIn = typeof cwd === 'string' && cwd && fs.existsSync(cwd) ? cwd : app.getPath('home');
-    return processManager.startInteractiveShell(startIn, 'PawOS terminal');
-  });
+  ipcMain.handle('terminal:startUserShell', (_evt, cwd?: string) =>
+    withSignedInAccount(() => {
+      const startIn = typeof cwd === 'string' && cwd && fs.existsSync(cwd) ? cwd : app.getPath('home');
+      return processManager.startInteractiveShell(startIn, 'PawOS terminal');
+    })
+  );
 
   // Ticket evidence image from the local cache, by evidence id only (never a path) — see EvidenceCaptureService.readImage.
   ipcMain.handle('evidence:readImage', (_evt, evidenceId: string) => (typeof evidenceId === 'string' ? evidenceCaptureService.readImage(evidenceId) : null));
@@ -249,6 +276,36 @@ export function registerIpc(opts: {
   // renderer upgrade a static "Installing…" narration message into a live one.
   desktopExecutionEngine.on('observation', (event) => {
     for (const win of BrowserWindow.getAllWindows()) win.webContents.send('workspace:observation', event);
+  });
+
+  // Live code changes (per task). Events carry metadata and counts only — never file content.
+  desktopExecutionEngine.on('codeChange', (event: CodeChangeEvent) => {
+    for (const win of BrowserWindow.getAllWindows()) win.webContents.send('workspace:codeChange', event);
+  });
+  const validExecutionId = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(value);
+  const validRelPath = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length < 2048 && !value.includes('\0');
+  ipcMain.handle('code-changes:list', (_evt, opts?: { limit?: unknown }): CodeChangeSummary[] => {
+    const limit = typeof opts?.limit === 'number' && opts.limit > 0 ? Math.min(opts.limit, 200) : 50;
+    return codeChangeStore().list({ limit });
+  });
+  ipcMain.handle('code-changes:get', (_evt, executionId: unknown): CodeChangeSummary | null => {
+    if (!validExecutionId(executionId)) return null;
+    const ledger = codeChangeStore().get(executionId);
+    return ledger ? codeChangeStore().summarize(ledger) : null;
+  });
+  ipcMain.handle('code-changes:diff', async (_evt, executionId: unknown, relPath: unknown, context?: unknown): Promise<CodeChangeDiff> => {
+    if (!validExecutionId(executionId) || !validRelPath(relPath)) {
+      return { ok: false, path: String(relPath ?? ''), status: null, reason: 'forbidden', message: 'Invalid request.' };
+    }
+    return codeChangeStore().diff(executionId, relPath, typeof context === 'number' && Number.isFinite(context) ? context : 3);
+  });
+  ipcMain.handle('code-changes:revert', async (_evt, executionId: unknown, relPath: unknown): Promise<CodeChangeRevertResult> => {
+    if (!validExecutionId(executionId) || !validRelPath(relPath)) {
+      return { ok: false, path: String(relPath ?? ''), reason: 'forbidden', message: 'Invalid request.' };
+    }
+    const result = await codeChangeStore().revert(executionId, relPath);
+    if (result.ok) for (const win of BrowserWindow.getAllWindows()) win.webContents.send('workspace:codeChange', result.event);
+    return result;
   });
 
   ipcMain.handle('assets:getAnimationsBaseUrl', () => toFileUrl(getAnimationsDir()));
@@ -1532,6 +1589,33 @@ export function registerIpc(opts: {
   // Restore reuse these same two handlers (a backup is just an export the
   // user chooses to keep; a restore is just an import of one) rather than
   // duplicating logic for a distinction that isn't actually different.
+  // Image generation: the PawOS server prices, charges, generates and stores every image (the same
+  // endpoint as PawOS Web). Desktop holds no model key — only the signed-in session is sent.
+  const imageClient = new ImageGenerationClient(PAWOS_BILLING_API_BASE_URL);
+  ipcMain.handle('images:allowance', async (_evt, accessToken: unknown): Promise<ImageAllowanceResult> =>
+    imageClient.allowance(typeof accessToken === 'string' ? accessToken : ''));
+  ipcMain.handle('images:generate', async (_evt, request: unknown, accessToken: unknown): Promise<ImageGenerateResult> =>
+    imageClient.generate(typeof accessToken === 'string' ? accessToken : '', request as ImageGenerateRequest));
+  ipcMain.handle('images:save', async (evt, imageId: unknown, accessToken: unknown): Promise<ImageSaveResult> => {
+    if (!isImageId(imageId) || typeof accessToken !== 'string' || !accessToken) return { ok: false, canceled: false, message: "That image can't be saved." };
+    const image = await imageClient.readImage(accessToken, imageId);
+    if (!image) return { ok: false, canceled: false, message: "Couldn't load the image to save it. Try again." };
+    const win = BrowserWindow.fromWebContents(evt.sender) ?? undefined;
+    const extension = imageFileExtension(image.mimeType);
+    const options: Electron.SaveDialogOptions = {
+      defaultPath: `pawos-image-${imageId.slice(0, 8)}.${extension}`,
+      filters: [{ name: 'Image', extensions: [extension] }],
+    };
+    const result = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
+    if (result.canceled || !result.filePath) return { ok: false, canceled: true };
+    try {
+      await fs.promises.writeFile(result.filePath, image.bytes);
+      return { ok: true, filePath: result.filePath };
+    } catch {
+      return { ok: false, canceled: false, message: "Couldn't save the image there. Choose another folder." };
+    }
+  });
+
   ipcMain.handle('companion:exportPackage', async (evt, input: CompanionPackageInput, suggestedName: string) => {
     const win = BrowserWindow.fromWebContents(evt.sender) ?? undefined;
     const options: Electron.SaveDialogOptions = { defaultPath: `${suggestedName}.paw`, filters: [{ name: 'PawOS Companion', extensions: ['paw'] }] };
@@ -1613,11 +1697,37 @@ export function registerIpc(opts: {
   // Work History — one already-finished ExecutionRecord per write, built by
   // the renderer's ExecutionSupervisor as a user request completes. Read-only
   // from here on (list), same shape as the sessions:* channels above.
+  // Work History is per account: the owner is the account the main process verified (never a value
+  // from the renderer), and reads return only that account's records.
   ipcMain.handle('execution:record', (_evt, record: ExecutionRecord) => {
-    executionMemoryStore.record(record);
+    if (!record || typeof record.id !== 'string') return;
+    // A stale (older-revision) write, or one for another account's record, changes nothing and announces nothing.
+    if (!executionMemoryStore.record(record, accountSession.verifiedUserId)) return;
+    for (const win of BrowserWindow.getAllWindows()) win.webContents.send('execution:updated', record.id);
+  });
+  ipcMain.handle('execution:list', () => executionMemoryStore.list(accountSession.verifiedUserId));
+  ipcMain.handle('execution:get', (_evt, id: unknown) =>
+    typeof id === 'string' ? executionMemoryStore.get(id, accountSession.verifiedUserId) ?? null : null
+  );
+
+  // The signed-in session, from the renderer's Supabase client (sign-in, every token refresh,
+  // sign-out → null). Main verifies the token with Supabase Auth itself; the account it learns scopes
+  // Work History and file-change records. Only a token crosses IPC — never a claimed account id.
+  ipcMain.handle('account:setSession', async (_evt, accessToken: unknown): Promise<{ signedIn: boolean }> => {
+    const token = typeof accessToken === 'string' && accessToken.length > 0 && accessToken.length < 8192 ? accessToken : null;
+    const userId = await accountSession.update(token);
+    return { signedIn: userId !== null };
+  });
+  accountSession.on('changed', () => {
+    // A different account (or none): every per-account view reloads from scratch.
     for (const win of BrowserWindow.getAllWindows()) win.webContents.send('execution:updated');
   });
-  ipcMain.handle('execution:list', () => executionMemoryStore.list());
+
+  // A cancelled execution whose last running step has now really returned: the renderer can confirm
+  // the cancellation it had to leave as "Cancelling".
+  onCancelledExecutionSettled((executionId) => {
+    for (const win of BrowserWindow.getAllWindows()) win.webContents.send('action:cancelSettled', executionId);
+  });
 
   // Browser Capabilities dashboard page — read-only, direct from
   // BrowserRuntime (same source of truth every browser plugin's

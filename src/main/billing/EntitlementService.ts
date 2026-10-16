@@ -43,11 +43,12 @@ const AI_MODELS: PawModelId[] = [
 ];
 
 /**
- * The Think-vs-Execute boundary (Paw Go = Think only, Pro+ = Think + Execute) — the actual
- * enforcement point is DesktopExecutionEngine.execute(), which refuses every
- * CODING_EXECUTION_ACTION_TYPES/INFRA_EXECUTION_ACTION_TYPES request unless this feature is
- * available, clamping CodingModeStore/InfraModeStore's local safety toggles by the real tier
- * rather than leaving them as free, billing-independent switches.
+ * The Think-vs-Execute boundary — the actual enforcement point is DesktopExecutionEngine.execute(),
+ * which refuses every CODING_EXECUTION_ACTION_TYPES/INFRA_EXECUTION_ACTION_TYPES request without a
+ * verified signed-in account, or unless 'advancedRuntimes' is available, clamping
+ * CodingModeStore/InfraModeStore's local safety toggles by the real tier rather than leaving them as
+ * free, billing-independent switches. Since 406663d GO_FEATURES includes 'advancedRuntimes' (Paw Go
+ * may execute; the local Coding mode switch decides) — see EntitlementService.test.ts.
  *
  * Mobile Presence follows the same Go-vs-Pro boundary: Paw Go gets none of
  * mobilePairing/crossDeviceSync/mobileNotifications (no phone pairing, no
@@ -219,13 +220,13 @@ export const PLAN_DERIVED_RUNTIME_ENTITLEMENTS: Record<SubscriptionTierId, Runti
  * — monthlyCreditLimit is resolved dynamically from UsageQuotaConfigStore's
  * single 'aiReasoning' config in getEntitlements() below, never stored
  * statically here). No runtime should hard-code a tier/feature check of its
- * own — everything goes through EntitlementService below. Paw Go is "Think,
- * not Execute" — real AI model access for investigation/analysis/planning
- * (paw-flash, the cheapest reasoning model), a real but capped credit pool,
- * and every CODING_EXECUTION_ACTION_TYPES/INFRA_EXECUTION_ACTION_TYPES
- * request refused (see DesktopExecutionEngine.execute()'s 'advancedRuntimes'
- * check) — not the previous "zero AI models, zero AI credits" design,
- * which the Intelligence Layer architecture explicitly reversed.
+ * own — everything goes through EntitlementService below. Paw Go has real
+ * AI model access for investigation/analysis/planning (paw-flash, the
+ * cheapest reasoning model) and a real but capped credit pool — not the
+ * previous "zero AI models, zero AI credits" design, which the Intelligence
+ * Layer architecture explicitly reversed — and, since 406663d, the
+ * 'advancedRuntimes' feature and the Coding Runtime (see GO_FEATURES and
+ * PLAN_DERIVED_RUNTIME_ENTITLEMENTS).
  */
 const TIER_ENTITLEMENTS: Record<SubscriptionTierId, Omit<TierEntitlements, 'monthlyCreditLimit' | 
 'weeklyCreditLimit' | 'seatTier'>> = {

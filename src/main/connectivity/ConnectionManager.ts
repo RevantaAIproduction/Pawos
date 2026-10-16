@@ -3,6 +3,8 @@ import { connectorRegistry } from './ConnectorRegistry';
 import type { ConnectorConnection, ConnectorStatus, ConnectivityScope } from '../../shared/connectivity/ConnectivityTypes';
 import { connectorLifecycleToConnectionStatus } from '../../shared/connectivity/ConnectivityTypes';
 import { credentialVaultBridge } from './CredentialVaultBridge';
+import { accountSession } from '../auth/AccountSession';
+import { assertCurrentAccountOperation, bindToAccountEpoch, isStaleAccountOperation } from './accountEpoch';
 import { persistCredentialViaRenderer, revokeCredentialViaRenderer } from './RendererConnectivityCredentialBridge';
 import { probeConnectorMcp } from './mcp/ConnectorMcpServers';
 import { isMcpCredentialId, mcpCredentialId } from '../../shared/connectivity/McpProviders';
@@ -35,6 +37,31 @@ class ConnectionManager {
   /** The app window that last connected or restored a credential — the only route to the durable
    *  store (see RendererConnectivityCredentialBridge), reused when a refreshed token needs persisting. */
   private credentialPersistSender: WebContents | undefined;
+  // Each call (connect, restore, persisting a refreshed credential…) runs as one operation of the
+  // account signed in when it started — see connectivity/accountEpoch.ts.
+  private readonly accountEpochBinding = bindToAccountEpoch(this);
+
+  /** Forgets every live connection (the signed-in account changed). Stored credentials are untouched. */
+  forgetAll(): void {
+    this.connections.clear();
+  }
+
+  /**
+   * An operation started for `scope` finished after the signed-in account changed: drop whatever
+   * the connector picked up for the old account and fail, instead of activating it for the new one.
+   */
+  private assertStillSignedIn(connectorId: string, scope: ConnectivityScope): void {
+    // The same account signed out and back in meanwhile is a new session too (a stale operation).
+    if (accountSession.verifiedUserId === scope.userId && !isStaleAccountOperation()) return;
+    // A stale operation leaves everything alone: the account change already cleared this session's
+    // state, and the record and connector may now belong to a newer session (even the same
+    // account's, restored again since). Only a mismatch within the current session is cleaned up.
+    if (!isStaleAccountOperation()) {
+      connectorRegistry.get(connectorId)?.forgetLocalSession?.();
+      this.connections.delete(this.connectionId(connectorId, scope));
+    }
+    throw new Error(`The signed-in account changed while connecting '${connectorId}'. Nothing was kept.`);
+  }
 
   private connectionId(connectorId: string, scope: ConnectivityScope): string {
     return `${connectorId}::${scopeKey(scope)}`;
@@ -63,6 +90,7 @@ class ConnectionManager {
     }
     if (sender) this.credentialPersistSender = sender;
     const connection = await sdk.connect(scope, opts);
+    this.assertStillSignedIn(connectorId, scope);
     this.connections.set(this.connectionId(connectorId, scope), connection);
 
     if (sender && !sender.isDestroyed()) {
@@ -94,6 +122,15 @@ class ConnectionManager {
     }
     const stored = await credentialVaultBridge.read(connectorId, scope);
     if (!stored) return false;
+    // The window writes as whichever account ITS session is — which, mid-switch, may already be the
+    // next account while this process still has the previous one verified. So: only once every
+    // sign-in already sent has been verified, and only if the account is still this session's
+    // (a sign-in verified meanwhile — another account, or the same one again — makes this stale).
+    await accountSession.whenSettled();
+    if (isStaleAccountOperation()) {
+      console.error(`[ConnectionManager] Not persisting the credential for '${connectorId}': the signed-in account changed.`);
+      return false;
+    }
     const result = await persistCredentialViaRenderer(sender, scope, connectorId, stored.authMethod, stored.secret, {
       refreshToken: stored.refreshToken,
       expiresAt: stored.expiresAt,
@@ -109,6 +146,9 @@ class ConnectionManager {
     if (!connection) return;
     const sdk = connectorRegistry.get(connection.connectorId);
     if (sdk) await sdk.disconnect(connection.scope);
+    // Each step below runs only while the account that asked is still the signed-in session —
+    // otherwise the record, the stored copy and the MCP sign-in may now be a newer session's.
+    assertCurrentAccountOperation(`disconnecting '${connection.connectorId}'`);
     this.connections.delete(this.connectionId(connection.connectorId, connection.scope));
     if (sender && !sender.isDestroyed()) {
       const result = await revokeCredentialViaRenderer(sender, connection.scope, connection.connectorId);
@@ -119,7 +159,9 @@ class ConnectionManager {
     // A connector's separate MCP sign-in does not outlive the connector.
     const mcpId = mcpCredentialId(connection.connectorId);
     if (await credentialVaultBridge.read(mcpId, connection.scope)) {
+      assertCurrentAccountOperation(`disconnecting '${connection.connectorId}'`);
       await credentialVaultBridge.revoke(mcpId, connection.scope);
+      assertCurrentAccountOperation(`disconnecting '${connection.connectorId}'`);
       if (sender) this.credentialPersistSender = sender;
       await this.revokeStoredCredential(mcpId, connection.scope);
     }
@@ -197,6 +239,7 @@ class ConnectionManager {
     if (sender) this.credentialPersistSender = sender;
     await sdk.authenticate(scope, credential);
     await sdk.refresh(scope).catch(() => {});
+    this.assertStillSignedIn(connectorId, scope);
     const status = await sdk.getStatus(scope);
     if (status.state === 'connected') {
       // Prefer the vault copy (a connector that just refreshed has rotated it); fall back to what was restored.
@@ -211,6 +254,8 @@ class ConnectionManager {
   }
 
   private upsertFromStatus(connectorId: string, scope: ConnectivityScope, status: ConnectorStatus): ConnectorConnection {
+    // A status read or restore that finished after the account changed: its result is not this session's.
+    assertCurrentAccountOperation(`recording the status of '${connectorId}'`);
     const key = this.connectionId(connectorId, scope);
     const existing = this.connections.get(key);
     const updated: ConnectorConnection = {
@@ -238,8 +283,16 @@ class ConnectionManager {
       throw new Error(`Cannot check health — connector '${connection.connectorId}' is no longer registered.`);
     }
     const result = await sdk.health(connection.scope);
-    const updated: ConnectorConnection = { ...connection, healthStatus: result.status, lastHealthCheckAt: Date.now() };
-    this.connections.set(this.connectionId(connection.connectorId, connection.scope), updated);
+    // Recorded only on the record as it is NOW, in the session that asked: never on one that was
+    // removed meanwhile, never as an earlier snapshot over newer status, never after an account change.
+    assertCurrentAccountOperation(`checking the health of '${connection.connectorId}'`);
+    const key = this.connectionId(connection.connectorId, connection.scope);
+    const current = this.connections.get(key);
+    if (!current || current.id !== connection.id) {
+      throw new Error(`Cannot check health — the connection '${connectionId}' was removed while it was being checked.`);
+    }
+    const updated: ConnectorConnection = { ...current, healthStatus: result.status, lastHealthCheckAt: Date.now() };
+    this.connections.set(key, updated);
     return updated;
   }
 

@@ -2,12 +2,15 @@ import { execFileSync } from "node:child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runLocalGit, type LocalGit } from "../git/localRepository";
 import type { AgentTurnRequest, AgentTurnResponse, ToolCall, ToolResult } from "../shared";
 import { GIT_DECLINED, runLocalTask } from "./agent";
 import { branchProblem, prepareGit, withoutCredentials, type GitPlan } from "./gitChanges";
 import { openWorkspace, type Workspace } from "./workspace";
+
+// Real Git on Windows takes seconds per test, more under a full parallel run: the 5-second default is too tight.
+vi.setConfig({ testTimeout: 30_000 });
 
 /**
  * The Git tools: git_add, git_commit, git_branch, git_checkout and git_push. Each runs against a

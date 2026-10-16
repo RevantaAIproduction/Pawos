@@ -1,12 +1,15 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AGENT_CLIENT_LIMITS, type AgentTurnRequest, type AgentTurnResponse, type ToolCall } from "../shared";
 import { DECLINED, runLocalTask } from "./agent";
 import { DELETE_ENTRIES, PREVIEW_LINES, applyChange, boundedDiff, prepareChange, previewText, type Proposal } from "./changes";
 import { executeTool } from "./tools";
 import { openWorkspace, resolveForChange, type Workspace } from "./workspace";
+
+// Many real files on Windows takes seconds per test, more under a full parallel run: the 5-second default is too tight.
+vi.setConfig({ testTimeout: 30_000 });
 
 /**
  * The tools that change the project: write_file, edit_file and delete_path. Run in a throwaway

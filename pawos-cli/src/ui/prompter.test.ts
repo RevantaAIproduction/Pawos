@@ -1,6 +1,6 @@
 import { PassThrough } from "stream";
 import { afterEach, describe, expect, it } from "vitest";
-import { CONTINUE_PROMPT, PASTE_WINDOW_MS, createPrompter, type Prompter } from "./prompts";
+import { CONTINUE_PROMPT, PASTE_WINDOW_MS, TYPED_AHEAD_IGNORED, TYPED_AHEAD_KEPT, createPrompter, typedAheadKeptOf, type Prompter } from "./prompts";
 
 /**
  * Typing into PawOS. One message can be several lines: a pasted task stays in one piece, and a line
@@ -222,5 +222,139 @@ describe("piped input", () => {
     const prompter = piped("only this \\\n");
     expect(await prompter.ask("> ")).toBe("only this ");
     expect(await prompter.ask("> ")).toBeNull();
+  });
+});
+
+/**
+ * Typed while PawOS works. No question is open then, so nothing would read the keyboard: a real
+ * console keeps those keys, unechoed (typing seems to do nothing), and hands them all to the next
+ * question — where a "y" and Enter pressed early would answer an approval nobody saw. PawOS reads
+ * them itself instead, as lines: the main prompt offers the next one on its input line, unsent;
+ * every other question leaves them waiting and says so. Ctrl+C is still an interrupt.
+ */
+describe("typed while PawOS works", () => {
+  function console() {
+    const input = new PassThrough() as PassThrough & { isTTY?: boolean; isRaw?: boolean; setRawMode?: (raw: boolean) => unknown };
+    input.isTTY = true;
+    input.isRaw = false;
+    input.setRawMode = (raw: boolean) => {
+      input.isRaw = raw;
+      return input;
+    };
+    const output = new PassThrough();
+    let shown = "";
+    output.on("data", (data) => (shown += data.toString()));
+    let interrupts = 0;
+    const prompter = createPrompter(input, output, { onInterrupt: () => (interrupts += 1) });
+    open.push(prompter);
+    return { input, type: (text: string) => input.write(text), prompter, shown: () => shown, interrupts: () => interrupts };
+  }
+  /** One question answered, so PawOS is now "working" (no question open). */
+  async function working(t: ReturnType<typeof console>) {
+    const first = t.prompter.ask("  > ");
+    t.type("build the storefront\r");
+    expect(await first).toBe("build the storefront");
+    await sleep(5);
+  }
+
+  it("a y and Enter typed early never answer an approval: the question waits for a fresh answer", async () => {
+    const t = console();
+    await working(t);
+    t.type("y\r"); // pressed while the model was thinking
+    await sleep(20);
+    const approval = t.prompter.ask("  Allow this change? [y] allow  [n] deny  [a] always allow\n\n  > ");
+    let settled = false;
+    void approval.then(() => (settled = true));
+    await sleep(PASTE_WINDOW_MS * 4);
+    expect(settled).toBe(false);
+    expect(t.shown()).toContain(TYPED_AHEAD_IGNORED);
+    t.type("n\r");
+    expect(await approval).toBe("n");
+    // The early "y" was not lost or used: it waits, visibly, at the main prompt.
+    const main = t.prompter.ask("  > ", { keepTypedAhead: true });
+    await sleep(PASTE_WINDOW_MS * 2);
+    t.type("\r");
+    expect(await main).toBe("y");
+  });
+
+  it("the main prompt puts what was typed back on its input line — shown, editable, and sent only on Enter", async () => {
+    const t = console();
+    await working(t);
+    t.type("now add a checkout page\r"); // even with Enter, nothing is sent while PawOS works
+    await sleep(20);
+    const next = t.prompter.ask("  > ", { keepTypedAhead: true });
+    let settled = false;
+    void next.then(() => (settled = true));
+    await sleep(PASTE_WINDOW_MS * 4);
+    expect(settled).toBe(false);
+    expect(t.shown()).toContain(TYPED_AHEAD_KEPT);
+    expect(t.shown()).toContain("now add a checkout page");
+    t.type(" with a total\r");
+    expect(await next).toBe("now add a checkout page with a total");
+  });
+
+  it("two lines typed ahead stay two messages: one per main prompt, each sent only on Enter", async () => {
+    const t = console();
+    await working(t);
+    t.type("/mode auto\rbuild the project\rand the rest");
+    await sleep(20);
+    const first = t.prompter.ask("  > ", { keepTypedAhead: true });
+    await sleep(PASTE_WINDOW_MS * 2);
+    expect(t.shown()).toContain(typedAheadKeptOf(2));
+    t.type("\r");
+    expect(await first).toBe("/mode auto");
+    const second = t.prompter.ask("  > ", { keepTypedAhead: true });
+    await sleep(PASTE_WINDOW_MS * 2);
+    expect(t.shown()).toContain(typedAheadKeptOf(1));
+    t.type("\r");
+    expect(await second).toBe("build the project");
+    const third = t.prompter.ask("  > ", { keepTypedAhead: true });
+    await sleep(PASTE_WINDOW_MS * 2);
+    t.type(" now\r");
+    expect(await third).toBe("and the rest now");
+  });
+
+  it("keeps Unicode, spaces and Windows paths; Backspace edits; arrow keys are dropped", async () => {
+    const t = console();
+    await working(t);
+    t.type("open C:\Users\A B\ünïcödé.txtX\b\u001b[D\u001b[C");
+    await sleep(20);
+    const next = t.prompter.ask("  > ", { keepTypedAhead: true });
+    await sleep(PASTE_WINDOW_MS * 2);
+    t.type("\r");
+    expect(await next).toBe("open C:\Users\A B\ünïcödé.txt");
+  });
+
+  it("Ctrl+C while PawOS works is an interrupt, and what was typed before it is dropped", async () => {
+    const t = console();
+    await working(t);
+    t.type("half a thought");
+    t.type(String.fromCharCode(3));
+    await sleep(10);
+    expect(t.interrupts()).toBe(1);
+    const next = t.prompter.ask("  > ", { keepTypedAhead: true });
+    await sleep(PASTE_WINDOW_MS * 2);
+    expect(t.shown()).not.toContain(TYPED_AHEAD_KEPT);
+    t.type("fresh\r");
+    expect(await next).toBe("fresh");
+  });
+
+  it("between questions PawOS reads the keyboard itself; closing hands the console back in its normal mode", async () => {
+    const t = console();
+    await working(t);
+    expect(t.input.isRaw).toBe(true); // Ctrl+C and Enter arrive as keys, not to the console's own line editing
+    expect(t.input.listenerCount("data")).toBeGreaterThan(0);
+    t.prompter.close();
+    expect(t.input.isRaw).toBe(false);
+    expect(t.input.isPaused()).toBe(true);
+  });
+
+  it("nothing typed ahead: the question is asked exactly as before", async () => {
+    const t = console();
+    await working(t);
+    const next = t.prompter.ask("  Allow this command? [y] allow  [n] deny\n\n  > ");
+    t.type("y\r");
+    expect(await next).toBe("y");
+    expect(t.shown()).not.toContain(TYPED_AHEAD_IGNORED);
   });
 });

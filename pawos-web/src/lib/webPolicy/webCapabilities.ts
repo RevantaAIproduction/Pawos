@@ -29,6 +29,7 @@ export type WebCapabilityId =
   | "web.continueInDesktop"
   | "web.codeChanges"
   | "web.localAgent"
+  | "web.imageGeneration"
   | "web.remoteWork"
   | "web.autonomousWork"
   | "web.browserWork";
@@ -125,6 +126,13 @@ export const WEB_CAPABILITY_RULES: readonly WebCapabilityRule[] = [
     description: "Work on a project on your own computer through the PawOS CLI. The same plans that include working on files in PawOS Desktop.",
     availability: "available",
     tiers: PAID_TIERS,
+  },
+  {
+    id: "web.imageGeneration",
+    label: "Image generation",
+    description: "Generate an image from a description. Paw Go: 3 free images, then purchased credits; paid plans: 9.7 PC per image; Enterprise: 1 unit of the shared usage.",
+    availability: "available",
+    tiers: ALL_TIERS,
   },
   { id: "web.remoteWork", label: "Remote work sessions", description: "Run work in an isolated remote workspace.", availability: "future", tiers: [] },
   { id: "web.autonomousWork", label: "Autonomous Work", description: "Resolve tickets end to end from the web.", availability: "future", tiers: [] },

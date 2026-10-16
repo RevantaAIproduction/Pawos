@@ -8,6 +8,8 @@ export function TaskDetailView({ task }: { task: ConversationTaskRecord }) {
     failed: '#ff6262',
     interrupted: '#ffa500',
     stopped: '#999',
+    cancelling: '#ffa500',
+    cancelled: '#999',
   }[task.status];
 
   return (

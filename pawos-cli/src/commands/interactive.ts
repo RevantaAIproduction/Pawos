@@ -416,7 +416,8 @@ async function followLocalTask(ctx: CliContext, workspace: Workspace, branch: st
       },
       background: ctx.background,
       sleep: ctx.sleep,
-      onRetry: (attempt, of) => live.update([], `PawOS's model is busy — trying again (${attempt} of ${of})${term.glyphs.ellipsis}`),
+      onRetry: (attempt, of, why) =>
+        live.update([], why === "cutOff" ? `PawOS's reply was cut off — asking for a smaller step (${attempt} of ${of})${term.glyphs.ellipsis}` : `PawOS's model is busy — trying again (${attempt} of ${of})${term.glyphs.ellipsis}`),
       readOnly: limits.readOnly === true,
       lookOnly: limits.lookOnly === true,
       approveOpen: async (url) => {
@@ -698,7 +699,8 @@ async function workspaceSession(ctx: CliContext, options: { signIn?: boolean } =
           ? [line("  ", seg(`Chat. /code to make changes in ${clean(code.repository, 200)}.`, "muted")), blank()]
           : [];
     term.print([line("  ", ...term.rule()), blank(), line("  ", seg(QUESTION, "strong")), blank(), ...hint]);
-    const answer = await ctx.prompter.ask(`  ${term.glyphs.prompt} `);
+    // The one question that keeps what was typed while PawOS worked (put back on the line, not sent).
+    const answer = await ctx.prompter.ask(`  ${term.glyphs.prompt} `, { keepTypedAhead: true });
     if (answer === null) {
       // Ctrl+C at the prompt discards what was being typed, submits nothing, and asks before leaving.
       if (ctx.prompter.interrupted && !(await leaving())) continue;

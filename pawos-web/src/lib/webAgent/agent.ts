@@ -41,13 +41,109 @@ interface TaskState {
 const tasks = new Map<string, TaskState>();
 const keyOf = (userId: string, taskId: string) => `${userId}:${taskId}`;
 
+/**
+ * What it has cost so far to get the step a task is waiting for: its replies cut off at the output
+ * limit, its tries running out of time, and every call made to the provider for it — across all the
+ * times the client has sent it. Kept apart from the task (a first turn that produced no step is
+ * forgotten, so it can be started again); a new step starts a new record.
+ */
+interface Strain {
+  /** Which step it is about: the number of steps the task had when it was asked for. */
+  step: number;
+  cutOffs: number;
+  timeouts: number;
+  /** Calls made to the provider for this step, answered or not. */
+  providerCalls: number;
+  /** Sends of this step that came back without a step (busy, timed out, unusable, cut off). */
+  failures: number;
+  /** When the first of those happened: the step's retry window starts there. */
+  firstFailureAt: number | null;
+  touchedAt: number;
+}
+const strains = new Map<string, Strain>();
+
+/**
+ * A step whose reply was cut off is asked for again — smaller — this many times. One more cut-off
+ * and the task stops (step_too_large): asking the same thing again would only cost more.
+ */
+export const AGENT_CUTOFF_RETRIES = 2;
+
+/**
+ * One budget for getting one step, shared by everything that retries on the way — the client
+ * sending the same turn again, and this service asking the provider again inside a turn. Held here,
+ * so it holds whichever client (and version) is sending:
+ *   - at most STEP_PROVIDER_CALLS calls to the provider for the step, in all;
+ *   - at most TURN_PROVIDER_CALLS of them in one send (inside the turn's own deadline);
+ *   - nothing more once STEP_RETRY_WINDOW_MS have passed since the step first failed.
+ * When it is spent the step fails for good (model_retries_exhausted) instead of being retried.
+ */
+export const STEP_PROVIDER_CALLS = 6;
+export const TURN_PROVIDER_CALLS = 2;
+export const STEP_RETRY_WINDOW_MS = 150_000;
+/** The wait suggested to the client before it sends the step again: exponential, capped, jittered. */
+export const RESEND_BASE_MS = 2_000;
+export const RESEND_MAX_MS = 30_000;
+/** A wait the provider asks for is passed on up to this; a longer one ends the step instead. */
+export const RESEND_PROVIDER_MAX_MS = 60_000;
+/** After a cut-off the provider isn't busy: the smaller step can be asked for almost at once. */
+export const RESEND_AFTER_CUTOFF_MS = 1_000;
+
+/** Randomness for the jitter, replaceable in tests. */
+export const agentClock = { random: () => Math.random() };
+
+/**
+ * How long the client should wait before sending this step again, or null when the step's budget
+ * has no room for another send (calls spent, window over, or a wait that would run past it).
+ */
+function resendWait(strain: Strain, now: number, why: "busy" | "cutOff", providerAsked?: number): number | null {
+  if (strain.providerCalls >= STEP_PROVIDER_CALLS) return null;
+  const windowEnds = (strain.firstFailureAt ?? now) + STEP_RETRY_WINDOW_MS;
+  if (providerAsked !== undefined && providerAsked > RESEND_PROVIDER_MAX_MS) return null;
+  const backoff = Math.min(RESEND_MAX_MS, RESEND_BASE_MS * 2 ** Math.max(0, strain.failures - 1));
+  const wait = why === "cutOff" ? RESEND_AFTER_CUTOFF_MS : providerAsked ?? Math.round(backoff * (0.5 + 0.5 * agentClock.random()));
+  return now + wait < windowEnds ? wait : null;
+}
+
+/** The step failed for good: the budget for asking again is spent. */
+function retriesExhausted(): WebChatError {
+  return new WebChatError(
+    "model_retries_exhausted",
+    "PawOS stopped: its model didn't answer this step in any of the tries it allows, so the task ended here. Nothing from that step was run; everything done before it is kept. Try again in a few minutes.",
+    503
+  );
+}
+
 /** Test-only: forget every task. */
 export function resetAgentTasks(): void {
   tasks.clear();
+  strains.clear();
 }
 
 function forgetIdle(now: number): void {
   for (const [key, task] of tasks) if (now - task.touchedAt > AGENT_SERVER_LIMITS.idleMs) tasks.delete(key);
+  for (const [key, strain] of strains) if (now - strain.touchedAt > AGENT_SERVER_LIMITS.idleMs) strains.delete(key);
+}
+
+function strainOn(key: string, step: number, now: number): Strain {
+  const known = strains.get(key);
+  const strain = known && known.step === step ? known : { step, cutOffs: 0, timeouts: 0, providerCalls: 0, failures: 0, firstFailureAt: null, touchedAt: now };
+  strain.touchedAt = now;
+  strains.set(key, strain);
+  return strain;
+}
+
+/** What the model is told when its last try at this step didn't come back whole. */
+function strainNote(strain: Strain | undefined, step: number): string {
+  if (!strain || strain.step !== step) return "";
+  const lines: string[] = [];
+  if (strain.cutOffs > 0) {
+    lines.push(
+      `Your last ${strain.cutOffs === 1 ? "reply" : `${strain.cutOffs} replies`} for this step ${strain.cutOffs === 1 ? "was" : "were"} cut off: ${strain.cutOffs === 1 ? "it" : "they"} did not fit in the reply limit, so nothing was run. Make this step much smaller.`,
+      "Write at most about 80 lines in one write_file. Split a large file into several smaller files (data, each component, styles), or write a short first version and add the rest with further edit_file steps. Keep the note short."
+    );
+  }
+  if (strain.timeouts > 0) lines.push("Your last try at this step took too long and was stopped. Choose a step you can answer quickly; keep any file you write short.");
+  return lines.join("\n");
 }
 
 const TOOL_GUIDE = [
@@ -117,14 +213,15 @@ function transcript(task: TaskState): string {
   return shown.join("\n\n");
 }
 
-function userTurn(task: TaskState, mustFinish: boolean): string {
+function userTurn(task: TaskState, mustFinish: boolean, strain?: Strain): string {
   const { workspace } = task;
   return [
     `Project: ${workspace.name}${workspace.branch ? ` (branch ${workspace.branch})` : ""}`,
     `Files${workspace.filesTruncated ? " (the first of many — use list_files for more)" : ""}:\n${workspace.files.join("\n") || "(none listed)"}`,
     `Task:\n${task.goal}`,
     task.steps.length > 0 ? `What you have done so far:\n\n${transcript(task)}` : "You have not looked at anything yet.",
-    mustFinish ? 'You have no steps left. Reply now with {"tool": "finish", "args": {"summary": "..."}} giving what you found.' : "",
+    strainNote(strain, task.steps.length),
+    mustFinish ?'You have no steps left. Reply now with {"tool": "finish", "args": {"summary": "..."}} giving what you found.' : "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -199,18 +296,74 @@ export async function agentTurn(account: AccountContext, rawBody: unknown, now: 
   // 3. One model call, on the plan's allowance (reserved before, settled after — or refused with 402).
   const mustFinish = task.turns >= limits.turns - 1;
   const model = changeModel(account, isWebUsageMetered(account), `agent-${parsed.taskId}`);
+  const step = task.steps.length;
+  const prior = strains.get(key);
+  const known = prior && prior.step === step ? prior : undefined;
+  // The step's budget (see STEP_PROVIDER_CALLS): spent, and nothing more is asked of the provider.
+  const callsLeft = STEP_PROVIDER_CALLS - (known?.providerCalls ?? 0);
+  if (callsLeft <= 0 || (known?.firstFailureAt != null && now - known.firstFailureAt >= STEP_RETRY_WINDOW_MS)) {
+    sameTurnAgain();
+    // Kept, so sending the same step again is refused at once — whichever client sends it.
+    throw retriesExhausted();
+  }
   task.turns += 1;
+  let calls = 0;
   let reply;
   try {
-    reply = await model(`turn-${task.turns}`, { system: SYSTEM_PROMPT, contents: [{ role: "user", parts: [{ text: userTurn(task, mustFinish) }] }], maxOutputTokens: AGENT_TURN_OUTPUT_TOKENS, json: true, timeoutMs: AGENT_TURN_TIMEOUT_MS });
+    reply = await model(`turn-${task.turns}`, { system: SYSTEM_PROMPT, contents: [{ role: "user", parts: [{ text: userTurn(task, mustFinish, known) }] }], maxOutputTokens: AGENT_TURN_OUTPUT_TOKENS, json: true, timeoutMs: AGENT_TURN_TIMEOUT_MS, thinking: "low", attempts: Math.min(TURN_PROVIDER_CALLS, callsLeft), onAttempt: () => void (calls += 1) });
   } catch (error) {
     // The turn didn't happen. A start that never got its first step is forgotten, so it can be started again.
     task.turns -= 1;
     sameTurnAgain();
-    throw error;
+    if (!(error instanceof WebChatError) || error.code !== "model_unavailable") throw error;
+    // The provider refused the request itself (a bad request, key or model — not a busy one): sending
+    // it again would fail the same way. Final, as a status no client sends again.
+    if (/^model_http_4\d\d$/.test(error.detail ?? "") && error.detail !== "model_http_429") {
+      throw new WebChatError("model_unavailable", "PawOS couldn't use its model for this step — a problem on PawOS's side that waiting won't fix. The task stopped here; everything done before it is kept.", 500, error.detail);
+    }
+    const strain = strainOn(key, step, now);
+    strain.providerCalls += calls;
+    strain.failures += 1;
+    strain.firstFailureAt ??= now;
+    // A try that ran out of time: the next try at this step is told to keep it small.
+    if (error.detail === "model_timeout") strain.timeouts += 1;
+    const wait = resendWait(strain, now, "busy", error.retryAfterMs);
+    if (wait === null) {
+      throw retriesExhausted();
+    }
+    throw new WebChatError(error.code, error.message, error.status, error.detail, wait);
   }
 
-  // 4. The model's choice, held to the contract. The service decides nothing about what is safe to
+  // 4. A reply the provider stopped at the output limit is incomplete, whatever it looks like: never
+  //    passed on, never repaired, never run. The task stays exactly where it was — no step is added,
+  //    nothing already run is asked for again — and the same step is asked for again, smaller, a
+  //    bounded number of times.
+  if (reply.finishReason === "MAX_TOKENS") {
+    sameTurnAgain();
+    const strain = strainOn(key, step, now);
+    strain.cutOffs += 1;
+    strain.providerCalls += calls;
+    strain.failures += 1;
+    strain.firstFailureAt ??= now;
+    // Sizes and the provider's fixed word only — never the reply itself, which may hold the user's code.
+    console.error(`[web-agent] reply cut off at the output limit: ${reply.text.length} characters, ${reply.usage.candidatesTokens} reply and ${reply.usage.thoughtsTokens} reasoning tokens (cut-off ${strain.cutOffs} for this step)`);
+    if (strain.cutOffs > AGENT_CUTOFF_RETRIES) {
+      strains.delete(key);
+      throw new WebChatError(
+        "step_too_large",
+        "PawOS stopped: its next step was too large to write in one reply, even when asked for a smaller one. Nothing from that step was run; everything done before it is kept. Ask for the rest in smaller parts — one file or one section at a time.",
+        422,
+        "model_reply_truncated"
+      );
+    }
+    const wait = resendWait(strain, now, "cutOff");
+    if (wait === null) {
+      throw retriesExhausted();
+    }
+    throw new WebChatError("model_unavailable", "PawOS's reply was cut off before it was complete. It is asking for a smaller step.", 502, "model_reply_truncated", wait);
+  }
+
+  // 5. The model's choice, held to the contract. The service decides nothing about what is safe to
   //    run — the client does — but it never passes on a tool that is not on the list.
   const chosen = parseModelJson(reply.text);
   const name = chosen?.tool;
@@ -219,10 +372,12 @@ export async function agentTurn(account: AccountContext, rawBody: unknown, now: 
 
   if (isAgentToolName(name) && name === "finish" && args) {
     tasks.delete(key);
+    strains.delete(key);
     return { turn: { kind: "finish", summary: String(args.summary) }, turnsLeft: 0 };
   }
   if (mustFinish) {
     tasks.delete(key);
+    strains.delete(key);
     return { turn: { kind: "finish", summary: `I stopped after ${limits.turns} steps without finishing.${note ? ` I was about to: ${note}` : ""}` }, turnsLeft: 0 };
   }
   if (!isAgentToolName(name) || !args) {
@@ -233,10 +388,20 @@ export async function agentTurn(account: AccountContext, rawBody: unknown, now: 
     sameTurnAgain();
     // Sizes and the provider's fixed word only — never the reply itself, which may hold the user's code.
     console.error(`[web-agent] unusable reply: ${reply.text.length} characters${reply.finishReason ? `, finish reason ${reply.finishReason}` : ""}${chosen ? "" : ", not JSON"}`);
-    throw new WebChatError("model_unavailable", "Paw couldn't work out the next step. Please try again.", 502, "model_unusable_reply");
+    // It counts against the step's budget like any other failed try.
+    const strain = strainOn(key, step, now);
+    strain.providerCalls += calls;
+    strain.failures += 1;
+    strain.firstFailureAt ??= now;
+    const wait = resendWait(strain, now, "busy");
+    if (wait === null) {
+      throw retriesExhausted();
+    }
+    throw new WebChatError("model_unavailable", "Paw couldn't work out the next step. Please try again.", 502, "model_unusable_reply", wait);
   }
 
   const call: ToolCall = { id: `step-${task.steps.length + 1}`, name, args };
   task.steps.push({ call, note, result: null });
+  // (A strain belongs to one step: from here the task waits on the next, and the old one no longer applies.)
   return { turn: { kind: "tool", call, note }, turnsLeft: Math.max(0, limits.turns - task.turns) };
 }

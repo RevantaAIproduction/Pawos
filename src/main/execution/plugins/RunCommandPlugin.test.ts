@@ -41,6 +41,9 @@ describe('RunCommandPlugin — P0-1 regression (real execution, no mocking)', ()
     expect(runCommandPlugin.requirements(req('git status'))).toHaveLength(0);
   });
 
+  // Real execution: every command first re-reads the environment through a fresh PowerShell process
+  // (envRefresh.ts), which takes several seconds on a loaded Windows machine — the 5 s default is
+  // shorter than that step alone when the full suite runs in parallel.
   it('execute() runs a legitimate command for real and returns real output', async () => {
     const result = await runCommandPlugin.execute(req('node -e "console.log(1+1)"'));
     expect(result.ok).toBe(true);
@@ -48,7 +51,7 @@ describe('RunCommandPlugin — P0-1 regression (real execution, no mocking)', ()
       const data = result.data as { output?: string };
       expect(data.output?.trim()).toBe('2');
     }
-  });
+  }, 30_000);
 
   it('execute() never runs a malicious chained command, even if requirements() were bypassed', async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pawos-runcommand-injection-'));

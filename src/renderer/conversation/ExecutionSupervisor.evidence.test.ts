@@ -82,6 +82,26 @@ describe('ExecutionSupervisor evidence pipeline', () => {
     });
   });
 
+  it('a block names its own next step: sign in, the local Coding mode, or the plan', () => {
+    const cases = [
+      ['account-restricted', 'Sign in to PawOS, then try again.'],
+      ['coding-mode-restricted', 'Switch Coding mode to full execution in Settings, then try again.'],
+      ['entitlement-restricted', 'Upgrade to a plan that includes this capability.'],
+    ] as const;
+    for (const [reason, nextAction] of cases) {
+      const { supervisor, records } = capture();
+      supervisor.begin('Build app');
+      supervisor.recordAction(
+        { type: 'runCommand', command: 'npm run build', cwd: 'C:/project' },
+        { ok: false, reason, message: 'Blocked.' },
+        { label: 'Blocked.', startedAt: 100, endedAt: 105 }
+      );
+      const latest = records.at(-1)!;
+      expect(latest.status).toBe('abandoned');
+      expect(latest.nextAction).toBe(nextAction);
+    }
+  });
+
   it('persists stopped entitlement evidence without fabricating commands or files', () => {
     const { supervisor, records } = capture();
     supervisor.begin('Build app');

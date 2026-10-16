@@ -11,6 +11,13 @@ import { connectorRegistry } from './ConnectorRegistry';
 import { connectionManager } from './ConnectionManager';
 import { credentialVaultBridge } from './CredentialVaultBridge';
 import type { ConnectorSDK } from '../../shared/connectivity/ConnectorSDK';
+import { accountSession } from '../auth/AccountSession';
+
+// The verified signed-in account (the main process's own session) is the one these scopes name:
+// connector credentials belong to the signed-in account only (see CredentialVaultBridge).
+beforeEach(() => {
+  vi.spyOn(accountSession, 'verifiedUserId', 'get').mockReturnValue('u-persist-test');
+});
 
 /**
  * persistStoredCredential() is how a connector's refreshed token reaches the durable store after

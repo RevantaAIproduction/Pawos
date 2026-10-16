@@ -36,6 +36,7 @@ function PurchasedBuckets({ buckets }: { buckets: CustomerUsageBucket[] }) {
           label={`${b.label || 'Credits'} · ${formatPrice(b.amountPaidCents)}`}
           used={b.pcUsed}
           limit={b.pcTotal}
+          percent={b.percentUsed}
           unit="PC"
           reset={b.expiresAt ? `expires ${formatDate(b.expiresAt)}` : 'no expiry'}
         />
@@ -64,8 +65,10 @@ function formatAmount(value: number, unit: 'PC' | 'h'): string {
   return `${rounded.toLocaleString()}${unit === 'h' ? ' h' : ' PC'}`;
 }
 
-function LimitRow({ label, used, limit, unit, reset }: { label: string; used: number; limit: number; unit: 'PC' | 'h'; reset: string | null }) {
-  const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+function LimitRow({ label, used, limit, unit, reset, percent }: { label: string; used: number; limit: number; unit: 'PC' | 'h'; reset: string | null; percent?: number }) {
+  // A plan bucket's percentage is the server's own (it is not a straight conversion of PC used near
+  // the end of the allowance); the other rows have no server percentage and are computed here.
+  const pct = typeof percent === 'number' && Number.isFinite(percent) ? Math.min(100, Math.max(0, Math.round(percent))) : limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
   return (
     <div style={{ marginBottom: 10 }} data-testid="plan-usage-limit">
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, gap: 12 }}>
@@ -190,7 +193,7 @@ export function PlanUsageLimits({
             <LimitRow label={bucketMetered ? 'Weekly limit' : 'This week'} used={entitlement.usageWeeklyPc} limit={entitlement.limitWeeklyPc} unit="PC" reset={weekReset} />
           )}
           {planBucket && (
-            <LimitRow label={`${planBucket.label || 'Plan'} · ${formatPrice(planBucket.amountPaidCents)} · this period`} used={planBucket.pcUsed} limit={planBucket.pcTotal} unit="PC" reset={planBucket.resetsAt ? `renews ${formatDate(planBucket.resetsAt)}` : null} />
+            <LimitRow label={`${planBucket.label || 'Plan'} · ${formatPrice(planBucket.amountPaidCents)} · this period`} used={planBucket.pcUsed} limit={planBucket.pcTotal} percent={planBucket.percentUsed} unit="PC" reset={planBucket.resetsAt ? `renews ${formatDate(planBucket.resetsAt)}` : null} />
           )}
           {summary && <PurchasedBuckets buckets={summary.buckets} />}
           {entitlement.activeHours5h !== null && (

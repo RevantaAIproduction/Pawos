@@ -56,7 +56,7 @@ import { restoreConversationSnapshot } from './RestoreConversationAdapter';
 import type { EvidenceCaptureData, EvidenceItem, EvidenceTarget } from '../../shared/evidence/EvidenceTypes';
 import { outputEvidenceMessage } from './evidenceMessages';
 import type { ProcessOutputEvent, ProcessExitEvent } from '../../shared/actions/ProcessTypes';
-import type { WorkspaceObservationEvent } from '../../shared/actions/ExecutionLifecycle';
+import type { ExecutionCancelResult, WorkspaceObservationEvent } from '../../shared/actions/ExecutionLifecycle';
 import type { CommunicationRuntimeEvent } from '../../shared/communication/CommunicationTypes';
 import type { ExecutionRecord } from '../../shared/actions/ExecutionRecordTypes';
 import { ExecutionSupervisor } from './ExecutionSupervisor';
@@ -81,6 +81,7 @@ function isTerminalExecutionBlock(result: ActionResult): boolean {
   return (
     !result.ok &&
     (result.reason === 'entitlement-restricted' ||
+      result.reason === 'account-restricted' ||
       result.reason === 'usage-restricted' ||
       result.reason === 'security-restricted' ||
       result.reason === 'coding-mode-restricted')
@@ -293,7 +294,7 @@ export class ConversationRuntime {
     this.projectFolder = folder && folder.trim() ? folder.trim() : null;
   }
 
-  private pendingConfirmation: { request: ActionRequest; toolCall: ReasoningToolCall; task?: ConversationTaskRecord | null; goal?: string } | null = null;
+  private pendingConfirmation: { request: ActionRequest; toolCall: ReasoningToolCall; task?: ConversationTaskRecord | null; goal?: string; executionId?: string | null } | null = null;
   /** The last model turn took the minimal path (a plain Q&A, no tools) — a short follow-up about it may too. */
   private lastTurnWasMinimalQuestion = false;
   /** Pieces of the full system prompt, so a request can be built from only its capability sections
@@ -321,6 +322,10 @@ export class ConversationRuntime {
 
   /** Which in-flight task action a currently-running action's observe() events should update — keyed by action type since that's all workspace:observation carries. */
   private activeActionIdByType = new Map<string, string>();
+  /** Tasks whose cancellation was requested and not yet confirmed by the main process. */
+  private cancellingTaskIds = new Set<string>();
+  /** How many times action:cancel is re-asked while the main process still reports work running. */
+  private static readonly CANCEL_CONFIRM_ATTEMPTS = 4;
 
   /** Track file changes during task execution for inline FileChangeExtension */
   private modifiedFilesDuringTask = new Map<string, { status: 'added' | 'modified' | 'deleted'; additions?: number; deletions?: number }>();
@@ -340,6 +345,8 @@ export class ConversationRuntime {
     const actionId = this.activeActionIdByType.get(event.actionType);
     if (!actionId) return;
     this.updateTaskActionProgress(actionId, event.event.message);
+    const executionId = this.executionSupervisor.currentExecutionId;
+    if (executionId) this.executionSupervisor.noteActivity(executionId, event.event.message);
   };
 
   /** Track file changes during task execution for FileChangeExtension */
@@ -488,6 +495,19 @@ export class ConversationRuntime {
        * tool use (chat-only), which is also the safe default.
        */
       executeAction?: (request: ActionRequest) => Promise<ActionResult>;
+      /**
+       * Cancels one execution's running work in the main process (IPC action:cancel) and resolves
+       * with whether nothing of it is still running. Omitted: only a cancel with no step in flight
+       * can be confirmed (nothing to stop); otherwise the task stays "Cancelling".
+       */
+      cancelExecution?: (executionId: string) => Promise<ExecutionCancelResult>;
+      /**
+       * Told when a cancelled execution's last running step has really returned in the main process
+       * (IPC action:cancelSettled). Used once the bounded confirmation attempts ran out, so a step
+       * that could not be stopped still ends as Cancelled when it finishes — never earlier.
+       * Returns an unsubscribe function.
+       */
+      onCancelSettled?: (listener: (executionId: string) => void) => () => void;
       /**
        * The Desktop Execution Engine's own pipeline stages, via IPC to the
        * matching plugin (see src/main/execution/). "Collect Missing
@@ -894,6 +914,7 @@ export class ConversationRuntime {
   }
 
   close() {
+    this.beginExecutionCancellation('PawOS closed this conversation while the task was running.');
     this.closed = true;
     this.turnId += 1;
     this.stopRecognition();
@@ -989,6 +1010,7 @@ export class ConversationRuntime {
       this.pendingConfirmation = null;
       this.updateSnapshot({ pendingConfirmation: false });
       this.args.speechSynthesis.stop();
+      this.beginExecutionCancellation('Interrupted by a new request.');
       this.finalizeCurrentTurn('interrupted', 'typed barge-in');
       this.log('interrupted', { reason: 'typed barge-in' });
     }
@@ -1032,6 +1054,8 @@ export class ConversationRuntime {
   }
 
   cancel() {
+    if (this.pendingConfirmation?.executionId) this.executionSupervisor.resolveApproval(this.pendingConfirmation.executionId, 'cancelled');
+    this.beginExecutionCancellation('Cancelled by you.');
     this.turnId += 1;
     this.stopRecognition();
     this.reasoningTurn?.cancel();
@@ -1238,6 +1262,12 @@ export class ConversationRuntime {
       const pending = this.pendingConfirmation;
       this.pendingConfirmation = null;
       this.updateSnapshot({ pendingConfirmation: false });
+      if (pending.executionId) {
+        this.executionSupervisor.resolveApproval(
+          pending.executionId,
+          isAffirmativeReply(transcript) ? 'approved' : isDenyReply(transcript) ? 'declined' : 'unanswered'
+        );
+      }
       if (isAffirmativeReply(transcript)) {
         const currentTurn = ++this.turnId;
         this.stopRecognition();
@@ -1250,6 +1280,8 @@ export class ConversationRuntime {
         } else if (pending.goal) {
           this.currentTaskRecord = { id: uuidv4(), goal: pending.goal, status: 'running', startedAt: Date.now(), endedAt: null, actions: [] };
         }
+        const continuedExecutionId = this.executionSupervisor.currentExecutionId;
+        if (continuedExecutionId && this.currentTaskRecord) this.executionSupervisor.annotate(continuedExecutionId, { taskRecordId: this.currentTaskRecord.id });
         void this.executeConfirmedAction(pending.request, pending.toolCall, currentTurn);
         return;
       }
@@ -1743,6 +1775,10 @@ export class ConversationRuntime {
     if (this.args.autonomousRunId) {
       request.autonomousRunId = this.args.autonomousRunId;
     }
+    // Which execution this action belongs to — lets the main process cancel exactly this request's
+    // work, and lets a late result be recognised as belonging to an older execution.
+    const executionIdForAction = this.executionSupervisor.currentExecutionId;
+    if (executionIdForAction) request.executionId = executionIdForAction;
 
     // Vision-backed actions always use Gemini regardless of the active
     // chat provider (same internal-Gemini precedent as AIRouter's other
@@ -1839,6 +1875,7 @@ export class ConversationRuntime {
     const actionStartedAt = Date.now();
     const inProgressText = await this.args.describeAction?.(request).catch(() => null) ?? 'Working on that…';
     const actionId = this.startTaskAction(request, inProgressText);
+    if (request.executionId) this.executionSupervisor.startAction(request.executionId, request.type, inProgressText);
 
     // Duplicate check first (skips the queue entirely — nothing to order if
     // it's not going to run again), then real actions are ordered through
@@ -1857,6 +1894,7 @@ export class ConversationRuntime {
         }));
     } catch (error) {
       this.activeActionIdByType.delete(request.type);
+      if (this.isStaleResult(currentTurn, request)) return;
       const message = error instanceof Error ? error.message : 'Action failed unexpectedly.';
       if (this.currentTurnRecord) this.currentTurnRecord.errors.push(message);
       const failure: ActionResult = { ok: false, reason: 'failed', message };
@@ -1871,6 +1909,9 @@ export class ConversationRuntime {
       return;
     }
     this.activeActionIdByType.delete(request.type);
+    // Cancelled or superseded while this step ran: its result belongs to a finished execution and is
+    // never shown as this task's progress, never fed back to the model, never counted as success.
+    if (this.isStaleResult(currentTurn, request)) return;
 
     await this.maybeStartRealCommunicationCapture(request, result);
     result = this.presentEvidence(request, result);
@@ -2083,6 +2124,7 @@ export class ConversationRuntime {
       toolCall,
       task: this.currentTaskRecord,
       goal: this.currentTaskRecord?.goal ?? this.currentTurnRecord?.transcript,
+      executionId: this.executionSupervisor.currentExecutionId,
     };
     this.upsertMessage({
       id: `confirm-${toolCall.id}`,
@@ -2164,7 +2206,11 @@ export class ConversationRuntime {
     const inProgressText = await this.args.describeAction?.(request).catch(() => null) ?? 'Working on that…';
     const actionId = this.startTaskAction(request, inProgressText);
 
-    const confirmedRequest = { ...request, confirmed: true } as ActionRequest;
+    // The confirmed action runs as part of the execution that is current NOW (an "allow" reply is
+    // its own turn), so its result and any cancel apply to that execution.
+    const confirmedExecutionId = this.executionSupervisor.currentExecutionId ?? undefined;
+    const confirmedRequest = { ...request, confirmed: true, executionId: confirmedExecutionId } as ActionRequest;
+    if (confirmedExecutionId) this.executionSupervisor.startAction(confirmedExecutionId, request.type, inProgressText);
     let result: ActionResult;
     try {
       const duplicate = this.executionSupervisor.findDuplicate(confirmedRequest);
@@ -2178,6 +2224,7 @@ export class ConversationRuntime {
         }));
     } catch (error) {
       this.activeActionIdByType.delete(request.type);
+      if (this.isStaleResult(currentTurn, confirmedRequest)) return;
       const message = error instanceof Error ? error.message : 'Action failed unexpectedly.';
       if (this.currentTurnRecord) this.currentTurnRecord.errors.push(message);
       const failure: ActionResult = { ok: false, reason: 'failed', message };
@@ -2193,6 +2240,7 @@ export class ConversationRuntime {
       return;
     }
     this.activeActionIdByType.delete(request.type);
+    if (this.isStaleResult(currentTurn, confirmedRequest)) return;
 
     // startCommunicationCapture is always confirmed (see
     // DESTRUCTIVE_ACTION_TYPES), so this confirmed-retry path — not the
@@ -2280,6 +2328,8 @@ export class ConversationRuntime {
       // Reset file tracking for new task
       this.modifiedFilesDuringTask.clear();
       this.fileChangeMessageCreated = false;
+      const executionId = this.executionSupervisor.currentExecutionId;
+      if (executionId) this.executionSupervisor.annotate(executionId, { taskRecordId: this.currentTaskRecord.id });
     }
     return this.currentTaskRecord;
   }
@@ -2349,6 +2399,137 @@ export class ConversationRuntime {
     });
   }
 
+  /**
+   * True when a step's result arrived for a turn or execution that is no longer the current one
+   * (cancelled, interrupted or superseded while the step ran). Such a result is discarded.
+   */
+  private isStaleResult(turnAtStart: number, request: ActionRequest): boolean {
+    if (turnAtStart !== this.turnId) return true;
+    return !!request.executionId && request.executionId !== this.executionSupervisor.currentExecutionId;
+  }
+
+  /**
+   * Starts cancelling the current execution: marks it (and its task) Cancelling, drops queued steps,
+   * then asks the main process to stop its running work (action:cancel). Only that execution —
+   * never another task, process or chat. Confirmation arrives asynchronously (settleCancellation).
+   */
+  private beginExecutionCancellation(reason: string): void {
+    const executionId = this.executionSupervisor.currentExecutionId;
+    if (!executionId) return;
+    const stepInFlight = this.activeActionIdByType.size > 0;
+    if (!this.executionSupervisor.requestCancellation(executionId, reason)) return;
+    this.executionSupervisor.queue.cancelQueued();
+    const taskId = this.currentTaskRecord?.id ?? null;
+    if (taskId) this.cancellingTaskIds.add(taskId);
+    void this.awaitCancellationConfirmation(executionId, taskId, stepInFlight);
+  }
+
+  private async awaitCancellationConfirmation(executionId: string, taskId: string | null, stepInFlight: boolean): Promise<void> {
+    const cancelInMain = this.args.cancelExecution;
+    let outcome: ExecutionCancelResult = {
+      confirmed: !stepInFlight,
+      hadRunningAction: stepInFlight,
+      runningActionType: null,
+      stopped: 0,
+      nonCancellable: false,
+      stillRunning: null,
+    };
+    if (cancelInMain) {
+      for (let attempt = 0; attempt < ConversationRuntime.CANCEL_CONFIRM_ATTEMPTS; attempt += 1) {
+        try {
+          outcome = await cancelInMain(executionId);
+        } catch {
+          outcome = { ...outcome, confirmed: false };
+        }
+        if (outcome.confirmed) break;
+      }
+    }
+    this.executionSupervisor.confirmCancellation(executionId, outcome);
+    if (taskId) this.settleCancelledTask(taskId, outcome);
+    if (!outcome.confirmed && cancelInMain && this.args.onCancelSettled) this.confirmWhenSettled(executionId, taskId, cancelInMain, this.args.onCancelSettled);
+  }
+
+  /**
+   * The step could not be stopped within the bounded wait: stay "Cancelling" (truthfully) and confirm
+   * only when the main process reports that nothing of this execution runs any more. Re-asked once
+   * right after subscribing, in case it settled in between.
+   */
+  private confirmWhenSettled(
+    executionId: string,
+    taskId: string | null,
+    cancelInMain: (executionId: string) => Promise<ExecutionCancelResult>,
+    onCancelSettled: (listener: (executionId: string) => void) => () => void
+  ): void {
+    let done = false;
+    const check = async () => {
+      if (done) return;
+      let outcome: ExecutionCancelResult;
+      try {
+        outcome = await cancelInMain(executionId);
+      } catch {
+        return;
+      }
+      if (!outcome.confirmed || done) return;
+      done = true;
+      unsubscribe();
+      this.executionSupervisor.confirmCancellation(executionId, outcome);
+      if (taskId) this.settleCancelledTask(taskId, outcome);
+    };
+    const unsubscribe = onCancelSettled((settledId) => {
+      if (settledId === executionId) void check();
+    });
+    void check();
+  }
+
+  /** The Tasks panel's copy of a cancelled task: Cancelled once confirmed, otherwise still Cancelling with what is running. */
+  private settleCancelledTask(taskId: string, outcome: ExecutionCancelResult): void {
+    const report = outcome.confirmed
+      ? outcome.nonCancellable && outcome.runningActionType
+        ? `Cancelled. The running step (${outcome.runningActionType}) can't be interrupted, so it finished first; its result was discarded.`
+        : 'Cancelled.'
+      : `Cancelling — PawOS is still waiting for ${outcome.stillRunning?.actionType ?? outcome.runningActionType ?? 'the running step'} to stop.`;
+    if (outcome.confirmed) this.cancellingTaskIds.delete(taskId);
+    const history = this.snapshot.taskHistory ?? [];
+    if (!history.some((task) => task.id === taskId)) {
+      // No longer shown here (another chat was opened): nothing to update, nothing to keep tracking.
+      this.cancellingTaskIds.delete(taskId);
+      return;
+    }
+    this.updateSnapshot({
+      taskHistory: history.map((task) =>
+        task.id === taskId ? { ...task, status: outcome.confirmed ? 'cancelled' : 'cancelling', finalReport: report, endedAt: task.endedAt ?? Date.now() } : task
+      ),
+    });
+  }
+
+  /**
+   * The task this window is running right now — a turn in progress, or a step waiting for the
+   * user's "allow" — with the chat it belongs to. Null when nothing is running. Switching to another
+   * chat while this is non-null must not cancel it (useConversationController shows the other chat
+   * read-only instead).
+   */
+  getActiveTask(): { goal: string; executionId: string | null; sessionId: string | null; startedAt: number; waitingForApproval: boolean } | null {
+    if (this.currentTurnRecord) {
+      return {
+        goal: this.currentTurnRecord.transcript,
+        executionId: this.executionSupervisor.currentExecutionId,
+        sessionId: this.activeSessionId,
+        startedAt: this.currentTurnRecord.startedAt,
+        waitingForApproval: false,
+      };
+    }
+    if (this.pendingConfirmation) {
+      return {
+        goal: this.pendingConfirmation.task?.goal ?? 'A step waiting for your approval',
+        executionId: this.pendingConfirmation.executionId ?? null,
+        sessionId: this.activeSessionId,
+        startedAt: this.pendingConfirmation.task?.startedAt ?? Date.now(),
+        waitingForApproval: true,
+      };
+    }
+    return null;
+  }
+
   private startTaskAction(request: ActionRequest, inProgressText: string): string {
     const task = this.ensureCurrentTask();
     const action: ConversationTaskAction = {
@@ -2402,7 +2583,9 @@ export class ConversationRuntime {
     console.log(`[TRACE.finalizeTask] START | taskId=${task.id} | reason=${reason}`);
     task.endedAt = Date.now();
     const waitingForAllow = this.pendingConfirmation?.task?.id === task.id;
-    task.status = waitingForAllow
+    task.status = this.cancellingTaskIds.has(task.id)
+      ? 'cancelling'
+      : waitingForAllow
       ? 'stopped'
       : task.actions.some((a) => a.result && isTerminalExecutionBlock(a.result))
         ? 'stopped'
@@ -2415,7 +2598,7 @@ export class ConversationRuntime {
           : task.actions.some((a) => a.result?.ok === false)
             ? 'failed'
             : 'completed';
-    task.finalReport = finalReport;
+    task.finalReport = task.status === 'cancelling' ? 'Cancelling — waiting for PawOS to confirm the running step stopped.' : finalReport;
     this.upsertTaskMessage();
 
     // Send completion notification
@@ -2480,6 +2663,11 @@ export class ConversationRuntime {
   async retryTaskAction(taskId: string, actionId: string): Promise<void> {
     const executeAction = this.args.executeAction;
     if (!executeAction) return;
+    // One task at a time: a retry never runs alongside a task step that is still running.
+    if (this.currentTurnRecord || this.activeActionIdByType.size > 0) {
+      this.log('retry-refused', { reason: 'a task is running', taskId, actionId });
+      return;
+    }
     const message = this.snapshot.messages.find((m) => m.id === taskId && m.task);
     if (!message?.task) return;
     const action = message.task.actions.find((a) => a.id === actionId);
@@ -2494,10 +2682,10 @@ export class ConversationRuntime {
     task.endedAt = null;
     this.upsertMessage({ ...message, status: 'streaming', task });
 
-    const retryRequest = { ...action.request, confirmed: true } as ActionRequest;
+    const retryRequest = { ...action.request, confirmed: true, executionId: this.executionSupervisor.currentExecutionId ?? undefined } as ActionRequest;
     let result: ActionResult;
     try {
-      result = await executeAction(retryRequest);
+      result = await this.executionSupervisor.queue.runExclusive(retryRequest, () => executeAction(retryRequest));
     } catch (error) {
       result = { ok: false, reason: 'failed', message: error instanceof Error ? error.message : 'Retry failed unexpectedly.' };
     }
@@ -2731,13 +2919,18 @@ export class ConversationRuntime {
     if (this.currentTurnRecord) {
       // Shouldn't normally happen (interrupts finalize the previous record
       // first) — but never silently drop a turn's metadata if it does.
+      this.beginExecutionCancellation('Superseded by a new request.');
       this.finalizeCurrentTurn('interrupted', 'superseded by a new turn');
     }
     // Recovery Policy caps apply per user turn, not per continuation.
     this.toolIterationCount = 0;
     this.failureSignatureCounts = new Map();
     this.currentTurnAssistantMessageId = null; // Reset for new turn
-    this.executionSupervisor.begin(transcript, { externalRunId: this.args.autonomousRunId });
+    this.executionSupervisor.begin(transcript, {
+      externalRunId: this.args.autonomousRunId,
+      sessionId: this.activeSessionId,
+      projectFolder: this.projectFolder ?? null,
+    });
     this.currentTurnRecord = {
       id: uuidv4(),
       startedAt: Date.now(),
@@ -2769,24 +2962,27 @@ export class ConversationRuntime {
       note,
       durationMs: this.currentTurnRecord.endedAt - this.currentTurnRecord.startedAt,
     });
-    this.executionSupervisor.end(reason, this.currentTurnRecord.assistantResponse || note || '');
+    const endedExecutionId = this.executionSupervisor.currentExecutionId;
+    const awaitingApproval = !!endedExecutionId && this.pendingConfirmation?.executionId === endedExecutionId;
+    this.executionSupervisor.end(reason, this.currentTurnRecord.assistantResponse || note || '', { awaitingApproval });
     this.finalizeTask(this.currentTurnRecord.assistantResponse || note || '', reason);
-    this.persistTurn(this.currentTurnRecord);
+    this.persistTurn(this.currentTurnRecord, endedExecutionId);
     this.currentTurnRecord = null;
     this.turnIdToTemporaryMode.delete(this.turnId);
     console.log(`[TRACE.finalizeCurrentTurn] END | msgCount=${this.snapshot.messages.length}`);
   }
 
   /** Hands a finished turn to Electron's session history, if wired. Skips turns with no real content (e.g. an immediately-superseded record). */
-  private persistTurn(turn: ConversationTurnRecord): void {
+  private persistTurn(turn: ConversationTurnRecord, executionId: string | null = null): void {
     const persist = this.args.persistTurn;
     if (!persist || (!turn.transcript.trim() && !turn.assistantResponse.trim())) return;
-    void this.persistTurnAsync(turn, persist);
+    void this.persistTurnAsync(turn, persist, executionId);
   }
 
   private async persistTurnAsync(
     turn: ConversationTurnRecord,
-    persist: (turn: ConversationTurnRecord, hint: SessionContinuationHint) => Promise<{ id: string } | void>
+    persist: (turn: ConversationTurnRecord, hint: SessionContinuationHint) => Promise<{ id: string } | void>,
+    executionId: string | null = null
   ): Promise<void> {
     const generation = this.conversationGeneration;
     try {
@@ -2810,6 +3006,7 @@ export class ConversationRuntime {
         { ...turn, actionsExecuted: [...turn.actionsExecuted], errors: [...turn.errors] },
         hint
       );
+      if (session && executionId) this.executionSupervisor.annotate(executionId, { sessionId: session.id });
       if (session && generation === this.conversationGeneration) {
         this.activeSessionId = session.id;
         this.startNewSession = false;

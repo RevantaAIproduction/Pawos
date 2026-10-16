@@ -43,6 +43,13 @@ export interface ConnectorSDK {
    */
   connect(scope: ConnectivityScope, opts?: { incrementalCapabilities?: string[] }): Promise<ConnectorConnection>;
   disconnect(scope: ConnectivityScope): Promise<void>;
+  /**
+   * Drops every credential this connector holds in memory (its own field and anything it
+   * registered with one), without disconnecting: no provider revoke, no change to the stored
+   * credential. Called when the signed-in account changes, or when the vault refuses a token this
+   * connector obtained for an account that is no longer signed in.
+   */
+  forgetLocalSession?(): void;
 
   authenticate(scope: ConnectivityScope, credential: unknown): Promise<void>;
   refresh(scope: ConnectivityScope): Promise<void>;

@@ -2,8 +2,10 @@ import spawn from 'cross-spawn';
 import type { CommandShell } from '../../shared/actions/ActionTypes';
 import { getRefreshedEnv } from './envRefresh';
 import { resolveSafeInvocation } from './plugins/commandSafety';
+import { killProcessTree, registerStop } from './ExecutionCancellation';
 
-export type ShellExecResult = { code: number | null; stdout: string; stderr: string; timedOut: boolean };
+/** `cancelled`: the command was stopped because its execution was cancelled (action:cancel). */
+export type ShellExecResult = { code: number | null; stdout: string; stderr: string; timedOut: boolean; cancelled?: boolean };
 
 /** Matches the previous exec() maxBuffer ceiling (4MB), applied per-stream here since spawn has no single combined-buffer option. */
 const MAX_OUTPUT_CHARS = 1024 * 1024 * 4;
@@ -50,6 +52,14 @@ export async function execShellCommand(command: string, cwd: string, shell?: Com
       child.kill();
     }, timeoutMs);
 
+    // Cancelling this command's execution stops the whole process tree (the real program is often a
+    // grandchild of a .cmd shim) — only this command's tree, nothing else.
+    let cancelled = false;
+    const unregisterStop = registerStop(() => {
+      cancelled = true;
+      return killProcessTree(child.pid, () => child.kill());
+    });
+
     child.stdout?.on('data', (data) => {
       stdout = (stdout + data.toString()).slice(-MAX_OUTPUT_CHARS);
     });
@@ -61,14 +71,16 @@ export async function execShellCommand(command: string, cwd: string, shell?: Com
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve({ code, stdout, stderr, timedOut });
+      unregisterStop();
+      resolve({ code, stdout, stderr, timedOut, ...(cancelled ? { cancelled } : {}) });
     };
 
     child.once('error', (error) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve({ code: 1, stdout, stderr: stderr || error.message, timedOut: false });
+      unregisterStop();
+      resolve({ code: 1, stdout, stderr: stderr || error.message, timedOut: false, ...(cancelled ? { cancelled } : {}) });
     });
     child.once('close', (code) => finish(code));
   });

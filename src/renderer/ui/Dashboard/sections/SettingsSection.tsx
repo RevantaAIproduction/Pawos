@@ -13,7 +13,6 @@ import { BrowserToolsSettingsPage } from './BrowserToolsSettingsPage';
 import { BillingSettingsPage } from './BillingSettingsPage';
 import { DevelopersSettingsPage } from './DevelopersSettingsPage';
 import { ConnectionsPage } from './ConnectionsPage';
-import { useConnectivityBootstrap } from '../../../connectivity/useConnectivityBootstrap';
 import { useCompanionAccountSync } from '../../../companion/manager/useCompanionAccountSync';
 import type { AuthUser } from '../../../auth/AuthTypes';
 
@@ -63,10 +62,8 @@ export function SettingsSection({
     if (initialTab) setTab(initialTab);
   }, [initialTab]);
 
-  // Restores every persisted connector credential once per session (never on repeated visits) —
-  // see useConnectivityBootstrap's own doc comment. Deliberately not inside ConnectionsPage.tsx,
-  // which is pure status discovery and must never itself trigger authentication.
-  useConnectivityBootstrap({ userId: user.id });
+  // (Connector credentials are restored by the signed-in Dashboard shell — useConnectivityBootstrap —
+  // so they are live at startup, not only once Settings is opened.)
   // Keeps this device's active Companion in step with the account's canonical selection (shared
   // with PawOS Web) — see CompanionAccountSync's own doc comment.
   useCompanionAccountSync(user.id);

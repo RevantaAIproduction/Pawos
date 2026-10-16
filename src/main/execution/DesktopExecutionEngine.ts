@@ -5,7 +5,8 @@ import { DESTRUCTIVE_ACTION_TYPES } from '../../shared/actions/ActionTypes';
 import { codingModeStore } from './CodingModeStore';
 import { infraModeStore } from '../infrastructure/InfraModeStore';
 import { entitlementService } from '../billing/EntitlementService';
-import { codingExecutionBlocked, infraExecutionBlocked } from './ThinkExecuteGate';
+import { accountExecutionBlocked, codingExecutionBlocked, infraExecutionBlocked } from './ThinkExecuteGate';
+import { accountSession } from '../auth/AccountSession';
 import { codingRuntimeSecurityRequirements, enforceCodingRuntimeSecurity } from './CodingRuntimeSecurity';
 import { enforceCodingRuntimeUsage, recordCodeFileWrite, type PooledCodingRuntimeUsageRecorder } from './CodingRuntimeUsageBoundary';
 import { authorizeRuntimeAction } from './RuntimeActionAuthorization';
@@ -221,6 +222,9 @@ import { requestToolAccessPlugin } from './plugins/RequestToolAccessPlugin';
 import { requestAPIAccessPlugin } from './plugins/RequestAPIAccessPlugin';
 import { requestExternalSiteAccessPlugin } from './plugins/RequestExternalSiteAccessPlugin';
 import { requestCredentialAccessPlugin } from './plugins/RequestCredentialAccessPlugin';
+import { isExecutionCancelled, runInExecution } from './ExecutionCancellation';
+import { FILE_CHANGE_ACTION_TYPES, UNTRACKED_CHANGE_ACTION_TYPES, type CaptureToken } from './codeChanges/CodeChangeLedger';
+import { codeChangeStore } from './codeChanges/codeChangeStore';
 
 /** Observe → Diagnose → Repair → Retry → Verify — max 3 automatic attempts, then honestly report failure rather than looping or silently giving up. */
 const MAX_RECOVERY_ATTEMPTS = 3;
@@ -470,13 +474,29 @@ export class DesktopExecutionEngine extends EventEmitter {
    * failure — never a silent stop, never an unbounded loop.
    */
   async execute(request: ActionRequest, opts: { pooledUsageRecorder?: PooledCodingRuntimeUsageRecorder | null } = {}): Promise<ActionResult> {
+    // A cancelled execution (action:cancel) starts nothing more — a step that was already queued or
+    // re-sent after the cancel never runs.
+    if (isExecutionCancelled(request.executionId)) {
+      return { ok: false, reason: 'cancelled', message: 'The task was cancelled before this step started.' };
+    }
+    // Execution needs a signed-in account, from the main process's own verified session — never an
+    // account id or flag carried on the request. Fails closed: no verified account, nothing runs.
+    if (accountExecutionBlocked(request.type, accountSession.verifiedUserId)) {
+      return {
+        ok: false,
+        reason: 'account-restricted',
+        message: 'Sign in to PawOS to let it edit files, run commands, build or deploy on this device.',
+      };
+    }
+
     const securityResult = enforceCodingRuntimeSecurity(request);
     if (!securityResult.ok) return securityResult.result;
 
     // Real, billing-backed Think-vs-Execute wall. CodingModeStore/InfraModeStore below are local,
-    // billing-independent safety toggles (a Pro+ user can still default themselves to read-only) —
-    // they are never allowed to grant execute behavior a tier doesn't actually entitle, so a Go
-    // user's local preference file can't be edited around this gate.
+    // billing-independent safety toggles (any plan can keep itself to planning & analysis) — they
+    // are never allowed to grant execute behavior a tier doesn't actually entitle, so a local
+    // preference file can't be edited around this gate. (Paw Go's tier has included
+    // 'advancedRuntimes' since 406663d, so on Go the local toggle is what decides.)
     const hasAdvancedRuntimes = entitlementService.isFeatureAvailable('advancedRuntimes');
     const hasCodingRuntime = entitlementService.isRuntimeEntitled('coding');
     const hasInfrastructureRuntime = entitlementService.isRuntimeEntitled('infrastructure');
@@ -491,12 +511,12 @@ export class DesktopExecutionEngine extends EventEmitter {
             ok: false,
             reason: 'coding-mode-restricted',
             message:
-              'Paw Go is designed for planning and analysis. Upgrade to Paw Pro to generate, modify, build, test, debug, and continuously improve your project.',
+              'Local execution is turned off: Coding mode is set to planning & analysis only. Switch Coding mode to full execution in Settings to let PawOS edit files, run commands, build and test.',
           }
         : {
             ok: false,
             reason: 'entitlement-restricted',
-            message: 'This action requires Paw Pro. Your current plan supports investigation, analysis, and planning — upgrade to generate, modify, build, test, and debug code.',
+            message: 'Your current plan doesn’t include editing files, running commands, building or testing on this device. Investigation, analysis and planning are still available.',
             data: { requiredFeature: 'advancedRuntimes', requiredTier: advancedRuntimesTier },
           };
     }
@@ -512,7 +532,7 @@ export class DesktopExecutionEngine extends EventEmitter {
         : {
             ok: false,
             reason: 'entitlement-restricted',
-            message: 'This action requires Paw Pro. Your current plan supports investigation, analysis, and planning — upgrade to deploy, roll back, or promote deployments.',
+            message: 'Your current plan doesn’t include deploying, rolling back or promoting deployments. Investigation and status checks are still available.',
             data: { requiredFeature: 'advancedRuntimes', requiredTier: advancedRuntimesTier },
           };
     }
@@ -576,8 +596,66 @@ export class DesktopExecutionEngine extends EventEmitter {
     const usageBlocked = await enforceCodingRuntimeUsage(request, { pooledRecorder: opts.pooledUsageRecorder });
     if (usageBlocked) return usageBlocked;
 
+    // Live code changes: the file's state just before this task's operation (first time only). The
+    // ledger never decides anything about the action — a failure here never blocks it.
+    let capture: CaptureToken | null = null;
+    if (request.executionId && FILE_CHANGE_ACTION_TYPES.has(request.type)) {
+      try {
+        capture = codeChangeStore().beforeAction(request.executionId, request as unknown as { type: string } & Record<string, unknown>, securityResult.selectedRootRealPath);
+      } catch (error) {
+        console.warn('[code-changes] could not capture a baseline:', (error as Error).message);
+      }
+    }
+
+    const runPlugin = () => this.runPluginLifecycle(plugin, request, prepared.reuse);
+    const outcome = request.executionId ? await runInExecution(request.executionId, request.type, runPlugin) : await runPlugin();
+    let { result } = outcome;
+    const { attempts, recovered, observations } = outcome;
+    /** What the step really returned, before any cancellation relabelling (usage caps count real writes). */
+    const actualResult = outcome.result;
+
+    // Cancelled while this step ran: never hand back a plain success. A step with no stop mechanism
+    // (a file write, a download) may still have finished — that is said, not hidden.
+    if (isExecutionCancelled(request.executionId) && (result.ok || result.reason !== 'cancelled')) {
+      result = result.ok
+        ? { ok: false, reason: 'cancelled', message: 'The task was cancelled. This step had already finished before it could be stopped.', data: { finishedAfterCancel: true, result: result.data } }
+        : { ok: false, reason: 'cancelled', message: 'The task was cancelled; this step was stopped.', data: result.data };
+    }
+
+    // What the operation really did on disk — recorded whatever the result says (a cancelled or
+    // failed write may still have changed the file).
+    if (capture) {
+      try {
+        for (const event of await codeChangeStore().afterAction(capture, result)) this.emit('codeChange', event);
+      } catch (error) {
+        console.warn('[code-changes] could not record a change:', (error as Error).message);
+      }
+    }
+    if (request.executionId && UNTRACKED_CHANGE_ACTION_TYPES.has(request.type)) {
+      const cwd = (request as { cwd?: unknown }).cwd;
+      try {
+        codeChangeStore().noteUntrackedCommand(request.executionId, typeof cwd === 'string' && cwd ? cwd : securityResult.selectedRootRealPath);
+      } catch {
+        // bookkeeping only
+      }
+    }
+
+    // Count successful code-file writes toward the hidden file cap — a write that finished just before
+    // a cancel still happened, so it still counts.
+    recordCodeFileWrite(request, actualResult);
+
+    const trail: ExecutionTrail = { attempts, recovered, observations };
+    return { ...result, trail };
+  }
+
+  /** execute → observe → verify → (recover → verify)*, exactly as before — never retried once its execution is cancelled. */
+  private async runPluginLifecycle(
+    plugin: DesktopPlugin,
+    request: ActionRequest,
+    reuse: ActionResult | undefined
+  ): Promise<{ result: ActionResult; attempts: number; recovered: boolean; observations: ObservationEvent[] }> {
     const observations: ObservationEvent[] = [];
-    let result: ActionResult = prepared.reuse ?? (await plugin.execute(request));
+    let result: ActionResult = reuse ?? (await plugin.execute(request));
     for await (const event of plugin.observe(request, result)) {
       observations.push(event);
       this.emit('observation', { actionType: request.type, event });
@@ -602,7 +680,7 @@ export class DesktopExecutionEngine extends EventEmitter {
     const initialFailureClass = !result.ok ? classifyFailure(result.message) : undefined;
     const hasRealRecovery = plugin.recover !== BasePlugin.prototype.recover;
     const autoRecoverable = hasRealRecovery && (!initialFailureClass || !NOT_AUTO_RECOVERABLE.has(initialFailureClass));
-    while (!result.ok && result.reason !== 'requires-confirmation' && autoRecoverable && attempts < MAX_RECOVERY_ATTEMPTS) {
+    while (!result.ok && result.reason !== 'requires-confirmation' && autoRecoverable && attempts < MAX_RECOVERY_ATTEMPTS && !isExecutionCancelled(request.executionId)) {
       attempts += 1;
       const narration = recoveryNarrationFor(result.message, attempts);
       this.emit('observation', { actionType: request.type, event: { at: Date.now(), message: narration } });
@@ -613,12 +691,7 @@ export class DesktopExecutionEngine extends EventEmitter {
     if (recovered && attempts > 0) {
       this.emit('observation', { actionType: request.type, event: { at: Date.now(), message: RECOVERY_SUCCESS_NARRATION } });
     }
-
-    // Count successful code-file writes toward the hidden file cap.
-    recordCodeFileWrite(request, result);
-
-    const trail: ExecutionTrail = { attempts, recovered, observations };
-    return { ...result, trail };
+    return { result, attempts, recovered, observations };
   }
 }
 

@@ -6,6 +6,13 @@ const request: ActionRequest = { type: 'runCommand', command: 'npm test', cwd: '
 const usageFailure: ActionResult = { ok: false, reason: 'usage-restricted', message: 'quota exhausted' };
 
 describe('LaunchReadinessUX', () => {
+  it('sign-in and the local Coding/Infra mode switch are blocks with the main process message — never a plan upsell or a retry', () => {
+    for (const reason of ['account-restricted', 'coding-mode-restricted', 'infra-mode-restricted'] as const) {
+      const result: ActionResult = { ok: false, reason, message: `${reason} message` };
+      expect(describeLaunchFailure(result, request, 'go')).toEqual({ title: 'BUILD BLOCKED', message: `${reason} message`, actions: ['none'] });
+    }
+  });
+
   it('never overrides the real backend message, and never names an internal runtime', () => {
     const result: ActionResult = {
       ok: false,

@@ -34,6 +34,11 @@ class JiraMetadataStore {
   async clear(scope: ConnectivityScope): Promise<void> {
     this.metadata.delete(metadataKey(scope));
   }
+
+  /** Forgets every account's metadata (the signed-in account changed). */
+  clearAll(): void {
+    this.metadata.clear();
+  }
 }
 
 export const jiraMetadataStore = new JiraMetadataStore();

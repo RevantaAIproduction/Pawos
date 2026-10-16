@@ -4,6 +4,7 @@ import { ipc } from '../../services/ipc/ipcBridgeImplementation';
 import { autonomousTaskBillingService } from '../../organization/AutonomousTaskBillingService';
 import { initiateRazorpayCreditsPayment } from './sections/CreditsPaymentHandler';
 import { TicketHistory } from './TicketHistory';
+import { CreditsLimitSalesNote, creditsLimitMessage } from '../billing/CreditsLimitSalesNote';
 import {
   MIN_TICKET_BALANCE_TOPUP_USD,
   MAX_TICKET_BALANCE_TOPUP_USD,
@@ -94,6 +95,8 @@ export function TicketBalanceIndicator({
   const [amountInput, setAmountInput] = useState(String(TICKET_BALANCE_TOPUP_PRESETS_USD[0]));
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  // The amount asked for is over the most one top-up can be: the sales note is shown with the error.
+  const [overLimit, setOverLimit] = useState(false);
   const [checkoutMessage, setCheckoutMessage] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
 
@@ -145,12 +148,14 @@ export function TicketBalanceIndicator({
 
   async function handleAddFunds() {
     const parsed = Number.parseFloat(amountInput);
+    setOverLimit(false);
     if (!Number.isFinite(parsed) || parsed < pricingConfig.minTopupUsd) {
       setCheckoutError(`Minimum top-up is $${pricingConfig.minTopupUsd}.`);
       return;
     }
     if (parsed > pricingConfig.maxTopupUsd) {
-      setCheckoutError(`Maximum top-up is $${pricingConfig.maxTopupUsd.toLocaleString()}.`);
+      setCheckoutError(creditsLimitMessage(pricingConfig.maxTopupUsd));
+      setOverLimit(true);
       return;
     }
     setCheckoutError(null);
@@ -361,6 +366,7 @@ export function TicketBalanceIndicator({
                     Minimum ${pricingConfig.minTopupUsd} · Maximum ${pricingConfig.maxTopupUsd.toLocaleString()}
                   </div>
                   {checkoutError && <p className={styles.walletPopoverError} style={{ marginTop: 6 }}>{checkoutError}</p>}
+                  {overLimit && <CreditsLimitSalesNote maxUsd={pricingConfig.maxTopupUsd} />}
                   {checkoutMessage && <p className={styles.walletPopoverSuccess} style={{ marginTop: 6 }}>{checkoutMessage}</p>}
                 </div>
 

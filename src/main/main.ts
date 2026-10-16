@@ -74,7 +74,7 @@ import { netlifyConnectorSDK } from './connectivity/connectors/NetlifyConnectorS
 import { railwayConnectorSDK } from './connectivity/connectors/RailwayConnectorSDK';
 import { slackConnectorSDK } from './connectivity/connectors/SlackConnectorSDK';
 import { startRatingPromptScheduler } from './feedback/RatingPromptScheduler';
-import { isStoreRuntime } from './platform/storeRuntime';
+import { appUserModelId, isStoreRuntime } from './platform/storeRuntime';
 import { registerUpdater } from './platform/updaterSetup';
 import { fetchLatestStoreVersion } from './platform/storeUpdates';
 import { registerPawosProtocolClient } from './platform/protocolRegistration';
@@ -137,10 +137,12 @@ console.error("[PAWOS START] before app.whenReady");
 // already running (and already holding the pending OAuth promise).
 // Request single-instance lock. On failure, we'll proceed anyway since this could be:
 app.setName('PawOS');
-// The direct-download build's shortcuts carry electron-builder's appId as their AppUserModelID;
-// the running process must claim the same one so its jump list and taskbar grouping attach to
-// that shortcut. The Store build's identity comes from its package and must not be overridden.
-if (process.platform === 'win32' && !isStoreRuntime()) app.setAppUserModelId('com.pawos.pet');
+// Electron files the jump list under the identity it has been told, and under its own default
+// ("electron.app.PawOS") when told nothing — an identity no shortcut or tile carries. So both
+// builds name theirs: the direct-download build the one its installer shortcuts carry, the Store
+// build its package's own (see platform/storeRuntime.ts). Without this the Store build's tasks
+// never reached its Start tile, and whatever a child PowerShell left there stayed.
+if (process.platform === 'win32') app.setAppUserModelId(appUserModelId());
 
 // Settings must load from userData before anything reads them (the Start with Windows sync
 // below, IPC). userData is writable in every build; the working directory is not — for the

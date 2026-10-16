@@ -29,7 +29,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, ...outcome });
   } catch (error) {
     if (error instanceof WebChatError) {
-      return NextResponse.json({ ok: false, code: error.code, message: error.message, ...(error.detail ? { detail: error.detail } : {}) }, { status: error.status });
+      // A failure the client may send again carries how long to wait first — in the body for PawOS's
+      // own clients, and as the standard header for anything else.
+      const retry = error.retryAfterMs !== undefined ? { body: { retryAfterMs: error.retryAfterMs }, headers: { "Retry-After": String(Math.ceil(error.retryAfterMs / 1000)) } } : null;
+      return NextResponse.json({ ok: false, code: error.code, message: error.message, ...(error.detail ? { detail: error.detail } : {}), ...(retry?.body ?? {}) }, { status: error.status, ...(retry ? { headers: retry.headers } : {}) });
     }
     console.error("[web-agent] unexpected failure");
     return NextResponse.json({ ok: false, code: "failed", message: "Something went wrong. Please try again." }, { status: 500 });

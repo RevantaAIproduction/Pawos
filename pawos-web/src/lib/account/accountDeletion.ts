@@ -25,7 +25,7 @@ import { listRazorpayInvoices, razorpayAuthHeader } from "../billing/razorpay";
  */
 
 /** Buckets that keep a person's files under a "<userId>/" folder. */
-export const USER_FILE_BUCKETS = ["web-chat-uploads", "ticket-evidence"];
+export const USER_FILE_BUCKETS = ["web-chat-uploads", "ticket-evidence", "generated-images"];
 
 export const DELETE_CODE_COOKIE = "pawos_account_delete";
 export const DELETE_CODE_TTL_SECONDS = 10 * 60;

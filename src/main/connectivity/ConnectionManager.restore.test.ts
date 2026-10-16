@@ -3,6 +3,13 @@ import { connectorRegistry } from './ConnectorRegistry';
 import { connectionManager } from './ConnectionManager';
 import type { ConnectorSDK } from '../../shared/connectivity/ConnectorSDK';
 import type { ConnectorStatus, ConnectivityScope, ConnectorConnection } from '../../shared/connectivity/ConnectivityTypes';
+import { accountSession } from '../auth/AccountSession';
+
+// The verified signed-in account (the main process's own session) is the one these scopes name:
+// connector credentials belong to the signed-in account only (see CredentialVaultBridge).
+beforeEach(() => {
+  vi.spyOn(accountSession, 'verifiedUserId', 'get').mockReturnValue('u-restore-test');
+});
 
 /**
  * Guards the exact regression this file exists to prevent: a page mount (or any repeated read)

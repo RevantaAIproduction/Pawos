@@ -41,6 +41,15 @@ export default function CompanionExperience() {
     },
   });
   const conversationSnapshot = conversation.snapshot;
+  // While a task runs and another chat is being viewed, the panel shows that chat read-only: its own
+  // messages and an idle state (nothing runs there). Sync/approval bridges keep the real snapshot.
+  // Only while a task really is active: otherwise the panel always shows the runtime's own chat, so a
+  // message can never go to a different chat than the one on screen.
+  const viewedConversation = conversation.activeTask ? conversation.viewedConversation : null;
+  const panelSnapshot = useMemo(
+    () => (viewedConversation ? { ...conversationSnapshot, messages: viewedConversation.messages, state: 'idle' as const, draftTranscript: '', pendingConfirmation: false } : conversationSnapshot),
+    [conversationSnapshot, viewedConversation]
+  );
   useConversationSyncPublisher(conversationSnapshot);
   useApprovalCenterBridge(conversationSnapshot, conversation.submitTranscript);
 
@@ -317,7 +326,14 @@ export default function CompanionExperience() {
         <WindowContextProvider>
           <div className={styles.conversationPanelSlot} data-interactive="true" style={{ height: '100%', width: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <ConversationPanel
-              snapshot={conversationSnapshot}
+              snapshot={panelSnapshot}
+              backgroundTask={
+                viewedConversation && conversation.activeTask
+                  ? { goal: conversation.activeTask.goal, waitingForApproval: conversation.activeTask.waitingForApproval, blockedAt: conversation.blockedSubmitAt }
+                  : null
+              }
+              onReturnToTask={conversation.returnToTask}
+              activeExecutionId={conversation.activeTask?.executionId ?? null}
               onClose={() => conversation.close()}
               onStartListening={() => conversation.startListening()}
               onStopListening={() => conversation.stopListening()}
@@ -361,7 +377,7 @@ export default function CompanionExperience() {
               projectFolder={conversation.projectFolder}
               sessionName={conversation.activeSessionName}
               onSetProjectFolder={(folder) => conversation.setProjectFolder(folder)}
-              activeChatId={conversation.currentSessionId}
+              activeChatId={conversation.displayedSessionId}
               onOpenChat={(id) => void conversation.openSession(id)}
               onNewChat={(folder) => conversation.startNewChat(folder)}
             />

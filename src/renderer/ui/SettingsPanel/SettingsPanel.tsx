@@ -99,8 +99,9 @@ export function SettingsPanel({
         <div className={styles.row} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
           <span>Coding mode</span>
           <span style={{ fontSize: 12, opacity: 0.7 }}>
-            A local capability preference — not a purchased plan. Paw Go is planning &amp; analysis only
-            (read-only Coding Canvas, no execution). Paw Pro unlocks full code generation, execution, builds, tests, and browser preview.
+            A local safety switch on this device — not a purchased plan. Planning &amp; analysis only keeps
+            PawOS read-only (Coding Canvas, analysis, no execution). Full execution lets it generate and edit code,
+            run commands, build, test, and open a browser preview.
           </span>
           <div style={{ display: 'flex', gap: 8 }}>
             <button
@@ -108,19 +109,19 @@ export function SettingsPanel({
               onClick={() => changeCodingMode('go')}
               type="button"
             >
-              Paw Go — planning &amp; analysis only
+              Planning &amp; analysis only
             </button>
             <button
               className={codingMode === 'pro' ? styles.primary : styles.secondary}
               onClick={() => changeCodingMode('pro')}
               type="button"
             >
-              Paw Pro — full execution
+              Full execution
             </button>
           </div>
           <span style={{ fontSize: 12, opacity: 0.7 }}>
-            Selecting "Paw Pro" here only takes effect if your account's subscription is actually
-            Paw Pro or higher — otherwise coding actions will still be blocked until you upgrade.
+            Full execution also needs you to be signed in, on a plan that includes running code on this
+            device — otherwise coding actions stay blocked and PawOS says why.
           </span>
         </div>
 

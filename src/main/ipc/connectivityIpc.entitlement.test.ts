@@ -111,6 +111,9 @@ describe('connectivityIpc — direct IPC invocation cannot bypass the connector 
     ({ subscriptionStore } = await import('../billing/SubscriptionStore'));
     ({ connectorRegistry } = await import('../connectivity/ConnectorRegistry'));
     ({ credentialVaultBridge } = await import('../connectivity/CredentialVaultBridge'));
+    // The verified signed-in account (the main process's own session) is the one the scopes name.
+    const { accountSession } = await import('../auth/AccountSession');
+    vi.spyOn(accountSession, 'verifiedUserId', 'get').mockReturnValue('u1');
     vi.spyOn(credentialVaultBridge, 'read').mockResolvedValue(undefined);
     vi.spyOn(credentialVaultBridge, 'store').mockResolvedValue(undefined);
     const { registerConnectivityIpc } = await import('./connectivityIpc');
@@ -212,6 +215,9 @@ describe('connectivityIpc — connectivity:restore cannot reactivate a connector
     ({ subscriptionStore } = await import('../billing/SubscriptionStore'));
     ({ connectorRegistry } = await import('../connectivity/ConnectorRegistry'));
     ({ credentialVaultBridge } = await import('../connectivity/CredentialVaultBridge'));
+    // The verified signed-in account (the main process's own session) is the one the scopes name.
+    const { accountSession } = await import('../auth/AccountSession');
+    vi.spyOn(accountSession, 'verifiedUserId', 'get').mockReturnValue('u1');
     vi.spyOn(credentialVaultBridge, 'read').mockResolvedValue(undefined);
     vi.spyOn(credentialVaultBridge, 'store').mockResolvedValue(undefined);
     vi.spyOn(credentialVaultBridge, 'revoke').mockResolvedValue(undefined);

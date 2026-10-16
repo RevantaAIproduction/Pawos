@@ -19,7 +19,9 @@ export class PawosApiError extends Error {
     /** The server's own error code, when it sent one (e.g. "repository_not_selected"). */
     readonly code: string | null = null,
     /** A finer class of failure the server may add for debugging (e.g. "model_http_429"). Never shown unless debug output is on. */
-    readonly detail: string | null = null
+    readonly detail: string | null = null,
+    /** How long PawOS asked the client to wait before sending the same request again, when it said. */
+    readonly retryAfterMs: number | null = null
   ) {
     super(message);
   }
@@ -54,10 +56,15 @@ function failure(status: number, data: Record<string, unknown>): PawosApiError {
   return withDetail(classify(status, data), data);
 }
 
-/** Only a short lower-case identifier is accepted as a detail: nothing free-form from the wire. */
+/**
+ * Only a short lower-case identifier is accepted as a detail (nothing free-form from the wire), and
+ * only a whole number of milliseconds up to two minutes as a wait.
+ */
 function withDetail(error: PawosApiError, data: Record<string, unknown>): PawosApiError {
   const detail = typeof data.detail === "string" && /^[a-z0-9_]{1,40}$/.test(data.detail) ? data.detail : null;
-  return detail ? new PawosApiError(error.kind, error.message, error.status, error.code, detail) : error;
+  const wait = data.retryAfterMs;
+  const retryAfterMs = typeof wait === "number" && Number.isInteger(wait) && wait >= 0 && wait <= 120_000 ? wait : null;
+  return detail || retryAfterMs !== null ? new PawosApiError(error.kind, error.message, error.status, error.code, detail, retryAfterMs) : error;
 }
 
 function classify(status: number, data: Record<string, unknown>): PawosApiError {

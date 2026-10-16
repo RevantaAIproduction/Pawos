@@ -1,4 +1,5 @@
 import type { ConnectorSDK } from '../../../shared/connectivity/ConnectorSDK';
+import { AccountBound, assertCurrentAccountOperation, bindToAccountEpoch, isStaleAccountOperation } from '../accountEpoch';
 import type { ConnectivityScope, ConnectorConnection, ConnectorStatus, NormalizedConnectivityEvent } from '../../../shared/connectivity/ConnectivityTypes';
 import { BitbucketSourceControlConnector } from '../../infrastructure/connectors/sourceControl/BitbucketSourceControlConnector';
 import { infrastructureConnectorRegistry } from '../../infrastructure/InfrastructureConnectorRegistry';
@@ -61,9 +62,31 @@ export class BitbucketConnectorSDK implements ConnectorSDK {
     ],
   };
 
-  private credential: BitbucketCredential | undefined;
-  private scope: ConnectivityScope | undefined;
-  private currentStatus: ConnectorStatus = { state: 'disconnected', capabilities: [] };
+  // Account-bound (connectivity/accountEpoch.ts): a token obtained for an account that is no longer
+  // signed in is never published here, and reads after an account change find nothing.
+  private readonly credentialSlot = new AccountBound<BitbucketCredential | undefined>(undefined, 'refuse', 'a Bitbucket credential');
+  private get credential(): BitbucketCredential | undefined {
+    return this.credentialSlot.get();
+  }
+  private set credential(value: BitbucketCredential | undefined) {
+    this.credentialSlot.set(value);
+  }
+  private readonly scopeSlot = new AccountBound<ConnectivityScope | undefined>(undefined, 'refuse', 'a Bitbucket scope');
+  private get scope(): ConnectivityScope | undefined {
+    return this.scopeSlot.get();
+  }
+  private set scope(value: ConnectivityScope | undefined) {
+    this.scopeSlot.set(value);
+  }
+  private readonly statusSlot = new AccountBound<ConnectorStatus>({ state: 'disconnected', capabilities: [] }, 'ignore', 'a Bitbucket status');
+  private get currentStatus(): ConnectorStatus {
+    return this.statusSlot.get();
+  }
+  private set currentStatus(value: ConnectorStatus) {
+    this.statusSlot.set(value);
+  }
+  // Every method runs as an operation of the account signed in when it was called.
+  private readonly accountEpochBinding = bindToAccountEpoch(this);
   /** Single-flight: Bitbucket rotates refresh tokens, so overlapping refreshes would invalidate each other. */
   private refreshInFlight: Promise<void> | undefined;
 
@@ -163,10 +186,23 @@ export class BitbucketConnectorSDK implements ConnectorSDK {
     };
   }
 
+  /** The local half of disconnect(): forgets the token held in memory — no provider revoke, no vault change. */
+  forgetLocalSession(): void {
+    // Called from an operation of an account no longer signed in: this connector may now hold the
+    // new account's session, which that operation must not clear (its own work was already refused).
+    if (isStaleAccountOperation()) return;
+    this.refreshInFlight = undefined;
+    this.credential = undefined;
+    this.scope = undefined;
+    infrastructureConnectorRegistry.register('sourceControl', new BitbucketSourceControlConnector(undefined));
+    this.currentStatus = { state: 'disconnected', capabilities: [] };
+  }
+
   async disconnect(scope: ConnectivityScope): Promise<void> {
     this.credential = undefined;
     this.scope = undefined;
     await credentialVaultBridge.revoke(this.definition.id, scope);
+    assertCurrentAccountOperation('a Bitbucket disconnect');
     infrastructureConnectorRegistry.register('sourceControl', new BitbucketSourceControlConnector(undefined));
     this.currentStatus = { state: 'disconnected', capabilities: [] };
   }

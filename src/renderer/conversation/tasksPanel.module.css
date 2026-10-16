@@ -132,7 +132,10 @@
 }
 
 .stopped .goal,
-.stopped .icon {
+.stopped .icon,
+.cancelled .goal,
+.cancelled .icon,
+.cancelling .goal {
   color: var(--pawos-text-secondary, rgba(255, 255, 255, 0.5));
 }
 
@@ -219,4 +222,170 @@
 
 .failedOutput {
   color: rgb(252, 165, 165);
+}
+
+/* ── Tasks Center (every chat) ─────────────────────────────────────────── */
+.completed .goal {
+  text-decoration: line-through;
+  text-decoration-color: rgba(var(--pawos-overlay-rgb, 255, 255, 255), 0.45);
+  color: var(--pawos-text-secondary, rgba(255, 255, 255, 0.55));
+}
+
+.completed .icon {
+  color: var(--pawos-text-secondary, rgba(255, 255, 255, 0.6));
+}
+
+.interrupted .icon {
+  color: rgb(252, 211, 77);
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 11.5px;
+  border: 1px solid rgba(var(--pawos-overlay-rgb, 255, 255, 255), 0.1);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--pawos-text-secondary, rgba(255, 255, 255, 0.65));
+  cursor: pointer;
+}
+
+.filter:hover {
+  background: rgba(var(--pawos-overlay-rgb, 255, 255, 255), 0.06);
+}
+
+.filterActive {
+  background: rgba(var(--pawos-overlay-rgb, 255, 255, 255), 0.1);
+  color: var(--pawos-fg, #fff);
+}
+
+.filterCount {
+  font-size: 10.5px;
+  opacity: 0.7;
+}
+
+.filter:focus-visible,
+.action:focus-visible,
+.rowButton:focus-visible,
+.stop:focus-visible {
+  outline: 2px solid rgba(var(--pawos-overlay-rgb, 255, 255, 255), 0.45);
+  outline-offset: 1px;
+}
+
+.notice {
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.1);
+  color: rgba(255, 230, 190, 0.95);
+}
+
+.rowText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.meta {
+  font-size: 11.5px;
+  color: var(--pawos-text-secondary, rgba(255, 255, 255, 0.5));
+  overflow-wrap: anywhere;
+}
+
+.healthInfo,
+.healthWarn {
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+}
+
+.healthInfo {
+  color: var(--pawos-text-secondary, rgba(255, 255, 255, 0.6));
+}
+
+.healthWarn {
+  color: rgb(252, 211, 77);
+}
+
+.details {
+  margin: 2px 0 8px 34px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 3px 10px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.facts dt {
+  color: var(--pawos-text-secondary, rgba(255, 255, 255, 0.5));
+}
+
+.facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--pawos-fg, rgba(255, 255, 255, 0.85));
+}
+
+.request {
+  white-space: pre-wrap;
+}
+
+.problem {
+  color: rgb(252, 165, 165) !important;
+}
+
+.idLabel,
+.idValue {
+  font-size: 10.5px;
+  opacity: 0.6;
+}
+
+.idValue {
+  font-family: Consolas, 'Cascadia Mono', monospace;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.action {
+  min-height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+  border: 1px solid rgba(var(--pawos-overlay-rgb, 255, 255, 255), 0.12);
+  border-radius: 6px;
+  background: rgba(var(--pawos-overlay-rgb, 255, 255, 255), 0.04);
+  color: var(--pawos-fg, rgba(255, 255, 255, 0.85));
+  cursor: pointer;
+}
+
+.action:hover:not(:disabled) {
+  background: rgba(var(--pawos-overlay-rgb, 255, 255, 255), 0.1);
+}
+
+.action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.details .terminal {
+  margin-left: 0;
 }

@@ -33,6 +33,11 @@ class FakeConversationRuntime {
     this.submitTranscriptCalls.push(text);
   }
 
+  cancelCalls = 0;
+  cancel() {
+    this.cancelCalls += 1;
+  }
+
   emit(snapshot: Partial<Snapshot>) {
     this.snapshot = { ...this.snapshot, ...snapshot };
     for (const l of [...this.listeners]) l(this.snapshot);
@@ -186,6 +191,8 @@ describe('HeadlessTurnRunner.run() — settlement detection', () => {
     const result = await runner.resume('run-1', false);
     expect(result).toEqual({ kind: 'finished', executionRecord: null });
     expect(instance.submitTranscriptCalls).toEqual(['prompt']);
+    // The denied, waiting step is settled (cancelled) rather than left open.
+    expect(instance.cancelCalls).toBe(1);
 
     const again = await runner.resume('run-1', true);
     expect(again).toBeNull();

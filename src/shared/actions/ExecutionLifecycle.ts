@@ -157,3 +157,19 @@ export type ExecutionPlan = {
   unplannableFindingIds: string[];
   approvalRequired: true;
 };
+
+/**
+ * The main process's answer to action:cancel for one execution. `confirmed` is true only once no
+ * step of that execution is running any more — until then the task is shown as "Cancelling".
+ * `nonCancellable`: the running step has no safe stop (e.g. a file write) and was left to finish;
+ * its result is discarded rather than reported as success.
+ */
+export type ExecutionCancelResult = {
+  confirmed: boolean;
+  hadRunningAction: boolean;
+  runningActionType: string | null;
+  stopped: number;
+  nonCancellable: boolean;
+  /** Still running when the wait ended (confirmed: false). */
+  stillRunning: { actionType: string; startedAt: number } | null;
+};

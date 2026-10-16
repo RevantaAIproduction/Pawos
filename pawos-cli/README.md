@@ -84,11 +84,27 @@ PawOS stays inside the project folder. It does not read or write outside it, doe
 that lead out of it, and does not read `.env` files, keys and similar secrets, `node_modules`, or
 build output. A step that would is refused, and PawOS is told so.
 
-### Longer prompts
+PawOS works with paths inside the project as you would write them: relative (`src\App.tsx` or
+`src/App.tsx`) or full (`C:\shopflow\src\App.tsx`), with spaces and accented letters. A full path
+outside the project is refused like any other. On Windows, a name Windows can't create (one with
+`< > : " | ? *`, ending in a dot or space, or a device name such as `nul` or `aux`) is refused before
+anything is written. A file that is read-only, locked by another program, missing or on a full disk
+is reported as exactly that. Renaming a file is a new file plus a delete, each shown to you; `/undo`
+covers both.
 
-- Pasting several lines sends them as one message.
-- End a line with `\` to continue on the next line.
-- Up and Down recall what you sent earlier in this session.
+### Typing
+
+- **Enter** sends the message. A line ending with `\` continues on the next line.
+- **Pasting** several lines sends them as one message. Paste in the terminal's own way (right-click,
+  Ctrl+V or Ctrl+Shift+V).
+- **Up and Down** recall what you sent earlier in this session.
+- **While PawOS is working**, you can type the next request. It is not sent and not shown until the
+  task ends; then it appears on the prompt line with a note, and is sent only when you press Enter.
+  Several lines typed then are offered one at a time. What you type ahead never answers a question
+  PawOS asks during the task (an approval, for example): that question always waits for a fresh
+  answer and says so.
+- **Ctrl+C** stops a task that is running, discarding anything typed ahead. At the prompt it clears
+  what you were typing and asks whether to leave PawOS (Enter or `n` stays).
 
 ### When PawOS's model is busy
 

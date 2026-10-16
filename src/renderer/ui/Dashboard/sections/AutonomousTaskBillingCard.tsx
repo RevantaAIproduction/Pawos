@@ -7,6 +7,7 @@ import { NativeBillingCheckoutModal, type NativeBillingCheckoutIntent } from '..
 import { MIN_TICKET_BALANCE_TOPUP_USD, MAX_TICKET_BALANCE_TOPUP_USD, TICKET_BALANCE_TOPUP_PRESETS_USD, getTicketUnitPriceUsd } from '../../../../shared/organization/AutonomousTaskBillingTypes';
 import type { AutonomousTaskRun, OrganizationBillingEvent, TicketBalance, TicketBalanceTopup } from '../../../../shared/organization/AutonomousTaskBillingTypes';
 import type { TicketPricingConfig } from '../../../../shared/billing/BillingTypes';
+import { CreditsLimitSalesNote, creditsLimitMessage } from '../../billing/CreditsLimitSalesNote';
 
 function getErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -67,6 +68,8 @@ export function AutonomousTaskBillingCard({ organizationId }: { organizationId: 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  // The amount asked for is over the most one top-up can be: the sales note is shown with the error.
+  const [overLimit, setOverLimit] = useState(false);
   // Seeded from the shared code defaults, then replaced by the real, editable config the moment
   // it loads — see TicketPricingConfigStore.ts for why the presets/minimum aren't hardcoded here.
   const [pricingConfig, setPricingConfig] = useState<TicketPricingConfig>({
@@ -170,12 +173,14 @@ export function AutonomousTaskBillingCard({ organizationId }: { organizationId: 
 
   async function addFunds() {
     const parsed = Number.parseFloat(amountInput);
+    setOverLimit(false);
     if (!Number.isFinite(parsed) || parsed < pricingConfig.minTopupUsd) {
       setError(`Minimum top-up is $${pricingConfig.minTopupUsd}.`);
       return;
     }
     if (parsed > pricingConfig.maxTopupUsd) {
-      setError(`Maximum top-up is $${pricingConfig.maxTopupUsd.toLocaleString()}.`);
+      setError(creditsLimitMessage(pricingConfig.maxTopupUsd));
+      setOverLimit(true);
       return;
     }
     setError(null);
@@ -474,6 +479,7 @@ export function AutonomousTaskBillingCard({ organizationId }: { organizationId: 
         </div>
       )}
       {error && <p style={{ color: '#e08c8c', fontSize: 12.5, marginTop: 10 }}>{error}</p>}
+      {overLimit && <CreditsLimitSalesNote maxUsd={pricingConfig.maxTopupUsd} />}
     </div>
     {checkoutIntent && (
       <NativeBillingCheckoutModal

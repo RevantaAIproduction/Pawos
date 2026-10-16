@@ -5,7 +5,7 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { LocalGit } from "../git/localRepository";
 import { AGENT_CLIENT_LIMITS, AGENT_TOOL_NAMES, PawosApiError, PawosClient, isAgentToolName, parseToolCall, parseTurn, toolRisk, type AgentTurnRequest, type AgentTurnResponse, type ToolCall } from "../shared";
-import { TURN_RETRY_DELAYS_MS, runLocalTask } from "./agent";
+import { TURN_RETRY_DELAYS_MS, TURN_RETRY_MAX_WAIT_MS, TURN_RETRY_TOTAL_MS, runLocalTask } from "./agent";
 import { READ_LINES, SEARCH_MATCHES, describeCall, executeTool } from "./tools";
 import { detectWorkspace, listFiles, openWorkspace, projectFolderProblem, protectedReason, resolveInside, type Workspace } from "./workspace";
 
@@ -654,7 +654,8 @@ describe("the loop: PawOS names a step, the CLI runs it here", () => {
     const pawos = service([busy(), tool("step-1", "read_file", { path: "src/cart.ts" }), busy(), busy(), finish("It adds the items up.")]);
     const waits: number[] = [];
     const retries: string[] = [];
-    const outcome = await runLocalTask({ ...options(pawos.client), sleep: async (ms) => void waits.push(ms), onRetry: (attempt, of) => retries.push(`${attempt}/${of}`) });
+    // random 1: the top of the jitter, so each wait is its full schedule step.
+    const outcome = await runLocalTask({ ...options(pawos.client), random: () => 1, sleep: async (ms) => void waits.push(ms), onRetry: (attempt, of) => retries.push(`${attempt}/${of}`) });
     expect(outcome.status).toBe("finished");
     expect(outcome.status === "finished" && outcome.summary).toBe("It adds the items up.");
     // The start was sent twice and the result three times — each retry the very same request.
@@ -666,6 +667,41 @@ describe("the loop: PawOS names a step, the CLI runs it here", () => {
     expect(outcome.steps).toHaveLength(1);
     expect(waits).toEqual([TURN_RETRY_DELAYS_MS[0], TURN_RETRY_DELAYS_MS[0], TURN_RETRY_DELAYS_MS[1]]);
     expect(retries).toEqual([`1/${TURN_RETRY_DELAYS_MS.length}`, `1/${TURN_RETRY_DELAYS_MS.length}`, `2/${TURN_RETRY_DELAYS_MS.length}`]);
+  });
+
+  it("PawOS's own suggested wait is followed — and without one the schedule is jittered, never longer than its step", async () => {
+    const busy = (retryAfterMs: number | null) => new PawosApiError("server", "Paw couldn't answer just now.", 502, "model_unavailable", "model_http_503", retryAfterMs);
+    const told = service([busy(7000), busy(null), finish("ok")]);
+    const waits: number[] = [];
+    await runLocalTask({ ...options(told.client), random: () => 0, sleep: async (ms) => void waits.push(ms) });
+    expect(waits).toEqual([7000, Math.round(TURN_RETRY_DELAYS_MS[1] * 0.5)]);
+  });
+
+  it("a suggested wait longer than the CLI waits, or past the turn's total, ends the retries — the failure stands", async () => {
+    const busy = (retryAfterMs: number) => new PawosApiError("server", "Paw couldn't answer just now.", 502, "model_unavailable", "model_http_503", retryAfterMs);
+    const tooLong = service([busy(TURN_RETRY_MAX_WAIT_MS + 1), finish("never")]);
+    expect((await runLocalTask({ ...options(tooLong.client), sleep: async () => undefined })).status).toBe("failed");
+    expect(tooLong.sent).toHaveLength(1);
+    const waits: number[] = [];
+    const long = service([busy(TURN_RETRY_MAX_WAIT_MS), busy(TURN_RETRY_MAX_WAIT_MS), busy(TURN_RETRY_MAX_WAIT_MS), finish("never")]);
+    expect((await runLocalTask({ ...options(long.client), sleep: async (ms) => void waits.push(ms) })).status).toBe("failed");
+    expect(waits).toEqual([TURN_RETRY_MAX_WAIT_MS, TURN_RETRY_MAX_WAIT_MS]); // a third would pass TURN_RETRY_TOTAL_MS
+    expect(waits.reduce((sum, ms) => sum + ms, 0)).toBeLessThanOrEqual(TURN_RETRY_TOTAL_MS);
+  });
+
+  it("the turn's total counts the time its requests took, not only the waits between them", async () => {
+    let clock = 0;
+    // Each send takes 70 s before PawOS answers that its model is busy, and asks for a 10 s wait.
+    const slowBusy = () => async () => {
+      clock += 70_000;
+      throw new PawosApiError("server", "Paw couldn't answer just now.", 502, "model_unavailable", "model_http_503", 10_000);
+    };
+    const pawos = service([slowBusy(), slowBusy(), slowBusy(), finish("never")]);
+    const outcome = await runLocalTask({ ...options(pawos.client), now: () => clock, sleep: async (ms) => void (clock += ms) });
+    expect(outcome.status).toBe("failed");
+    // 70 s + 10 s wait + 70 s = 150 s: another 10 s wait would end past the total, so there is no third send.
+    expect(pawos.sent).toHaveLength(2);
+    expect(clock).toBeLessThanOrEqual(TURN_RETRY_TOTAL_MS);
   });
 
   it("it gives up after a few tries, and says what PawOS said", async () => {

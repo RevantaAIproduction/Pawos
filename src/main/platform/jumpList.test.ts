@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { buildJumpTasks, extractJumpAction, isJumpProtocolUrl } from './jumpList';
+import { DIRECT_APP_USER_MODEL_ID, STORE_APPLICATION_ID, STORE_APP_USER_MODEL_ID, STORE_PACKAGE_FAMILY_NAME, appUserModelId } from './storeRuntime';
 
 describe('PawOS jump list', () => {
   it('offers PawOS tasks — never PowerShell ones', () => {
@@ -49,9 +50,39 @@ describe('PawOS jump list', () => {
   });
 
   it('the direct build claims the same app identity its installer shortcuts carry', () => {
-    const main = fs.readFileSync(path.join(__dirname, '..', 'main.ts'), 'utf8');
     const builder = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'electron-builder.yml'), 'utf8');
     expect(builder).toContain('appId: "com.pawos.pet"');
-    expect(main).toContain("if (process.platform === 'win32' && !isStoreRuntime()) app.setAppUserModelId('com.pawos.pet');");
+    expect(DIRECT_APP_USER_MODEL_ID).toBe('com.pawos.pet');
+    expect(appUserModelId({})).toBe('com.pawos.pet');
+    expect(appUserModelId({ windowsStore: undefined })).toBe('com.pawos.pet');
+    expect(appUserModelId({ windowsStore: false })).toBe('com.pawos.pet');
+  });
+
+  it("the Store build claims its package's own identity, so the jump list lands on the Start tile and taskbar icon", () => {
+    // What Windows calls the installed app (Get-StartApps): <package family name>!<application id>.
+    expect(STORE_APP_USER_MODEL_ID).toBe('PawosAI.PawOS_y5w6824kw3wcj!PawOS');
+    expect(appUserModelId({ windowsStore: true })).toBe('PawosAI.PawOS_y5w6824kw3wcj!PawOS');
+    // Never Electron's default, which is where the tasks went when the Store build named nothing.
+    expect(appUserModelId({ windowsStore: true })).not.toMatch(/^electron\.app\./);
+    expect(appUserModelId({ windowsStore: true })).not.toBe(appUserModelId({}));
+  });
+
+  it("the Store identity is built from the package's declared identity and application id", () => {
+    const builder = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'electron-builder.yml'), 'utf8');
+    expect(builder).toContain(`applicationId: "${STORE_APPLICATION_ID}"`);
+    // The family name is the identity name plus the publisher hash Partner Center assigns.
+    const identityName = /identityName: "([^"]+)"/.exec(builder)![1];
+    expect(STORE_PACKAGE_FAMILY_NAME.startsWith(`${identityName}_`)).toBe(true);
+    expect(builder).toContain(`PFN ${STORE_PACKAGE_FAMILY_NAME}`);
+    expect(STORE_APP_USER_MODEL_ID).toBe(`${STORE_PACKAGE_FAMILY_NAME}!${STORE_APPLICATION_ID}`);
+  });
+
+  it('both builds tell Electron their identity before the jump list is written', () => {
+    const main = fs.readFileSync(path.join(__dirname, '..', 'main.ts'), 'utf8');
+    expect(main).toContain("if (process.platform === 'win32') app.setAppUserModelId(appUserModelId());");
+    // No build is left to Electron's default any more.
+    expect(main).not.toMatch(/!isStoreRuntime\(\)\) app\.setAppUserModelId/);
+    expect(main.match(/app\.setAppUserModelId\(/g)).toHaveLength(1);
+    expect(main.indexOf('app.setAppUserModelId(appUserModelId())')).toBeLessThan(main.indexOf('installJumpList(app, {'));
   });
 });
