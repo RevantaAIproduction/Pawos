@@ -13,6 +13,10 @@ import { renderOutcome } from "../ui/result";
 import { LiveStatus } from "../ui/spinner";
 import { blank, clean, cleanLines, indent, line, seg, type Line } from "../ui/terminal";
 import { connectService, showConnections } from "./connections";
+import { runEnvironmentCommand } from "./environment";
+import { parseGitHubCommand, parseLinearCommand, runToolCommand, showTools } from "./tools";
+import { autonomousWork } from "./autonomous";
+import { measureTaskChange } from "../local/changeSize";
 import { accountRows } from "./status";
 import { classifyIntent, routeLocal } from "../intent/intent";
 import { runLocalTask, type LocalOutcome, type LocalStep } from "../local/agent";
@@ -361,7 +365,7 @@ interface WriteConsent {
  * on the user's yes; a delete is asked about every time, whatever the mode. Ctrl+C stops the task
  * at once — there is nothing left running anywhere, because the work was happening here.
  */
-async function followLocalTask(ctx: CliContext, workspace: Workspace, branch: string | null, goal: string, consent: WriteConsent, limits: { readOnly?: boolean; lookOnly?: boolean } = {}): Promise<LocalOutcome> {
+async function followLocalTask(ctx: CliContext, workspace: Workspace, branch: string | null, goal: string, consent: WriteConsent, limits: { readOnly?: boolean; lookOnly?: boolean; taskId?: string } = {}): Promise<LocalOutcome> {
   const { term } = ctx;
   let live = new LiveStatus(term, ctx.timers);
   const stop = new AbortController();
@@ -373,7 +377,7 @@ async function followLocalTask(ctx: CliContext, workspace: Workspace, branch: st
       client: ctx.client,
       workspace,
       branch,
-      taskId: newRequestId(),
+      taskId: limits.taskId ?? newRequestId(),
       goal,
       signal: stop.signal,
       forbidden: ctx.stateDirectory ? [ctx.stateDirectory] : [],
@@ -573,7 +577,12 @@ export const COMMAND_HELP: [string, string][] = [
   ["/remote <request>", "Make a change in this project's GitHub repository"],
   ["/chat", "Talk to PawOS without changing anything"],
   ["/connections", "Show your connected services"],
+  ["/env [tool]", "Inspect development tool paths and environment configuration"],
   ["/connect <name>", "Connect a service to your PawOS account"],
+  ["/tools", "What PawOS can read and do in your connected GitHub and Linear"],
+  ["/github <what>", "Read repositories, issues, pull requests and files; comment"],
+  ["/linear <what>", "Read your Linear issues, search them; comment"],
+  ["/work <ticket>", "Autonomous Work: resolve a Linear or GitHub ticket in this project"],
   ["/mode [name]", "Ask before code changes, don't ask, or plan only"],
   ["/resume [number]", "Open earlier PawOS work and carry on with it"],
   ["/undo", "Put back the files PawOS changed in its last task here"],
@@ -775,6 +784,41 @@ async function workspaceSession(ctx: CliContext, options: { signIn?: boolean } =
         case "connections":
           await showConnections(ctx);
           break;
+        case "env":
+          await runEnvironmentCommand(ctx, argument);
+          break;
+        case "tools":
+          await showTools(ctx);
+          break;
+        case "github":
+          await runToolCommand(ctx, parseGitHubCommand(argument, project.repository.kind === "github" ? project.repository.fullName : null), planLabel);
+          break;
+        case "linear":
+          await runToolCommand(ctx, parseLinearCommand(argument), planLabel);
+          break;
+        case "work": {
+          // Autonomous Work runs as an ordinary local task: the session's mode and approvals apply.
+          if (workspace) {
+            if (permission === "auto") consent.writes = true;
+            consent.commands = permission === "auto";
+            consent.git = permission === "auto";
+          }
+          const here = workspace;
+          await autonomousWork(ctx, argument, {
+            inProject: here !== null && permission !== "plan",
+            repository: project.repository.kind === "github" ? project.repository.fullName : null,
+            planLabel,
+            runTask: async (goal) => {
+              if (!here) throw new Error("not in a project");
+              const taskId = newRequestId();
+              const outcome = await followLocalTask(ctx, here, project.branch, goal, consent, { taskId });
+              const { account: done } = localAccount(here.name, outcome.steps);
+              term.print([blank(), ...(outcome.status === "finished" ? [line("  ", seg("PawOS:", "muted")), ...cleanLines(outcome.summary, 400).map((text) => (text === "" ? blank() : line("  ", text))), blank()] : []), ...done, blank()]);
+              return { outcome, size: measureTaskChange(ctx.stateDirectory, here, taskId) };
+            },
+          });
+          break;
+        }
         case "connect":
           if ((await connectService(ctx, argument, planLabel)) && !("repository" in code) && project.repository.kind === "github") {
             // GitHub may just have been connected: see whether code changes are possible here now.

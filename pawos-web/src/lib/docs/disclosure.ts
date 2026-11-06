@@ -295,11 +295,15 @@ function pageSpecificNotes(page: DocPage): DocBlock[] {
 }
 
 /**
- * Pages about PawOS Web (in a browser or on a phone) rather than PawOS Desktop: the section's
- * "How it works" appendix describes the desktop app (workspace folders, local commands), which
- * would be wrong here, so these pages carry their own explanation instead.
+ * Product-comparison and browser pages already define their own execution boundaries. The generic
+ * section appendix describes Desktop and would contradict the multi-product scope of these pages.
  */
-const WITHOUT_DESKTOP_APPENDIX = new Set(['getting-started/web-and-mobile']);
+const WITHOUT_DESKTOP_APPENDIX = new Set([
+  'getting-started/introduction',
+  'getting-started/four-ways-to-work',
+  'getting-started/web-and-mobile',
+  'getting-started/web-cli-desktop',
+]);
 
 export function addDisclosureBlocks(page: DocPage): DocPage {
   if (WITHOUT_DESKTOP_APPENDIX.has(`${page.section}/${page.slug}`)) return page;

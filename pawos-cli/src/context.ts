@@ -20,7 +20,7 @@ export interface CliContext {
   config: ApiConfig;
   session: SessionManager;
   store: CliSessionStore;
-  client: Pick<PawosClient, "getCapabilities" | "getRepositoryReadiness" | "selectRepository" | "sendCodeChange" | "sendChat" | "recoverSend" | "getChange" | "getOverview" | "listIntegrations" | "startConnect" | "listChats" | "getChat" | "agentTurn">;
+  client: Pick<PawosClient, "getCapabilities" | "getRepositoryReadiness" | "selectRepository" | "sendCodeChange" | "sendChat" | "recoverSend" | "getChange" | "getOverview" | "listIntegrations" | "startConnect" | "listChats" | "getChat" | "agentTurn" | "listTools" | "runTool" | "previewAutonomousWork" | "startAutonomousWork" | "finishAutonomousWork">;
   pending: PendingTaskStore;
   /** The folder the CLI was started in, its Git branch and its GitHub repository — read, never assumed. */
   detectProject: () => Promise<ProjectContext>;

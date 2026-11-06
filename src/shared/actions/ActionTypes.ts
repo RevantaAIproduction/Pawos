@@ -1,3 +1,4 @@
+import type { AdrInput, ChangelogInput, DocId } from '../docs/types';
 import type { ExecutionTrail } from './ExecutionLifecycle';
 import type { ConnectivityScope } from '../connectivity/ConnectivityTypes';
 import type { CapabilityConfirmation, Requirement } from '../runtime/RequirementTypes';
@@ -45,6 +46,18 @@ export type CodeEditHunk = {
  *  it (via RequirementGate); every existing call site that never sets it is unaffected.
  *  `projectId` is optional — when present, constrains execution to that project (org_projects.id).
  *  `approvalId` is optional — when destructive action requires approval, ties resume flow to this ID. */
+/** Options shared by planProjectDocs and writeProjectDocs (see the documentation engine, src/shared/docs). */
+export type ProjectDocsOptions = {
+  docs?: DocId[];
+  request?: string;
+  sync?: boolean;
+  plan?: { title?: string; markdown: string };
+  adr?: AdrInput;
+  changelog?: ChangelogInput[];
+  /** Append generated sections to a documentation file the user wrote (never replacing their text). */
+  adoptExisting?: boolean;
+};
+
 export type ActionRequest = {
   scope?: ConnectivityScope;
   codingRuntimeSession?: CodingRuntimeSession;
@@ -157,6 +170,15 @@ export type ActionRequest = {
   // like every other memory-write here — absent from CODING_EXECUTION_ACTION_TYPES on purpose, so
   // it stays available in Paw Go, not just Pro.
   | { type: 'recordArchitecturalDecision'; rootPath: string; decision: string; rationale: string; alternativesConsidered?: string[] }
+  // Unified Documentation (src/shared/docs) — the engine reads the project itself (never content the
+  // model supplies), so a plan and a write always describe the same, current source. `request` is the
+  // user's wording ("update the API docs"), `docs` an explicit list; `sync` documents only what this
+  // task's own change ledger (executionId) touched; `plan` saves an approved project plan as
+  // PRD/REQUIREMENTS/IMPLEMENTATION_PLAN; `adr` records a decision; `changelog` adds entries.
+  // planProjectDocs is read-only (available in Paw Go); writeProjectDocs writes only the listed
+  // `paths` that the fresh plan still says to create or update — destructive and Pro-gated like writeFile.
+  | ({ type: 'planProjectDocs'; rootPath: string } & ProjectDocsOptions)
+  | ({ type: 'writeProjectDocs'; rootPath: string; paths: string[]; confirmed?: boolean } & ProjectDocsOptions)
   // A project-scoped preference requires rootPath; a global one (applies across every project) omits it.
   // Named `preferenceScope`, not `scope` — every ActionRequest already carries an unrelated,
   // optional `scope?: ConnectivityScope` field (see the top-level intersection type below); reusing
@@ -826,6 +848,7 @@ export type ActionResult =
  */
 export const DESTRUCTIVE_ACTION_TYPES: ActionRequest['type'][] = [
   'writeFile',
+  'writeProjectDocs',
   'createFolder',
   'runCommand',
   'movePath',
@@ -902,6 +925,7 @@ export const DESTRUCTIVE_ACTION_TYPES: ActionRequest['type'][] = [
  */
 export const CODING_EXECUTION_ACTION_TYPES: ActionRequest['type'][] = [
   'writeFile',
+  'writeProjectDocs',
   'deletePath',
   'gitAdd',
   'gitCommit',

@@ -176,9 +176,15 @@ describe("the browser is never launched automatically", () => {
       // an address on this computer, and only after the user says yes to that address.
       const mayOpenLocalPages = ["local/process.ts", "local/agent.ts"].includes(file.replace(/\\/g, "/"));
       if (!mayOpenLocalPages) expect(source, file).not.toMatch(/rundll32|xdg-open|FileProtocolHandler|openBrowser|openInBrowser|explorer\.exe|PAWOS_NO_BROWSER/);
-      // The CLI starts programs in two places only: Git queries, and the local agent's command runner —
-      // which starts nothing that isn't on its short list of development tools (never a browser or a shell).
-      if (source.includes("child_process")) expect(["git/localRepository.ts", "local/process.ts"]).toContain(file.replace(/\\/g, "/"));
+      // Git queries and the local command runner start project tools. Environment diagnostics
+      // additionally use fixed, noninteractive CMD/PowerShell commands for read-only resolution checks.
+      if (source.includes("child_process")) expect(["git/localRepository.ts", "local/process.ts", "local/environment.ts"]).toContain(file.replace(/\\/g, "/"));
+      if (file.replace(/\\/g, "/") === "local/environment.ts") {
+        expect(source).toContain('"cmd.exe"');
+        expect(source).toContain('"powershell.exe"');
+        expect(source).toContain('"-NonInteractive"');
+        expect(source).not.toMatch(/shell:\s*true|spawn\(|rmSync|writeFile/);
+      }
       // The CLI's own files make no network request of their own: every request goes through the shared client.
       expect(source).not.toMatch(/\bfetch\(/);
     }

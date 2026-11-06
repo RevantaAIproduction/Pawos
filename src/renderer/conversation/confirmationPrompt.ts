@@ -71,6 +71,8 @@ export function describePlannedAction(request: ActionRequest): string {
       return `run \`${command ?? ''}\`${inFolder}`;
     case 'writeFile':
       return `write the file ${path}`;
+    case 'writeProjectDocs':
+      return `write these documentation files in ${field(request, 'rootPath')}: ${request.paths.join(', ')}`;
     case 'createFolder':
       return `create the folder ${path}`;
     case 'deletePath':

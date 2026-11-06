@@ -1,5 +1,5 @@
 import { AuthRequiredError, type FetchLike } from "../auth/types";
-import type { AccountOverview, Capabilities, CodeChange, ConnectStart, Integration, RepositoryReadiness, SendResult, RecentChat, ChatAttachment, ChatMessage } from "./types";
+import type { AccountOverview, Capabilities, CodeChange, ConnectStart, Integration, RepositoryReadiness, SendResult, RecentChat, ChatAttachment, ChatMessage, ConnectedTool, ConnectedToolList, ToolRun, AutonomousPreview, AutonomousStart, AutonomousFinish, AutonomousFinished } from "./types";
 import { parseTurn, type AgentTurnRequest, type AgentTurnResponse } from "../agent/protocol";
 
 /**
@@ -211,6 +211,41 @@ export class PawosClient {
     const connect = (data.connect ?? {}) as { method?: unknown; message?: unknown };
     if (connect.method === "desktop") return { method: "desktop", message: typeof connect.message === "string" ? connect.message : "" };
     return { method: "redirect" };
+  }
+
+  /** GET /api/web/tools — the connected tools PawOS runs for the account, and which its plan includes. */
+  async listTools(): Promise<ConnectedToolList> {
+    const data = await this.json("GET", "/api/web/tools");
+    const tools = Array.isArray(data.tools) ? (data.tools as ConnectedTool[]).filter((t) => t && typeof t.name === "string" && (t.access === "read" || t.access === "write")) : [];
+    return { available: data.available === true, tools };
+  }
+
+  /**
+   * POST /api/web/tools — PawOS runs one connected tool on its servers with the account's own
+   * connection; the service's token never comes here. A write is only sent with `confirmed` once the
+   * user has said yes; PawOS refuses an unconfirmed write (confirmation_required).
+   */
+  async runTool(tool: string, args: Record<string, unknown>, confirmed = false): Promise<ToolRun> {
+    const data = await this.json("POST", "/api/web/tools", { tool, args, ...(confirmed ? { confirmed: true } : {}) });
+    return { tool: String(data.tool ?? tool), access: data.access === "write" ? "write" : "read", data: (data.data ?? null) as unknown };
+  }
+
+  /** POST /api/web/autonomous/preview — the ticket, the Ticket Balance and the price rule. Starts and charges nothing. */
+  async previewAutonomousWork(ticket: string): Promise<AutonomousPreview> {
+    const data = await this.json("POST", "/api/web/autonomous/preview", { ticket });
+    return data as unknown as AutonomousPreview;
+  }
+
+  /** POST /api/web/autonomous/runs — starts a paid run; only after the user authorized it. */
+  async startAutonomousWork(ticket: string, repository: string | null): Promise<AutonomousStart> {
+    const data = await this.json("POST", "/api/web/autonomous/runs", { ticket, authorized: true, ...(repository ? { repository } : {}) });
+    return data as unknown as AutonomousStart;
+  }
+
+  /** POST /api/web/autonomous/runs/<id> — completes (charged once, by change size) or ends a run. */
+  async finishAutonomousWork(runId: string, body: AutonomousFinish): Promise<AutonomousFinished> {
+    const data = await this.json("POST", `/api/web/autonomous/runs/${encodeURIComponent(runId)}`, body);
+    return data as unknown as AutonomousFinished;
   }
 
   /** Asks whether an earlier send with this request id arrived. Never starts anything. */

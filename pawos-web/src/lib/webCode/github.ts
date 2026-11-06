@@ -266,6 +266,21 @@ export class GitHubClient {
     return (data ?? []).map((note) => `${note.path}:${note.start_line} ${note.annotation_level}: ${note.message}`).join("\n").slice(0, 6000);
   }
 
+  /**
+   * A read-only GET of the GitHub REST API, for connected tools (lib/connectedTools), which build
+   * the path from validated input. Only paths under /user, /repos/ and /search/ are allowed.
+   */
+  async get<T>(path: string): Promise<T | null> {
+    if (!/^\/(user|repos\/|search\/)/.test(path) || path.includes("..")) throw new GitHubError("not_found", "That isn't something PawOS reads from GitHub.");
+    return (await this.request<T>("GET", path)).data;
+  }
+
+  /** Adds a comment to an issue or pull request (GitHub treats both as issues). */
+  async commentOnIssue(fullName: string, number: number, body: string): Promise<{ url: string | null }> {
+    const { data } = await this.request<{ html_url?: string }>("POST", `/repos/${fullName}/issues/${number}/comments`, { body });
+    return { url: httpsOrNull(data?.html_url) };
+  }
+
   /** The pull request from `branch` into `base`, opening it if there isn't one. */
   async ensurePullRequest(fullName: string, branch: string, base: string, title: string, body: string): Promise<GitHubPullRequest> {
     const owner = fullName.split("/")[0];

@@ -132,6 +132,11 @@ export class FakePawos {
   /** What GET /api/web/changes returns on each poll (the last repeats). */
   polls: (CodeChange | null)[] = [null];
   pollCount = 0;
+  /**
+   * Scripted answers for other routes, by "METHOD /path" (a path ending in "/*" matches any last
+   * segment, e.g. "POST /api/web/autonomous/runs/*"), in order; the last one repeats.
+   */
+  scripted = new Map<string, Scripted[]>();
   private waiters: { at: number; release: () => void }[] = [];
 
   /** A sign-in session as PawOS would issue it. */
@@ -259,6 +264,9 @@ export class FakePawos {
       this.waiters = this.waiters.filter((entry) => entry.at > this.pollCount);
       return current ? json(200, { ok: true, change: current }) : json(404, { ok: false, code: "not_found", message: "That change doesn't exist." });
     }
+    const wildcard = `${call.method} ${call.path.replace(/\/[^/]+$/, "/*")}`;
+    const queue = this.scripted.get(route) ?? this.scripted.get(wildcard);
+    if (queue && queue.length > 0) return play(queue.length > 1 ? queue.shift()! : queue[0]!);
     return json(404, { ok: false, code: "not_found", message: "No such route." });
   };
 }

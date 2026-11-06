@@ -5,7 +5,7 @@ export const billingPages: DocPage[] = [
     section: 'billing',
     slug: 'plans',
     title: 'Plans',
-    description: 'The real tier ladder and what each tier unlocks.',
+    description: 'Plan capability overview; check your account for current terms.',
     blocks: [
       {
         type: 'table',
@@ -26,17 +26,16 @@ export const billingPages: DocPage[] = [
         type: 'table',
         headers: ['Tier', 'Price', 'Paw Compute included'],
         rows: [
-          ['Go', 'Free', '500 PC every 14 days'],
-          ['Pro', '$20/month', '2,000 PC per billing period'],
-          ['Pro Max 5x', '$100/month', '10,000 PC per billing period'],
-          ['Pro Max 20x', '$250/month', '25,000 PC per billing period'],
-          ['Team', 'Per seat', 'Per member: Standard seat 2,000 PC, Premium seat 10,000 PC a month (no shared pool)'],
-          ['Enterprise', 'Custom', 'Drawn from your organization’s shared pool'],
+          ['Go', 'See current account plan details', 'See current account plan details'],
+          ['Pro', 'See current account plan details', 'See current account plan details'],
+          ['Pro Max', 'See current account plan details', 'See current account plan details'],
+          ['Team', 'See current organization plan details', 'Seat and allowance details vary by account'],
+          ['Enterprise', 'See current organization plan details', 'See current organization plan details'],
         ],
       },
       {
         type: 'note',
-        text: '$1 of value = 100 PC. Pro and Pro Max include a weekly limit of half your plan’s PC, so your usage is spread across the billing period.',
+        text: 'Prices, allowances, tiers and limits can change and may vary by account or region. Use the billing screen as the source of truth before purchasing or upgrading.',
       },
     ],
     related: ['concepts/entitlements', 'billing/upgrades'],
@@ -55,7 +54,7 @@ export const billingPages: DocPage[] = [
           'Usage records can’t be edited after the fact.',
           'Your plan’s PC renews with each billing period; unused plan PC does not carry over.',
           'The weekly limit resets every 7 days from the start of your billing period.',
-          'Paw Go includes 500 PC every 14 days.',
+          'Your current plan allowance and reset schedule appear in Settings → Usage.',
         ],
       },
     ],
@@ -75,7 +74,7 @@ export const billingPages: DocPage[] = [
       {
         type: 'status',
         status: 'implemented',
-        text: 'Pro and Pro Max include a set amount of PC per billing period with a weekly limit; credits add more. Paw Go includes 500 PC every 14 days. Team members each have their own seat’s PC; Enterprise draws from an organization-wide pool.',
+        text: 'Plan allowances, weekly limits, credit behavior and organization pooling are account-controlled. Check Settings → Usage and your organization billing screen for current values.',
       },
       {
         type: 'warning',
@@ -139,15 +138,11 @@ export const billingPages: DocPage[] = [
       {
         type: 'list',
         items: [
-          'Go: 500 PC every 14 days.',
-          'Pro: 2,000 PC per billing period ($20/month), with a weekly limit of 1,000 PC.',
-          'Pro Max 5x: 10,000 PC per billing period ($100/month), with a weekly limit of 5,000 PC.',
-          'Pro Max 20x: 25,000 PC per billing period ($250/month), with a weekly limit of 12,500 PC.',
-          'Team: each member’s own seat — Standard 2,000 PC, Premium 10,000 PC a month, weekly limit half of that. No shared pool; credits can be added per member.',
-          'Enterprise: usage is drawn from your organization’s shared pool.',
+          'Your plan allowance, reset schedule and any weekly limit are shown in Settings → Usage.',
+          'Organization seat allowances and pooling are shown in your organization billing settings.',
           'Reached your weekly limit? The rest of your plan is still there — it becomes available again when the weekly limit resets.',
           'Used all of your plan’s PC for this billing period? Buy credits, upgrade, or wait for your plan to renew. Included plan PC does not carry over.',
-          'Credits: pay any amount from $5 and get 100 PC per $1. Credits never expire and are used after your plan’s included PC.',
+          'Credit purchase amounts, conversion, expiry and application order can change; review the terms displayed at checkout.',
           'Everything else keeps working — hitting a limit is never a hard stop for the rest of the app.',
           'PawOS Web and your phone’s browser use the same allowance on paid plans; Go has 4 Web messages of its own. See Web, Mobile & Desktop.',
         ],
@@ -203,7 +198,7 @@ export const billingPages: DocPage[] = [
           ['Local files, terminal, tests, installing packages', 'Yes (paid plans)', 'No', 'No'],
           ['Autonomous Work, browser automation', 'Yes, as your plan allows', 'No', 'No'],
           ['Jira, Linear, Slack and other connected tools', 'Yes, as your plan allows', 'No', 'No'],
-          ['Meetings, Companion, working offline', 'Yes', 'No', 'No'],
+          ['Desktop companion experience', 'Yes', 'No', 'No; offline behavior is not verified'],
         ],
       },
       {
@@ -225,7 +220,7 @@ export const billingPages: DocPage[] = [
     section: 'billing',
     slug: 'tier-comparison',
     title: 'Tier Comparison & Pricing',
-    description: 'Detailed comparison of all PawOS tiers — Go, Pro, Pro Max, Team, and Enterprise.',
+    description: 'Plan capabilities vary; use the live billing screen for current pricing and limits.',
     blocks: [
       {
         type: 'heading',
@@ -236,27 +231,23 @@ export const billingPages: DocPage[] = [
       {
         type: 'heading',
         level: 2,
-        text: 'Go Tier (Free)',
+        text: 'Go Tier',
         id: 'go-tier-free',
       },
       {
         type: 'paragraph',
-        text: 'The free tier is perfect for learning, experimentation and small projects, with PawOS’s AI assistance in the desktop app.',
+        text: 'The Go plan provides the capabilities and allowance shown for your account in PawOS billing settings.',
       },
       {
         type: 'list',
         items: [
-          'Cost: Free forever',
-          'Execution: Planning and analysis only — no file edits, commands, or deployments',
-          'Paw Compute: 500 PC every 14 days',
-          'Use Cases: Learning, trying PawOS, read-only project analysis',
-          'Payment: None required',
+          'Current price, allowance, execution entitlements and payment requirements are shown in PawOS billing settings.',
         ],
       },
       {
         type: 'heading',
         level: 2,
-        text: 'Pro Tier ($20 USD/month or ₹1,913 INR/month)',
+        text: 'Pro Tier',
         id: 'pro-tier',
       },
       {
@@ -266,8 +257,7 @@ export const billingPages: DocPage[] = [
       {
         type: 'list',
         items: [
-          'Cost: $20/month (USD) or ₹1,913/month (INR)',
-          'Annual Option: $200/year (USD) or ₹19,053/year (INR) — saves 17%',
+          'Check billing settings for current price and available billing intervals.',
           'Execution: Full file edits, commands, installs, deployments',
           'Paw Compute: 2,000 PC per billing period, with a weekly limit of 1,000 PC (on the annual plan, 2,000 PC each month)',
           'Autonomous Work: Not included — available on Pro Max and above',
@@ -278,7 +268,7 @@ export const billingPages: DocPage[] = [
       {
         type: 'heading',
         level: 2,
-        text: 'Pro Max Tier (from $100 USD/month or ₹9,565 INR/month)',
+        text: 'Pro Max Tier',
         id: 'pro-max-tier',
       },
       {
@@ -288,8 +278,7 @@ export const billingPages: DocPage[] = [
       {
         type: 'list',
         items: [
-          'Pro Max 5x: $100/month (₹9,565) — 10,000 PC per billing period, with a weekly limit of 5,000 PC',
-          'Pro Max 20x: $250/month (₹23,913) — 25,000 PC per billing period, with a weekly limit of 12,500 PC',
+          'Check billing settings for current plan options, prices and allowances.',
           'Execution: Full capabilities (same as Pro)',
           'Advanced Features: Extended context windows, custom configurations',
           'Autonomous Work: Included — paid from your Ticket Balance at volume-tiered pricing',
@@ -306,7 +295,7 @@ export const billingPages: DocPage[] = [
       {
         type: 'heading',
         level: 2,
-        text: 'Team Tier (₹1,913 per seat/month)',
+        text: 'Team Tier',
         id: 'team-tier',
       },
       {
@@ -316,14 +305,14 @@ export const billingPages: DocPage[] = [
       {
         type: 'list',
         items: [
-          'Cost: ₹1,913/seat/month (multiply by total seats)',
+          'Check organization billing settings for current per-seat price.',
           'Maximum Seats: 150 seats hard limit',
-          'Seat Types: Standard (₹1,913) and Premium (₹9,565) available',
+          'Seat types and prices depend on current organization options.',
           'Execution: Full Pro capabilities per team member',
           'Paw Compute: each member’s own seat — Standard 2,000 PC, Premium 10,000 PC a month (no shared pool)',
           'Team Features: Shared organization workspace, invite members by email, audit logs',
           'Organization Settings: Team name, member roles (Owner, Admin, Member)',
-          'Billing: Invoice-based for amounts >₹50,000, credit card for ≤₹50,000',
+          'Available billing and payment methods are shown in organization billing settings.',
           'Address Capture: Automatic for invoices, billing address required',
           'Use Cases: Startup teams, consulting agencies, in-house development teams',
         ],
@@ -363,9 +352,7 @@ export const billingPages: DocPage[] = [
         type: 'table',
         headers: ['Amount', 'Method', 'Tier(s)'],
         rows: [
-          ['≤₹50,000', 'Credit card (Visa, Mastercard, RuPay)', 'Individual, Team'],
-          ['>₹50,000', 'Invoice', 'Team, Enterprise'],
-          ['Custom', 'Custom terms', 'Enterprise'],
+          ['Current checkout options', 'See payment methods offered to your account', 'Depends on account and region'],
         ],
       },
     ],
@@ -407,8 +394,7 @@ export const billingPages: DocPage[] = [
         type: 'list',
         items: [
           'Save and manage multiple payment cards',
-          'Invoices for amounts >₹50,000',
-          'Card for amounts ≤₹50,000',
+          'Current payment options are shown during checkout.',
         ],
       },
       {

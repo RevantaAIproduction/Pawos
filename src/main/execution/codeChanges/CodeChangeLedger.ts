@@ -50,7 +50,7 @@ const MAX_CACHED_LEDGERS = 50;
 const BLOB_GRACE_MS = 10 * 60_000;
 const EXECUTION_ID = /^[A-Za-z0-9-]{8,64}$/;
 
-export const FILE_CHANGE_ACTION_TYPES = new Set(['applyCodeEdit', 'writeFile', 'deletePath', 'movePath']);
+export const FILE_CHANGE_ACTION_TYPES = new Set(['applyCodeEdit', 'writeFile', 'deletePath', 'movePath', 'writeProjectDocs']);
 /** Actions that can change files in ways PawOS does not attribute per file. */
 export const UNTRACKED_CHANGE_ACTION_TYPES = new Set(['runCommand', 'buildProject', 'runValidationPipeline', 'startProcess', 'runDeployScript']);
 
@@ -473,7 +473,15 @@ export class CodeChangeLedgerStore {
     if (!EXECUTION_ID.test(executionId) || !FILE_CHANGE_ACTION_TYPES.has(request.type)) return null;
     const accountId = this.deps.getAccountId();
     if (!accountId) return null;
-    const rawPaths = request.type === 'movePath' ? [request.from, request.to] : [request.path];
+    // writeProjectDocs writes several documentation files (relative to its rootPath) in one step.
+    const rawPaths =
+      request.type === 'movePath'
+        ? [request.from, request.to]
+        : request.type === 'writeProjectDocs'
+          ? Array.isArray(request.paths) && typeof request.rootPath === 'string' && request.paths.length > 0
+            ? request.paths.map((p) => (typeof p === 'string' && p ? path.resolve(request.rootPath as string, p) : null))
+            : [null]
+          : [request.path];
     if (!rawPaths.every((p) => typeof p === 'string' && p.length > 0)) return null;
     const absPaths = (rawPaths as string[]).map((raw) => realPathLoose(raw));
 

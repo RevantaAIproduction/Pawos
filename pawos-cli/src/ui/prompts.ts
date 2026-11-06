@@ -1,4 +1,5 @@
 import * as readline from "readline";
+import { PassThrough } from "stream";
 import { StringDecoder } from "string_decoder";
 
 /**
@@ -203,8 +204,36 @@ export function createPrompter(input: Input, output: NodeJS.WritableStream, opti
           const ahead = next?.text ?? "";
           if (next) output.write(`${next.more > 0 ? typedAheadKeptOf(next.more) : TYPED_AHEAD_KEPT}\n`);
           else if (!askOptions.keepTypedAhead && typed.waiting) output.write(`${TYPED_AHEAD_IGNORED}\n`);
-          const rl = readline.createInterface({ input, output, terminal: true, history: [...history], historySize: HISTORY_SIZE });
+          // Node binds its keypress decoder to the first readline.Interface on a stream. PawOS
+          // closes interfaces between questions, so give each question a fresh stream wrapper;
+          // otherwise later interfaces receive key events but Up/Down history silently stops.
+          const promptInput = new PassThrough();
+          const promptTTY = promptInput as typeof promptInput & Input;
+          promptTTY.isTTY = true;
+          if (input.setRawMode) promptTTY.setRawMode = (mode) => input.setRawMode?.(mode);
+          input.pipe(promptInput);
+          // Only the main prompt gets command history. Approval/exit/login prompts start empty.
+          const rl = readline.createInterface({ input: promptInput, output, terminal: true, history: [], historySize: 0 });
           open = rl;
+          let historyIndex = -1;
+          let draft = "";
+          const replaceLine = (text: string) => {
+            (rl as readline.Interface & { line: string; cursor: number }).line = text;
+            (rl as readline.Interface & { line: string; cursor: number }).cursor = text.length;
+            rl.prompt(true);
+          };
+          const onKeypress = (_text: string | undefined, key: readline.Key) => {
+            if (!askOptions.keepTypedAhead || key.ctrl || key.meta || key.shift) return;
+            if (key.name === "up" && historyIndex < history.length - 1) {
+              if (historyIndex === -1) draft = rl.line;
+              historyIndex++;
+              replaceLine(history[historyIndex]!);
+            } else if (key.name === "down" && historyIndex >= 0) {
+              historyIndex--;
+              replaceLine(historyIndex < 0 ? draft : history[historyIndex]!);
+            }
+          };
+          promptInput.on("keypress", onKeypress);
           let answered = false;
           let pending: NodeJS.Timeout | undefined;
           const lines: string[] = [];
@@ -213,8 +242,11 @@ export function createPrompter(input: Input, output: NodeJS.WritableStream, opti
             answered = true;
             if (pending) clearTimeout(pending);
             open = null;
+            promptInput.removeListener("keypress", onKeypress);
+            input.unpipe(promptInput);
+            promptInput.end();
             // One entry per message, however many lines it had; short answers (y, n) are not worth recalling.
-            if (value !== null && value.trim().length > 2) history = [value.replace(/\s*\n\s*/g, " ").trim(), ...history.filter((entry) => entry !== value)].slice(0, HISTORY_SIZE);
+            if (askOptions.keepTypedAhead && value !== null && value.trim().length > 2) history = [value.replace(/\s*\n\s*/g, " ").trim(), ...history.filter((entry) => entry !== value)].slice(0, HISTORY_SIZE);
             rl.close();
             // From here until the next question, keys are PawOS's to keep (see TypedAhead).
             typed.collect();

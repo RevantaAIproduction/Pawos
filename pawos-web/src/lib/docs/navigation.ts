@@ -30,6 +30,7 @@ export const DOC_NAV: DocNavSection[] = [
       { slug: 'workspaces', title: 'Workspaces' },
       { slug: 'working-history', title: 'Working History' },
       { slug: 'work-records', title: 'Work Records' },
+      { slug: 'desktop-capability-status', title: 'Desktop Capability Status' },
       { slug: 'plans', title: 'Plans' },
       { slug: 'evidence', title: 'Evidence' },
       { slug: 'permissions', title: 'Permissions' },

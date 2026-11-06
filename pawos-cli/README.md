@@ -3,6 +3,12 @@
 PawOS in your terminal: ask PawOS anything from any folder, have it work on the project folder you
 start it in, or have it make changes in your connected GitHub project.
 
+> **Release status:** the currently published npm package is **1.2.0**. The `/env`, `/tools`,
+> `/github`, `/linear`, and `/work` commands described in the candidate section below exist only in
+> the local **1.2.1 candidate**. That candidate is unpublished; these commands are not available to
+> users who install the current npm release. Candidate service commands have not been verified
+> against the live production service.
+
 ```bash
 npm install -g @revantaai/pawos-cli
 ```
@@ -12,6 +18,11 @@ pawos
 ```
 
 `pawos` starts in any folder. Git is not required.
+
+The CLI is independently installed and runs local project work in the folder where you start it.
+The Desktop application and PawOS Web do not need to be installed. Sign-in does require a PawOS
+account and may use a browser authorization handoff; the CLI does not ask for your password in the
+terminal.
 
 ## Requirements
 
@@ -145,6 +156,24 @@ Leave with `/exit` or Ctrl+D. Ctrl+C asks before leaving.
 | `pawos status` | Show your account, plan, usage and connections (changes nothing) |
 | `pawos version` | Show the version |
 
+## Local candidate 1.2.1 — unpublished capabilities
+
+The following commands are implemented in the local 1.2.1 candidate but are **not in the published
+1.2.0 npm package**. Do not use these commands as published installation instructions until 1.2.1
+is released. The local implementation and tests do not establish that the corresponding API routes
+are deployed or working for production accounts.
+
+| Command | Local candidate behavior |
+|---|---|
+| `/env [tool]` | Read-only development environment diagnostics. Supported tool names: `node`, `npm`, `git`, `python` (aliases `python3`, `py`), `java`, `javac`, `adb`, and `sdkmanager`. On Windows it compares current process resolution with fresh CMD and PowerShell, and reports PATH duplicates/stale state and Java/Android home settings. It never changes PATH or installs software. |
+| `/tools` | Lists GitHub/Linear tools the service reports as available to the account. |
+| `/github …` | Reads repositories, issues, pull requests and repository files; a comment requires confirmation. |
+| `/linear …` | Reads/searches Linear issues; a comment requires confirmation. |
+| `/work <ticket>` | Starts an explicitly authorized local ticket task for supported GitHub or Linear references. It uses the local project and candidate service APIs. Entitlement, billing, connected-account, writeback, and live production behavior remain unverified. It does not mean every ticket creates a pull request. |
+
+The candidate does not add a general CLI MCP executor, software installation manager, or PATH
+repair. Desktop software/environment capabilities are separate.
+
 ## Asking before a change on GitHub
 
 A change made with `/remote` is pushed to your repository on GitHub, so PawOS asks first. It shows
@@ -277,34 +306,31 @@ Everywhere:
 - You cannot choose the model: PawOS's service uses its own, and offers no choice to clients.
 - You cannot send a folder. One text file can go with a chat message (`/attach`); images and files
   with a code change are not supported from the CLI.
-- Using your connected services from a conversation — reading GitHub issues, Slack messages or
-  Google Drive files, creating a Linear ticket, calling an MCP server — runs only in the PawOS
-  desktop app today. PawOS's servers do not offer it to PawOS Web or to this CLI, so when you ask
-  for it here PawOS tells you it needs the desktop app, and nothing is done.
-- Autonomous Work (ticket solving) likewise runs only in the PawOS desktop app, and its ticket
-  balance is not shown here.
+- In **published CLI 1.2.0**, connected service actions and Autonomous Work are not exposed as CLI
+  commands; use PawOS Desktop for those workflows. The local 1.2.1 candidate adds the limited
+  GitHub/Linear and `/work` commands listed above, but live production availability is unverified.
 - Most services are connected from PawOS's Integrations page or the desktop app; the CLI points
   you there and checks the result.
 - Plan limits are the same as on PawOS Web, because the same service does the work.
 
-## Not available from the CLI yet
+## Published 1.2.0: service capabilities not exposed in this package
 
-These need PawOS's servers to offer them to signed-in clients other than the desktop app. Today
-they don't, so the CLI does not attempt them and does not work around it — it never reaches into
-the desktop app, a database or a provider directly.
+This table describes the published npm release only. It does not make claims about whether a newer
+endpoint may exist in the repository or be deployed. The CLI does not reach into the Desktop app,
+the database, or provider credentials.
 
 | Capability | What PawOS's servers offer today | What the CLI does |
 |---|---|---|
-| MCP tool calls | None outside the desktop app (`web.mcpRead` is reported as desktop-only) | Shows the status; a request is answered by PawOS with "needs PawOS Desktop" |
-| Connector actions (GitHub issues, Slack, Google Drive, Linear, ...) | None outside the desktop app | Same |
-| Connecting a service | Listing and status; the connection itself is made in a browser on PawOS's Integrations page, or in the desktop app | Says where, then checks the status |
-| Autonomous Work (ticket solving) | None (`web.autonomousWork` is reported as not available yet) | Shows the status; cannot start it |
+| MCP tool calls | Not exposed as CLI commands | Use Desktop MCP features where supported |
+| Connected provider actions | Not exposed as CLI commands in 1.2.0 | Use Desktop or the provider's documented PawOS Web workflow |
+| Connecting a service | Connection is managed through PawOS's supported connection flow | `/connect <name>` explains where to connect and checks reported status |
+| Autonomous Work | Not exposed as a CLI command in 1.2.0 | Use Desktop where eligible |
 | Ticket balance | Not returned by any client API | Not shown |
 | Usage and credits | Read-only, in Paw Compute (`/api/dashboard/overview`) | Shown as returned |
 | Plan and entitlements | The plan label and each capability's status (`/api/web/capabilities`) | Shown as returned; PawOS enforces them |
 
-Supporting the first five from the CLI is server work: PawOS would need to expose them through its
-authenticated API, with the same plan, credit and organization checks it applies in the desktop app.
+The local 1.2.1 candidate is a separate implementation state; its service-backed commands are
+listed above and must not be assumed to work against production until verified.
 
 ## Security
 

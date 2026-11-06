@@ -32,6 +32,8 @@ export type WebCapabilityId =
   | "web.imageGeneration"
   | "web.remoteWork"
   | "web.autonomousWork"
+  | "web.connectedTools"
+  | "web.localAutonomousWork"
   | "web.browserWork";
 
 export type WebCapabilityAvailability = "available" | "desktopOnly" | "future";
@@ -96,6 +98,12 @@ export type WebImageMimeType = (typeof WEB_IMAGE_MIME_TYPES)[number];
 
 const ALL_TIERS: readonly AccountTier[] = ["go", "pro", "proMax", "team", "enterprise", "build"];
 const PAID_TIERS: readonly AccountTier[] = ["pro", "proMax", "team", "enterprise", "build"];
+/**
+ * The desktop's Autonomous Work tiers: the tiers holding FeatureId 'autonomousTaskBilling'
+ * (src/main/billing/EntitlementService.ts — Pro Max, Team, Enterprise; never Go, Pro or Build).
+ * connectedTools.test.ts reads the desktop source and fails if this list ever disagrees with it.
+ */
+export const AUTONOMOUS_WORK_TIERS: readonly AccountTier[] = ["proMax", "team", "enterprise"];
 
 interface WebCapabilityRule {
   id: WebCapabilityId;
@@ -136,6 +144,22 @@ export const WEB_CAPABILITY_RULES: readonly WebCapabilityRule[] = [
   },
   { id: "web.remoteWork", label: "Remote work sessions", description: "Run work in an isolated remote workspace.", availability: "future", tiers: [] },
   { id: "web.autonomousWork", label: "Autonomous Work", description: "Resolve tickets end to end from the web.", availability: "future", tiers: [] },
+  {
+    id: "web.connectedTools",
+    label: "Connected tools",
+    description: "Read your connected GitHub and Linear from the PawOS CLI, and comment there when you approve it. Each service also needs its connector on your plan.",
+    availability: "available",
+    // Every plan: which services it may use is decided per provider by the connector entitlement
+    // (GitHub on every plan, Linear from Pro Max), exactly as on the desktop.
+    tiers: ALL_TIERS,
+  },
+  {
+    id: "web.localAutonomousWork",
+    label: "Autonomous Work in the CLI",
+    description: "Resolve a GitHub or Linear ticket on your own computer with the PawOS CLI, paid from your Ticket Balance like Autonomous Work in PawOS Desktop.",
+    availability: "available",
+    tiers: AUTONOMOUS_WORK_TIERS,
+  },
   { id: "web.browserWork", label: "Browser work", description: "Drive a browser from the web.", availability: "future", tiers: [] },
 ];
 

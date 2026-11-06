@@ -35,6 +35,58 @@ const WIDGET_TOOL_DESCRIPTION = [
   'INTERACTION: a button can call sendPrompt("text") to send a follow-up question as the user.',
 ].join(' ');
 
+const DOC_IDS = ['readme', 'prd', 'requirements', 'implementation-plan', 'changelog', 'architecture', 'database', 'api', 'auth', 'testing', 'deployment', 'adr', 'components', 'widgets', 'design-system', 'pages', 'ui-flows'] as const;
+const CHANGELOG_CATEGORIES = ['Added', 'Changed', 'Fixed', 'Removed', 'Security', 'Deprecated'] as const;
+
+/** Options shared by plan_project_docs and write_project_docs (both must be given the same ones). */
+const PROJECT_DOCS_PROPERTIES = {
+  rootPath: { type: 'string', description: 'Absolute path of the project root.' },
+  request: { type: 'string', description: 'The user\'s request in their words, e.g. "document the API and the database". Picks the documents when `docs` is not given; omit both for every document the source supports.' },
+  docs: { type: 'array', items: { type: 'string', enum: [...DOC_IDS] }, description: 'Explicit documents to produce.' },
+  sync: { type: 'boolean', description: 'true = only update the documentation that the files changed in THIS task affect (from the task change ledger). Use after making code changes.' },
+  plan: {
+    type: 'object',
+    description: 'An approved project plan to save as PRD.md, REQUIREMENTS.md and IMPLEMENTATION_PLAN.md — only after the user approved it.',
+    properties: { title: { type: 'string' }, markdown: { type: 'string', description: 'The plan exactly as the user approved it.' } },
+    required: ['markdown'],
+  },
+  adr: {
+    type: 'object',
+    description: 'A decision that was actually made, to record as a new docs/adr/NNNN-*.md.',
+    properties: { title: { type: 'string' }, context: { type: 'string' }, decision: { type: 'string' }, consequences: { type: 'string' }, alternatives: { type: 'array', items: { type: 'string' } } },
+    required: ['title', 'context', 'decision'],
+  },
+  changelog: {
+    type: 'array',
+    description: 'CHANGELOG.md entries for what this task actually changed.',
+    items: { type: 'object', properties: { category: { type: 'string', enum: [...CHANGELOG_CATEGORIES] }, entry: { type: 'string' } }, required: ['category', 'entry'] },
+  },
+  adoptExisting: { type: 'boolean', description: 'true = add the PawOS sections after the text of a documentation file the user wrote themselves (their text is never replaced). Only when the user asked for it.' },
+};
+
+function projectDocsOptions(args: Record<string, unknown>) {
+  const rawPlan = args.plan && typeof args.plan === 'object' ? (args.plan as Record<string, unknown>) : undefined;
+  const adr = args.adr && typeof args.adr === 'object' ? (args.adr as Record<string, unknown>) : undefined;
+  return {
+    request: typeof args.request === 'string' ? args.request : undefined,
+    docs: Array.isArray(args.docs) ? args.docs.filter((d): d is (typeof DOC_IDS)[number] => (DOC_IDS as readonly unknown[]).includes(d)) : undefined,
+    sync: args.sync === true ? true : undefined,
+    plan: rawPlan && typeof rawPlan.markdown === 'string' ? { title: typeof rawPlan.title === 'string' ? rawPlan.title : undefined, markdown: rawPlan.markdown } : undefined,
+    adr:
+      adr && typeof adr.title === 'string' && typeof adr.context === 'string' && typeof adr.decision === 'string'
+        ? { title: adr.title, context: adr.context, decision: adr.decision, consequences: typeof adr.consequences === 'string' ? adr.consequences : undefined, alternatives: isStringArray(adr.alternatives) ? adr.alternatives : undefined }
+        : undefined,
+    changelog: Array.isArray(args.changelog)
+      ? args.changelog.flatMap((e) => {
+          const entry = e && typeof e === 'object' ? (e as Record<string, unknown>) : {};
+          const category = CHANGELOG_CATEGORIES.find((c) => c === entry.category);
+          return category && typeof entry.entry === 'string' ? [{ category, entry: entry.entry }] : [];
+        })
+      : undefined,
+    adoptExisting: args.adoptExisting === true ? true : undefined,
+  };
+}
+
 export const ACTION_TOOL_DEFINITIONS: ReasoningToolDefinition[] = [
   {
     // Renderer-only (ConversationRuntime.presentResume) — nothing is written to disk; the user downloads it.
@@ -402,6 +454,26 @@ export const ACTION_TOOL_DEFINITIONS: ReasoningToolDefinition[] = [
         alternativesConsidered: { type: 'array', items: { type: 'string' }, description: 'Optional — other options that were considered and rejected.' },
       },
       required: ['rootPath', 'decision', 'rationale'],
+    },
+  },
+  {
+    name: 'plan_project_docs',
+    description:
+      "Plans the project's documentation from its real source (PawOS documentation engine): which files to create or update — README, PRD/REQUIREMENTS/IMPLEMENTATION_PLAN, CHANGELOG, ARCHITECTURE with a module diagram, database ERD, API, auth, testing, deployment, ADRs, component/widget pages with their real props, design system, pages and UI flows — with the reason for each and what could not be verified. Mermaid diagrams are validated. Never writes anything; available in Paw Go and Paw Pro. Use it whenever the user asks for documentation, and after finishing code changes in a task (with sync: true) to see which existing docs those changes affect. Then call write_project_docs with the `writable` paths the user wants.",
+    parameters: {
+      type: 'object',
+      properties: PROJECT_DOCS_PROPERTIES,
+      required: ['rootPath'],
+    },
+  },
+  {
+    name: 'write_project_docs',
+    description:
+      "Writes documentation files planned by plan_project_docs. Pass the same options and the `paths` to write (from the plan's `writable` list). The content is generated again from the current source at write time — you never supply file contents — and only PawOS's own marked sections are replaced: the user's text, and any section they edited by hand, is kept. Asks the user first. Use it in the same task as the code change it documents.",
+    parameters: {
+      type: 'object',
+      properties: { ...PROJECT_DOCS_PROPERTIES, paths: { type: 'array', items: { type: 'string' }, description: 'Documentation paths to write, relative to rootPath, exactly as plan_project_docs listed them under `writable`.' } },
+      required: ['rootPath', 'paths'],
     },
   },
   {
@@ -2643,6 +2715,14 @@ export function toolCallToActionRequest(toolCall: ReasoningToolCall): ActionRequ
             rationale: args.rationale,
             alternativesConsidered: isStringArray(args.alternativesConsidered) ? args.alternativesConsidered : undefined,
           }
+        : null;
+
+    case 'plan_project_docs':
+      return typeof args.rootPath === 'string' ? { type: 'planProjectDocs', rootPath: args.rootPath, ...projectDocsOptions(args) } : null;
+
+    case 'write_project_docs':
+      return typeof args.rootPath === 'string' && isStringArray(args.paths) && args.paths.length > 0
+        ? { type: 'writeProjectDocs', rootPath: args.rootPath, paths: args.paths, ...projectDocsOptions(args) }
         : null;
 
     case 'record_coding_preference':

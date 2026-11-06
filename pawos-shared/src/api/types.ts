@@ -131,3 +131,67 @@ export interface Integration {
  * Integrations page in a signed-in browser, or from the PawOS desktop app.
  */
 export type ConnectStart = { method: "redirect" } | { method: "desktop"; message: string };
+
+/** One connected tool PawOS runs on its servers (GET /api/web/tools). */
+export interface ConnectedTool {
+  name: string;
+  provider: string;
+  access: "read" | "write";
+  summary: string;
+  args: Record<string, string>;
+  /** The plan includes this tool's service. */
+  entitled: boolean;
+  availableOn: string | null;
+}
+
+export interface ConnectedToolList {
+  /** The plan includes connected tools at all. */
+  available: boolean;
+  tools: ConnectedTool[];
+}
+
+export interface ToolRun {
+  tool: string;
+  access: "read" | "write";
+  /** What the service returned, shaped by PawOS. It is the service's content: shown, never acted on. */
+  data: unknown;
+}
+
+export interface AutonomousTicket {
+  source: "linear" | "github";
+  key: string;
+  title: string;
+  description: string;
+  url: string | null;
+  status: string | null;
+}
+
+export interface AutonomousPreview {
+  ticket: AutonomousTicket;
+  balance: { balanceUsd: number; availableUsd: number };
+  minimumUsd: number;
+  priceRule: string;
+  canStart: boolean;
+  blocked: string | null;
+}
+
+export interface AutonomousStart {
+  run: { id: string; status: string; attempt?: number };
+  alreadyActive: boolean;
+  ticket: AutonomousTicket;
+  message?: string;
+  priceRule?: string;
+}
+
+export type AutonomousFinish =
+  | { outcome: "completed"; filesChanged: number; linesChanged: number; prUrl?: string; comment?: string; commentConfirmed?: boolean }
+  | { outcome: "failed" | "cancelled" };
+
+export interface AutonomousFinished {
+  run: { id: string; status: string };
+  chargedUsd?: number | null;
+  charged?: string;
+  prVerified?: boolean;
+  ticketVerified?: boolean;
+  commentUrl?: string | null;
+}

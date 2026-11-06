@@ -176,9 +176,13 @@ describe("boundaries the code must keep", () => {
   it("every future or desktop-only capability has no Web API route", () => {
     // Each /api/web route serves display (capabilities) or an available capability:
     // handoff → web.continueInDesktop, github + changes → web.codeChanges, agent → web.localAgent,
-    // images → web.imageGeneration.
+    // images → web.imageGeneration, tools → web.connectedTools, autonomous → web.localAutonomousWork
+    // (the PawOS CLI's Autonomous Work on the user's own computer — not web.autonomousWork, which stays future).
     const routes = fs.readdirSync(path.join(SRC, "app", "api", "web")).sort();
-    expect(routes).toEqual(["agent", "capabilities", "changes", "github", "handoff", "images"]);
+    expect(routes).toEqual(["agent", "autonomous", "capabilities", "changes", "github", "handoff", "images", "tools"]);
+    expect(webCapabilityStatus({ tier: "go" }, "web.connectedTools")).toBe("available");
+    expect(webCapabilityStatus({ tier: "proMax" }, "web.localAutonomousWork")).toBe("available");
+    for (const tier of ["go", "pro", "build"] as const) expect(webCapabilityStatus({ tier }, "web.localAutonomousWork")).toBe("locked");
     for (const tier of ["go", "pro", "proMax", "team", "enterprise"] as const) expect(webCapabilityStatus({ tier }, "web.imageGeneration")).toBe("available");
     expect(webCapabilityStatus({ tier: "pro" }, "web.localAgent")).toBe("available");
     expect(webCapabilityStatus({ tier: "go" }, "web.localAgent")).not.toBe("available");
@@ -235,8 +239,21 @@ describe("FUTURE capabilities are not faked", () => {
     for (const id of ["web.remoteWork", "web.autonomousWork", "web.browserWork"] as const) {
       for (const tier of TIERS) expect(webCapabilityStatus({ tier }, id)).toBe("future");
     }
-    const api = fs.readdirSync(path.join(SRC, "app", "api"), { recursive: true }).map(String);
-    expect(api.filter((entry) => /remote-work|autonomous|browser-work/i.test(entry))).toEqual([]);
+    const api = fs.readdirSync(path.join(SRC, "app", "api"), { recursive: true }).map(String).map((entry) => entry.replace(/\\/g, "/"));
+    expect(api.filter((entry) => /remote-work|browser-work/i.test(entry))).toEqual([]);
+    // The only autonomous routes are the CLI's (web/autonomous), and every entry point behind them
+    // requires web.localAutonomousWork — the desktop's Autonomous Work tiers — before anything else.
+    expect(api.filter((entry) => /autonomous/i.test(entry) && !entry.startsWith("web/autonomous"))).toEqual([]);
+    const local = fs.readFileSync(path.join(SRC, "lib", "autonomous", "localAutonomous.ts"), "utf8");
+    for (const entry of ["async function gate(", "export async function finishAutonomousWork("]) {
+      const body = local.slice(local.indexOf(entry), local.indexOf(entry) + 300);
+      expect(body, entry).toContain('requireWebCapability(account, "web.localAutonomousWork")');
+    }
+    for (const entry of ["export async function previewAutonomousWork(", "export async function startAutonomousWork("]) {
+      const start = local.indexOf(entry);
+      const body = local.slice(start, local.indexOf("\n}\n", start));
+      expect(body, entry).toContain("await gate(account");
+    }
   });
 
   it("the Web chat tells the model everything only PawOS Desktop can do", () => {

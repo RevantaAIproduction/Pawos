@@ -88,6 +88,8 @@ export const TOOL_CAPABILITIES: Record<string, CapabilityGroup[]> = {
   propose_code_edit_plan: G('coding'),
   run_validation_pipeline: G('coding'),
   record_architectural_decision: G('coding'),
+  plan_project_docs: G('coding'),
+  write_project_docs: G('coding'),
   record_coding_preference: G('coding'),
   query_coding_runtime_memory: G('coding'),
   build_repository_semantic_index: G('coding'),

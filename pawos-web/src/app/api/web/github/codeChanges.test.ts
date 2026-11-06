@@ -26,7 +26,8 @@ import { POST as send } from "../../web-chat/messages/route";
 import { GET as listRepos } from "./repositories/route";
 import { DELETE as clearRepo, GET as getRepo, PUT as selectRepo } from "./repository/route";
 import { GET as getChange } from "../changes/[requestId]/route";
-import { changedLineCount, isEditablePath, isFrontendPath, isFullScopePath, suspiciousEdits, validateEdits } from "../../../../lib/webCode/codePolicy";
+import { changedLineCount, isDocumentationPath, isEditablePath, isFrontendPath, isFullScopePath, suspiciousEdits, validateEdits } from "../../../../lib/webCode/codePolicy";
+import { generateDocs, writableFiles } from "../../../../lib/docs/engine";
 import { branchFor, parseModelJson } from "../../../../lib/webCode/codeChange";
 import { summariseSignals } from "../../../../lib/webCode/changeWatch";
 import { pathsNamedIn, referencedPaths } from "../../../../lib/webCode/investigate";
@@ -969,5 +970,82 @@ describe("following the code (pure helpers)", () => {
     expect(pathsNamedIn("nothing here", known)).toEqual([]);
     expect(pathsNamedIn("", known)).toEqual([]);
     expect(pathsNamedIn("/etc/passwd and ../.env and node_modules/x/index.js", known)).toEqual([]);
+  });
+});
+
+describe("documentation kept in step with the change (same commit)", () => {
+  const DOCS = "acme/documented";
+  const PROP_HEADER = 'export function Header({ title = "Shop" }: { /** The heading text. */ title?: string }) {\n  return <h1 className="title">{title}</h1>;\n}\n';
+  const USER_README = "# Shop\n\nWritten by hand.\n";
+
+  /** A repository that keeps PawOS documentation: the docs the engine generates for it, plus a hand-written README. */
+  function addDocumentedRepo() {
+    const sources = { "src/components/Header.tsx": HEADER, "src/app/page.tsx": 'import { Header } from "../components/Header";\nexport default function Page() { return <Header />; }\n', "package.json": '{ "name": "shop" }\n' };
+    const generated = generateDocs({ snapshot: { files: Object.entries(sources).map(([path, content]) => ({ path, content })) }, existing: {}, date: "2026-10-19", selection: { docs: ["components"] } });
+    const docs = Object.fromEntries(writableFiles(generated).map((f) => [f.path, f.content]));
+    github.addRepo(DOCS, { ...sources, ...docs, "README.md": USER_README, "CHANGELOG.md": "# Changelog\n\n## [1.0.0] - 2026-01-01\n\n- First.\n" });
+    return docs;
+  }
+
+  async function readyOn(userId: string) {
+    connectGitHub(userId);
+    expect((await selectRepo(put({ fullName: DOCS }))).status).toBe(200);
+  }
+
+  beforeEach(() => {
+    planReply = { files: ["src/components/Header.tsx"], decline: null };
+    editReply = { title: "Header takes a title", summary: "The heading text is a prop.", changes: [{ path: "src/components/Header.tsx", content: PROP_HEADER }], decline: null };
+  });
+
+  it("paid plans: the component page and the changelog are updated in the same commit; the user's README is untouched", async () => {
+    addDocumentedRepo();
+    await readyOn("pro-user");
+    const body = await (await send(post({ content: "Make the heading text a prop", mode: "codeChange", requestId: "docs-change-01" }))).json();
+    const files = github.filesOn(DOCS, "main") ?? {};
+    // The page, the components index (its prop count changed) and the changelog.
+    expect(body.change.files).toEqual(["src/components/Header.tsx", "docs/components/README.md", "docs/components/Header.md", "CHANGELOG.md"]);
+    expect(files["docs/components/Header.md"]).toContain("| `title` | `string` | no | `\"Shop\"` | The heading text. |");
+    expect(files["CHANGELOG.md"]).toContain("## [Unreleased]\n\n### Changed\n\n- Header takes a title\n\n## [1.0.0]");
+    expect(files["README.md"]).toBe(USER_README);
+    expect(github.commitMessage(DOCS, github.headOf(DOCS, "main") as string)).toMatch(/Documentation updated: docs\/components\/README\.md, docs\/components\/Header\.md, CHANGELOG\.md/);
+  });
+
+  it("Paw Go: only existing UI documentation is updated — no changelog, no new files", async () => {
+    addDocumentedRepo();
+    state.session = goUser;
+    await readyOn("go-user");
+    const body = await (await send(post({ content: "Make the heading a prop", mode: "codeChange", requestId: "docs-go-0001" }))).json();
+    const files = github.filesOn(DOCS, "main") ?? {};
+    expect(body.change.files).toEqual(["src/components/Header.tsx", "docs/components/README.md", "docs/components/Header.md"]);
+    expect(files["docs/components/Header.md"]).toContain("`title`");
+    expect(files["CHANGELOG.md"]).not.toContain("Unreleased");
+  });
+
+  it("a hand-edited section is kept as the user wrote it", async () => {
+    const docs = addDocumentedRepo();
+    const edited = (docs["docs/components/Header.md"] ?? "").replace("This component takes no props.", "My own description of the props.");
+    github.pushAsSomeoneElse(DOCS, "main", { "docs/components/Header.md": edited });
+    await readyOn("pro-user");
+    await send(post({ content: "Make the heading text a prop", mode: "codeChange", requestId: "docs-change-02" }));
+    const files = github.filesOn(DOCS, "main") ?? {};
+    expect(files["docs/components/Header.md"]).toContain("My own description of the props.");
+    expect(files["docs/components/Header.md"]).not.toContain("| `title` |");
+  });
+
+  it("a repository without PawOS documentation gets no documentation changes", async () => {
+    await ready();
+    const body = await (await send(post({ content: "Rename the heading to Welcome", mode: "codeChange" }))).json();
+    expect(body.change.files).toEqual(["src/components/Header.tsx"]);
+  });
+});
+
+describe("documentation paths by plan", () => {
+  it("Paw Go may only update UI documentation; paid plans any Markdown or Mermaid docs; never hidden or build folders", () => {
+    for (const path of ["docs/components/Header.md", "docs/widgets/Cart.md", "docs/design-system.md", "docs/pages.md", "docs/ui-flows.md", "docs/diagrams/ui-flow.mmd"]) expect(isDocumentationPath(path, "small")).toBe(true);
+    for (const path of ["README.md", "CHANGELOG.md", "docs/api.md", "docs/ARCHITECTURE.md", "docs/diagrams/database-erd.mmd"]) {
+      expect(isDocumentationPath(path, "small")).toBe(false);
+      expect(isDocumentationPath(path, "full")).toBe(true);
+    }
+    for (const path of [".github/README.md", "node_modules/x/README.md", "dist/docs.md", "../README.md", "src/App.tsx", "docs/.hidden.md"]) expect(isDocumentationPath(path, "full")).toBe(false);
   });
 });

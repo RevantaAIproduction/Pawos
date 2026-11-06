@@ -35,6 +35,7 @@ import { analyzeProjectPlugin } from './plugins/AnalyzeProjectPlugin';
 import { analyzeProjectStructurePlugin } from './plugins/AnalyzeProjectStructurePlugin';
 import { analyzeFileImpactPlugin } from './plugins/AnalyzeFileImpactPlugin';
 import { buildDependencyGraphPlugin } from './plugins/BuildDependencyGraphPlugin';
+import { planProjectDocsPlugin, writeProjectDocsPlugin } from './plugins/ProjectDocsPlugins';
 import { discoverProjectFeaturesPlugin } from './plugins/DiscoverProjectFeaturesPlugin';
 import { classifyProjectAssetsPlugin } from './plugins/ClassifyProjectAssetsPlugin';
 import { detectDomainConceptsPlugin } from './plugins/DetectDomainConceptsPlugin';
@@ -390,6 +391,8 @@ export class DesktopExecutionEngine extends EventEmitter {
     analyzeProjectStructurePlugin,
     analyzeFileImpactPlugin,
     buildDependencyGraphPlugin,
+    planProjectDocsPlugin,
+    writeProjectDocsPlugin,
     discoverProjectFeaturesPlugin,
     classifyProjectAssetsPlugin,
     detectDomainConceptsPlugin,
@@ -555,6 +558,8 @@ export class DesktopExecutionEngine extends EventEmitter {
         actionDetails = (request as any).command || '';
       } else if (request.type === 'writeFile') {
         actionDetails = (request as any).path || '';
+      } else if (request.type === 'writeProjectDocs') {
+        actionDetails = request.paths.join(', ');
       } else if (request.type === 'createFolder') {
         actionDetails = (request as any).path || '';
       } else if (request.type === 'deletePath') {

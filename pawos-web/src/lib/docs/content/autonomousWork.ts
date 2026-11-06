@@ -87,7 +87,7 @@ export const autonomousWorkPages: DocPage[] = [
     blocks: [
       {
         type: 'lead',
-        text: 'Autonomous Work Credits are a real dollar balance, separate from your Paw Compute allotment — add funds from inside the app (any amount, $30 minimum), and the balance never expires.',
+        text: 'Autonomous Work Credits are described as a dollar-denominated balance separate from Paw Compute. Available top-up amounts, minimums, expiry and rates are account-controlled; check the current billing screen before starting a paid run.',
       },
       {
         type: 'paragraph',
@@ -104,14 +104,14 @@ export const autonomousWorkPages: DocPage[] = [
     blocks: [
       {
         type: 'lead',
-        text: 'The rate is automatically volume-tiered by your account’s (or organization’s) cumulative completed-ticket count — no negotiation required.',
+        text: 'Ticket pricing and eligibility are account-controlled and may change. Review the current displayed price and charging terms before enabling a run.',
       },
       {
         type: 'table',
-        headers: ['Cumulative volume', 'Rate'],
+        headers: ['Pricing detail', 'Where to verify'],
         rows: [
-          ['Entry tier', '$5.00 per completed ticket'],
-          ['High volume', 'Down to $3.00 per completed ticket'],
+          ['Current ticket price', 'Review the price shown in PawOS before enabling each run.'],
+          ['Volume tiers and charging', 'Review current account terms; documentation does not promise a fixed rate.'],
         ],
       },
       {

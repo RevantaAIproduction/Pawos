@@ -56,6 +56,11 @@ export class FakeBackend {
     web_code_changes: [],
     pawos_build_usage_reports: [],
     web_build_usage: [],
+    // Autonomous Work (ticket_balance_wallet_production.sql and later): the wallet, runs and charges.
+    user_task_credits: [],
+    organization_task_credits: [],
+    autonomous_task_runs: [],
+    organization_billing_events: [],
     // The real price row for the Web model (usage_buckets.sql), read by the service role only.
     model_prices: [{ model: "gemini-flash-latest", version: 1, active: true, input_usd_per_mtok: 0.75, cached_input_usd_per_mtok: 0.075, output_usd_per_mtok: 3.75, effective_from: "2026-01-01T00:00:00Z", effective_until: "2027-01-01T00:00:00Z" }],
   };
@@ -213,6 +218,11 @@ export class FakeBackend {
         return ok(this.usageSummary);
       case "get_my_usage_history":
         return ok(this.usageHistory.get(userId) ?? []);
+      case "start_or_get_active_autonomous_task_run":
+      case "transition_autonomous_task_run":
+      case "mark_autonomous_task_terminal":
+      case "mark_autonomous_task_completed":
+        return this.autonomousFunction(userId, name, args);
       case "read_connectivity_credential": {
         // Reads under the caller's own id only (auth.uid()), like the real function.
         const row = this.tables.connectivity_credentials.find((r) => r.user_id === userId && r.connector_id === args.p_connector_id && (r.organization_id ?? null) === (args.p_organization_id ?? null));
@@ -454,6 +464,50 @@ export class FakeBackend {
 
   joinOrganization(userId: string, org: { id: string; name: string; tier: "team" | "enterprise" }, role: string, status = "active") {
     this.tables.organization_members.push({ user_id: userId, role, status, organizations: org });
+  }
+
+  /**
+   * The Autonomous Work functions, modelling the real ones' rules: one active run per ticket, the
+   * caller acts only on its own runs, a run completes only from running, and a ticket is charged
+   * exactly once (by change size: $5 up to 3 files and 100 lines, else $20 — the test's stand-in
+   * for pawos_ticket_size_price()).
+   */
+  autonomousCalls: Array<{ name: string; args: Row }> = [];
+  private runSeq = 0;
+  private autonomousFunction(userId: string, name: string, args: Row): { data: unknown; error: { message: string } | null } {
+    this.autonomousCalls.push({ name, args });
+    const runs = this.tables.autonomous_task_runs;
+    if (name === "start_or_get_active_autonomous_task_run") {
+      const active = runs.find((r) => r.user_id === userId && r.ticket_id === args.p_ticket_id && ["queued", "running"].includes(String(r.status)));
+      if (active) return { data: [{ run_row: active, already_active: true }], error: null };
+      this.runSeq += 1;
+      const run: Row = { id: `00000000-0000-4000-8000-${String(this.runSeq).padStart(12, "0")}`, user_id: userId, organization_id: args.p_organization_id ?? null, ticket_source: args.p_ticket_source, ticket_id: args.p_ticket_id, repository: args.p_repository, runtime_version: args.p_runtime_version, status: "queued", attempt_number: 1, started_at: "2026-10-19T00:00:00Z" };
+      runs.push(run);
+      return { data: [{ run_row: run, already_active: false }], error: null };
+    }
+    const run = runs.find((r) => r.id === args.p_run_id && r.user_id === userId);
+    if (!run) return { data: null, error: { message: "No autonomous_task_runs row the caller may act on" } };
+    if (name === "transition_autonomous_task_run") {
+      run.status = args.p_to_status;
+      return { data: run, error: null };
+    }
+    if (name === "mark_autonomous_task_terminal") {
+      if (run.status === "completed") return { data: null, error: { message: "already completed" } };
+      run.status = args.p_status;
+      return { data: null, error: null };
+    }
+    if (run.status === "completed") return { data: run.billing_event_id, error: null };
+    if (run.status !== "running") return { data: null, error: { message: `Run cannot be completed from status ${String(run.status)}` } };
+    const price = Number(args.p_files_changed) <= 3 && Number(args.p_lines_changed) <= 100 ? 5 : 20;
+    const wallet = this.tables.user_task_credits.find((w) => w.user_id === userId);
+    if (wallet) {
+      wallet.balance_usd = Number(wallet.balance_usd) - price;
+      wallet.balance_pc = Number(wallet.balance_pc) - price * 100;
+    }
+    const eventId = `event-${String(run.id)}`;
+    this.tables.organization_billing_events.push({ id: eventId, run_id: run.id, user_id: userId, amount_usd: price, completion_source: args.p_pr_verified && args.p_ticket_verified ? "connector_verified" : "self_reported" });
+    Object.assign(run, { status: "completed", billing_event_id: eventId, pr_url: args.p_pr_url, pr_verified: args.p_pr_verified, ticket_verified: args.p_ticket_verified, files_changed: args.p_files_changed, lines_changed: args.p_lines_changed });
+    return { data: eventId, error: null };
   }
 
   addConnection(userId: string, connectorId: string, status = "connected", metadata: Row = {}) {

@@ -37,6 +37,7 @@ const ANALYSIS_ROOT_ACTION_TYPES = new Set<ActionRequest['type']>([
   'discoverAffectedFiles',
   'runValidationPipeline',
   'recordArchitecturalDecision',
+  'planProjectDocs',
   'recordCodingPreference',
   'queryCodingRuntimeMemory',
   'getWorkspace',

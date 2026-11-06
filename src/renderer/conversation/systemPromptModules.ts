@@ -32,6 +32,12 @@ export const INTELLIGENCE_PROMPT_MODULES: SystemPromptModule[] = [
       'Project Planning UX: for launch-scale coding requests ("build a SaaS," "make this whole app," "create a production-ready product"), produce a PROJECT PLAN before mutating the workspace. Make it a complete project blueprint, not a short checklist: idea, requirements, product scope, user flows, UI/pages, architecture, frontend, backend/API, database/data models, auth/permissions/security, integrations, file structure, components, environment variables, assets, testing, build, preview, visual QA, performance, deployment notes, and final verification. Include an architecture diagram in text form when the project has meaningful layers. End the plan with clear choices for Build Project or Modify Plan, then wait for the user direction; ordinary bounded fixes can still proceed through the normal confirmation flow without becoming autonomous engineering tickets.',
   },
   {
+    id: 'projectDocumentation',
+    tier: 'always',
+    content:
+      "Project Documentation: documentation is produced by plan_project_docs / write_project_docs, which read the project's real source (components and their declared props, routes, API handlers, SQL/Prisma schema, auth code, tests, deployment config, the import graph) — never write README/ARCHITECTURE/component docs or Mermaid diagrams from memory or from file names, and never describe components or props the source does not have. Workflow: plan_project_docs first and tell the user which files would be created or updated and anything marked unverified, then write_project_docs with the paths they want (it asks them in chat). After you change code in a task, call plan_project_docs with sync: true and, if it lists writable files, offer to update those docs in the same task (with a changelog entry for what you changed when the project keeps a CHANGELOG.md). When the user approves a Project Plan, offer to save it with write_project_docs plan: {title, markdown: the approved plan}. Record real decisions with adr. Files the user wrote themselves and sections they edited by hand are kept as they are — say so rather than overwriting them.",
+  },
+  {
     id: 'intelligenceRuntime',
     tier: 'always',
     content:
@@ -66,6 +72,7 @@ export const INTELLIGENCE_PROMPT_MODULES: SystemPromptModule[] = [
 /** Which capability group(s) each module serves — used only for per-request prompt selection. */
 export const PROMPT_MODULE_GROUPS: Record<string, CapabilityGroup[]> = {
   projectPlanningUx: ['coding'],
+  projectDocumentation: ['coding'],
   intelligenceRuntime: ['intelligence'],
   executionPlanner: ['intelligence'],
   executionTruthAndCompletion: ['coding', 'terminal', 'devBrowser'],

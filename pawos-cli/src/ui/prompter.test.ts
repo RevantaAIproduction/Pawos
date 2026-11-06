@@ -11,8 +11,13 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const open: Prompter[] = [];
 
 function terminal() {
-  const input = new PassThrough() as PassThrough & { isTTY?: boolean };
+  const input = new PassThrough() as PassThrough & { isTTY?: boolean; isRaw?: boolean; setRawMode?: (raw: boolean) => unknown };
   input.isTTY = true;
+  input.isRaw = false;
+  input.setRawMode = (raw) => {
+    input.isRaw = raw;
+    return input;
+  };
   const output = new PassThrough();
   let shown = "";
   output.on("data", (data) => (shown += data.toString()));
@@ -174,10 +179,10 @@ describe("stopping", () => {
 describe("history", () => {
   it("Up brings back the last message, as one entry even if it had several lines", async () => {
     const t = terminal();
-    const first = t.prompter.ask("  > ");
+    const first = t.prompter.ask("  > ", { keepTypedAhead: true });
     t.type("Redesign the hero.\rKeep the cart.\r");
     expect(await first).toBe("Redesign the hero.\nKeep the cart.");
-    const second = t.prompter.ask("  > ");
+    const second = t.prompter.ask("  > ", { keepTypedAhead: true });
     await sleep(PASTE_WINDOW_MS * 2);
     t.type("\u001b[A"); // Up
     await sleep(10);
@@ -187,19 +192,30 @@ describe("history", () => {
 
   it("y and n are not kept", async () => {
     const t = terminal();
-    const first = t.prompter.ask("  > ");
+    const first = t.prompter.ask("  > ", { keepTypedAhead: true });
     t.type("fix the total\r");
     await first;
     const yes = t.prompter.ask("  Allow? ");
     await sleep(PASTE_WINDOW_MS * 2);
     t.type("y\r");
     await yes;
-    const again = t.prompter.ask("  > ");
+    const again = t.prompter.ask("  > ", { keepTypedAhead: true });
     await sleep(PASTE_WINDOW_MS * 2);
     t.type("\u001b[A");
     await sleep(10);
     t.type("\r");
     expect(await again).toBe("fix the total");
+  });
+
+  it("an approval prompt cannot recall or submit a previous command", async () => {
+    const t = terminal();
+    const first = t.prompter.ask("  > ", { keepTypedAhead: true });
+    t.type("install the dependencies\r");
+    await first;
+    const approval = t.prompter.ask("  Allow this command? ");
+    await sleep(PASTE_WINDOW_MS * 2);
+    t.type("\u001b[A\r");
+    expect(await approval).toBe("");
   });
 });
 

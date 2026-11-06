@@ -756,7 +756,7 @@ describe("what the local runtime is made of", () => {
   const sources = fs.readdirSync(__dirname).filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts")).map((file) => ({ file, source: fs.readFileSync(path.join(__dirname, file), "utf8") }));
 
   it("only one file can change the project, and nothing runs a program", () => {
-    expect(sources.map((entry) => entry.file).sort()).toEqual(["agent.ts", "changes.ts", "checkpoint.ts", "commandPolicy.ts", "commands.ts", "gitChanges.ts", "process.ts", "tools.ts", "workspace.ts"]);
+    expect(sources.map((entry) => entry.file).sort()).toEqual(["agent.ts", "changeSize.ts", "changes.ts", "checkpoint.ts", "commandPolicy.ts", "commands.ts", "environment.ts", "gitChanges.ts", "process.ts", "tools.ts", "workspace.ts"]);
     // The programs it can start by name: Windows' process-tree stopper, and each system's own
     // "open this address" launcher — which is only ever handed an address on this computer.
     const process = sources.find((entry) => entry.file === "process.ts")!.source;
@@ -766,14 +766,20 @@ describe("what the local runtime is made of", () => {
       // Reading, the boundary, the loop, the command runner and the Git tools never write a file themselves:
       // every change goes through local/changes.ts, and only local/checkpoint.ts can put one back.
       if (file !== "changes.ts" && file !== "checkpoint.ts") expect(source, file).not.toMatch(/writeFile|appendFile|createWriteStream|\.unlink|\.rm\(|rmSync|rmdir|mkdir|fs\.rename|renameSync|copyFile|chmod|truncate\(|symlink/);
-      // Only local/process.ts starts a program, and nothing anywhere starts one through a shell.
-      if (file !== "process.ts") expect(source, file).not.toMatch(/child_process|cross-spawn|spawn\(|execFile\(/);
-      expect(source, file).not.toMatch(/shell:\s*true|\bexec\(|execSync|spawnSync|eval\(|new Function|cmd\.exe|powershell|\/bin\/sh|bash -c/i);
+      // Only local/process.ts runs project programs. environment.ts has narrowly fixed, read-only
+      // Windows PATH probes; no caller text is interpolated into either command.
+      if (file !== "process.ts" && file !== "environment.ts") expect(source, file).not.toMatch(/child_process|cross-spawn|spawn\(|execFile\(/);
+      if (file !== "environment.ts") expect(source, file).not.toMatch(/shell:\s*true|\bexec\(|execSync|spawnSync|eval\(|new Function|cmd\.exe|powershell|\/bin\/sh|bash -c/i);
     }
     const runner = sources.find((entry) => entry.file === "process.ts")!.source;
     expect(runner).toContain("shell: false");
     // The one other program it starts by name is Windows' own tool for stopping a process tree.
     expect(runner.match(/execFile\("([^"]+)"/g)).toEqual(['execFile("taskkill"']);
+    const environment = sources.find((entry) => entry.file === "environment.ts")!.source;
+    expect(environment).toContain('"cmd.exe"');
+    expect(environment).toContain('"powershell.exe"');
+    expect(environment).toContain('"-NonInteractive"');
+    expect(environment).not.toMatch(/spawn\(|shell:\s*true|rmSync|writeFile/);
     // And the file that changes things has no way to rename, link, change permissions or reach Git.
     const changes = sources.find((entry) => entry.file === "changes.ts")!.source;
     expect(changes).not.toMatch(/fs\.rename|renameSync|copyFile|chmod|symlink|runLocalGit|localRepository/);
