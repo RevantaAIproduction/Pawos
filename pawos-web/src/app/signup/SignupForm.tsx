@@ -227,7 +227,7 @@ export function SignupForm() {
               <input type="checkbox" checked={agreedToTerms} onChange={(e) => setAgreedToTerms(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border border-neutral-600 bg-neutral-900" />
               <span>
                 I agree to the{" "}
-                <Link href="/terms" target="_blank" className="text-neutral-200 underline-offset-2 hover:underline">
+                <Link href="/legal/terms" target="_blank" className="text-neutral-200 underline-offset-2 hover:underline">
                   Terms of Service
                 </Link>
               </span>
@@ -236,7 +236,7 @@ export function SignupForm() {
               <input type="checkbox" checked={agreedToPrivacy} onChange={(e) => setAgreedToPrivacy(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border border-neutral-600 bg-neutral-900" />
               <span>
                 I acknowledge the{" "}
-                <Link href="/privacy" target="_blank" className="text-neutral-200 underline-offset-2 hover:underline">
+                <Link href="/legal/privacy-policy" target="_blank" className="text-neutral-200 underline-offset-2 hover:underline">
                   Privacy Policy
                 </Link>
               </span>

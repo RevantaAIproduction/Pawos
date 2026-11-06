@@ -57,8 +57,9 @@ const GROUPS = [
   {
     title: "Legal",
     links: [
-      { href: "/privacy", label: "Privacy" },
-      { href: "/terms", label: "Terms" },
+      { href: "/security", label: "Privacy & Security" },
+      { href: "/legal/privacy-policy", label: "Privacy Policy" },
+      { href: "/legal/terms", label: "Terms" },
     ],
   },
 ];

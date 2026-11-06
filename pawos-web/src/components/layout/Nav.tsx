@@ -60,6 +60,7 @@ const NAV_ITEMS = [
           { href: "/faq", label: "FAQ" },
           { href: "/changelog", label: "Changelog" },
           { href: "/trust", label: "Trust" },
+          { href: "/security", label: "Privacy & Security" },
         ],
       }
     ],
@@ -95,6 +96,7 @@ const SEARCH_INDEX = [
   { title: "FAQ", url: "/faq", type: "Resource", desc: "Frequently asked questions about PawOS and Revanta AI." },
   { title: "Changelog", url: "/changelog", type: "Resource", desc: "Latest updates, features, and fixes for PawOS." },
   { title: "Trust & Security", url: "/trust", type: "Page", desc: "Learn about how PawOS handles your data safely and securely." },
+  { title: "Privacy & Security", url: "/security", type: "Page", desc: "How PawOS handles project data, AI requests, account access, and integrations." },
 ];
 
 export function Nav({ userEmail }: { userEmail: string | null }) {

@@ -27,11 +27,11 @@ export function AuthLayout({ children, footer = "account" }: { children: ReactNo
         <p className="text-center text-xs leading-relaxed text-neutral-500">
           By continuing, you agree to the
           <br />
-          <Link href="/terms" className="hover:text-neutral-300 hover:underline">
+          <Link href="/legal/terms" className="hover:text-neutral-300 hover:underline">
             Terms of Service
           </Link>{" "}
           and{" "}
-          <Link href="/privacy" className="hover:text-neutral-300 hover:underline">
+          <Link href="/legal/privacy-policy" className="hover:text-neutral-300 hover:underline">
             Privacy Policy
           </Link>
         </p>

@@ -195,7 +195,6 @@ describe('secrets', () => {
     expect(JSON.stringify(ev)).not.toContain('fixture-placeholder');
     const r = redactSecrets('const token = "ghp_abcdefghijklmnopqrstuvwxyz0123456789AB"; password: "hunter2hunter2"');
     expect(r.text).not.toMatch(/ghp_|hunter2/);
-    expect(r.text).not.toMatch(/hunter2/);
     expect(findSecrets(r.text)).toEqual([]);
   });
 
@@ -293,7 +292,7 @@ describe('the engine', () => {
     const readme = result.files.find((f) => f.path === 'README.md')?.content ?? '';
     expect(readme).toContain('A small storefront.');
     expect(readme).toContain('npm run dev');
-    expect(readme).not.toMatch(new RegExp(['sk', 'live'].join('_')));
+    expect(readme).not.toMatch(/ghp_/);
     // On-request documents are not produced without a plan, decision or entry.
     expect(paths).not.toContain('PRD.md');
     expect(paths).not.toContain('IMPLEMENTATION_PLAN.md');

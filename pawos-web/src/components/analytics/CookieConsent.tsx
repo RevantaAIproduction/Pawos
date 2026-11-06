@@ -44,7 +44,7 @@ export function CookieConsent() {
     >
       <p className="text-sm text-neutral-300">
         We use strictly necessary cookies to run this site, and optional analytics cookies if you consent. See our{" "}
-        <Link href="/privacy" className="text-blue-400 hover:underline">Privacy Policy</Link>.
+        <Link href="/legal/privacy-policy" className="text-blue-400 hover:underline">Privacy Policy</Link>.
       </p>
       <div className="mt-4 flex justify-end gap-3">
         <button
