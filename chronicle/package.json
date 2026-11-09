@@ -1,0 +1,23 @@
+{
+  "name": "@pawos/chronicle-local",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "types": "./src/domain/evidence.d.ts",
+  "description": "Independent local-first developer report with approved Claude Code, Codex CLI, Gemini CLI, and Git evidence",
+  "bin": {
+    "chronicle": "./src/cli.js"
+  },
+  "scripts": {
+    "start": "node ./src/cli.js",
+    "test": "node --test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

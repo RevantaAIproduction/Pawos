@@ -43,6 +43,7 @@ const NAV_ITEMS = [
         title: "Build & Integrate",
         links: [
           { href: "/docs", label: "Documentation" },
+          { href: "/chronicle/upload", label: "Chronicle" },
           { href: "/docs/integrations", label: "Integrations" },
           { href: "/docs/integrations/github", label: "GitHub" },
           { href: "/docs/integrations/jira", label: "Jira" },
@@ -149,7 +150,7 @@ export function Nav({ userEmail }: { userEmail: string | null }) {
     : [];
   const pathname = usePathname();
 
-  if (pathname?.startsWith("/docs") || pathname?.startsWith("/dashboard") || pathname === "/app" || pathname?.startsWith("/app/")) return null;
+  if (pathname?.startsWith("/docs") || pathname?.startsWith("/dashboard") || pathname === "/app" || pathname?.startsWith("/app/") || pathname?.startsWith("/chronicle")) return null;
   const isCompanionMode = pathname === "/companion";
   if (isCompanionMode || pathname === "/auth/desktop-success" || isAuthPagePath(pathname)) return null;
 

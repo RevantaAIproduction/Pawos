@@ -1,0 +1,3 @@
+/chronicle/**/*.sh text eol=lf
+/pawos-web/public/chronicle/run text eol=lf
+/pawos-web/public/chronicle/releases/**/*.tar.gz binary

@@ -66,7 +66,7 @@ const GROUPS = [
 
 export function Footer() {
   const pathname = usePathname();
-  if (pathname?.startsWith("/docs") || pathname?.startsWith("/dashboard") || pathname === "/app" || pathname?.startsWith("/app/") || pathname === "/auth/desktop-success" || isAuthPagePath(pathname)) return null;
+  if (pathname?.startsWith("/docs") || pathname?.startsWith("/dashboard") || pathname === "/app" || pathname?.startsWith("/app/") || pathname?.startsWith("/chronicle") || pathname === "/auth/desktop-success" || isAuthPagePath(pathname)) return null;
 
   return (
     <footer className="border-t border-neutral-900 bg-black text-sm relative z-10">
