@@ -201,12 +201,21 @@ export default function Home() {
       <section className="py-32 px-6 bg-neutral-950 relative z-10">
         <div className="mx-auto max-w-7xl">
           <div className="grid md:grid-cols-2 gap-16 items-center">
-            <div className="overflow-hidden rounded-2xl border border-neutral-800 bg-black shadow-2xl order-last md:order-first">
-              <video controls playsInline preload="metadata" width={1072} height={576} poster="/pawos-product-demo-poster.webp" className="block h-auto w-full" aria-label="ShopFlow e-commerce live preview built with PawOS" aria-describedby="shopflow-video-description">
-                <source src="/pawos-product-demo.mp4" type="video/mp4" />
-                Your browser does not support embedded video.
-              </video>
-              <p id="shopflow-video-description" className="sr-only">Poster frame from the supplied ShopFlow storefront recording, showing product cards and the store navigation. The recording is a live preview of the e-commerce web app built with PawOS.</p>
+            <div className="order-last md:order-first space-y-5">
+              <figure className="overflow-hidden rounded-2xl border border-neutral-800 bg-black shadow-2xl">
+                <video controls playsInline preload="metadata" width={1072} height={576} poster="/pawos-product-demo-poster.webp" className="block h-auto w-full" aria-label="ShopFlow e-commerce live preview built with PawOS" aria-describedby="shopflow-video-description">
+                  <source src="/pawos-product-demo.mp4" type="video/mp4" />
+                  Your browser does not support embedded video.
+                </video>
+                <figcaption id="shopflow-video-description" className="border-t border-neutral-800 px-4 py-3 text-sm text-neutral-300">ShopFlow storefront live preview, showing the product cards and store navigation.</figcaption>
+              </figure>
+              <figure className="overflow-hidden rounded-2xl border border-neutral-800 bg-black shadow-2xl">
+                <video controls playsInline preload="metadata" width={832} height={448} poster="/pawos-product-demo-2-poster.webp" className="block h-auto w-full" aria-label="PawOS CLI proposing a source file edit in the local ShopFlow project" aria-describedby="shopflow-cli-video-description">
+                  <source src="/pawos-cli-shopflow-demo.mp4" type="video/mp4" />
+                  Your browser does not support embedded video.
+                </video>
+                <figcaption id="shopflow-cli-video-description" className="border-t border-neutral-800 px-4 py-3 text-sm text-neutral-300">PawOS CLI proposing an edit to <code>src/App.css</code> in the local ShopFlow project.</figcaption>
+              </figure>
             </div>
             <div className="order-first md:order-last">
               <div className="inline-flex items-center rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-sm font-medium text-blue-300 mb-6 tracking-wide">
@@ -216,7 +225,7 @@ export default function Home() {
                 PawOS in action.
               </h2>
               <p className="text-lg text-neutral-400 leading-relaxed">
-                This recording shows the live preview of ShopFlow, an e-commerce web app built with PawOS. Use the controls to review the result.
+                The first recording shows the ShopFlow e-commerce live preview built with PawOS. The second shows PawOS CLI preparing an edit in the local ShopFlow project. Use each player&apos;s controls to review the recordings.
               </p>
             </div>
           </div>
