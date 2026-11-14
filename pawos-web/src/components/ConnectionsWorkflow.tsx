@@ -100,16 +100,16 @@ export function ConnectionsWorkflow() {
   return (
     <div ref={containerRef} className="relative py-20 px-4 w-full touch-pan-y group">
       {/* Background connecting thread (Execution Path) */}
-      <div className="absolute top-1/2 left-[5%] w-[90%] h-[2px] bg-gradient-to-r from-transparent via-indigo-500/20 to-transparent -translate-y-1/2 hidden md:block" />
-      <div className="absolute left-1/2 top-[5%] h-[90%] w-[2px] bg-gradient-to-b from-transparent via-indigo-500/20 to-transparent -translate-x-1/2 md:hidden" />
+      <div className="absolute top-1/2 left-[5%] w-[90%] h-[2px] bg-gradient-to-r from-transparent via-indigo-500/20 to-transparent -translate-y-1/2 hidden lg:block" />
+      <div className="absolute left-1/2 top-[5%] h-[90%] w-[2px] bg-gradient-to-b from-transparent via-indigo-500/20 to-transparent -translate-x-1/2 lg:hidden" />
       
       {/* Overlapping Workflow Surfaces */}
-      <div className="relative z-10 flex flex-col md:flex-row items-stretch justify-center gap-4 md:gap-0 md:-space-x-6 max-w-6xl mx-auto">
+      <div className="relative z-10 flex flex-col lg:flex-row items-stretch justify-center gap-4 lg:gap-0 lg:-space-x-6 max-w-6xl mx-auto">
         {STAGES.map((stage, i) => (
           <div
             key={stage.id}
             ref={(el) => { cardsRef.current[i] = el; }}
-            className="w-full md:w-1/5 min-h-[220px] bg-neutral-950/90 backdrop-blur-2xl border border-neutral-800/40 rounded-2xl p-6 flex flex-col justify-between transition-all duration-[400ms] ease-out will-change-transform shadow-2xl origin-center"
+            className="w-full lg:w-1/5 min-h-[176px] lg:min-h-[220px] bg-neutral-950/90 backdrop-blur-2xl border border-neutral-800/40 rounded-2xl p-5 lg:p-6 flex flex-col justify-between transition-all duration-[400ms] ease-out will-change-transform shadow-2xl origin-center"
           >
             <div>
               <div className="text-[10px] font-bold tracking-[0.2em] text-indigo-400/80 mb-4 uppercase">

@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Versioned Chronicle bootstrap. Release tooling fills the immutable artifact
+# URL and SHA-256; the generated copy is served from PawOS Web over HTTPS.
+APP_VERSION='0.3.1'
+NODE_VERSION='v24.22.2'
+NODE_SHA256='1c331340fa6cac5e4294725959070a143fa0507195a78ad77eed7943f719aac9'
+APP_SHA256='e79394a6a84b05452104c131379f7c8692fa2e55b56333642c1baefd9a8629ad'
+NODE_URL='https://nodejs.org/dist/v24.22.2/win-x64/node.exe'
+APP_URL='https://pawos.revantaai.com/chronicle/releases/v0.3.1/chronicle-0.3.1.tar.gz'
+
+die() { printf 'PawOS Chronicle: %s\n' "$*" >&2; exit 1; }
+
+case "${OSTYPE:-}" in
+  msys*|cygwin*|mingw*) ;;
+  *) die "This launcher currently supports Windows Git Bash only. Open Git Bash in your project folder and retry." ;;
+esac
+
+case "$(uname -m 2>/dev/null || true)" in
+  x86_64|amd64) RUNTIME_ARCH='win-x64' ;;
+  *) die "This Windows architecture is not supported by this Chronicle release. No project files were changed." ;;
+esac
+
+[[ "$NODE_SHA256" =~ ^[0-9a-f]{64}$ ]] || die "This Chronicle release has no valid pinned runtime checksum. Contact support."
+[[ "$APP_SHA256" =~ ^[0-9a-f]{64}$ ]] || die "This Chronicle release has no valid pinned application checksum. Contact support."
+[[ "$NODE_URL" == https://* || "$NODE_URL" == http://127.0.0.1:* ]] || die "Invalid runtime download URL in release metadata."
+[[ "$APP_URL" == https://* || "$APP_URL" == http://127.0.0.1:* ]] || die "Invalid application download URL in release metadata."
+
+command -v curl >/dev/null 2>&1 || die "curl is unavailable. Reinstall or repair Git for Windows, then open Git Bash again."
+command -v sha256sum >/dev/null 2>&1 || die "sha256sum is unavailable. Reinstall or repair Git for Windows, then open Git Bash again."
+command -v tar >/dev/null 2>&1 || die "tar is unavailable. Reinstall or repair Git for Windows, then open Git Bash again."
+command -v cygpath >/dev/null 2>&1 || die "Git Bash path conversion is unavailable. Open the Git Bash terminal supplied with Git for Windows."
+
+if [[ -z "${LOCALAPPDATA:-}" ]]; then
+  die "Windows did not provide LOCALAPPDATA. Chronicle cannot choose a safe per-user cache location."
+fi
+LOCALAPPDATA_UNIX="$(cygpath -u "$LOCALAPPDATA")"
+LOCALAPPDATA_REAL="$(cd "$LOCALAPPDATA_UNIX" 2>/dev/null && pwd -P)" || die "Windows LOCALAPPDATA could not be resolved safely."
+PROJECT_CWD="$(pwd -P)"
+CACHE_BASE="$LOCALAPPDATA_REAL/PawOS/Chronicle/cache"
+case "${CACHE_BASE,,}/" in
+  "${PROJECT_CWD,,}/"*) die "Chronicle's cache would be inside the selected project. Choose a project outside the Windows application-data folder." ;;
+esac
+for part in "$LOCALAPPDATA_REAL/PawOS" "$LOCALAPPDATA_REAL/PawOS/Chronicle" "$CACHE_BASE"; do
+  [[ ! -L "$part" ]] || die "Chronicle's application cache contains a symbolic link and was rejected."
+done
+RUNTIME_DIR="$CACHE_BASE/runtime/$NODE_VERSION-$RUNTIME_ARCH"
+APP_DIR="$CACHE_BASE/app/$APP_VERSION"
+NODE_BIN="$RUNTIME_DIR/node.exe"
+APP_ENTRY="$APP_DIR/src/cli.js"
+mkdir -p "$RUNTIME_DIR" "$APP_DIR"
+for part in "$LOCALAPPDATA_REAL/PawOS" "$LOCALAPPDATA_REAL/PawOS/Chronicle" "$CACHE_BASE" "$RUNTIME_DIR" "$APP_DIR"; do
+  [[ ! -L "$part" ]] || die "Chronicle's application cache contains a symbolic link and was rejected."
+done
+
+verify_file() {
+  local file="$1" expected="$2" actual
+  [[ -f "$file" && ! -L "$file" ]] || return 1
+  actual="$(sha256sum "$file" | awk '{print $1}')"
+  [[ "$actual" == "$expected" ]]
+}
+
+download_verified() {
+  local url="$1" target="$2" expected="$3" max_bytes="$4" size
+  local temp="$target.part.$$"
+  rm -f "$temp"
+  if ! curl --fail --location --silent --show-error --proto '=https,http' --proto-redir '=https' --tlsv1.2 --max-filesize "$max_bytes" --output "$temp" "$url"; then
+    rm -f "$temp"
+    die "Could not download a required Chronicle component. Check your connection and retry."
+  fi
+  size="$(wc -c < "$temp")"
+  (( size <= max_bytes )) || { rm -f "$temp"; die "A Chronicle component exceeded its size limit and was discarded."; }
+  if ! verify_file "$temp" "$expected"; then
+    rm -f "$temp"
+    die "A downloaded Chronicle component failed its SHA-256 check. It was discarded."
+  fi
+  mv -f "$temp" "$target"
+}
+
+if ! verify_file "$NODE_BIN" "$NODE_SHA256"; then
+  rm -f "$NODE_BIN"
+  download_verified "$NODE_URL" "$NODE_BIN" "$NODE_SHA256" 100000000
+fi
+
+APP_ARCHIVE="$CACHE_BASE/app/chronicle-$APP_VERSION.tar.gz"
+if ! verify_file "$APP_ARCHIVE" "$APP_SHA256"; then
+  download_verified "$APP_URL" "$APP_ARCHIVE" "$APP_SHA256" 16777216
+fi
+
+# Only accept regular files and directories below src/; reject absolute paths,
+# traversal, links, and special files before extraction. Re-extract from the
+# verified archive into a fresh directory on each run so modified cache files
+# are never executed just because the archive itself remained intact.
+while IFS= read -r entry; do
+  entry="${entry#./}"
+  [[ "$entry" == src || "$entry" == src/* ]] || die "The Chronicle bundle contains an unexpected path and was rejected."
+  [[ "$entry" != /* && "$entry" != *../* && "$entry" != ../* ]] || die "The Chronicle bundle contains a path escape and was rejected."
+done < <(tar -tzf "$APP_ARCHIVE")
+if tar -tvzf "$APP_ARCHIVE" | awk 'substr($1,1,1)!="-" && substr($1,1,1)!="d" { found=1 } END { exit !found }'; then
+  die "The Chronicle bundle contains a link or special entry and was rejected."
+fi
+STAGING_DIR="$CACHE_BASE/app/.extract-$APP_VERSION-$$"
+rm -rf "$STAGING_DIR"
+mkdir -p "$STAGING_DIR"
+tar -xzf "$APP_ARCHIVE" -C "$STAGING_DIR" --no-same-owner --no-same-permissions
+rm -rf "$APP_DIR"
+mv "$STAGING_DIR" "$APP_DIR"
+
+[[ -f "$APP_ENTRY" && ! -L "$APP_ENTRY" ]] || die "The verified Chronicle bundle is incomplete. Clear the Chronicle cache and retry."
+# Run only the bundled Chronicle entry point. The selected project's scripts,
+# package manager hooks, and discovered commands are never invoked.
+if [[ -t 1 && -r /dev/tty && -w /dev/tty ]]; then
+  exec "$NODE_BIN" "$APP_ENTRY" "$@" </dev/tty
+fi
+exec "$NODE_BIN" "$APP_ENTRY" "$@"

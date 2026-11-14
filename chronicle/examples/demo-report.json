@@ -1,0 +1,939 @@
+{
+  "schemaVersion": 6,
+  "reportId": "9ee8bfc8-9361-40ee-93f5-0dae735f1706",
+  "createdAt": "2026-11-10T05:03:09.562Z",
+  "sourceAvailability": {
+    "git": "implemented",
+    "agentSessions": "implemented",
+    "ide": "not_implemented",
+    "testRuns": "not_implemented",
+    "buildRuns": "not_implemented",
+    "ciRuns": "not_implemented"
+  },
+  "project": {
+    "localProjectId": "56dbd5f29b58e2858ab43e932c2cc811b9b3fb24ea55c610572277d741f24352",
+    "displayName": "Demo Fixture Project",
+    "association": "exact_root"
+  },
+  "git": {
+    "evidenceClass": "git_activity",
+    "authorship": "unknown",
+    "commitCount": 2,
+    "fileChanges": 3,
+    "insertions": 3,
+    "deletions": 0,
+    "currentBranchCount": 1,
+    "mergeCommitCount": 0,
+    "activityByDay": [
+      {
+        "day": "2026-11-10",
+        "commits": 2
+      }
+    ],
+    "fileCategories": [
+      {
+        "category": "documentation",
+        "changes": 2
+      },
+      {
+        "category": "test",
+        "changes": 1
+      }
+    ],
+    "commitIds": [
+      "0787b004c3296aa58beceb07fd276262da8aacaef7c6a7b8359c76b31490dc3b",
+      "665034aefe540e385783e0b12e1074e625dc12df58f020022e36155f43c2fb49"
+    ],
+    "historyTruncated": false
+  },
+  "developmentStory": "Git records 2 commits, 3 file-change records, +3 insertions and −0 deletions for Demo Fixture Project. Git metadata does not establish who authored this work. 1 approved local agent sessions were observed across 1 supported tool source(s). 1 session(s) show planning evidence before the first recorded tool action, based on source order. 1 correction(s) were followed by a later agent action in the recorded sequence. 1 explicit failure event(s) were observed. 1 failure-to-later-success sequence(s) were observed; task resolution is not established. Recorded model identifiers include claude-sonnet-fixture. Git/session date overlap is temporal context only and does not establish authorship, handoffs or collaborative work.",
+  "contribution": {
+    "manual": "unknown",
+    "aiAssisted": "unknown",
+    "collaborative": "unknown",
+    "unclassified": "git_activity_only"
+  },
+  "dimensions": [
+    {
+      "key": "planning",
+      "score": null,
+      "status": "insufficient_evidence",
+      "evidenceCount": 1,
+      "confidence": "insufficient",
+      "explanation": "Planning language is counted, but ordering before implementation and follow-through are not normalized; no score is assigned.",
+      "positiveSignals": [
+        "planning_language_observed"
+      ],
+      "improvementOpportunities": [],
+      "evidenceRefs": [
+        "f29c2e5777241ad217ebd26ff70de8138cade5e803447e27d2c819b17727e32b"
+      ]
+    },
+    {
+      "key": "ai_steering",
+      "score": null,
+      "status": "insufficient_evidence",
+      "evidenceCount": 1,
+      "confidence": "insufficient",
+      "explanation": "Correction language is counted, but the agent response and resulting outcome are not linked; no score is assigned.",
+      "positiveSignals": [
+        "correction_language_observed"
+      ],
+      "improvementOpportunities": [],
+      "evidenceRefs": [
+        "f29c2e5777241ad217ebd26ff70de8138cade5e803447e27d2c819b17727e32b"
+      ]
+    },
+    {
+      "key": "execution_leverage",
+      "score": null,
+      "status": "insufficient_evidence",
+      "evidenceCount": 1,
+      "confidence": "insufficient",
+      "explanation": "Tool activity indicates recorded agent actions, not useful output or developer leverage; no score is assigned.",
+      "positiveSignals": [
+        "agent_tool_activity_observed"
+      ],
+      "improvementOpportunities": [],
+      "evidenceRefs": [
+        "f29c2e5777241ad217ebd26ff70de8138cade5e803447e27d2c819b17727e32b"
+      ]
+    },
+    {
+      "key": "engineering_quality",
+      "score": null,
+      "status": "insufficient_evidence",
+      "evidenceCount": 1,
+      "confidence": "insufficient",
+      "explanation": "Verification-related tool types and test-file changes do not establish that tests ran or passed; no score is assigned.",
+      "positiveSignals": [
+        "test_file_changes_observed"
+      ],
+      "improvementOpportunities": [],
+      "evidenceRefs": [
+        "56dbd5f29b58e2858ab43e932c2cc811b9b3fb24ea55c610572277d741f24352"
+      ]
+    },
+    {
+      "key": "product_thinking",
+      "score": null,
+      "status": "insufficient_evidence",
+      "evidenceCount": 0,
+      "confidence": "insufficient",
+      "explanation": "The current adapters do not normalize product decision evidence into a validated signal; no score is assigned.",
+      "positiveSignals": [],
+      "improvementOpportunities": [],
+      "evidenceRefs": []
+    }
+  ],
+  "agents": {
+    "sessions": [
+      {
+        "sessionKey": "f29c2e5777241ad217ebd26ff70de8138cade5e803447e27d2c819b17727e32b",
+        "source": "claude-code",
+        "association": "exact_root",
+        "evidence": "confirmed",
+        "startedAt": "2026-11-08T10:00:00.000Z",
+        "endedAt": "2026-11-08T10:06:00.000Z",
+        "durationSeconds": 360,
+        "userTurns": 2,
+        "assistantTurns": 0,
+        "promptWordCount": 15,
+        "planningSignals": 1,
+        "correctionSignals": 1,
+        "toolCallCount": 2,
+        "toolKinds": [
+          "shell"
+        ],
+        "models": [
+          "claude-sonnet-fixture"
+        ],
+        "failureSignals": 1,
+        "recoverySignals": 1,
+        "sequenceSummary": {
+          "schemaVersion": 1,
+          "initialIntent": "plan",
+          "planningBeforeFirstTool": true,
+          "planningEvidenceRefs": [
+            "b3acc57ce333e724aeddf4fc1f3dca449c62c20916cc08d4484cae0164c28524"
+          ],
+          "firstToolCallEventId": "77aaafc685be2bd480e39c40ffc4a0944246fa117f1bafa2356a91d713124e01",
+          "toolCallCount": 2,
+          "toolResultCount": 2,
+          "correctionCount": 1,
+          "correctionFollowUpCount": 1,
+          "failureCount": 1,
+          "recoveryCount": 1,
+          "completionStatus": "not_observed",
+          "modelChangeCount": 0,
+          "modelSequence": [
+            {
+              "modelIdentifier": "claude-sonnet-fixture",
+              "eventId": "ae31f8301e67284fdd8d4654fc19529066123f253dd9ce48ff5d9f89e765b304"
+            }
+          ],
+          "subagentDispatchCount": 0,
+          "subagentReturnCount": 0,
+          "backgroundEventCount": 0,
+          "missingTimestampCount": 0,
+          "eventCount": 10,
+          "truncated": false,
+          "evidenceRefs": [
+            "219e17b18c37b30eeeecd8c839d99593658d72b140cf40db6b6bc6b1854f40df",
+            "b3acc57ce333e724aeddf4fc1f3dca449c62c20916cc08d4484cae0164c28524",
+            "ae31f8301e67284fdd8d4654fc19529066123f253dd9ce48ff5d9f89e765b304",
+            "77aaafc685be2bd480e39c40ffc4a0944246fa117f1bafa2356a91d713124e01",
+            "a485489c02c5382c63dc809e3dc207426d49508eaa38f11f7996f31dbcc450b5",
+            "9ea717fc8cdda5c0f81dce145f7276f33b12c69f4ae75196164f022ee440e830",
+            "15c4df25969953e5ec9146689efe9bf4f348a18f1aeb9d4e560b9874e77334a3",
+            "9a915b969fe6c5818432e669b261178c6d09ffbbc0fb04f404392cf64324d2de",
+            "2c24c3a8a465202e4ce4f0bf9db7d2872d39601d9e2a1ab30db17403c5e6574f",
+            "a5098275c0eb0298f43e675e8c7f1da5718c826dc7b66eb9745f48c35666eb15"
+          ]
+        }
+      }
+    ],
+    "sourceCoverage": [
+      {
+        "sourceId": "claude-code",
+        "adapterId": "claude-code",
+        "adapterVersion": "2",
+        "format": "Claude Code JSONL transcript (observed record schema)",
+        "estimatedFiles": 1,
+        "filesRead": 1,
+        "matchedSessions": 1,
+        "skippedFiles": 0
+      }
+    ],
+    "metrics": {
+      "sessionCount": 1,
+      "sourceCounts": {
+        "claude-code": 1
+      },
+      "modelCounts": {
+        "claude-sonnet-fixture": 1
+      },
+      "averagePromptWords": 8,
+      "planningSignals": 1,
+      "correctionSignals": 1,
+      "toolCalls": 2,
+      "toolCounts": {
+        "shell": 1
+      },
+      "longestSessionSeconds": 360,
+      "sessionsWithDuration": 1,
+      "maxConcurrentSessions": 1,
+      "failureSignals": 1,
+      "recoverySignals": 1,
+      "sessionDays": 1,
+      "gitCommitsOnSessionDays": 0,
+      "overlappingGitDays": 0,
+      "correlationNote": "Date overlap is temporal context only. It does not attribute commits or changes to a person or agent."
+    },
+    "claim": "Confirmed local agent-session records were analyzed after approval. Transcript text was used only in memory for derived counts and is not retained in this report."
+  },
+  "episodes": [
+    {
+      "schemaVersion": 1,
+      "episodeId": "ce4e328554fcb35a8796325cf22b3f91be952a5d837829ea77517976ce8a9c00",
+      "repositoryIdentity": "56dbd5f29b58e2858ab43e932c2cc811b9b3fb24ea55c610572277d741f24352",
+      "title": "Development activity",
+      "narrative": "Chronicle groups this as single-session development activity using a prompt followed by an observed tool action in one session. The first recorded instruction was classified as plan; this is a derived category, not a retained task description. claude-code session evidence is included without a directly linked Git commit. 1 correction event(s) were observed. 1 failure event(s) and 1 later-success signal(s) were recorded; task resolution is unknown. Episode completion is unknown unless an independent task-completion record is available.",
+      "intentClassification": "plan",
+      "startedAt": "2026-11-08T10:00:00.000Z",
+      "endedAt": "2026-11-08T10:06:00.000Z",
+      "startedAtPrecision": "millisecond",
+      "endedAtPrecision": "millisecond",
+      "sessionRefs": [
+        {
+          "sessionKey": "f29c2e5777241ad217ebd26ff70de8138cade5e803447e27d2c819b17727e32b",
+          "source": "claude-code"
+        }
+      ],
+      "participatingAgentTypes": [
+        "claude-code"
+      ],
+      "gitCommitRefs": [],
+      "changedFileCategories": [],
+      "sequence": [
+        {
+          "type": "planning",
+          "count": 1,
+          "evidenceRefs": [
+            "b3acc57ce333e724aeddf4fc1f3dca449c62c20916cc08d4484cae0164c28524"
+          ]
+        },
+        {
+          "type": "agent_execution",
+          "count": 2,
+          "evidenceRefs": [
+            "77aaafc685be2bd480e39c40ffc4a0944246fa117f1bafa2356a91d713124e01",
+            "2c24c3a8a465202e4ce4f0bf9db7d2872d39601d9e2a1ab30db17403c5e6574f"
+          ]
+        },
+        {
+          "type": "developer_correction",
+          "count": 1,
+          "evidenceRefs": [
+            "9a915b969fe6c5818432e669b261178c6d09ffbbc0fb04f404392cf64324d2de"
+          ]
+        },
+        {
+          "type": "failure",
+          "count": 1,
+          "evidenceRefs": [
+            "a485489c02c5382c63dc809e3dc207426d49508eaa38f11f7996f31dbcc450b5"
+          ]
+        },
+        {
+          "type": "later_success_signal",
+          "count": 1,
+          "evidenceRefs": [
+            "15c4df25969953e5ec9146689efe9bf4f348a18f1aeb9d4e560b9874e77334a3"
+          ]
+        }
+      ],
+      "eventSequences": [
+        {
+          "sessionKey": "f29c2e5777241ad217ebd26ff70de8138cade5e803447e27d2c819b17727e32b",
+          "source": "claude-code",
+          "eventCount": 10,
+          "truncated": false,
+          "events": [
+            {
+              "sequence": 0,
+              "type": "session_start",
+              "timestamp": "2026-11-08T10:00:00.000Z",
+              "timestampPrecision": "millisecond",
+              "actor": "system",
+              "outcome": "none",
+              "evidenceRef": "219e17b18c37b30eeeecd8c839d99593658d72b140cf40db6b6bc6b1854f40df"
+            },
+            {
+              "sequence": 1,
+              "type": "user_prompt",
+              "timestamp": "2026-11-08T10:00:00.000Z",
+              "timestampPrecision": "millisecond",
+              "actor": "user",
+              "outcome": "none",
+              "evidenceRef": "b3acc57ce333e724aeddf4fc1f3dca449c62c20916cc08d4484cae0164c28524"
+            },
+            {
+              "sequence": 2,
+              "type": "model_change",
+              "timestamp": "2026-11-08T10:01:00.000Z",
+              "timestampPrecision": "millisecond",
+              "actor": "system",
+              "outcome": "none",
+              "evidenceRef": "ae31f8301e67284fdd8d4654fc19529066123f253dd9ce48ff5d9f89e765b304"
+            },
+            {
+              "sequence": 3,
+              "type": "tool_call",
+              "timestamp": "2026-11-08T10:01:00.000Z",
+              "timestampPrecision": "millisecond",
+              "actor": "assistant",
+              "outcome": "none",
+              "evidenceRef": "77aaafc685be2bd480e39c40ffc4a0944246fa117f1bafa2356a91d713124e01"
+            },
+            {
+              "sequence": 4,
+              "type": "tool_result",
+              "timestamp": "2026-11-08T10:02:00.000Z",
+              "timestampPrecision": "millisecond",
+              "actor": "tool",
+              "outcome": "failure",
+              "evidenceRef": "a485489c02c5382c63dc809e3dc207426d49508eaa38f11f7996f31dbcc450b5"
+            },
+            {
+              "sequence": 5,
+              "type": "tool_result",
+              "timestamp": "2026-11-08T10:03:00.000Z",
+              "timestampPrecision": "millisecond",
+              "actor": "tool",
+              "outcome": "success",
+              "evidenceRef": "9ea717fc8cdda5c0f81dce145f7276f33b12c69f4ae75196164f022ee440e830"
+            },
+            {
+              "sequence": 6,
+              "type": "recovery",
+              "timestamp": "2026-11-08T10:03:00.000Z",
+              "timestampPrecision": "millisecond",
+              "actor": "system",
+              "outcome": "success",
+              "evidenceRef": "15c4df25969953e5ec9146689efe9bf4f348a18f1aeb9d4e560b9874e77334a3"
+            },
+            {
+              "sequence": 7,
+              "type": "developer_correction",
+              "timestamp": "2026-11-08T10:04:00.000Z",
+              "timestampPrecision": "millisecond",
+              "actor": "user",
+              "outcome": "none",
+              "evidenceRef": "9a915b969fe6c5818432e669b261178c6d09ffbbc0fb04f404392cf64324d2de"
+            },
+            {
+              "sequence": 8,
+              "type": "tool_call",
+              "timestamp": "2026-11-08T10:06:00.000Z",
+              "timestampPrecision": "millisecond",
+              "actor": "assistant",
+              "outcome": "none",
+              "evidenceRef": "2c24c3a8a465202e4ce4f0bf9db7d2872d39601d9e2a1ab30db17403c5e6574f"
+            },
+            {
+              "sequence": 9,
+              "type": "session_end",
+              "timestamp": "2026-11-08T10:06:00.000Z",
+              "timestampPrecision": "millisecond",
+              "actor": "system",
+              "outcome": "unknown",
+              "evidenceRef": "a5098275c0eb0298f43e675e8c7f1da5718c826dc7b66eb9745f48c35666eb15"
+            }
+          ]
+        }
+      ],
+      "eventSequenceTruncated": false,
+      "correctionCount": 1,
+      "failureCount": 1,
+      "laterSuccessSignalCount": 1,
+      "verificationEventCount": 0,
+      "completionStatus": "unknown",
+      "confidence": "low",
+      "groupingBasis": [
+        "single_session_observed_sequence"
+      ],
+      "evidenceRefs": [
+        "219e17b18c37b30eeeecd8c839d99593658d72b140cf40db6b6bc6b1854f40df",
+        "b3acc57ce333e724aeddf4fc1f3dca449c62c20916cc08d4484cae0164c28524",
+        "ae31f8301e67284fdd8d4654fc19529066123f253dd9ce48ff5d9f89e765b304",
+        "77aaafc685be2bd480e39c40ffc4a0944246fa117f1bafa2356a91d713124e01",
+        "a485489c02c5382c63dc809e3dc207426d49508eaa38f11f7996f31dbcc450b5",
+        "9ea717fc8cdda5c0f81dce145f7276f33b12c69f4ae75196164f022ee440e830",
+        "15c4df25969953e5ec9146689efe9bf4f348a18f1aeb9d4e560b9874e77334a3",
+        "9a915b969fe6c5818432e669b261178c6d09ffbbc0fb04f404392cf64324d2de",
+        "2c24c3a8a465202e4ce4f0bf9db7d2872d39601d9e2a1ab30db17403c5e6574f",
+        "a5098275c0eb0298f43e675e8c7f1da5718c826dc7b66eb9745f48c35666eb15"
+      ]
+    }
+  ],
+  "privacy": {
+    "rawSourceCodeIncluded": false,
+    "rawDiffsIncluded": false,
+    "commitMessagesIncluded": false,
+    "authorIdentitiesIncluded": false,
+    "absoluteProjectPathIncluded": false,
+    "rawAgentTranscriptsIncluded": false,
+    "rawPromptTextIncluded": false,
+    "rawToolOutputIncluded": false
+  },
+  "unassignedActivity": {
+    "schemaVersion": 1,
+    "sessionRefs": [],
+    "gitCommitRefs": [
+      "0787b004c3296aa58beceb07fd276262da8aacaef7c6a7b8359c76b31490dc3b",
+      "665034aefe540e385783e0b12e1074e625dc12df58f020022e36155f43c2fb49"
+    ],
+    "reason": "insufficient_linkage_evidence"
+  },
+  "behavioralAnalysis": {
+    "schemaVersion": 2,
+    "evidenceCoverage": {
+      "totalObservations": 15,
+      "unavailableObservations": 8,
+      "truncatedObservations": 0,
+      "evidenceAvailable": 17,
+      "referencesIncluded": 17,
+      "referencesOmitted": 0,
+      "referenceCoveragePercent": 100,
+      "countingBasis": "per_observation; references may support multiple observations"
+    },
+    "observations": [
+      {
+        "observationId": "8a1357f63c94e43fc3976c5c3241f3c3f6d3bef8283c9f2a3ce3e000a361920c",
+        "category": "agent_orchestration",
+        "signal": "orchestration_unavailable",
+        "evidenceCount": 0,
+        "description": "No explicit orchestration relationship was available in the retained session events.",
+        "evidenceRefs": [],
+        "evidenceCoverage": {
+          "totalAvailable": 0,
+          "referencesIncluded": 0,
+          "omitted": 0,
+          "truncated": false,
+          "coveragePercent": 0,
+          "source": "claude-code",
+          "category": "agent_orchestration",
+          "unavailableReason": "evidence_absent"
+        },
+        "verificationStatus": "locally_generated",
+        "sourceAdapter": "claude-code",
+        "provenance": [
+          {
+            "sourceAdapter": "claude-code",
+            "recordTypes": []
+          }
+        ],
+        "confidence": "low",
+        "evidenceClassification": "unavailable",
+        "limitations": "Concurrency, delegation and handoffs are not inferred from timestamp overlap."
+      },
+      {
+        "observationId": "1af207bf1519247b8a444e2005925ec35712ad1abbe790ed330cc35e7cc62fdf",
+        "category": "ai_steering",
+        "signal": "correction_followups",
+        "evidenceCount": 1,
+        "description": "1 correction event(s) were followed by a later recorded agent action in source order.",
+        "evidenceRefs": [
+          "2c24c3a8a465202e4ce4f0bf9db7d2872d39601d9e2a1ab30db17403c5e6574f",
+          "9a915b969fe6c5818432e669b261178c6d09ffbbc0fb04f404392cf64324d2de"
+        ],
+        "evidenceCoverage": {
+          "totalAvailable": 2,
+          "referencesIncluded": 2,
+          "omitted": 0,
+          "truncated": false,
+          "coveragePercent": 100,
+          "source": "claude-code",
+          "category": "ai_steering",
+          "unavailableReason": "not_applicable"
+        },
+        "verificationStatus": "locally_generated",
+        "sourceAdapter": "claude-code",
+        "provenance": [
+          {
+            "sourceAdapter": "claude-code",
+            "recordTypes": [
+              "tool_use",
+              "user"
+            ]
+          }
+        ],
+        "confidence": "medium",
+        "evidenceClassification": "confirmed",
+        "limitations": "Sequence does not prove the later action addressed the correction or improved the result."
+      },
+      {
+        "observationId": "83097305cc0e5ba6c926a289c73f02c896aa2d80506e12a19a13bd97719b5d0d",
+        "category": "ai_steering",
+        "signal": "correction_language",
+        "evidenceCount": 1,
+        "description": "1 prompt(s) contained correction-language indicators.",
+        "evidenceRefs": [
+          "9a915b969fe6c5818432e669b261178c6d09ffbbc0fb04f404392cf64324d2de"
+        ],
+        "evidenceCoverage": {
+          "totalAvailable": 1,
+          "referencesIncluded": 1,
+          "omitted": 0,
+          "truncated": false,
+          "coveragePercent": 100,
+          "source": "claude-code",
+          "category": "ai_steering",
+          "unavailableReason": "not_applicable"
+        },
+        "verificationStatus": "locally_generated",
+        "sourceAdapter": "claude-code",
+        "provenance": [
+          {
+            "sourceAdapter": "claude-code",
+            "recordTypes": [
+              "user"
+            ]
+          }
+        ],
+        "confidence": "low",
+        "evidenceClassification": "heuristic",
+        "limitations": "Lexical matching can misclassify ordinary instructions; the prompt text is not retained."
+      },
+      {
+        "observationId": "7287a9f282f48bc3a64914a761ec66021589322c3e7b4b255a5f547b1e583a3b",
+        "category": "execution_approach",
+        "signal": "ai_authorship_unavailable",
+        "evidenceCount": 0,
+        "description": "Confirmed AI-authored code contribution is unavailable in the collected evidence.",
+        "evidenceRefs": [],
+        "evidenceCoverage": {
+          "totalAvailable": 0,
+          "referencesIncluded": 0,
+          "omitted": 0,
+          "truncated": false,
+          "coveragePercent": 0,
+          "source": "claude-code",
+          "category": "execution_approach",
+          "unavailableReason": "evidence_absent"
+        },
+        "verificationStatus": "locally_generated",
+        "sourceAdapter": "claude-code",
+        "provenance": [
+          {
+            "sourceAdapter": "claude-code",
+            "recordTypes": []
+          }
+        ],
+        "confidence": "low",
+        "evidenceClassification": "unavailable",
+        "limitations": "An AI session or tool call does not prove its output entered the repository."
+      },
+      {
+        "observationId": "b71f3ea13670ad38eee793bdafc5f61080e4c86df6590210384a18165c70eb44",
+        "category": "execution_approach",
+        "signal": "ai_session_activity",
+        "evidenceCount": 1,
+        "description": "1 approved AI-agent session(s) contain recorded event activity.",
+        "evidenceRefs": [
+          "15c4df25969953e5ec9146689efe9bf4f348a18f1aeb9d4e560b9874e77334a3",
+          "2c24c3a8a465202e4ce4f0bf9db7d2872d39601d9e2a1ab30db17403c5e6574f",
+          "77aaafc685be2bd480e39c40ffc4a0944246fa117f1bafa2356a91d713124e01",
+          "9a915b969fe6c5818432e669b261178c6d09ffbbc0fb04f404392cf64324d2de",
+          "9ea717fc8cdda5c0f81dce145f7276f33b12c69f4ae75196164f022ee440e830",
+          "a485489c02c5382c63dc809e3dc207426d49508eaa38f11f7996f31dbcc450b5",
+          "ae31f8301e67284fdd8d4654fc19529066123f253dd9ce48ff5d9f89e765b304",
+          "b3acc57ce333e724aeddf4fc1f3dca449c62c20916cc08d4484cae0164c28524",
+          "f29c2e5777241ad217ebd26ff70de8138cade5e803447e27d2c819b17727e32b"
+        ],
+        "evidenceCoverage": {
+          "totalAvailable": 9,
+          "referencesIncluded": 9,
+          "omitted": 0,
+          "truncated": false,
+          "coveragePercent": 100,
+          "source": "claude-code",
+          "category": "execution_approach",
+          "unavailableReason": "not_applicable"
+        },
+        "verificationStatus": "locally_generated",
+        "sourceAdapter": "claude-code",
+        "provenance": [
+          {
+            "sourceAdapter": "claude-code",
+            "recordTypes": [
+              "assistant",
+              "tool_result",
+              "tool_use",
+              "user"
+            ]
+          }
+        ],
+        "confidence": "high",
+        "evidenceClassification": "confirmed",
+        "limitations": "Session activity does not attribute code authorship or prove that an agent-produced change entered Git."
+      },
+      {
+        "observationId": "54122a6f7d0fe053ca23cd85e8bce5038912986b4e0792859b546a6b7bc13300",
+        "category": "execution_approach",
+        "signal": "git_activity_only",
+        "evidenceCount": 2,
+        "description": "2 Git commit record(s) were observed independently of author attribution.",
+        "evidenceRefs": [
+          "0787b004c3296aa58beceb07fd276262da8aacaef7c6a7b8359c76b31490dc3b",
+          "665034aefe540e385783e0b12e1074e625dc12df58f020022e36155f43c2fb49"
+        ],
+        "evidenceCoverage": {
+          "totalAvailable": 2,
+          "referencesIncluded": 2,
+          "omitted": 0,
+          "truncated": false,
+          "coveragePercent": 100,
+          "source": "git",
+          "category": "execution_approach",
+          "unavailableReason": "not_applicable"
+        },
+        "verificationStatus": "locally_generated",
+        "sourceAdapter": "git",
+        "provenance": [
+          {
+            "sourceAdapter": "git",
+            "recordTypes": [
+              "git_commit_metadata"
+            ]
+          }
+        ],
+        "confidence": "high",
+        "evidenceClassification": "confirmed",
+        "limitations": "Git metadata does not establish whether work was manual, AI-assisted or collaborative."
+      },
+      {
+        "observationId": "1715e1358a865a55d71080dd7d9e0e874789b92626dd5f00a3178c98ff15d409",
+        "category": "execution_approach",
+        "signal": "hybrid_authorship_unavailable",
+        "evidenceCount": 0,
+        "description": "Confirmed human-and-agent contribution to the same changes is unavailable.",
+        "evidenceRefs": [],
+        "evidenceCoverage": {
+          "totalAvailable": 0,
+          "referencesIncluded": 0,
+          "omitted": 0,
+          "truncated": false,
+          "coveragePercent": 0,
+          "source": "multiple",
+          "category": "execution_approach",
+          "unavailableReason": "evidence_absent"
+        },
+        "verificationStatus": "locally_generated",
+        "sourceAdapter": "multiple",
+        "provenance": [
+          {
+            "sourceAdapter": "claude-code",
+            "recordTypes": []
+          },
+          {
+            "sourceAdapter": "git",
+            "recordTypes": [
+              "git_commit_metadata"
+            ]
+          }
+        ],
+        "confidence": "low",
+        "evidenceClassification": "unavailable",
+        "limitations": "Session and Git proximity or episode linkage does not establish collaborative authorship."
+      },
+      {
+        "observationId": "5c35fbdb27c853029bd164749506d59167315a2815b1dcc02ec93467f720470c",
+        "category": "execution_approach",
+        "signal": "manual_authorship_unavailable",
+        "evidenceCount": 0,
+        "description": "Confirmed manual code contribution is unavailable in the collected evidence.",
+        "evidenceRefs": [],
+        "evidenceCoverage": {
+          "totalAvailable": 0,
+          "referencesIncluded": 0,
+          "omitted": 0,
+          "truncated": false,
+          "coveragePercent": 0,
+          "source": "git",
+          "category": "execution_approach",
+          "unavailableReason": "evidence_absent"
+        },
+        "verificationStatus": "locally_generated",
+        "sourceAdapter": "git",
+        "provenance": [
+          {
+            "sourceAdapter": "git",
+            "recordTypes": [
+              "git_commit_metadata"
+            ]
+          }
+        ],
+        "confidence": "low",
+        "evidenceClassification": "unavailable",
+        "limitations": "Git author metadata and session absence or presence do not prove who wrote a change."
+      },
+      {
+        "observationId": "ef963f1d8dceb4b5fe7ab1d860c4c44f6bcdeb1743e9d81304aa1c05af11dbd7",
+        "category": "failure_recovery",
+        "signal": "failure_events",
+        "evidenceCount": 1,
+        "description": "1 explicit error or failed-result event(s) were recorded.",
+        "evidenceRefs": [
+          "a485489c02c5382c63dc809e3dc207426d49508eaa38f11f7996f31dbcc450b5"
+        ],
+        "evidenceCoverage": {
+          "totalAvailable": 1,
+          "referencesIncluded": 1,
+          "omitted": 0,
+          "truncated": false,
+          "coveragePercent": 100,
+          "source": "claude-code",
+          "category": "failure_recovery",
+          "unavailableReason": "not_applicable"
+        },
+        "verificationStatus": "locally_generated",
+        "sourceAdapter": "claude-code",
+        "provenance": [
+          {
+            "sourceAdapter": "claude-code",
+            "recordTypes": [
+              "tool_result"
+            ]
+          }
+        ],
+        "confidence": "high",
+        "evidenceClassification": "confirmed",
+        "limitations": "Error events may be partial; they do not establish user impact or task failure."
+      },
+      {
+        "observationId": "467d418388044199eb6b0b44bfbe82786da438154d50f048105d3a191d32b1fa",
+        "category": "failure_recovery",
+        "signal": "later_success_signals",
+        "evidenceCount": 1,
+        "description": "1 later-success signal(s) followed a recorded failure.",
+        "evidenceRefs": [
+          "15c4df25969953e5ec9146689efe9bf4f348a18f1aeb9d4e560b9874e77334a3"
+        ],
+        "evidenceCoverage": {
+          "totalAvailable": 1,
+          "referencesIncluded": 1,
+          "omitted": 0,
+          "truncated": false,
+          "coveragePercent": 100,
+          "source": "claude-code",
+          "category": "failure_recovery",
+          "unavailableReason": "not_applicable"
+        },
+        "verificationStatus": "locally_generated",
+        "sourceAdapter": "claude-code",
+        "provenance": [
+          {
+            "sourceAdapter": "claude-code",
+            "recordTypes": [
+              "tool_result"
+            ]
+          }
+        ],
+        "confidence": "medium",
+        "evidenceClassification": "probable",
+        "limitations": "A later successful tool result may be unrelated; this does not establish recovery of the original issue or task completion."
+      },
+      {
+        "observationId": "116adda85ef49e1d24d2776a5feaeb1ffc18894669409b71235a1a46b16ab0dd",
+        "category": "planning",
+        "signal": "planning_language",
+        "evidenceCount": 1,
+        "description": "1 prompt(s) contained planning-related language indicators.",
+        "evidenceRefs": [
+          "b3acc57ce333e724aeddf4fc1f3dca449c62c20916cc08d4484cae0164c28524"
+        ],
+        "evidenceCoverage": {
+          "totalAvailable": 1,
+          "referencesIncluded": 1,
+          "omitted": 0,
+          "truncated": false,
+          "coveragePercent": 100,
+          "source": "claude-code",
+          "category": "planning",
+          "unavailableReason": "not_applicable"
+        },
+        "verificationStatus": "locally_generated",
+        "sourceAdapter": "claude-code",
+        "provenance": [
+          {
+            "sourceAdapter": "claude-code",
+            "recordTypes": [
+              "user"
+            ]
+          }
+        ],
+        "confidence": "low",
+        "evidenceClassification": "heuristic",
+        "limitations": "Lexical indicators do not establish a complete plan, its sequence or execution."
+      },
+      {
+        "observationId": "08f034626b345c17d5a6ea0b33abb7afd576cd1ced1d296df0739ca8b486d022",
+        "category": "planning",
+        "signal": "task_decomposition_unavailable",
+        "evidenceCount": 0,
+        "description": "Task decomposition cannot be assessed from the retained evidence.",
+        "evidenceRefs": [],
+        "evidenceCoverage": {
+          "totalAvailable": 0,
+          "referencesIncluded": 0,
+          "omitted": 0,
+          "truncated": false,
+          "coveragePercent": 0,
+          "source": "claude-code",
+          "category": "planning",
+          "unavailableReason": "evidence_absent"
+        },
+        "verificationStatus": "locally_generated",
+        "sourceAdapter": "claude-code",
+        "provenance": [
+          {
+            "sourceAdapter": "claude-code",
+            "recordTypes": []
+          }
+        ],
+        "confidence": "low",
+        "evidenceClassification": "unavailable",
+        "limitations": "Plan content and individual task steps are not retained."
+      },
+      {
+        "observationId": "b6369072e60406ca0bea43300aa0986c164d79bb7b39c35b4ad82c608daa5be6",
+        "category": "product_thinking",
+        "signal": "product_decisions_unavailable",
+        "evidenceCount": 0,
+        "description": "Product requirements, user-impact decisions and scope trade-offs cannot be confirmed.",
+        "evidenceRefs": [],
+        "evidenceCoverage": {
+          "totalAvailable": 0,
+          "referencesIncluded": 0,
+          "omitted": 0,
+          "truncated": false,
+          "coveragePercent": 0,
+          "source": "claude-code",
+          "category": "product_thinking",
+          "unavailableReason": "evidence_absent"
+        },
+        "verificationStatus": "locally_generated",
+        "sourceAdapter": "claude-code",
+        "provenance": [
+          {
+            "sourceAdapter": "claude-code",
+            "recordTypes": []
+          }
+        ],
+        "confidence": "low",
+        "evidenceClassification": "unavailable",
+        "limitations": "The retained event model does not preserve decision content or product context."
+      },
+      {
+        "observationId": "d1bf683525eb85f365d1da31b2eae93595a075147c5e40fba0b2fdeca59c423a",
+        "category": "technical_decision",
+        "signal": "alternatives_unavailable",
+        "evidenceCount": 0,
+        "description": "Technical alternatives and unresolved decisions cannot be assessed.",
+        "evidenceRefs": [],
+        "evidenceCoverage": {
+          "totalAvailable": 0,
+          "referencesIncluded": 0,
+          "omitted": 0,
+          "truncated": false,
+          "coveragePercent": 0,
+          "source": "claude-code",
+          "category": "technical_decision",
+          "unavailableReason": "evidence_absent"
+        },
+        "verificationStatus": "locally_generated",
+        "sourceAdapter": "claude-code",
+        "provenance": [
+          {
+            "sourceAdapter": "claude-code",
+            "recordTypes": []
+          }
+        ],
+        "confidence": "low",
+        "evidenceClassification": "unavailable",
+        "limitations": "Raw conversation and source contents are not retained, and tool activity alone does not establish a decision."
+      },
+      {
+        "observationId": "416a3f72400b9cc919dd02e8c46c12a7d96c899a51fc8acb5f4575aaa19db641",
+        "category": "verification",
+        "signal": "verification_unavailable",
+        "evidenceCount": 0,
+        "description": "Test, build, type-check and review outcomes are unavailable.",
+        "evidenceRefs": [],
+        "evidenceCoverage": {
+          "totalAvailable": 0,
+          "referencesIncluded": 0,
+          "omitted": 0,
+          "truncated": false,
+          "coveragePercent": 0,
+          "source": "claude-code",
+          "category": "verification",
+          "unavailableReason": "evidence_absent"
+        },
+        "verificationStatus": "locally_generated",
+        "sourceAdapter": "claude-code",
+        "provenance": [
+          {
+            "sourceAdapter": "claude-code",
+            "recordTypes": []
+          }
+        ],
+        "confidence": "low",
+        "evidenceClassification": "unavailable",
+        "limitations": "Git test-file changes and CI configuration do not establish that checks were run."
+      }
+    ]
+  }
+}

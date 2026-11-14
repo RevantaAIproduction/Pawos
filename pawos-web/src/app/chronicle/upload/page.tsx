@@ -26,12 +26,12 @@ const insightExamples = [
 
 const faq = [
   { q: "Is Chronicle reading my source code?", a: "Chronicle asks Git for commit metadata and numstat summaries. Git computes line counts from repository objects; Chronicle receives counts plus relative paths transiently to classify file types, then discards the paths. Chronicle does not retain or upload source contents, full patches, commit messages or author identities. Nothing is sent to PawOS until you review and approve a report upload." },
-  { q: "Which coding tools are supported?", a: "Claude Code, Codex CLI and Gemini CLI adapters are implemented for local JSONL records. Each source path is previewed and must be approved before transcript contents are parsed. Cursor, OpenCode, GitHub Copilot, Antigravity, Windsurf, Aider, Cline, Continue and Roo Code are unsupported." },
+  { q: "Which coding tools are supported?", a: "Chronicle parses project-local Aider chat history from the default .aider.chat.history.md file after you approve that exact file. It also parses Claude Code, Codex CLI and Gemini CLI session records from known external stores only after you opt in with --include-external and approve the exact source path for each repository. Cursor, GitHub Copilot, Windsurf, Cline, Roo Code, Continue, OpenHands, Amazon Q Developer, Kiro and OpenCode are currently detected by project markers only; their activity is not parsed. Configuration or activity markers do not prove a tool was used." },
   { q: "Do I need Docker?", a: "No. Chronicle uses a privately cached, managed Node runtime and does not install Node globally, modify PATH, or require Docker. The public launcher endpoint is not deployed yet." },
   { q: "Does it cost anything?", a: "Chronicle pricing has not been announced. The local-first design does not imply that future cloud features or services are free." },
   { q: "How long does analysis take?", a: "Duration depends on the repository's Git history and local disk speed. Chronicle currently limits the report to at most 2,000 commits and stops Git analysis after 20 seconds; no broader timing guarantee is available." },
   { q: "Can I analyze multiple repositories?", a: "Yes. Run Chronicle from their parent directory; it will list Git repositories it can identify and ask you to choose before reading history. Only the selected repositories are analyzed." },
-  { q: "How often should I upload?", a: "Each upload saves a separate, immutable snapshot. Repeated snapshots compare hashed commit identifiers so earlier commits are not counted as new activity. Supported session records are deduplicated by an opaque session identifier across repeated local analyses. Other tools remain unsupported." },
+  { q: "How often should I upload?", a: "Each upload saves a separate, immutable snapshot. Repeated snapshots compare hashed commit identifiers so earlier commits are not counted as new activity. Supported session records are deduplicated by an opaque session identifier across repeated local analyses. Other detected tools remain configuration/activity markers only until a tested parser is available." },
   { q: "What is the difference between a report and a profile?", a: "A report is one immutable project-analysis snapshot. A profile combines comparable evidence across reports to describe patterns and progression. Cloud profile aggregation is not available yet." },
   { q: "Can I include multiple machines?", a: "Not currently. The local scanner only inventories the machine on which it runs. Cross-machine aggregation requires future source capture and cloud history work." },
   { q: "Are remote development environments supported?", a: "Remote boxes and hosted cloud-agent transcripts are not supported by the current scanner. No remote capture adapter is implemented." },
@@ -97,7 +97,7 @@ export default function ChronicleUploadPage() {
             <div className={styles.promptHeader}><span><i /> COPYABLE DISCOVERY PROMPT</span><UploadPageClient text={discoveryPrompt} label="Copy repository discovery prompt" compact /></div>
             <pre>{discoveryPrompt}</pre>
           </div>
-          <p className={styles.capabilityWarning}>Current limitation: only Claude Code, Codex CLI and Gemini CLI have local session adapters. All candidate source paths are shown for approval before transcript contents are read. Other tools are not counted as supported sessions.</p>
+          <p className={styles.capabilityWarning}>Current limitation: project-local configuration and activity markers are detection-only. Session parsing is implemented only for Claude Code, Codex CLI and Gemini CLI known external stores; they are not inspected unless you explicitly opt in and approve each exact path.</p>
         </section>
 
         <section className={styles.section} id="what-you-get">
@@ -123,7 +123,7 @@ export default function ChronicleUploadPage() {
             {[
               ["01", "Discover locally", "The CLI uses its working directory to find Git repository candidates. It runs no project scripts or package-manager hooks."],
               ["02", "Choose your repositories", "A repository opened directly is analyzed as selected. From a parent folder, choose repository numbers before any Git history is read."],
-              ["03", "Analyze on device", "Chronicle summarizes Git metadata locally. It can also parse Claude Code, Codex CLI and Gemini CLI records only after you approve each displayed external source path. Raw session text is processed in memory for counts and then discarded."],
+              ["03", "Analyze on device", "Chronicle discovers project-local tool markers without opening their files. It summarizes Git metadata locally. Claude Code, Codex CLI and Gemini CLI external session records are considered only after you pass --include-external and approve each displayed path; session text is processed in memory and not retained in the report."],
               ["04", "Review before cloud", "Choose a generated JSON report, inspect its project and aggregate activity preview, then sign in to PawOS and approve the upload."],
               ["05", "Keep private history", "Each approved upload creates a private, immutable account snapshot. Git commit identifiers are hashed for comparison across snapshots."],
               ["06", "Manage sharing", "Reports are private by default. A report owner can explicitly enable a public link and revoke it later."],
@@ -146,10 +146,11 @@ export default function ChronicleUploadPage() {
           <div className={styles.centerIntro}><div className={styles.kicker}>SOURCE AVAILABILITY</div><h2>Supported means implemented.</h2><p>Chronicle will not treat a detected installation as evidence of active use.</p></div>
           <div className={styles.sourceTable}>
             <div className={styles.sourceRow}><span className={`${styles.sourceState} ${styles.stateNow}`}>IMPLEMENTED · LIMITED</span><div><strong>Project discovery and Git history</strong><p>Project discovery reads marker names. The Git adapter summarizes commit timestamps, file-change counts, insertion/deletion totals, branch count and file categories. It does not establish authorship.</p></div></div>
-            <div className={styles.sourceRow}><span className={`${styles.sourceState} ${styles.stateNow}`}>IMPLEMENTED · LOCAL APPROVAL</span><div><strong>Claude Code, Codex CLI and Gemini CLI sessions</strong><p>Claude Code, Codex CLI and Gemini CLI session adapters are implemented. Chronicle previews known local storage locations and estimated file counts, then requires approval for each source path before parsing. Session records are matched by recorded working directory or Gemini project hash; only derived summaries are retained. Cursor, OpenCode, Copilot, Antigravity, IDE activity, and test/build/CI run outcomes are not implemented.</p></div></div>
+            <div className={styles.sourceRow}><span className={`${styles.sourceState} ${styles.stateNow}`}>IMPLEMENTED · DETECTION ONLY</span><div><strong>Project-local agent configuration and activity markers</strong><p>Chronicle checks names and filesystem metadata inside the selected project for Claude Code, Codex CLI, Gemini CLI, Cursor, GitHub Copilot, Windsurf, Cline, Roo Code, Aider, Continue, OpenHands, Amazon Q Developer, Kiro and OpenCode. It does not open these files or treat detection as evidence of use. Unsupported or unidentified activity artifacts are labeled, not parsed.</p></div></div>
+            <div className={styles.sourceRow}><span className={`${styles.sourceState} ${styles.stateNow}`}>IMPLEMENTED · EXPLICIT EXTERNAL OPT-IN</span><div><strong>Claude Code, Codex CLI and Gemini CLI session parsing</strong><p>Behavioral session adapters parse known JSONL formats from external stores only when you run Chronicle with --include-external and approve each exact source path. Without that opt-in, Chronicle does not check the machine-wide stores. Only derived summaries are retained.</p></div></div>
             <div className={styles.sourceRow}><span className={`${styles.sourceState} ${styles.stateLater}`}>NOT AVAILABLE NOW</span><div><strong>Hosted cloud agents and remote development boxes</strong><p>No remote capture or hosted-session integration is implemented. Unknown formats remain unsupported until a reviewed adapter exists.</p></div></div>
           </div>
-          <p className={styles.sourceFoot}>Cursor, OpenCode, GitHub Copilot, Antigravity, Windsurf, Aider, Cline, Continue and Roo Code remain unsupported until an adapter ships with tested format fixtures.</p>
+          <p className={styles.sourceFoot}>Project-marker detection is not behavioral support. Cursor, Copilot, Windsurf, Cline, Roo Code, Aider, Continue, OpenHands, Amazon Q, Kiro and OpenCode activity formats remain unparsed. IDE, test/build/CI outcomes and remote capture are not implemented.</p>
         </section>
 
         <section className={styles.section} id="faq">
@@ -169,9 +170,9 @@ export default function ChronicleUploadPage() {
 
 const discoveryPrompt = `Help me prepare a Chronicle repository scan.
 
-1. Ask me which parent directory or project locations you may inspect. Do not search my whole machine without approval.
-2. In the approved locations, identify Git repositories and list each repository name and absolute path.
-3. Check Chronicle's Upload page for sources marked IMPLEMENTED. For each supported adapter, count available sessions only if the adapter can do so safely; do not open or summarize transcript contents. List Claude Code, Codex CLI and Gemini CLI session-file counts as rough metadata estimates only, clearly label them estimates, and do not open file contents. For other tools, say “unsupported.”
+1. Use only the project folder I selected, or the single parent folder I selected to contain repositories I intend to include. Ask me to confirm that exact scope before inspecting it. Do not search parent ancestors, my home directory, unrelated projects, or external agent stores.
+2. Within that exact folder only, identify Git repositories and list each repository name and absolute path. Group linked worktrees and obvious duplicate clones for my review; do not inspect repository file contents.
+3. Distinguish project-local marker detection from behavioral parser support. Do not inspect external agent-session paths, even to count files. Only report project-local paths and marker names that Chronicle's preview explicitly exposes; say that no transcript contents were inspected. Mark all detection-only tools as “not parsed,” not “unsupported” or “used.”
 4. Do not read source code, full diffs, raw transcripts, credentials or environment files. Do not run project scripts, tests, builds, Git hooks or commands from a repository.
 5. Show me the candidate list and ask exactly which repositories I want to include before preparing commands.
 6. For one selected project, prepare: cd '<ABSOLUTE_PROJECT_PATH>' && curl -fsSL https://pawos.revantaai.com/chronicle/run | bash

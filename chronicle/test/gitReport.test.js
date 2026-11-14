@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile, lstat } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { analyzeGitProject } from "../src/adapters/git.js";
 import { renderLocalReport } from "../src/report/renderHtml.js";
@@ -40,9 +40,21 @@ test("Git report counts activity while leaving authorship unknown and source tex
   }
 });
 
-test("Git report rejects linked worktrees whose metadata lives outside the selected root", async (t) => {
+test("Git report supports linked worktrees and keeps their original project identity", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "chronicle-linked-"));
   t.after(() => rm(root, { recursive: true, force: true }));
-  await writeFile(path.join(root, ".git"), "gitdir: ../outside\n");
-  await assert.rejects(analyzeGitProject(root), /linked worktrees are not read/);
+  await mkdir(path.join(root, "src"));
+  await writeFile(path.join(root, "src", "feature.js"), "export const feature = true;\n");
+  execFileSync("git", ["-C", root, "init", "-q"]);
+  const git = (...args) => execFileSync("git", ["-C", root, ...args], { stdio: "ignore", env: { ...process.env, GIT_AUTHOR_NAME: "Test", GIT_AUTHOR_EMAIL: "test@example.test", GIT_COMMITTER_NAME: "Test", GIT_COMMITTER_EMAIL: "test@example.test" } });
+  git("add", "src/feature.js");
+  git("-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "-m", "initial");
+  const linked = path.join(root, ".claude", "worktrees", "one");
+  await mkdir(path.dirname(linked), { recursive: true });
+  git("worktree", "add", "--detach", linked, "HEAD");
+  const mainReport = await analyzeGitProject(root);
+  const linkedReport = await analyzeGitProject(linked);
+  assert.equal(mainReport.project.localProjectId, linkedReport.project.localProjectId);
+  assert.equal(mainReport.git.commitCount, linkedReport.git.commitCount);
+  assert.equal((await lstat(path.join(linked, ".git"))).isFile(), true);
 });

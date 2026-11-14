@@ -7,7 +7,7 @@ import type { DocPage, DocScreenshot } from '../types';
  */
 const WEB_SCREENSHOT: DocScreenshot = { slot: 'WEB_SCREENSHOT', src: '/docs/pawos-web.png', width: 1493, height: 697, alt: 'PawOS Web in a desktop browser, in Code mode, showing the Connect GitHub, Select a repository and Start coding steps.', caption: 'PawOS Web, Code mode: connect GitHub, select a repository, then describe the change.' };
 const MOBILE_SCREENSHOT: DocScreenshot = { slot: 'MOBILE_SCREENSHOT', src: '/docs/pawos-mobile.jpg', width: 739, height: 1600, alt: 'PawOS Web in a phone browser, in Code mode, with GitHub connected and the Choose repository step next.', caption: 'PawOS on a phone: the same PawOS Web, in the phone’s browser.', portrait: true };
-const DESKTOP_SCREENSHOT: DocScreenshot = { slot: 'DESKTOP_SCREENSHOT', src: '/docs/pawos-desktop.png', width: 1218, height: 807, alt: 'The PawOS Desktop app with its companion, asking what to build, fix, automate or research.', caption: 'PawOS Desktop, with its companion, ready for a task.' };
+const DESKTOP_SCREENSHOT: DocScreenshot = { slot: 'DESKTOP_SCREENSHOT', src: '/docs/pawos-desktop.png', width: 1000, height: 764, alt: 'The PawOS Desktop app with its companion, asking what to build, fix, automate or research.', caption: 'PawOS Desktop, with its companion, ready for a task.' };
 const CLI_SCREENSHOT: DocScreenshot = { slot: 'CLI_SCREENSHOT', src: '/docs/pawos-cli.png', width: 725, height: 361, alt: 'The PawOS CLI in a terminal: the PawOS mascot and recent activity in a box, the folder, branch and GitHub repository, and the prompt.', caption: 'PawOS CLI: the start screen, with the folder, branch and repository it found.' };
 
 export const fourWaysPages: DocPage[] = [

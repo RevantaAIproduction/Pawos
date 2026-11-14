@@ -1,9 +1,10 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
-import { lstat, realpath } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { stableLocalProjectId } from "../storage/localStore.js";
+import { inspectGitRepository } from "./gitRepository.js";
+import { timestampPrecision } from "../domain/sessionEvent.js";
 
 const execFileAsync = promisify(execFile);
 const MAX_COMMITS = 2_000;
@@ -11,11 +12,10 @@ const MAX_BUFFER = 8 * 1024 * 1024;
 const COMMIT_LINE = /^([0-9a-f]{40,64})\0(\d{4}-\d\d-\d\dT[^\0]+)\0(.*)$/;
 
 export async function analyzeGitProject(candidateRoot) {
-  const root = await realpath(candidateRoot);
-  const stat = await lstat(path.join(root, ".git"));
-  if (stat.isSymbolicLink() || !stat.isDirectory()) {
-    throw new Error("Chronicle supports standard repositories with an in-project .git directory; linked worktrees are not read.");
-  }
+  const repository = await inspectGitRepository(candidateRoot);
+  if (!repository) throw new Error("This directory is not a readable Git repository or linked worktree.");
+  const root = repository.primaryRoot;
+  const projectId = await stableLocalProjectId(root);
 
   const env = {
     ...process.env,
@@ -50,7 +50,7 @@ export async function analyzeGitProject(candidateRoot) {
     if (commitMatch) {
       if (commits.size >= MAX_COMMITS) break;
       const id = createHash("sha256").update(commitMatch[1]).digest("hex");
-      active = { id, date: new Date(commitMatch[2]).toISOString() };
+      active = { id, rawId: commitMatch[1].toLowerCase(), date: new Date(commitMatch[2]).toISOString(), timestampPrecision: timestampPrecision(commitMatch[2]), fileReferenceHashes: [], fileCategories: [] };
       if (commitMatch[3].trim().split(/\s+/).filter(Boolean).length > 1) mergeCommitCount++;
       commits.set(id, active);
       continue;
@@ -64,6 +64,9 @@ export async function analyzeGitProject(candidateRoot) {
     const rawPath = line.slice(line.lastIndexOf("\t") + 1);
     const extension = path.extname(rawPath).toLowerCase();
     const category = categoryFor(extension, rawPath);
+    const safeRelativePath = rawPath.replaceAll("\\", "/").replace(/^\.\//, "").toLowerCase();
+    active.fileReferenceHashes.push(createHash("sha256").update(`${projectId}\0file\0${safeRelativePath}`).digest("hex"));
+    active.fileCategories.push(category);
     categories.set(category, (categories.get(category) ?? 0) + 1);
   }
 
@@ -81,12 +84,12 @@ export async function analyzeGitProject(candidateRoot) {
   const dates = [...days.keys()].sort();
   const projectName = path.basename(root).slice(0, 120) || "Selected project";
   return {
-    schemaVersion: 2,
+    schemaVersion: 6,
     reportId: randomUUID(),
     createdAt: new Date().toISOString(),
     sourceAvailability: { git: "implemented", agentSessions: "not_implemented", ide: "not_implemented", testRuns: "not_implemented", buildRuns: "not_implemented", ciRuns: "not_implemented" },
     project: {
-      localProjectId: await stableLocalProjectId(root),
+      localProjectId: projectId,
       displayName: projectName,
       association: "exact_root",
     },
@@ -103,13 +106,22 @@ export async function analyzeGitProject(candidateRoot) {
       fileCategories: [...categories].sort(([a], [b]) => a.localeCompare(b)).map(([category, changes]) => ({ category, changes })),
       commitIds: [...commits.keys()],
       historyTruncated: commits.size === MAX_COMMITS,
+      episodeCommitEvidence: [...commits.values()].map((commit) => ({
+        commitId: commit.id,
+        timestamp: commit.date,
+        timestampPrecision: commit.timestampPrecision,
+        fileReferenceHashes: [...new Set(commit.fileReferenceHashes)].slice(0, 200),
+        fileCategories: [...new Set(commit.fileCategories)].sort(),
+        commitReferenceHashes: Array.from({ length: Math.max(0, commit.rawId.length - 6) }, (_, index) => createHash("sha256").update(`${projectId}\0commit-prefix\0${commit.rawId.slice(0, index + 7)}`).digest("hex")),
+      })),
     },
     developmentStory: commits.size
       ? `Git records ${commits.size} commits and ${fileChanges} file changes for ${projectName}. This is repository activity; Git metadata alone does not establish who authored the work or whether an AI agent contributed.`
       : `No Git commits were available in the selected repository. Chronicle cannot infer manual or AI contribution from an empty history.`,
     contribution: { manual: "unknown", aiAssisted: "unknown", collaborative: "unknown", unclassified: "git_activity_only" },
-    dimensions: ["planning", "technical_understanding", "verification", "steering", "coordination"].map((key) => ({ key, score: null, status: "insufficient_evidence", evidence: [] })),
+    dimensions: ["planning", "ai_steering", "execution_leverage", "engineering_quality", "product_thinking"].map((key) => ({ key, score: null, status: "insufficient_evidence", evidenceCount: 0, confidence: "insufficient", explanation: "Agent evidence was not attached; no score is assigned.", positiveSignals: [], improvementOpportunities: [], evidenceRefs: [] })),
     agents: { sessions: [], sourceCoverage: [], metrics: { sessionCount: 0, sourceCounts: {}, modelCounts: {}, averagePromptWords: null, planningSignals: 0, correctionSignals: 0, toolCalls: 0, toolCounts: {}, longestSessionSeconds: null, sessionsWithDuration: 0, maxConcurrentSessions: 0, failureSignals: 0, recoverySignals: 0, sessionDays: 0, gitCommitsOnSessionDays: 0, overlappingGitDays: 0, correlationNote: "Date overlap is temporal context only. It does not attribute commits or changes to a person or agent." }, claim: "No supported, repository-associated session records were included. An installed agent is not evidence of use." },
+    episodes: [],
     privacy: { rawSourceCodeIncluded: false, rawDiffsIncluded: false, commitMessagesIncluded: false, authorIdentitiesIncluded: false, absoluteProjectPathIncluded: false, rawAgentTranscriptsIncluded: false, rawPromptTextIncluded: false, rawToolOutputIncluded: false },
   };
 }

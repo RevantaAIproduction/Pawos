@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAccount, rejectCrossOrigin } from "../../../../lib/account/api";
-import { chronicleSnapshotHash, validateChronicleReport } from "../../../../lib/chronicle/reportSchema";
+import { applyChronicleServerVerification, buildChronicleDevelopmentStory, chronicleSnapshotHash, validateChronicleReport } from "../../../../lib/chronicle/reportSchema";
 import { readChronicleRequestText } from "../../../../lib/chronicle/requestBody";
 
 export const runtime = "nodejs";
@@ -30,11 +30,9 @@ export async function POST(request: Request) {
   try { input = JSON.parse(raw); } catch { return NextResponse.json({ ok: false, message: "The selected file is not valid JSON." }, { status: 400, headers: noStore }); }
   const result = validateChronicleReport(input);
   if (!result.ok) return NextResponse.json({ ok: false, message: result.message }, { status: 400, headers: noStore });
-  const report = { ...result.report, developmentStory: result.report.git.commitCount ? `Git records ${result.report.git.commitCount.toLocaleString("en-US")} commits and ${result.report.git.fileChanges.toLocaleString("en-US")} file changes for ${result.report.project.displayName}. Git metadata alone does not establish who authored the work or whether an AI agent contributed.` : `No Git commits were available in ${result.report.project.displayName}; Chronicle cannot infer contribution from an empty history.` };
-  const sessionCount = Number(report.agents.metrics.sessionCount);
-  report.developmentStory += sessionCount
-    ? " Chronicle analyzed " + sessionCount.toLocaleString("en-US") + " approved local agent sessions. Date overlap does not establish authorship."
-    : " No supported agent sessions were included.";
+  // Rebuild on the server so even legacy reports cannot smuggle arbitrary narrative text.
+  const verified = applyChronicleServerVerification(result.report);
+  const report = { ...verified, developmentStory: buildChronicleDevelopmentStory(verified) };
   const snapshotHash = chronicleSnapshotHash(report);
   const { data, error } = await guard.account.supabase.from("chronicle_reports").insert({
     user_id: guard.account.user.id,

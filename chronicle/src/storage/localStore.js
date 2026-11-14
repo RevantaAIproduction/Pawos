@@ -3,6 +3,7 @@ import path from "node:path";
 import { mkdir, readFile, writeFile, rename, rm, stat, lstat, readdir } from "node:fs/promises";
 import { randomUUID, randomBytes, createHmac } from "node:crypto";
 import { validateEvent } from "../domain/schema.js";
+import { validateSessionEvent, SESSION_EVENT_SCHEMA_VERSION } from "../domain/sessionEvent.js";
 
 export const MAX_STORE_BYTES = 5 * 1024 * 1024;
 export const MAX_EVENTS = 25_000;
@@ -59,17 +60,57 @@ export async function storageStatus() {
 }
 
 export async function saveLocalReport(report, html) {
-  if (!report || report.schemaVersion !== 2 || !/^[0-9a-f-]{36}$/i.test(report.reportId) || typeof html !== "string") throw new Error("report_invalid");
-  if (Buffer.byteLength(JSON.stringify(report)) > 2 * 1024 * 1024 || Buffer.byteLength(html) > 2 * 1024 * 1024) throw new Error("report_too_large");
+  if (!report || ![2, 3, 4, 5, 6, 7, 8].includes(report.schemaVersion) || !/^[0-9a-f-]{36}$/i.test(report.reportId) || typeof html !== "string") throw new Error("report_invalid");
+  const persistedReport = {
+    ...report,
+    git: Object.fromEntries(Object.entries(report.git).filter(([key]) => key !== "episodeCommitEvidence")),
+    agents: {
+      ...report.agents,
+      sessions: report.agents.sessions.map(({ events, timelineAnalysis, taskReferenceHashes, branchIdentity, fileReferenceHashes, relatedCommitReferences, explicitParentSessionId, explicitRelatedSessionIds, ...session }) => session),
+    },
+  };
+  if (Buffer.byteLength(JSON.stringify(persistedReport)) > 2 * 1024 * 1024 || Buffer.byteLength(html) > 2 * 1024 * 1024) throw new Error("report_too_large");
   const folder = path.join(dir(), "reports");
   await mkdir(folder, { recursive: true, mode: 0o700 });
   const id = report.reportId;
   const jsonPath = path.join(folder, `${id}.json`);
   const htmlPath = path.join(folder, `${id}.html`);
   if (path.dirname(jsonPath) !== folder || path.dirname(htmlPath) !== folder) throw new Error("report_path_invalid");
-  await atomicWrite(jsonPath, `${JSON.stringify(report, null, 2)}\n`);
+  await atomicWrite(jsonPath, `${JSON.stringify(persistedReport, null, 2)}\n`);
   await atomicWrite(htmlPath, html);
   return { jsonPath, htmlPath };
+}
+
+export async function saveLocalEventStream(reportId, sessions) {
+  if (!/^[0-9a-f-]{36}$/i.test(reportId) || !Array.isArray(sessions)) throw new Error("session_event_stream_invalid");
+  const bounded = sessions.map((session) => ({ sessionId: session.sessionKey, events: session.events || [] })).filter((session) => session.events.length);
+  const allEvents = bounded.flatMap((session) => session.events);
+  if (allEvents.length > 3_000 || allEvents.some((event) => !validateSessionEvent(event).ok)) throw new Error("session_event_stream_invalid_or_over_limit");
+  const payload = { schemaVersion: SESSION_EVENT_SCHEMA_VERSION, reportId, eventCount: allEvents.length, sessions: bounded };
+  const folder = path.join(dir(), "session-events");
+  await mkdir(folder, { recursive: true, mode: 0o700 });
+  const target = path.join(folder, `${reportId}.json`);
+  if (path.dirname(target) !== folder) throw new Error("session_event_path_invalid");
+  await atomicWrite(target, `${JSON.stringify(payload, null, 2)}\n`);
+  return { eventCount: allEvents.length, path: target };
+}
+
+export async function loadLocalEventStream(reportId) {
+  if (!/^[0-9a-f-]{36}$/i.test(reportId)) throw new Error("session_event_report_id_invalid");
+  const target = path.join(dir(), "session-events", `${reportId}.json`);
+  try {
+    const stats = await stat(target);
+    if (stats.size > MAX_STORE_BYTES) throw new Error("session_event_stream_over_limit");
+    const value = JSON.parse(await readFile(target, "utf8"));
+    if (value.schemaVersion !== SESSION_EVENT_SCHEMA_VERSION || value.reportId !== reportId || !Array.isArray(value.sessions) || value.sessions.length > 1_000) throw new Error("session_event_stream_invalid");
+    const events = value.sessions.flatMap((session) => {
+      if (!session || typeof session.sessionId !== "string" || !/^[a-f0-9]{64}$/.test(session.sessionId) || !Array.isArray(session.events) || session.events.length > 3_000) throw new Error("session_event_session_invalid");
+      if (session.events.some((event) => event.sessionId !== session.sessionId || !validateSessionEvent(event).ok)) throw new Error("session_event_invalid");
+      return session.events;
+    });
+    if (events.length !== value.eventCount || events.length > 3_000 || new Set(events.map((event) => event.eventId)).size !== events.length) throw new Error("session_event_count_invalid");
+    return value;
+  } catch (error) { if (error.code === "ENOENT") return null; throw error; }
 }
 
 export async function saveDeveloperSummary(html) {
@@ -91,10 +132,23 @@ export async function listLocalReports() {
       const raw = await readFile(path.join(folder, name), "utf8");
       if (Buffer.byteLength(raw) > 2 * 1024 * 1024) continue;
       const report = JSON.parse(raw);
-      if (report.schemaVersion === 2 && report.reportId === name.slice(0, -5)) reports.push({ reportId: report.reportId, project: report.project.displayName, createdAt: report.createdAt, gitCommitCount: report.git.commitCount, agentSessionCount: report.agents?.metrics?.sessionCount ?? 0 });
+      if ([2, 3, 4, 5, 6, 7, 8].includes(report.schemaVersion) && report.reportId === name.slice(0, -5)) reports.push({ reportId: report.reportId, project: report.project.displayName, createdAt: report.createdAt, gitCommitCount: report.git.commitCount, agentSessionCount: report.agents?.metrics?.sessionCount ?? 0 });
     } catch { /* Ignore malformed local files without executing or trusting them. */ }
   }
   return reports;
+}
+
+export async function loadLocalReport(reportId) {
+  if (typeof reportId !== "string" || !/^[0-9a-f-]{36}$/i.test(reportId)) throw new Error("report_id_invalid");
+  const folder = path.join(dir(), "reports");
+  const target = path.join(folder, `${reportId}.json`);
+  try {
+    const info = await lstat(target);
+    if (info.isSymbolicLink() || !info.isFile() || info.size > 2 * 1024 * 1024) throw new Error("report_file_invalid");
+    const report = JSON.parse(await readFile(target, "utf8"));
+    if (![2, 3, 4, 5, 6, 7, 8].includes(report.schemaVersion) || report.reportId !== reportId || !report.project || !report.git || !report.agents) throw new Error("report_invalid");
+    return report;
+  } catch (error) { if (error.code === "ENOENT") throw new Error("report_not_found"); throw error; }
 }
 
 export async function stableLocalProjectId(projectRoot) {

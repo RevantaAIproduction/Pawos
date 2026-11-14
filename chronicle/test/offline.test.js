@@ -36,4 +36,7 @@ test("CLI preview runs without network/setup and returns local-only inventory", 
   assert.equal(preview.networkUsed, false);
   assert.equal(preview.project.inventory, undefined);
   assert.equal(preview.consent.externalContentsRead, false);
+  assert.ok(Array.isArray(preview.projectSources));
+  assert.ok(preview.projectSources.every((entry) => entry.discovery.scope === "selected_project_only" && entry.discovery.contentsRead === false));
+  assert.ok(preview.externalSources.every((source) => source.status === "not_inspected" && source.availabilityChecked === false && source.contentsInspected === false));
 });
