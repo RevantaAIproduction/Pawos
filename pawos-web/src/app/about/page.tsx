@@ -352,21 +352,38 @@ export default function AboutPage() {
 
         {/* SECTION 18 — THE BUILDERS */}
         <section id="builders" className="scroll-mt-32">
-          <h2 className="text-3xl font-medium text-white mb-8 tracking-tight">18. Built by Builders</h2>
-          <div className="flex flex-col md:flex-row gap-12 items-start mt-8">
-            <div className="w-full md:w-1/3 shrink-0">
-              <div className="aspect-square rounded-2xl overflow-hidden bg-neutral-900 border border-neutral-800 relative">
-                <Image src="/founder.jpg" alt="PawOS Founder" fill className="object-cover" />
+          <div className="text-center mb-10">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-400 mb-4">THE PEOPLE BEHIND PAWOS</p>
+            <h2 className="text-3xl md:text-5xl font-medium text-white mb-5 tracking-tight">Built with vision. Engineered with purpose.</h2>
+            <p className="text-lg text-neutral-400 leading-relaxed max-w-3xl mx-auto">
+              PawOS is driven by hands-on engineering, ambitious product thinking and thoughtful strategic guidance.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-5xl mx-auto">
+            <article className="group overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/70 transition-colors duration-300 hover:border-neutral-700">
+              <div className="relative aspect-[4/5] overflow-hidden bg-neutral-900">
+                <Image src="/images/team/tharun-e.jpeg" alt="Portrait of Tharun E, Founder and Chief Executive Officer of PawOS" fill sizes="(min-width: 1024px) 40vw, (min-width: 640px) 45vw, 100vw" className="object-cover transition-transform duration-500 group-hover:scale-[1.02]" />
               </div>
-            </div>
-            <div className="w-full md:w-2/3 prose prose-invert prose-lg text-neutral-400 leading-relaxed">
-              <p>
-                PawOS was started by a builder deeply frustrated by the limitations of conversational AI in real-world engineering. 
-              </p>
-              <p>
-                The engineering philosophy behind PawOS is simple: execution matters, and honesty matters. We do not invent fake corporate leadership teams, we do not fabricate usage statistics, and we do not advertise future architecture as shipped capabilities. We are building this because we need it to exist, and we are sharing it because we believe execution-focused AI is the next computing paradigm.
-              </p>
-            </div>
+              <div className="p-6">
+                <h3 className="text-2xl font-medium tracking-tight text-white">Tharun E</h3>
+                <p className="mt-2 text-sm font-medium tracking-wide text-blue-300">Founder &amp; Chief Executive Officer</p>
+                <p className="mt-4 text-base leading-relaxed text-neutral-400">
+                  Leads the product vision, system architecture and engineering. Responsible for building PawOS end to end, from its underlying technology to its product experience.
+                </p>
+              </div>
+            </article>
+            <article className="group overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/70 transition-colors duration-300 hover:border-neutral-700">
+              <div className="relative aspect-[4/5] overflow-hidden bg-neutral-900">
+                <Image src="/images/team/sujith-p.jpeg" alt="Portrait of Sujith P, Co-founder and Strategic Advisor at PawOS" fill sizes="(min-width: 1024px) 40vw, (min-width: 640px) 45vw, 100vw" className="object-cover transition-transform duration-500 group-hover:scale-[1.02]" />
+              </div>
+              <div className="p-6">
+                <h3 className="text-2xl font-medium tracking-tight text-white">Sujith P</h3>
+                <p className="mt-2 text-sm font-medium tracking-wide text-blue-300">Co-founder &amp; Strategic Advisor</p>
+                <p className="mt-4 text-base leading-relaxed text-neutral-400">
+                  Contributes strategic perspective, product feedback and guidance to help shape the direction and evolution of PawOS.
+                </p>
+              </div>
+            </article>
           </div>
         </section>
 
