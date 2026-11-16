@@ -2,6 +2,7 @@
 
 import Script from "next/script";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { getStoredConsent } from "./CookieConsent";
 
 const GA_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
@@ -14,6 +15,7 @@ const GA_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
  */
 export function Analytics() {
   const [consented, setConsented] = useState(false);
+  const pathname = usePathname();
 
   useEffect(() => {
     const sync = () => setConsented(getStoredConsent() === "accepted");
@@ -21,6 +23,12 @@ export function Analytics() {
     window.addEventListener("pawos-consent-changed", sync);
     return () => window.removeEventListener("pawos-consent-changed", sync);
   }, []);
+
+  useEffect(() => {
+    if (!consented || !pathname) return;
+    if (pathname === "/pricing") trackEvent("pricing_page_visit");
+    if (pathname === "/") trackEvent("product_overview_visit");
+  }, [consented, pathname]);
 
   if (!GA_ID || !consented) return null;
 
@@ -42,6 +50,16 @@ export function Analytics() {
 /** Fires a real GA event (download click, etc.) only when analytics is actually loaded. */
 export function trackEvent(name: string, params?: Record<string, string | number>): void {
   if (typeof window === "undefined") return;
-  const w = window as unknown as { gtag?: (...args: unknown[]) => void };
-  w.gtag?.("event", name, params);
+  try {
+    if (!GA_ID || getStoredConsent() !== "accepted") return;
+  } catch {
+    return;
+  }
+  const w = window as unknown as {
+    dataLayer?: unknown[];
+    gtag?: (...args: unknown[]) => void;
+  };
+  w.dataLayer = w.dataLayer ?? [];
+  w.gtag = w.gtag ?? ((...args: unknown[]) => { w.dataLayer?.push(args); });
+  w.gtag("event", name, params);
 }

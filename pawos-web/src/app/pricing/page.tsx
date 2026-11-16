@@ -2,8 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PricingPlans } from "./PricingPlans";
 import { Section } from "../../components/ui/Section";
-import { buttonClasses } from "../../components/ui/Button";
-import { DownloadWindowsButton } from "../../components/DownloadWindowsButton";
 
 export const metadata: Metadata = {
   title: "Pricing",
@@ -54,8 +52,12 @@ const FAQS = [
 export default function PricingPage() {
   return (
     <>
-      <Section title="Simple, honest pricing" subtitle="Start free on Paw Go. Upgrade to Pro or Pro Max whenever you're ready, or set up Team and Enterprise seats for your organization.">
+      <Section id="individual-plans" title="Simple, honest pricing" subtitle="Start free on Paw Go. Upgrade to Pro or Pro Max whenever you're ready, or set up Team and Enterprise seats for your organization." className="scroll-mt-24">
         <PricingPlans />
+        <div className="mt-10 flex flex-wrap justify-center gap-3">
+          <Link href="/signup" className="inline-flex items-center justify-center rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:bg-neutral-200">Get Started</Link>
+          <Link href="/login" className="inline-flex items-center justify-center rounded-full border border-neutral-700 px-6 py-3 text-sm font-semibold text-white transition hover:bg-neutral-900">Log in</Link>
+        </div>
       </Section>
 
       <Section eyebrow="Compare plans" title="What's included" className="border-t border-neutral-900">
@@ -143,15 +145,10 @@ export default function PricingPage() {
         </p>
       </Section>
 
-      <Section className="text-center border-t border-neutral-900">
-        <h2 className="text-2xl font-bold">Ready for Team or Enterprise?</h2>
-        <p className="mx-auto mt-3 max-w-md text-neutral-400">
-          Set up your organization directly from the app — 2–150 seats on Team, 20+ seats on Enterprise. No sales
-          call required.
-        </p>
-        <div className="mt-6">
-          <DownloadWindowsButton source="pricing" className={buttonClasses("secondary")}>Get started</DownloadWindowsButton>
-        </div>
+      <Section className="border-t border-neutral-900 text-center">
+        <h2 className="text-2xl font-bold">Choosing a Team or Enterprise plan?</h2>
+        <p className="mx-auto mt-3 max-w-md text-neutral-400">Talk with the team about seat options and usage for your organization.</p>
+        <div className="mt-6"><Link href="/support/sales" className="inline-flex items-center justify-center rounded-full border border-neutral-700 px-6 py-3 text-sm font-semibold text-white transition hover:bg-neutral-900">Contact sales</Link></div>
       </Section>
     </>
   );

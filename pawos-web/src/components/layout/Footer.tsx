@@ -9,18 +9,20 @@ const GROUPS = [
   {
     title: "Product",
     links: [
-      { href: "/companion", label: "Companion" },
-      { href: "/features#autonomous-work", label: "Autonomous Work" },
-      { href: "/features#projects", label: "Projects" },
-      { href: "/features", label: "Features" },
+      { href: "/", label: "Overview" },
+      { href: "/features/desktop-ai", label: "Desktop" },
+      { href: "/docs/getting-started/four-ways-to-work#install-cli", label: "CLI" },
+      { href: "/docs/getting-started/web-and-mobile", label: "Web" },
+      { href: "/docs/autonomous-work/overview", label: "Autonomous Work" },
+      { href: "/docs/connectors/overview", label: "Connections" },
     ],
   },
   {
     title: "Solutions",
     links: [
-      { href: "/pricing#individuals", label: "Individuals" },
-      { href: "/enterprise", label: "Teams" },
-      { href: "/enterprise", label: "Organizations" },
+      { href: "/pricing#individual-plans", label: "Individual Developers" },
+      { href: "/enterprise", label: "Engineering Teams" },
+      { href: "/features/autonomous-engineering", label: "Engineering Workflows" },
       { href: "/pricing", label: "Pricing" },
     ],
   },
@@ -28,30 +30,18 @@ const GROUPS = [
     title: "Developers",
     links: [
       { href: "/docs", label: "Documentation" },
-      { href: "/docs/integrations", label: "Integrations" },
-      { href: "/docs/integrations/github", label: "GitHub" },
-      { href: "/docs/integrations/jira", label: "Jira" },
-      { href: "/docs/integrations/linear", label: "Linear" },
+      { href: "/docs/getting-started/four-ways-to-work#install-cli", label: "CLI Installation" },
+      { href: "/docs/connectors/overview", label: "Integrations" },
+      { href: "/docs/coding/overview", label: "Technical Guides" },
     ],
   },
   {
     title: "Resources",
     links: [
-      
-      { href: "/faq", label: "FAQ" },
-      { href: "/changelog", label: "Changelog" },
-      { href: "/support", label: "Support" },
-    ],
-  },
-  {
-    title: "Company",
-    links: [
       { href: "/about", label: "About PawOS" },
+      { href: "/changelog", label: "Changelog" },
       { href: "/careers", label: "Careers" },
-      { href: "/about#builders", label: "Builders" },
-      
       { href: "/support/contact", label: "Contact" },
-      { href: "/about", label: "Revanta AI" },
     ],
   },
   {

@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { createClient } from "../../lib/supabase/client";
+import { trackEvent } from "../../components/analytics/Analytics";
 import {
   AuthHeading,
   CodeInput,
@@ -46,6 +47,13 @@ export function SignupForm() {
   const [message, setMessage] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [oauthPending, setOauthPending] = useState<"google" | "github" | null>(null);
+  const signupStarted = useRef(false);
+
+  const markSignupStarted = (method: string) => {
+    if (signupStarted.current) return;
+    signupStarted.current = true;
+    trackEvent("signup_started", { method });
+  };
 
   const sendCode = async () => {
     setLoading(true);
@@ -75,6 +83,7 @@ export function SignupForm() {
 
   const submitDetails = async (e: React.FormEvent) => {
     e.preventDefault();
+    markSignupStarted("email");
     if (await sendCode()) {
       setCode("");
       setStep("code");
@@ -121,6 +130,7 @@ export function SignupForm() {
         }).catch(() => {});
       }
       rememberAuthMethod("email");
+      trackEvent("signup_completed", { method: "email" });
       window.location.href = next;
     } catch (err) {
       setLoading(false);
@@ -129,6 +139,7 @@ export function SignupForm() {
   };
 
   const oauth = async (provider: "google" | "github") => {
+    markSignupStarted(provider);
     setOauthPending(provider);
     setMessage(null);
     const error = await startOAuth(provider, next);

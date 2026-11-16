@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Section } from "../../components/ui/Section";
-import { Button, buttonClasses } from "../../components/ui/Button";
-import { DownloadWindowsButton } from "../../components/DownloadWindowsButton";
+import { Button } from "../../components/ui/Button";
 import { Badge } from "../../components/ui/Badge";
 
 export const metadata: Metadata = {
   title: "Enterprise",
-  description: "PawOS for teams and enterprises: shared workspaces, governance, security, and dedicated support.",
+  description: "PawOS plans for engineering teams with shared workspaces, seat options, permissions and governance.",
 };
 
 const CAPABILITIES = [
@@ -42,7 +41,7 @@ export default function EnterprisePage() {
             architecture, with governance and collaboration layered on top.
           </p>
           <div className="mt-8 flex justify-center gap-4">
-            <DownloadWindowsButton source="enterprise-hero" className={buttonClasses()}>Get started</DownloadWindowsButton>
+            <Button href="/support/sales">Contact sales</Button>
             <Button href="/pricing" variant="secondary">See pricing</Button>
           </div>
         </div>
@@ -94,11 +93,9 @@ export default function EnterprisePage() {
 
       <Section className="text-center border-t border-neutral-900">
         <h2 className="text-2xl font-bold">Ready to bring PawOS to your team?</h2>
-        <p className="mx-auto mt-3 max-w-md text-neutral-400">
-          Set up Team or Enterprise directly from the app — 20+ seats, self-serve, no sales call required.
-        </p>
+        <p className="mx-auto mt-3 max-w-md text-neutral-400">Talk with our team about seat options, usage and rollout for your organization.</p>
         <div className="mt-6">
-          <DownloadWindowsButton source="enterprise-footer" className={buttonClasses()}>Get started</DownloadWindowsButton>
+          <Button href="/support/sales">Contact sales</Button>
         </div>
       </Section>
     </>

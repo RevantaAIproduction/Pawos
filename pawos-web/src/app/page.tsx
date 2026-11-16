@@ -6,6 +6,7 @@ import { ConnectionsWorkflow } from "../components/ConnectionsWorkflow";
 import { HeroAnimation } from '../components/HeroAnimation';
 import { ParticleField } from '../components/ParticleField';
 import { EarlyAccessSection } from '../components/early-access/EarlyAccessSection';
+import { trackEvent } from "../components/analytics/Analytics";
 
 type ProductScreenshotProps = {
   src: string;
@@ -39,10 +40,13 @@ export default function Home() {
         <p className="text-2xl md:text-3xl text-white [text-shadow:0_1px_5px_rgba(0,0,0,0.85)] font-light mb-12 max-w-2xl">
           One AI work companion. Desktop, CLI, and Web.
         </p>
-        <div className="flex justify-center">
-          <a href="#early-access" className="px-8 py-4 text-base font-medium bg-white text-black rounded-full hover:bg-neutral-200 transition">
-            Get Early Access &rarr;
-          </a>
+        <div className="flex flex-wrap justify-center gap-3">
+          <Link href="/signup" onClick={() => trackEvent("home_get_started", { destination: "/signup" })} className="rounded-full bg-white px-8 py-4 text-base font-medium text-black transition hover:bg-neutral-200">
+            Get Started <span aria-hidden="true">→</span>
+          </Link>
+          <Link href="/features" onClick={() => trackEvent("features_index_visit", { source: "home_hero" })} className="rounded-full border border-white/25 px-8 py-4 text-base font-medium text-white transition hover:bg-white/10">
+            Explore Product
+          </Link>
         </div>
         </div>
       </section>
@@ -203,14 +207,14 @@ export default function Home() {
           <div className="grid md:grid-cols-2 gap-16 items-center">
             <div className="order-last md:order-first space-y-5">
               <figure className="overflow-hidden rounded-2xl border border-neutral-800 bg-black shadow-2xl">
-                <video controls playsInline preload="metadata" width={1072} height={576} poster="/pawos-product-demo-poster.webp" className="block h-auto w-full" aria-label="ShopFlow e-commerce live preview built with PawOS" aria-describedby="shopflow-video-description">
+                <video controls playsInline preload="metadata" width={1072} height={576} poster="/pawos-product-demo-poster.webp" onPlay={() => trackEvent("demo_video_play", { video: "shopflow_storefront" })} className="block h-auto w-full" aria-label="ShopFlow e-commerce live preview built with PawOS" aria-describedby="shopflow-video-description">
                   <source src="/pawos-product-demo.mp4" type="video/mp4" />
                   Your browser does not support embedded video.
                 </video>
                 <figcaption id="shopflow-video-description" className="border-t border-neutral-800 px-4 py-3 text-sm text-neutral-300">ShopFlow storefront live preview, showing the product cards and store navigation.</figcaption>
               </figure>
               <figure className="overflow-hidden rounded-2xl border border-neutral-800 bg-black shadow-2xl">
-                <video controls playsInline preload="metadata" width={832} height={448} poster="/pawos-product-demo-2-poster.webp" className="block h-auto w-full" aria-label="PawOS CLI proposing a source file edit in the local ShopFlow project" aria-describedby="shopflow-cli-video-description">
+                <video controls playsInline preload="metadata" width={832} height={448} poster="/pawos-product-demo-2-poster.webp" onPlay={() => trackEvent("demo_video_play", { video: "shopflow_cli" })} className="block h-auto w-full" aria-label="PawOS CLI proposing a source file edit in the local ShopFlow project" aria-describedby="shopflow-cli-video-description">
                   <source src="/pawos-cli-shopflow-demo.mp4" type="video/mp4" />
                   Your browser does not support embedded video.
                 </video>

@@ -91,7 +91,7 @@ export default async function FeatureDetailPage({ params }: { params: Promise<{ 
             </div>
             <div className="rounded-xl border border-neutral-800 p-6">
               <DownloadWindowsButton source="feature-page" className={buttonClasses("primary", "w-full")}>
-                Try it in PawOS
+                Request early access
               </DownloadWindowsButton>
               <Link href="/features" className="mt-4 block text-center text-sm text-neutral-500 hover:text-neutral-300">
                 ← All features
