@@ -83,7 +83,7 @@ export const autonomousWorkPages: DocPage[] = [
     section: 'autonomous-work',
     slug: 'credits',
     title: 'Autonomous Work Credits',
-    description: 'The dollar-denominated wallet that funds ticket completions.',
+    description: 'The separate prepaid balance used for supported Autonomous Work runs.',
     blocks: [
       {
         type: 'lead',
@@ -91,7 +91,7 @@ export const autonomousWorkPages: DocPage[] = [
       },
       {
         type: 'paragraph',
-        text: 'A completed ticket deducts a real amount from this balance only once it genuinely completes — see Completion & Charging. A run that fails, is cancelled, hits its retry limit, or is denied approval is never charged.',
+        text: 'For individual and Team accounts, current rates and charging terms are shown in PawOS before a paid run. Enterprise usage follows pass-through provider rates under its organization terms. Under current rules, failed, cancelled, retry-limited or approval-denied runs are not charged.',
       },
     ],
     related: ['autonomous-work/pricing', 'billing/credits', 'autonomous-work/completion-and-charging'],
@@ -100,7 +100,7 @@ export const autonomousWorkPages: DocPage[] = [
     section: 'autonomous-work',
     slug: 'pricing',
     title: 'Pricing',
-    description: 'How the per-ticket rate is calculated.',
+    description: 'Where to check current Autonomous Work usage terms.',
     blocks: [
       {
         type: 'lead',

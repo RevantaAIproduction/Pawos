@@ -5,14 +5,14 @@ import { Section } from "../../components/ui/Section";
 
 export const metadata: Metadata = {
   title: "Pricing",
-  description: "PawOS pricing: Go, Pro, Pro Max, Team, and Enterprise plans, plus volume-tiered Autonomous Ticket System pricing.",
+  description: "Compare PawOS individual and organization plans, included Paw Compute, and additional usage terms.",
 };
 
 const COMPARISON_ROWS: { feature: string; go: string; pro: string; proMax: string; team: string; enterprise: string }[] = [
   { feature: "Companion Studio & Desktop Companion", go: "✓", pro: "✓", proMax: "✓", team: "✓", enterprise: "✓" },
   { feature: "Paw Compute (PC) included", go: "500 PC every 14 days", pro: "2,000 PC per billing period", proMax: "10,000 PC (5x) or 25,000 PC (20x) per billing period", team: "Per seat: 2,000 PC (Standard) or 10,000 PC (Premium) a month", enterprise: "Shared organization pool" },
   { feature: "AI models & reasoning runtimes", go: "—", pro: "✓", proMax: "✓", team: "✓", enterprise: "✓" },
-  { feature: "Autonomous Ticket System billing", go: "—", pro: "—", proMax: "Ticket Balance", team: "Ticket Balance (shared)", enterprise: "Seat fee + usage at API rates" },
+  { feature: "Autonomous Ticket System billing", go: "—", pro: "—", proMax: "Prepaid balance", team: "See organization terms", enterprise: "Seat fee + pass-through usage" },
   { feature: "Shared Workspaces & Companions", go: "—", pro: "—", proMax: "—", team: "✓", enterprise: "✓" },
   { feature: "Shared credit pool", go: "—", pro: "—", proMax: "—", team: "—", enterprise: "✓" },
   { feature: "Task Management & Git Collaboration (PR Review)", go: "—", pro: "—", proMax: "—", team: "✓", enterprise: "✓" },
@@ -25,7 +25,7 @@ const COMPARISON_ROWS: { feature: string; go: string; pro: string; proMax: strin
 const FAQS = [
   {
     q: "How does Autonomous Ticket System billing work?",
-    a: "The Autonomous Ticket System is billed through a Ticket Balance — a prepaid dollar wallet, completely separate from your subscription. Add funds anytime from inside the app (any amount, $30 minimum). Each genuinely completed ticket deducts a real dollar amount from that balance — never for chat, tokens, or time, and never until a real pull request is opened and the ticket is updated. The rate per ticket is volume-tiered by your account's (or organization's) cumulative completed-ticket count: $5.00/ticket for your first 500, $4.50 for tickets 501–2,000, $4.00 for 2,001–10,000, $3.50 for 10,001–25,000, and $3.00/ticket beyond that — so the more you use it, the less each ticket costs. A ticket that fails, is cancelled, hits a retry limit, or is denied approval never deducts anything. Run low and PawOS simply prompts you to add funds before starting a new ticket.",
+    a: "Autonomous Ticket System usage is paid from a prepaid balance separate from your subscription. The available top-up amounts and minimum, and the rate for a completed run, are shown in the billing screen and can depend on your account or organization. Enterprise usage is billed at pass-through provider rates under its organization terms. Review the displayed price before adding funds or starting paid work. Failed, cancelled or approval-denied runs are not charged under the current billing rules.",
   },
   {
     q: "How is usage measured?",
@@ -37,7 +37,7 @@ const FAQS = [
   },
   {
     q: "What counts as a 'seat' on Team or Enterprise?",
-    a: "One seat is one member of your organization workspace. Team seats come in two rates — Standard ($20/seat/mo, 2,000 PC a month) and Premium ($100/seat/mo, 10,000 PC a month) — mixed freely across your 2–150 members. Each Team member uses their own seat's usage; there is no shared pool. Enterprise seats are uniform at a $20/seat/mo base fee (20+ seats), with Autonomous Ticket System usage billed separately through the same volume-tiered Ticket Balance.",
+    a: "A seat is one member of your organization workspace. Team supports 2–150 seats with Standard and Premium options; each seat has its own included Paw Compute. Enterprise starts at 20 seats and has separate usage terms. Contact sales for the current Enterprise price and usage details; it does not use the standard tiered Ticket Balance rates.",
   },
   {
     q: "Does an unused Ticket Balance roll over?",
@@ -52,7 +52,7 @@ const FAQS = [
 export default function PricingPage() {
   return (
     <>
-      <Section id="individual-plans" title="Simple, honest pricing" subtitle="Start free on Paw Go. Upgrade to Pro or Pro Max whenever you're ready, or set up Team and Enterprise seats for your organization." className="scroll-mt-24">
+      <Section id="individual-plans" title="Plans and pricing" subtitle="Start with Paw Go, compare the individual plans, or contact the team about Team and Enterprise." className="scroll-mt-24">
         <PricingPlans />
         <div className="mt-10 flex flex-wrap justify-center gap-3">
           <Link href="/signup" className="inline-flex items-center justify-center rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:bg-neutral-200">Get Started</Link>
@@ -89,39 +89,19 @@ export default function PricingPage() {
         </div>
       </Section>
 
-      <Section id="autonomous-engineering" eyebrow="Autonomous Ticket System" title="Pay only for completed work" className="border-t border-neutral-900 bg-neutral-900/30">
+      <Section id="autonomous-engineering" eyebrow="Autonomous Ticket System" title="Understand usage before a run" className="border-t border-neutral-900 bg-neutral-900/30">
         <div className="mx-auto mt-8 max-w-2xl space-y-4 text-neutral-400">
           <p>
-            Autonomous Ticket Resolution is billed through a <strong className="text-neutral-200">Ticket Balance</strong> — a
-            prepaid dollar wallet completely separate from your subscription — never as chat, tokens, or time. A
-            real dollar amount is deducted only once Paw has genuinely opened a pull request and updated the
-            originating ticket.
+            Autonomous Ticket System usage is billed from a <strong className="text-neutral-200">prepaid balance</strong> separate from your subscription. Top-up limits and run rates are account-controlled; the billing screen shows the current amounts for your account before you pay.
           </p>
           <ul className="space-y-2">
-            <li>• Add funds anytime from inside the app — any amount, $30 minimum.</li>
-            <li>• Per-ticket pricing is volume-tiered by your account&apos;s (or organization&apos;s) cumulative completed-ticket count:</li>
+            <li>• The billing screen shows the available top-up amounts and minimum for your account.</li>
+            <li>• Individual and Team run rates may follow configured volume tiers. Enterprise usage is billed at pass-through provider rates under its organization terms.</li>
           </ul>
-          <div className="mt-2 overflow-x-auto rounded-lg border border-neutral-800">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-neutral-800 text-left text-neutral-500">
-                  <th className="py-2 px-4 font-medium">Cumulative tickets</th>
-                  <th className="py-2 px-4 font-medium">Rate per ticket</th>
-                </tr>
-              </thead>
-              <tbody className="text-neutral-300">
-                <tr className="border-b border-neutral-900"><td className="py-2 px-4">1 – 500</td><td className="py-2 px-4">$5.00</td></tr>
-                <tr className="border-b border-neutral-900"><td className="py-2 px-4">501 – 2,000</td><td className="py-2 px-4">$4.50</td></tr>
-                <tr className="border-b border-neutral-900"><td className="py-2 px-4">2,001 – 10,000</td><td className="py-2 px-4">$4.00</td></tr>
-                <tr className="border-b border-neutral-900"><td className="py-2 px-4">10,001 – 25,000</td><td className="py-2 px-4">$3.50</td></tr>
-                <tr><td className="py-2 px-4">25,000+</td><td className="py-2 px-4">$3.00</td></tr>
-              </tbody>
-            </table>
-          </div>
           <ul className="space-y-2">
-            <li>• Balance never expires and rolls over indefinitely — you&apos;re topping up a wallet, not a monthly allowance.</li>
-            <li>• A ticket that fails, is cancelled, hits its retry limit, or is denied approval <strong className="text-neutral-200">never</strong> deducts anything.</li>
-            <li>• Low balance? PawOS prompts you to add funds before starting a new ticket — nothing runs on an empty balance.</li>
+            <li>• Check the current balance, run terms and any approval steps in the app before starting paid work.</li>
+            <li>• Under current billing rules, failed, cancelled or approval-denied runs are not charged.</li>
+            <li>• If your balance cannot cover a run, the app will ask you to add funds before proceeding.</li>
             <li>• Purchase and usage history are fully visible in-app, with CSV export.</li>
           </ul>
         </div>

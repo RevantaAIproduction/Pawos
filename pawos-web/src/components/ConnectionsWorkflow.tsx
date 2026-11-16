@@ -7,7 +7,7 @@ const STAGES = [
   { id: 'workspace', title: 'WORKSPACE', text: 'Read the project. Inspect the relevant files.', sub: 'Files & Code' },
   { id: 'execution', title: 'EXECUTION', text: 'Change the code. Run the environment.', sub: 'Terminal' },
   { id: 'verification', title: 'VERIFICATION', text: 'Verify the result. Commit to Git.', sub: 'Version Control' },
-  { id: 'reporting', title: 'REPORTING', text: 'Update the ticket. Report what changed.', sub: 'Jira / Linear' },
+  { id: 'reporting', title: 'REPORTING', text: 'Report the result through supported connections.', sub: 'Issue tracker' },
 ];
 
 export function ConnectionsWorkflow() {

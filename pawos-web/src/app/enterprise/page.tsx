@@ -10,21 +10,21 @@ export const metadata: Metadata = {
 };
 
 const CAPABILITIES = [
-  { title: "Shared Organization Workspaces", body: "Members, projects, and shared documents scoped to your organization's verified email domain — with real-time presence and live cursors on shared documents." },
-  { title: "Task lifecycle & assignment", body: "Assign work, track task status, and grant temporary elevated permissions scoped to a specific task rather than a permanent role change." },
-  { title: "Remote assistance", body: "Screen-share-based remote assistance with a shared terminal, so a teammate can help debug a colleague's machine directly." },
-  { title: "Credential vault", body: "Organization-shared infrastructure credentials stored encrypted, never in plain text, and accessed only through gated actions." },
-  { title: "Approval policies", body: "Require explicit approval before specific action types (like production deploys) run, with a real, queryable approval queue." },
-  { title: "Audit log", body: "A durable, exportable audit log of infrastructure-affecting actions for compliance evidence." },
-  { title: "SSO (in progress)", body: "Single sign-on enablement for organizations — see our security documentation for current status and honest capability notes." },
-  { title: "Seat-based billing", body: "Team ($/seat/mo, 2–150 seats) and Enterprise ($20/seat + tax, 20+ seats, usage billed at API rates) — billed per member, not per device, self-serve from inside the app." },
-  { title: "Spend limits & additional RBAC roles", body: "Admins allocate and cap credit spend per member or department from the shared Credit Pool. Enterprise adds three roles on top of Team's RBAC: IT Administrator, Security Administrator, and Department Manager." },
+  { title: "Organization workspaces", body: "Team and Enterprise plans support shared organization workspaces. Membership and available workspace features depend on plan and configuration." },
+  { title: "Task management", body: "Organization features include task assignment and status tracking. Check with the team about which workflows are enabled for your plan." },
+  { title: "Remote assistance", body: "Remote assistance is listed among organization features. Contact the team for current availability and setup requirements." },
+  { title: "Credential management", body: "Organization credential features are designed for controlled access to connected infrastructure. See the security documentation for current behavior and limitations." },
+  { title: "Approvals", body: "Organization approval controls can add a review step before supported actions. The actions covered depend on configuration." },
+  { title: "Audit history", body: "Organization audit records provide a history of supported actions. They are not a compliance certification or a guarantee that every external event is recorded." },
+  { title: "Single sign-on", body: "SSO availability is not confirmed as generally available. Ask the team about current status before planning a rollout." },
+  { title: "Seat-based plans", body: "Team and Enterprise are organization plans billed by seat. Team is available for 2–150 seats; Enterprise starts at 20. Contact sales for current pricing and usage terms." },
+  { title: "Roles and spending controls", body: "Organization plans include role-based access and spending controls. Available roles, limits and shared-pool behavior vary by plan." },
 ];
 
 const SCALE = [
-  { label: "One Paw", body: "A single companion on one device — the same PawOS every individual uses." },
-  { label: "Ten Paws", body: "A small team sharing companions, credits, and CRM context inside one Organization Workspace." },
-  { label: "A hundred Paws", body: "A larger organization enforcing approval policies, governance, and audit evidence across every member." },
+  { label: "Individual", body: "Use PawOS on your own account and device." },
+  { label: "Team", body: "Set up seats and shared organization workspaces for a small engineering group." },
+  { label: "Enterprise", body: "Talk with the team about seat count, usage, controls and rollout requirements." },
 ];
 
 export default function EnterprisePage() {
@@ -34,11 +34,10 @@ export default function EnterprisePage() {
         <div className="text-center">
           <Badge tone="blue">Enterprise</Badge>
           <h1 className="mx-auto mt-4 max-w-2xl text-4xl font-bold tracking-tight sm:text-5xl">
-            One platform, from a single Paw to a whole organization
+            PawOS for engineering teams
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-neutral-400">
-            PawOS scales without maintaining a separate product for teams — the same runtimes, the same
-            architecture, with governance and collaboration layered on top.
+            Team and Enterprise plans add organization workspaces, administration and controls to PawOS. Tell us how your team works and we&apos;ll confirm which features and terms fit your rollout.
           </p>
           <div className="mt-8 flex justify-center gap-4">
             <Button href="/support/sales">Contact sales</Button>
@@ -47,7 +46,7 @@ export default function EnterprisePage() {
         </div>
       </Section>
 
-      <Section eyebrow="Capabilities" title="Built for organizations, not just individuals" className="border-t border-neutral-900">
+      <Section eyebrow="Capabilities" title="Organization features" className="border-t border-neutral-900">
         <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {CAPABILITIES.map((c) => (
             <div key={c.title} className="rounded-xl border border-neutral-800 p-6">
@@ -58,7 +57,7 @@ export default function EnterprisePage() {
         </div>
       </Section>
 
-      <Section eyebrow="Scale" title="One Paw. Ten Paws. A hundred Paws." className="border-t border-neutral-900 bg-neutral-900/30">
+      <Section eyebrow="Plans" title="Choose a plan for your organization" className="border-t border-neutral-900 bg-neutral-900/30">
         <div className="mt-12 grid gap-8 sm:grid-cols-3">
           {SCALE.map((s) => (
             <div key={s.label} className="text-center">
@@ -69,16 +68,13 @@ export default function EnterprisePage() {
         </div>
       </Section>
 
-      <Section eyebrow="Deployment" title="Self-hosting & infrastructure" className="border-t border-neutral-900">
+      <Section eyebrow="Deployment" title="Discuss your environment" className="border-t border-neutral-900">
         <div className="mx-auto mt-6 max-w-2xl space-y-4 text-neutral-400">
           <p>
-            PawOS deploys through a provider-agnostic Infrastructure Runtime — your organization&apos;s own cloud and
-            hosting accounts, connected via each provider&apos;s official CLI or API. PawOS never holds your production
-            credentials on its own servers; every connector runs against your machine&apos;s own already-authenticated
-            session.
+            Deployment workflows depend on the configured runtime, provider and permissions. The website does not promise support for every cloud or hosting provider. Talk with the team about your environment before planning a rollout.
           </p>
           <p>
-            For large-scale automation and CI/CD integration, see our{" "}
+            For current technical details and security practices, see our{" "}
             <Link href="/docs/enterprise" className="text-blue-400 hover:underline">
               Enterprise documentation
             </Link>{" "}

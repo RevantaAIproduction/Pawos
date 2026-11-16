@@ -4,7 +4,7 @@ import { EarlyAccessSection } from "../../components/early-access/EarlyAccessSec
 export const metadata: Metadata = {
   title: "Early Access",
   description:
-    "PawOS is preparing for its next release. Join Early Access to see real engineering workflows and be among the first to try it.",
+    "Register your interest in PawOS Early Access and tell the team which engineering workflows matter to you.",
 };
 
 /** Shareable standalone home for the same Early Access section the homepage renders. */

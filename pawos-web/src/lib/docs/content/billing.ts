@@ -87,11 +87,11 @@ export const billingPages: DocPage[] = [
     section: 'billing',
     slug: 'credits',
     title: 'Autonomous Work Credits',
-    description: 'The separate dollar wallet that funds Autonomous Ticket completions.',
+    description: 'The separate prepaid balance used for supported Autonomous Work runs.',
     blocks: [
       {
         type: 'paragraph',
-        text: 'A distinct, dollar-denominated balance from Paw Compute — see Autonomous Work → Autonomous Work Credits for the full detail. It funds only Autonomous Ticket completions, at the volume-tiered rate described in Autonomous Work → Pricing.',
+        text: 'A prepaid balance separate from Paw Compute. Top-up options and rates may depend on the account or organization; check the billing screen for current terms. Enterprise usage is billed at pass-through provider rates under its organization terms.',
       },
     ],
     related: ['autonomous-work/credits', 'autonomous-work/pricing'],

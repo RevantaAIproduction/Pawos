@@ -3,7 +3,7 @@ import { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Careers | PawOS',
-  description: 'Build what comes next. Engineering and product roles at Revanta AI.',
+  description: 'Learn about engineering and product work at Revanta AI. No public roles are listed at this time.',
 };
 
 export default function CareersPage() {
@@ -14,10 +14,10 @@ export default function CareersPage() {
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(30,40,90,0.15),transparent_50%)] pointer-events-none" />
         <div className="max-w-4xl mx-auto relative z-10 text-center">
           <h1 className="text-5xl md:text-7xl font-medium tracking-tight text-white mb-8">
-            Build what comes next.
+            Help build PawOS.
           </h1>
           <p className="text-2xl text-neutral-400 font-light leading-relaxed max-w-3xl mx-auto">
-            Revanta AI is building PawOS as a new kind of AI work environment—one that can understand work, operate across connected systems, execute real tasks, and eventually become a broader environment for individuals, teams, and organizations.
+            Revanta AI is building PawOS, an AI development operating system for engineering work. The product spans a Windows desktop app, a local-project CLI and browser-based Web workflows.
           </p>
         </div>
       </header>
@@ -29,7 +29,7 @@ export default function CareersPage() {
           <h2 className="text-3xl font-medium text-white mb-10 tracking-tight">The engineering ahead of us</h2>
           <div className="prose prose-invert prose-lg text-neutral-400 leading-relaxed max-w-none mb-12">
             <p>
-              To make an intelligent execution environment a reality, we need builders who can bridge the gap between applied AI and deep systems engineering. We care deeply about the following domains:
+              PawOS brings together AI, local software execution and developer workflows. The work spans:
             </p>
           </div>
           
@@ -58,44 +58,44 @@ export default function CareersPage() {
           <div className="grid md:grid-cols-2 gap-x-12 gap-y-12">
             
             <div>
-              <h3 className="text-xl font-medium text-indigo-300 mb-3">Build from first principles</h3>
+              <h3 className="text-xl font-medium text-indigo-300 mb-3">Understand the problem before choosing a solution</h3>
               <p className="text-neutral-400 leading-relaxed">
-                We are building a new paradigm for how humans and computers interact. We want builders who can break down complex problems to their core truths rather than relying on how things have always been done.
+                We value people who can make a complicated problem concrete, test their assumptions and explain the tradeoffs behind a design.
               </p>
             </div>
 
             <div>
-              <h3 className="text-xl font-medium text-indigo-300 mb-3">Care about the system, not just the interface</h3>
+              <h3 className="text-xl font-medium text-indigo-300 mb-3">Care about the whole system</h3>
               <p className="text-neutral-400 leading-relaxed">
-                A beautiful chat window means nothing if the underlying execution engine fails. We value deep architectural thinking that ensures resilience across the entire stack.
+                PawOS connects interfaces to runtimes and external services. We care about the behavior between those pieces as much as the interface itself.
               </p>
             </div>
 
             <div>
-              <h3 className="text-xl font-medium text-indigo-300 mb-3">Make ambitious ideas actually work</h3>
+              <h3 className="text-xl font-medium text-indigo-300 mb-3">Make difficult workflows dependable</h3>
               <p className="text-neutral-400 leading-relaxed">
-                Autonomous AI workflows are incredibly difficult to make reliable. We look for engineers who are relentless about taking a visionary concept and turning it into something that works 99.9% of the time.
+                Engineering tasks can fail for ordinary reasons: missing tools, permissions or unexpected project state. We want to make those limits visible and handle failures carefully.
               </p>
             </div>
 
             <div>
               <h3 className="text-xl font-medium text-indigo-300 mb-3">Prefer useful execution over impressive demos</h3>
               <p className="text-neutral-400 leading-relaxed">
-                Anyone can build a fragile demo. We are building a product for professional engineers and knowledge workers. It must provide genuine utility and withstand the chaos of real-world environments.
+                We prefer improvements people can use in real projects over demos that hide setup requirements or failure cases.
               </p>
             </div>
 
             <div>
               <h3 className="text-xl font-medium text-indigo-300 mb-3">Treat safety as a product requirement</h3>
               <p className="text-neutral-400 leading-relaxed">
-                Giving an AI access to a local development environment is a massive responsibility. User control, permission boundaries, and verifiable execution are not afterthoughts—they are the product.
+                Local project access and connected accounts require care. Permissions, approvals and clear reporting are part of the product design.
               </p>
             </div>
 
             <div>
               <h3 className="text-xl font-medium text-indigo-300 mb-3">Be honest about what is shipped</h3>
               <p className="text-neutral-400 leading-relaxed">
-                We do not sell vaporware or advertise future capabilities as current features. We want people who share a commitment to transparency and engineering integrity.
+                We distinguish shipped behavior from work in progress and describe failures as clearly as successful runs.
               </p>
             </div>
 
@@ -104,13 +104,13 @@ export default function CareersPage() {
 
         {/* THE BUILDER STORY */}
         <section>
-          <h2 className="text-3xl font-medium text-white mb-8 tracking-tight">The Builder Story</h2>
+          <h2 className="text-3xl font-medium text-white mb-8 tracking-tight">What we are building</h2>
           <div className="prose prose-invert prose-lg text-neutral-400 leading-relaxed max-w-none">
             <p>
-              PawOS is being built by people who believe AI should move beyond answering questions and become capable of understanding context, planning work, executing through controlled runtimes, and operating across the complex systems involved in getting work done.
+              PawOS is designed to help with engineering tasks that involve more than producing code suggestions. Depending on the experience, it can work in a local project or a connected GitHub repository, while respecting the access available there.
             </p>
             <p>
-              We are not just building another coding assistant. We are researching and engineering a cross-connection platform that bridges the gap between intent and execution. If you believe that the future of computing requires a layer of intelligent orchestration, you belong here.
+              We are working on the practical details: understanding a project, planning a change, carrying out supported steps and reporting what could be checked. If that work interests you, tell us what you would bring to the team.
             </p>
           </div>
         </section>
@@ -119,13 +119,13 @@ export default function CareersPage() {
         <section className="bg-neutral-900/30 border border-neutral-800 rounded-2xl p-10 md:p-16 text-center">
           <h2 className="text-3xl font-medium text-white mb-6 tracking-tight">Current Openings</h2>
           <p className="text-xl text-neutral-400 font-light leading-relaxed max-w-2xl mx-auto mb-12">
-            We don&apos;t have a public list of open roles right now. We&apos;re building carefully, and the right opportunity may not always fit a predefined job description.
+            There are no public openings at the moment. You can still introduce yourself and tell us which part of the product you would like to work on.
           </p>
           
           <div className="border-t border-neutral-800 pt-12">
             <h3 className="text-2xl font-medium text-white mb-4">Think you should build with us?</h3>
             <p className="text-neutral-400 mb-8">
-              If you align with our engineering philosophy and want to help build PawOS, we would love to hear from you.
+              If you are interested in working on PawOS, send the team a note.
             </p>
             <a 
               href="mailto:hello@revantaai.com?subject=Careers%20at%20Revanta%20AI" 

@@ -12,31 +12,27 @@ export default function TrustPage() {
           <div>
             <h2 className="text-lg font-semibold text-neutral-100">Mission</h2>
             <p className="mt-2">
-              Build an AI companion capable enough to be trusted with real work — and honest enough that the trust is
-              earned, not assumed.
+              Build software that can help with engineering work, while making its limits and required approvals clear.
             </p>
           </div>
           <div>
             <h2 className="text-lg font-semibold text-neutral-100">Vision</h2>
             <p className="mt-2">
-              A desktop where the boundary between &ldquo;asking an AI for help&rdquo; and &ldquo;the work actually
-              getting done&rdquo; disappears — without giving up the confirmation gates and honesty that make that
-              safe.
+              A practical way to move from an engineering request to supported work and a reviewable result.
             </p>
           </div>
           <div>
             <h2 className="text-lg font-semibold text-neutral-100">Values</h2>
             <ul className="mt-2 space-y-2">
-              <li>• <strong className="text-neutral-200">Honesty over polish.</strong> Every feature and runtime doc on this site lists real limitations next to real capabilities.</li>
-              <li>• <strong className="text-neutral-200">Confirmed, not silent.</strong> Destructive and production-impacting actions are always gated.</li>
-              <li>• <strong className="text-neutral-200">Outcome-based trust.</strong> Autonomous Engineering Task billing only fires on genuine completion — never on effort alone.</li>
+              <li>• <strong className="text-neutral-200">Clear product boundaries.</strong> Desktop, CLI and Web have different access and supported actions.</li>
+              <li>• <strong className="text-neutral-200">Review before action.</strong> Approval requirements depend on the action, experience and organization settings.</li>
+              <li>• <strong className="text-neutral-200">Evidence over assumptions.</strong> Review the work and checks PawOS reports before relying on a result.</li>
             </ul>
           </div>
           <div>
             <h2 className="text-lg font-semibold text-neutral-100">Why PawOS</h2>
             <p className="mt-2">
-              Because most AI products optimize for a good demo. We&apos;d rather optimize for the version that&apos;s
-              still trustworthy after you&apos;ve used it for six months on real work.
+              Engineering work often crosses project files, commands and connected services. PawOS is being built to help with those steps without treating every task or integration as the same.
             </p>
           </div>
         </div>

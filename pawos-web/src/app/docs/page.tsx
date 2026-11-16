@@ -4,7 +4,7 @@ import { DOC_NAV } from '../../lib/docs/navigation';
 
 export const metadata: Metadata = {
   title: 'PawOS Docs',
-  description: 'PawOS documentation: getting started, core concepts, coding, autonomous work, connectors, billing, security, and reference material.',
+  description: 'Guides to PawOS Desktop, CLI and Web, including setup, coding workflows, connections, billing and security.',
 };
 
 export default function DocsIndexPage() {
@@ -13,7 +13,7 @@ export default function DocsIndexPage() {
       <div className="mx-auto max-w-5xl">
         <h1 className="text-4xl font-bold tracking-tight text-neutral-900">PawOS Documentation</h1>
         <p className="mt-3 max-w-2xl text-lg text-neutral-500">
-          Everything you need to install, configure, and get real work done with PawOS — the desktop app, Coding Runtime, Autonomous Work, connectors, and billing.
+          Setup instructions, product guides and reference material for PawOS Desktop, CLI and Web.
         </p>
 
         <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -43,7 +43,7 @@ export default function DocsIndexPage() {
 
         <div className="mt-12 rounded-xl border border-neutral-200 bg-neutral-50 p-6">
           <h2 className="font-semibold text-neutral-900">New here?</h2>
-          <p className="mt-1.5 text-sm text-neutral-600">Start with the Getting Started section, or jump straight to a real coding task.</p>
+          <p className="mt-1.5 text-sm text-neutral-600">Start with the product overview or follow the quickstart for your first workspace.</p>
           <div className="mt-4 flex flex-wrap gap-3">
             <Link href="/docs/getting-started/introduction" className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800">
               Introduction

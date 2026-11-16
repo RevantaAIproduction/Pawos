@@ -34,11 +34,11 @@ export default function Home() {
         <HeroAnimation />
         <ParticleField />
         <div className="relative z-10">
-        <h1 className="text-6xl md:text-8xl font-bold tracking-tighter text-white mb-6">
-          PawOS
+        <h1 className="mx-auto max-w-5xl text-5xl md:text-7xl font-bold tracking-tighter text-white mb-6">
+          Engineering work, carried through.
         </h1>
-        <p className="text-2xl md:text-3xl text-white [text-shadow:0_1px_5px_rgba(0,0,0,0.85)] font-light mb-12 max-w-2xl">
-          One AI work companion. Desktop, CLI, and Web.
+        <p className="mx-auto max-w-3xl text-lg md:text-2xl text-white [text-shadow:0_1px_5px_rgba(0,0,0,0.85)] font-light mb-10">
+          PawOS helps developers plan and carry out supported engineering tasks, with a clear view of the work and its results. Choose Desktop for your Windows environment, CLI for a local project folder, or Web for chat and GitHub-connected work.
         </p>
         <div className="flex flex-wrap justify-center gap-3">
           <Link href="/signup" onClick={() => trackEvent("home_get_started", { destination: "/signup" })} className="rounded-full bg-white px-8 py-4 text-base font-medium text-black transition hover:bg-neutral-200">
@@ -55,10 +55,10 @@ export default function Home() {
       <section className="py-32 px-6 bg-black relative z-10">
         <div className="mx-auto max-w-4xl text-center">
           <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-8">
-            The work is fragmented. The system shouldn&apos;t be.
+            Engineering work crosses tools. PawOS helps connect the steps.
           </h2>
           <p className="text-xl text-neutral-400 leading-relaxed max-w-3xl mx-auto">
-            PawOS brings task context across the tools you use through three product experiences: a graphical desktop app, a CLI for local project folders, and a browser-based Web app for chat and connected repository workflows.
+            A code change can involve understanding a project, editing files, running commands and reporting the result. PawOS supports that work in three distinct ways: Desktop on Windows, CLI in a local project folder, and Web for browser chat and GitHub-connected repository changes.
           </p>
         </div>
       </section>
@@ -118,13 +118,13 @@ export default function Home() {
                 Select your repo and start coding from the web.
               </h2>
               <p className="text-lg text-neutral-400 leading-relaxed">
-                PawOS Web is a browser-based experience for chat and connected repository work. In Code mode, connect GitHub, select a repository, and describe a change. Web does not access files on your computer.
+                PawOS Web offers browser-based Chat and Code modes. In Code mode, connect GitHub, choose a repository and describe a change. Web works with the connected repository; it does not access your computer&apos;s files or terminal.
               </p>
               <ol className="mt-8 space-y-3">
                 {[
                   ["Connect GitHub", "Sign in with GitHub — from your computer or your phone."],
                   ["Pick a repository", "Choose the repo Paw should work in."],
-                  ["Describe the change", "Watch each step, then open the live preview."],
+                  ["Describe the change", "Review the proposed change and its available checks."],
                 ].map(([title, detail], index) => (
                   <li key={title} className="flex gap-4">
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-neutral-700 text-xs font-semibold text-neutral-300">{index + 1}</span>
@@ -268,7 +268,7 @@ export default function Home() {
               Where PawOS is today — and where we&apos;re taking it.
             </h2>
             <p className="text-xl text-neutral-400 max-w-3xl mx-auto leading-relaxed">
-              PawOS already works across your desktop and engineering workflow. We&apos;re expanding the same execution layer to connect more of the work around it.
+            Desktop, CLI and Web each support different parts of an engineering workflow. Here is what is available today and what we are still working toward.
             </p>
           </div>
 
@@ -280,7 +280,7 @@ export default function Home() {
               <div>
                 <h3 className="text-3xl font-medium text-white mb-4">A companion that executes real work.</h3>
                 <p className="text-lg text-neutral-400 mb-6 leading-relaxed">
-                  PawOS already operates as a desktop AI companion and execution environment. It can explore codebases, make code changes, work with the terminal, install software, and fix development environment issues.
+                  On Windows, PawOS Desktop can work with supported local projects and development tools. Depending on the task and permissions, it can inspect files, make changes, run commands, install software and help repair environment issues.
                 </p>
                 <div className="grid sm:grid-cols-2 gap-4 text-neutral-300">
                   <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Understand an existing project</div>
@@ -299,15 +299,13 @@ export default function Home() {
               <div>
                 <h3 className="text-3xl font-medium text-white mb-4">Deepening the working environment.</h3>
                 <p className="text-lg text-neutral-400 mb-6 leading-relaxed">
-                  We are building a richer workspace around the execution layer. This is about making execution more visible—bringing the work PawOS already does to the surface.
+                  We are improving how people review work in PawOS. The details shown depend on the experience and task; check the current product and documentation for what is available.
                 </p>
                 <div className="grid sm:grid-cols-2 gap-4 text-neutral-300">
-                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Richer inline file and code viewers</div>
-                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Clearer real diffs and verification</div>
-                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Persistent terminal and work output</div>
-                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Stronger project context</div>
-                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>More isolated execution environments</div>
-                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Richer execution history</div>
+                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Review the task plan before work begins</div>
+                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>See command output and reported results</div>
+                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Approve actions that require confirmation</div>
+                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Choose the experience that fits the project</div>
                 </div>
               </div>
             </div>
@@ -318,7 +316,7 @@ export default function Home() {
               <div>
                 <h3 className="text-3xl font-medium text-white mb-4">Expanding across connections.</h3>
                 <p className="text-lg text-neutral-400 mb-6 leading-relaxed">
-                  Work doesn&apos;t live in one place. A task may begin in a local project, require code changes, need terminal work, interact with Git, require ticket investigation, and eventually require updating connected systems. PawOS is the execution layer moving through that work.
+                  A task may involve a local project, terminal commands, Git and a connected issue tracker. PawOS can help with supported steps, but the actions available depend on the product experience and each connection.
                 </p>
               </div>
             </div>
@@ -329,7 +327,7 @@ export default function Home() {
               <div>
                 <h3 className="text-3xl font-medium text-white mb-4">Autonomous execution.</h3>
                 <p className="text-lg text-neutral-400 mb-6 leading-relaxed">
-                  Autonomous ticket work is part of PawOS today, not a future capability. PawOS can take supported tasks from request through execution and reporting. It operates with strict execution controls, requiring appropriate approval and permission boundaries around the work.
+                  PawOS includes ticket-based workflows for supported plans and connected services. They can stop when a step needs approval or a required capability is unavailable; they do not guarantee a fix or pull request for every ticket.
                 </p>
                 <div className="flex flex-wrap items-center gap-2 text-sm font-medium tracking-wide text-neutral-500 uppercase">
                   <span>Request</span>
@@ -355,7 +353,7 @@ export default function Home() {
               <div>
                 <h3 className="text-3xl font-medium text-white mb-4">Organizational direction.</h3>
                 <p className="text-lg text-neutral-400 mb-6 leading-relaxed">
-                  This is where the genuinely future organizational expansion belongs. Building on existing foundations for authentication and billing, we are expanding PawOS to support the administration, collaboration, and governance required for larger teams.
+                  Team and Enterprise features add organization workspaces, administration and governance. Availability depends on plan and configuration; contact the team to discuss an organization rollout.
                 </p>
                 <div className="grid sm:grid-cols-2 gap-4 text-neutral-300">
                   <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Collaborative PawOS workspaces</div>
@@ -376,10 +374,10 @@ export default function Home() {
       <section className="py-40 px-6 bg-black relative z-10 border-t border-neutral-900 flex flex-col items-center justify-center text-center">
         <div className="max-w-5xl mx-auto">
           <h2 className="text-5xl md:text-7xl font-medium tracking-tight text-white mb-10 leading-tight">
-            A computer that understands the work around you.
+            Tools that help move engineering work forward.
           </h2>
           <p className="text-2xl text-neutral-400 font-light max-w-4xl mx-auto leading-relaxed">
-            The long-term idea is larger than coding. The goal is not to replace every underlying tool. The goal is to make the tools and systems people already use work together through an intelligent execution layer. A system that connects people, projects, files, software, tools, execution, communication, and organizations.
+            PawOS is focused on engineering tasks that span a project, its tools and connected services. We are building toward more continuity between those steps, while keeping each experience within its supported access and permissions.
           </p>
         </div>
       </section>
@@ -394,13 +392,13 @@ export default function Home() {
           </div>
           <div className="prose prose-invert prose-lg mx-auto text-neutral-400 leading-relaxed mb-12">
             <p className="mb-6">
-              We started building PawOS because we realized that giving an AI conversational access to a codebase isn&apos;t the same thing as giving an AI the ability to do the work.
+              We started PawOS because discussing a code change and carrying it out are different jobs.
             </p>
             <p className="mb-6">
               When a developer sits down at a computer, they don&apos;t just read code. They install dependencies, they navigate the file system, they run commands in the terminal, they debug failing builds, and they track their work in Jira. The work is connected.
             </p>
             <p>
-              We are researching and building an execution platform that doesn&apos;t just chat, but actively bridges these fragmented systems—because the future of engineering isn&apos;t just an assistant that tells you what to type. It&apos;s a companion that understands your computer and acts as an autonomous extension of your environment.
+              PawOS is being built to help with the steps between a request and a checked result. It can work with local projects in Desktop or CLI, and with connected repositories in Web. Each experience has its own boundaries, and PawOS reports what it could and could not verify.
             </p>
           </div>
           <div className="text-center">

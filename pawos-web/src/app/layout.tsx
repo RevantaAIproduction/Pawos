@@ -24,24 +24,24 @@ const SITE_URL = OFFICIAL_SITE_ORIGIN;
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "PawOS - Your AI desktop companion",
+    default: "PawOS — AI tools for engineering work",
     template: "%s - PawOS",
   },
   description:
-    "PawOS is an AI companion that lives on your desktop, plans and executes real work, and helps you code, browse, deploy, and communicate - with autonomous engineering built in.",
+    "PawOS helps developers plan and carry out supported engineering tasks. Use the Windows desktop app, CLI in a local project folder, or Web for browser chat and GitHub-connected work.",
   openGraph: {
     type: "website",
     siteName: "PawOS",
-    title: "PawOS - Your AI desktop companion",
+    title: "PawOS — AI tools for engineering work",
     description:
-      "PawOS is an AI companion that lives on your desktop, plans and executes real work, and helps you code, browse, deploy, and communicate.",
+      "Plan and carry out supported engineering tasks with PawOS Desktop for Windows, CLI for local project folders, or Web for browser chat and GitHub-connected work.",
     url: SITE_URL,
   },
   twitter: {
     card: "summary_large_image",
-    title: "PawOS - Your AI desktop companion",
+    title: "PawOS — AI tools for engineering work",
     description:
-      "PawOS is an AI companion that lives on your desktop, plans and executes real work, and helps you code, browse, deploy, and communicate.",
+      "Plan and carry out supported engineering tasks with PawOS Desktop for Windows, CLI for local project folders, or Web for browser chat and GitHub-connected work.",
   },
   robots: { index: true, follow: true },
 };
@@ -79,7 +79,7 @@ export default async function RootLayout({
     applicationCategory: "DeveloperApplication",
     operatingSystem: "Windows",
     description:
-      "PawOS is an AI companion that lives on your desktop, plans and executes real work, and helps you code, browse, deploy, and communicate.",
+      "PawOS helps developers plan and carry out supported engineering tasks through a Windows desktop app, local-project CLI, and browser-based Web experience.",
     offers: {
       "@type": "Offer",
       price: "0",

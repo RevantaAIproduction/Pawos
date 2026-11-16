@@ -163,8 +163,8 @@ export function SignupForm() {
       : step === "password"
         ? ["Choose a password", "Your email is verified"]
         : isDesktopWaitlist
-          ? ["Join the PawOS Desktop launch list", "Get launch updates"]
-          : ["Welcome to PawOS", "One account for Web and Desktop"];
+          ? ["Create your PawOS account", "You can request Desktop early access after signing in"]
+          : ["Create your PawOS account", "Use PawOS Web, Desktop, or CLI with the access available to your account"];
 
   return (
     <div className="w-full" data-testid="signup-form" data-step={step}>

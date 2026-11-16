@@ -6,14 +6,14 @@ import { FEATURES } from "../../lib/featuresContent";
 
 export const metadata: Metadata = {
   title: "Features",
-  description: "Every PawOS capability, from desktop automation and browser control to autonomous engineering and enterprise governance.",
+  description: "Explore PawOS capabilities and see which features are available in Desktop, CLI, Web, and organization plans.",
 };
 
 const CATEGORIES = ["Core", "Engineering", "Collaboration", "Platform"] as const;
 
 export default function FeaturesIndexPage() {
   return (
-    <Section title="Every capability, in one companion" subtitle="PawOS is built from real, working runtimes — explore what each one actually does.">
+    <Section title="PawOS capabilities" subtitle="Explore the product features and their supported workflows. Availability depends on the product experience, plan and connected services.">
       <div className="mt-12 space-y-16">
         {CATEGORIES.map((category) => {
           const items = FEATURES.filter((f) => f.category === category);

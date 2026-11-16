@@ -14,14 +14,14 @@ export const FEATURES: FeatureContent[] = [
   {
     slug: "desktop-ai",
     title: "Desktop AI",
-    tagline: "A companion that lives on your machine, not in a browser tab.",
+    tagline: "A Windows app for work in your local environment.",
     category: "Core",
     summary:
-      "PawOS runs as a native desktop app. Your companion sees your active window, understands what you're working on, and can act on your machine directly — opening apps, running commands, editing files — instead of being confined to a chat window.",
+      "PawOS Desktop runs on Windows and can work with supported local projects and development tools. Available actions depend on the task, installed tools and permissions you grant.",
     capabilities: [
       "Runs locally as a native desktop application",
-      "Foreground-window awareness so Paw knows what you're looking at",
-      "A persistent, animated companion presence alongside your work",
+      "A desktop workspace for starting and continuing tasks",
+      "An optional animated companion alongside your work",
       "Streaming responses with sentence-chunked speech for natural conversation",
     ],
     workflow: [
@@ -70,10 +70,10 @@ export const FEATURES: FeatureContent[] = [
   {
     slug: "browser-automation",
     title: "Browser Automation",
-    tagline: "A real, controllable browser Paw can navigate, read, and act in.",
+    tagline: "Browser tasks through supported local browser connections.",
     category: "Engineering",
     summary:
-      "The Browser Runtime gives Paw a real, adapter-based connection to your browser — navigate pages, read content, fill forms, click elements, extract structured data, and compare results across sites, always with permission gates before anything that changes state.",
+      "PawOS Desktop includes browser workflows for supported browser adapters. Available actions vary by browser and task; actions that change external state may require confirmation.",
     capabilities: [
       "Navigate, search, read, and extract structured data from web pages",
       "Fill forms, click elements, scroll, and wait for page state",
@@ -100,16 +100,16 @@ export const FEATURES: FeatureContent[] = [
   {
     slug: "desktop-automation",
     title: "Desktop Automation",
-    tagline: "Files, apps, and processes — handled directly on your machine.",
+    tagline: "Supported file and command workflows on your Windows machine.",
     category: "Engineering",
     summary:
-      "The Universal Execution Runtime is PawOS's general-purpose desktop actuator: opening and managing applications, running allowlisted shell commands, manipulating files safely, and watching processes for health — all through a single, auditable execution engine.",
+      "PawOS Desktop can run supported local workflows, including project file operations and development commands. The available actions depend on the task and installed tools; PawOS asks for approval where required.",
     capabilities: [
       "Open apps, folders, and files, including opening a project in your editor",
       "Run allowlisted commands (npm, git, node, python, and more) with shell selection",
       "Safe file lifecycle operations — create, move, copy, merge, recycle bin support",
       "Process lifecycle management with health checks",
-      "A recovery policy that retries and repairs failed steps instead of just failing",
+      "Task reporting that includes errors when a step cannot be completed",
     ],
     workflow: [
       { step: "Describe the task", detail: "\"Install this dependency,\" \"organize my downloads folder,\" \"restart the dev server.\"" },
@@ -156,7 +156,7 @@ export const FEATURES: FeatureContent[] = [
   {
     slug: "memory",
     title: "Memory",
-    tagline: "A companion that remembers your projects, not just this conversation.",
+    tagline: "Project context that can carry across sessions.",
     category: "Core",
     summary:
       "PawOS builds an evidence-based Memory Graph from what it observes and does — project structure, past decisions, communication history, and companion-specific preferences — so context persists across sessions instead of resetting every time you open the app.",
@@ -173,7 +173,7 @@ export const FEATURES: FeatureContent[] = [
     ],
     useCases: [
       "Picking up a project days later without re-explaining context",
-      "Relationship history surfacing automatically before a follow-up meeting",
+      "Finding saved project context when continuing prior work",
     ],
     limitations: [
       "Memory is local to your device unless explicitly shared to an organization workspace",
@@ -208,10 +208,10 @@ export const FEATURES: FeatureContent[] = [
   {
     slug: "terminal",
     title: "Terminal",
-    tagline: "Real shell access, allowlisted and narrated.",
+    tagline: "Run supported development commands with approval controls.",
     category: "Engineering",
     summary:
-      "Paw can run real commands in a real terminal — npm, git, python, node, and more — with shell selection, live output streaming into the Coding Canvas, and build status parsed from the actual output rather than guessed.",
+      "PawOS CLI and Desktop support development commands in their respective local environments. Supported commands and approval requirements depend on the product and task.",
     capabilities: [
       "Allowlisted command execution with shell selection (bash, PowerShell, cmd)",
       "Live, independently-expandable terminal output in the Coding Canvas",
@@ -234,10 +234,10 @@ export const FEATURES: FeatureContent[] = [
   {
     slug: "git",
     title: "Git",
-    tagline: "Real git operations, including AI-assisted PR review.",
+    tagline: "Git workflows in supported local and connected projects.",
     category: "Engineering",
     summary:
-      "PawOS's Git Write Runtime covers the everyday git workflow — add, commit, branch, checkout, revert — plus, for Team and Enterprise workspaces, real pull request reading and AI-assisted review against your organization's connected repositories.",
+      "PawOS can use Git as part of supported project workflows. Connected repository actions vary by product experience and provider; review the integration guide for the operations available to your account.",
     capabilities: [
       "Add, commit, create branches, and checkout through a real git runtime",
       "Revert a specific commit as a real, reviewable undo — a safety net if a Paw Pro edit needs to be rolled back after it's already committed",
@@ -261,25 +261,23 @@ export const FEATURES: FeatureContent[] = [
   {
     slug: "deployments",
     title: "Deployments",
-    tagline: "Real deploys across a growing set of real providers.",
+    tagline: "Deployment workflows depend on the configured provider and tools.",
     category: "Engineering",
     summary:
-      "The Infrastructure Runtime deploys through a provider-agnostic connector interface — Vercel, Netlify, Railway, Google Cloud Run, AWS Elastic Beanstalk and EC2, Docker/VPS, DigitalOcean, Linode, Vultr, Hetzner, Oracle Cloud, Azure (VM and App Service), Kubernetes, Render, Fly.io, GitHub Pages, and Hostinger — each shelling to that provider's own already-authenticated CLI or API, never inventing a deployment mechanism a provider doesn't actually have.",
+      "PawOS includes infrastructure workflows for configured providers and local tools. Supported operations depend on the provider connector, installed CLI or API access, and the permissions available on the machine.",
     capabilities: [
-      "One consistent deploy/status/rollback/promote interface across every provider",
-      "Cloud VM provisioning (EC2, Compute Engine, Azure VM, DigitalOcean, Linode, Vultr, Hetzner, Oracle Cloud) that launches a real instance and deploys to it over SSH + Docker",
-      "Automatic health-check-and-rollback after a deploy",
-      "Deployment comparison and infrastructure discovery across connected providers",
+      "Deployment and status operations for supported configurations",
+      "Provider-specific workflows where the required tools and access are available",
+      "Checks and recovery actions vary by deployment target",
     ],
     workflow: [
-      { step: "Request a deploy", detail: "\"Deploy this to production,\" or let Paw suggest the right target for the project." },
-      { step: "Safety gate", detail: "Production-impacting deploys go through an approval gate before running." },
-      { step: "Deploy and verify", detail: "Paw deploys, then checks real health signals rather than assuming success." },
-      { step: "Roll back if needed", detail: "A failed health check can trigger an automatic rollback to the last good deployment." },
+      { step: "Check the setup", detail: "Confirm the provider, local tools and credentials required for the workflow." },
+      { step: "Review the action", detail: "Check the proposed deployment steps and any required approval." },
+      { step: "Run and inspect", detail: "Review the command output and checks available for that target." },
     ],
     useCases: [
-      "Shipping a side project without learning every provider's own CLI",
-      "Standardizing deploy workflows across a team using different providers",
+      "Using a supported deployment workflow without memorizing every provider command",
+      "Documenting the deployment steps used by a configured provider",
     ],
     limitations: [
       "Every provider requires its own already-authenticated CLI/API session on your machine — PawOS never manages your cloud credentials for you",
@@ -422,10 +420,10 @@ export const FEATURES: FeatureContent[] = [
   {
     slug: "safety",
     title: "Safety",
-    tagline: "Confirmation gates, an audit log, and a real credential vault.",
+    tagline: "Approvals and access controls for supported actions.",
     category: "Platform",
     summary:
-      "Destructive or production-impacting actions never run silently. PawOS confirms before acting, logs infrastructure actions for audit, and — for Team and Enterprise — enforces governance policies and stores organization credentials in an encrypted vault rather than in plain text.",
+      "PawOS uses approval and permission controls for supported actions. Organization controls depend on plan and configuration; review the security documentation for current scope and limitations.",
     capabilities: [
       "Confirm-then-retry gating for destructive or irreversible actions",
       "A real approval queue for production-impacting infrastructure actions",
@@ -440,7 +438,7 @@ export const FEATURES: FeatureContent[] = [
     ],
     useCases: [
       "Preventing accidental production incidents from an over-eager automation",
-      "Meeting basic compliance evidence requirements for regulated teams",
+      "Reviewing approval requirements before supported actions run",
     ],
     limitations: [
       "Safety mechanisms reduce risk; they don't eliminate the need for good judgment about what to automate",
@@ -449,16 +447,15 @@ export const FEATURES: FeatureContent[] = [
   {
     slug: "enterprise",
     title: "Enterprise",
-    tagline: "One platform for individuals, teams, and organizations of any size.",
+    tagline: "Organization plans with shared workspaces and administration.",
     category: "Collaboration",
     summary:
-      "PawOS scales from a single Paw on one device to shared Organization Workspaces with real-time presence, shared documents, task assignment, remote assistance, and org-wide governance — without maintaining a separate product for teams.",
+      "Team and Enterprise plans add organization workspaces and administrative features. Available collaboration, governance and billing features depend on the plan and configuration.",
     capabilities: [
-      "Shared Organization Workspaces with members, projects, and shared documents",
-      "Live presence and cursors on shared documents via CRDT sync",
-      "Task lifecycle, assignment, and temporary permission grants",
-      "Screen-share-based remote assistance with a shared terminal",
-      "Org-wide credential vault, approval policies, and audit logging",
+      "Organization workspaces for supported team workflows",
+      "Plan-dependent collaboration and administration features",
+      "Role and permission controls where available",
+      "Organization usage and billing options",
     ],
     workflow: [
       { step: "Create a workspace", detail: "An organization owner sets up a shared workspace scoped to their email domain." },
@@ -476,20 +473,20 @@ export const FEATURES: FeatureContent[] = [
   {
     slug: "billing",
     title: "Billing",
-    tagline: "Transparent tiers, a volume-tiered Ticket Balance, and success-only billing.",
+    tagline: "Plans, included Paw Compute and separate paid usage.",
     category: "Platform",
     summary:
-      "PawOS's pricing is a real, published tier ladder — not usage-metered chat. The Autonomous Ticket System runs on a separate prepaid Ticket Balance and is billed, at a volume-tiered per-ticket rate, only when a ticket genuinely completes successfully — never for chat, research, or manual coding help, and never for a run that fails, is cancelled, or is denied approval.",
+      "PawOS offers individual and organization plans with included Paw Compute. Autonomous Ticket System usage is paid separately from a prepaid balance; current top-up options and rates are shown in the billing screen. Enterprise usage follows its organization terms.",
     capabilities: [
       "A real tier ladder: Go (free), Pro, Pro Max, and per-seat Team and Enterprise plans",
-      "Instant self-serve upgrade, downgrade, and renewal — no sales call required",
-      "A prepaid Ticket Balance (any amount, $30 minimum) that never expires, billed per ticket at a volume-tiered rate from $5.00 down to $3.00",
+      "Self-serve billing for individual plans; Team and Enterprise are arranged through sales",
+      "A separate prepaid balance for supported Autonomous Ticket System usage",
       "A full purchase and usage history export with per-run detail",
     ],
     workflow: [
       { step: "Pick a plan", detail: "Choose the tier that matches your usage — upgrade or downgrade anytime." },
-      { step: "Add funds to your Ticket Balance", detail: "Top up any amount upfront, anytime, from inside the app." },
-      { step: "Pay only for completed work", detail: "The current volume-tiered rate is deducted only for a ticket that genuinely finished successfully." },
+      { step: "Review usage terms", detail: "Check the current balance and displayed rate for your account before paid work starts." },
+      { step: "Review the result", detail: "The app reports the run status and billing outcome." },
     ],
     useCases: [
       "Predictable monthly cost for individual and team use",
@@ -502,26 +499,26 @@ export const FEATURES: FeatureContent[] = [
   {
     slug: "autonomous-engineering",
     title: "Autonomous Engineering",
-    tagline: "PawOS's flagship capability: real tickets, resolved end to end.",
+    tagline: "Ticket workflows for supported trackers and repositories.",
     category: "Engineering",
     summary:
-      "Given a ticket from a connected tracker, Paw investigates the issue using real evidence — browser console output, network requests, repository history — plans a fix, implements it, tests it, opens a real pull request, and reports back. It's billed only when that full cycle genuinely completes.",
+      "Autonomous Work can start from supported ticket and repository connections, gather available context and carry out configured steps. Runs can require approval or stop when a capability is unavailable; a fix or pull request is not guaranteed for every ticket.",
     capabilities: [
-      "Real, tracker-agnostic ticket investigation (Jira, Linear, GitHub Issues, Azure Boards, and more)",
+      "Ticket context from supported trackers, including Jira, Linear and GitHub Issues where enabled",
       "Root-cause correlation across logs, code, and deployment history",
       "Implementation, testing, and a real pull request as the deliverable",
       "Structured engineering reports capturing what was found and what was done",
-      "Success-gated billing tied to a completed PR and updated ticket — never to deploy alone",
+      "Separate usage billing; current rates and completion rules are shown in the app",
     ],
     workflow: [
-      { step: "Investigate", detail: "Paw gathers real evidence about the reported issue before proposing anything." },
-      { step: "Plan", detail: "A concrete implementation plan is drafted and tracked as a live TODO list." },
-      { step: "Implement & test", detail: "Paw writes the fix and runs real tests against it." },
-      { step: "Deliver", detail: "A pull request is opened and the ticket is updated — that's when the task counts as complete." },
+      { step: "Gather context", detail: "PawOS reads information available through the connected tracker and repository." },
+      { step: "Plan", detail: "Review the proposed steps and provide approvals when requested." },
+      { step: "Carry out supported work", detail: "The run may edit files or run checks within its configured environment." },
+      { step: "Review the report", detail: "Check what changed, which checks ran and whether any steps remain." },
     ],
     useCases: [
-      "Working through a backlog of well-defined bugs without a human picking up every ticket",
-      "Consistent, evidenced investigation quality across a large ticket volume",
+      "Investigating supported, well-scoped tickets with connected repository context",
+      "Reviewing run progress and reported results in one workflow",
     ],
     limitations: [
       "Best suited to well-scoped, well-defined tickets — ambiguous or highly exploratory work still benefits from a human in the loop",

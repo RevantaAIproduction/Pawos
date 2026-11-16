@@ -266,8 +266,7 @@ export function EarlyAccessSection({ placement = "home" }: { placement?: "home" 
             PawOS workflow demonstrations before the next release.
           </p>
           <p className="mt-6 text-lg text-neutral-300 leading-relaxed">
-            PawOS doesn&apos;t just tell you how to do engineering work. It is designed to execute real engineering
-            work.
+            Tell us which engineering workflows matter to you and we&apos;ll share updates as PawOS develops.
           </p>
         </div>
 
@@ -311,10 +310,10 @@ export function EarlyAccessSection({ placement = "home" }: { placement?: "home" 
             <div className="mt-24">
               <div className="mx-auto max-w-3xl text-center mb-12">
                 <h3 id="early-access-workflows-title" className="text-3xl font-medium tracking-tight text-white mb-4">
-                  What would you give PawOS?
+                  Which work would you like help with?
                 </h3>
                 <p className="text-lg text-neutral-400 leading-relaxed">
-                  Tell us what kind of engineering work you would want PawOS to handle.
+                  Select the engineering tasks you would like PawOS to support.
                 </p>
               </div>
 
