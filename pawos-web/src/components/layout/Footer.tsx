@@ -86,7 +86,7 @@ export function Footer() {
             <div>
               <p className="text-neutral-200 font-semibold text-base tracking-tight">PawOS</p>
               <p className="text-neutral-500">
-                An AI work environment by <span className="text-neutral-300">Revanta AI</span>.
+                AI engineering execution by <span className="text-neutral-300">Revanta AI</span>.
               </p>
             </div>
           </div>
