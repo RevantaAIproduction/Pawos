@@ -6,7 +6,7 @@ import { Badge } from "../../components/ui/Badge";
 
 export const metadata: Metadata = {
   title: "Enterprise",
-  description: "PawOS plans for engineering teams with shared workspaces, seat options, permissions and governance.",
+  description: "Organization plans for engineering teams using PawOS workspaces, seats, usage controls and administration.",
 };
 
 const CAPABILITIES = [
@@ -34,7 +34,7 @@ export default function EnterprisePage() {
         <div className="text-center">
           <Badge tone="blue">Enterprise</Badge>
           <h1 className="mx-auto mt-4 max-w-2xl text-4xl font-bold tracking-tight sm:text-5xl">
-            PawOS for engineering teams
+            Engineering workflows for teams
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-neutral-400">
             Team and Enterprise plans add organization workspaces, administration and controls to PawOS. Tell us how your team works and we&apos;ll confirm which features and terms fit your rollout.
