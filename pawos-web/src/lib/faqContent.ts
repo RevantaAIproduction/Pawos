@@ -1,8 +1,8 @@
 export type FaqItem = { category: string; q: string; a: string };
 
 export const FAQ_ITEMS: FaqItem[] = [
-  { category: "Installation", q: "What platforms does PawOS support?", a: "PawOS Desktop is for Windows only and is installed from the Microsoft Store; it is not currently available for macOS or Linux. PawOS Web works in a browser on any computer or phone, and the PawOS CLI runs in a terminal with Node.js 20 or newer." },
-  { category: "Installation", q: "Do I need to install anything else first?", a: "PawOS Desktop is distributed as a Windows app. PawOS CLI requires Node.js 20 or newer. Web runs in a browser." },
+  { category: "Installation", q: "What platforms does PawOS support?", a: "PawOS Desktop is the Windows application and currently uses an early-access distribution process. PawOS Web runs in a supported browser on a computer or phone. PawOS CLI runs in a terminal and requires Node.js 20 or newer." },
+  { category: "Installation", q: "Do I need to install anything else first?", a: "Request Windows early access for PawOS Desktop and follow the instructions provided for the release available to your account. PawOS CLI requires Node.js 20 or newer. PawOS Web runs in a browser." },
   { category: "Billing", q: "Is there a free plan?", a: "Yes — Paw Go is free, with local runtime features and real AI for planning & analysis (Paw Flash); execution requires Paw Pro. See Pricing for the full tier ladder." },
   { category: "Billing", q: "How is Autonomous Work billed?", a: "Autonomous Work uses a prepaid balance separate from Paw Compute. Current top-up options and rates are shown in the billing screen. Enterprise usage has separate pass-through provider terms. Failed, cancelled or approval-denied runs are not charged under the current billing rules." },
   { category: "Billing", q: "How do I change my plan?", a: "Go, Pro and Pro Max plan changes are available through in-app billing. Team and Enterprise plans are arranged through sales." },
