@@ -24,17 +24,17 @@ const SITE_URL = OFFICIAL_SITE_ORIGIN;
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "PawOS — AI tools for engineering work",
+    default: "PawOS — AI engineering execution",
     template: "%s - PawOS",
   },
   description:
-    "PawOS helps developers plan and carry out supported engineering tasks. Use the Windows desktop app, CLI in a local project folder, or Web for browser chat and GitHub-connected work.",
+    "PawOS helps developers investigate issues, understand projects, plan code changes and carry out supported engineering tasks through Web, CLI and Windows Desktop.",
   openGraph: {
     type: "website",
     siteName: "PawOS",
-    title: "PawOS — AI tools for engineering work",
+    title: "PawOS — AI engineering execution",
     description:
-      "Plan and carry out supported engineering tasks with PawOS Desktop for Windows, CLI for local project folders, or Web for browser chat and GitHub-connected work.",
+      "Investigate issues, plan code changes and carry out supported engineering tasks with PawOS Web, CLI and Windows Desktop. Each experience has distinct execution boundaries.",
     url: SITE_URL,
   },
   twitter: {
