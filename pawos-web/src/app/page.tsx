@@ -1,431 +1,189 @@
-'use client';
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
-import { Button } from "../components/ui/Button";
-import { ConnectionsWorkflow } from "../components/ConnectionsWorkflow";
-import { HeroAnimation } from '../components/HeroAnimation';
-import { ParticleField } from '../components/ParticleField';
-import { EarlyAccessSection } from '../components/early-access/EarlyAccessSection';
+import { DownloadWindowsButton } from "../components/DownloadWindowsButton";
 import { trackEvent } from "../components/analytics/Analytics";
 
-type ProductScreenshotProps = {
-  src: string;
-  mobileSrc: string;
-  alt: string;
-  width: number;
-  height: number;
-};
+const products = [
+  {
+    name: "PawOS CLI",
+    label: "Local terminal workflow",
+    description: "Start PawOS from a project folder and work with local files, Git or non-Git projects, and approved development commands.",
+    href: "/docs/getting-started/four-ways-to-work#install-cli",
+    image: "/pawos-cli-edits.png",
+    alt: "PawOS CLI showing proposed local file changes and lint and build command results",
+  },
+  {
+    name: "PawOS Desktop",
+    label: "Windows development environment",
+    description: "Use the Windows desktop application for supported local project, development-tool and environment workflows. Availability and actions depend on the release, setup and permissions.",
+    href: "/features/desktop-ai",
+    image: "/pawos-desktop-capture.png",
+    alt: "PawOS Desktop application showing its local development workspace",
+  },
+  {
+    name: "PawOS Web",
+    label: "Browser and GitHub workflows",
+    description: "Use Chat and Code in a browser. Code works with repositories you connect through GitHub; Web does not access your computer's local files or terminal.",
+    href: "/docs/getting-started/web-and-mobile",
+    image: "/pawos-web-code.png",
+    alt: "PawOS Web Code mode showing GitHub repository connection and setup",
+  },
+];
 
-function ProductScreenshot({ src, mobileSrc, alt, width, height }: ProductScreenshotProps) {
-  return (
-    <picture className="block w-full">
-      <source media="(max-width: 767px)" srcSet={mobileSrc} />
-      <Image src={src} alt={alt} width={width} height={height} sizes="(min-width: 768px) 50vw, 100vw" className="block h-auto w-full object-contain" />
-    </picture>
-  );
-}
-
+const workflow = [
+  ["01", "Describe the outcome", "Start with the engineering task: investigate a defect, understand a project, or make a defined change."],
+  ["02", "Inspect and plan", "PawOS uses the project context and tools available in the selected experience to determine a supported approach."],
+  ["03", "Review and authorize", "Review proposed work. Actions that require confirmation pause for approval before they run."],
+  ["04", "Execute and verify", "PawOS carries out supported steps and reports the commands, changes, checks, failures and items it could not verify."],
+];
 
 export default function Home() {
   return (
-    <>
-      {/* 1. HERO */}
-      <section className="relative min-h-[90vh] flex flex-col items-center justify-center text-center px-6">
-        <HeroAnimation />
-        <ParticleField />
-        <div className="relative z-10">
-        <h1 className="mx-auto max-w-5xl text-5xl md:text-7xl font-bold tracking-tighter text-white mb-6">
-          Engineering work, carried through.
-        </h1>
-        <p className="mx-auto max-w-3xl text-lg md:text-2xl text-white [text-shadow:0_1px_5px_rgba(0,0,0,0.85)] font-light mb-10">
-          PawOS helps developers plan and carry out supported engineering tasks, with a clear view of the work and its results. Choose Desktop for your Windows environment, CLI for a local project folder, or Web for chat and GitHub-connected work.
-        </p>
-        <div className="flex flex-wrap justify-center gap-3">
-          <Link href="/signup" onClick={() => trackEvent("home_get_started", { destination: "/signup" })} className="rounded-full bg-white px-8 py-4 text-base font-medium text-black transition hover:bg-neutral-200">
-            Get Started <span aria-hidden="true">→</span>
-          </Link>
-          <Link href="/features" onClick={() => trackEvent("features_index_visit", { source: "home_hero" })} className="rounded-full border border-white/25 px-8 py-4 text-base font-medium text-white transition hover:bg-white/10">
-            Explore Product
-          </Link>
-        </div>
-        </div>
-      </section>
-
-      {/* 2. WHAT PAWOS IS */}
-      <section className="py-32 px-6 bg-black relative z-10">
-        <div className="mx-auto max-w-4xl text-center">
-          <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-8">
-            Engineering work crosses tools. PawOS helps connect the steps.
-          </h2>
-          <p className="text-xl text-neutral-400 leading-relaxed max-w-3xl mx-auto">
-            A code change can involve understanding a project, editing files, running commands and reporting the result. PawOS supports that work in three distinct ways: Desktop on Windows, CLI in a local project folder, and Web for browser chat and GitHub-connected repository changes.
-          </p>
-        </div>
-      </section>
-
-      {/* 3. UNDERSTAND / COMPANION (Image Left, Text Right) */}
-      <section className="py-32 px-6 bg-neutral-950 relative z-10">
-        <div className="mx-auto max-w-7xl">
-          <div className="grid md:grid-cols-2 gap-16 items-center">
-            <div className="rounded-2xl overflow-hidden border border-neutral-800 shadow-2xl relative order-last md:order-first">
-              <ProductScreenshot src="/pawos-desktop-capture.png" mobileSrc="/pawos-desktop-mobile.webp" alt="PawOS Desktop open with the task prompt and companion workspace" width={1000} height={764} />
-              <a href="/pawos-desktop-capture.png" target="_blank" rel="noreferrer" className="block px-4 py-3 text-sm text-neutral-300 underline decoration-neutral-600 underline-offset-4 md:hidden">View the full desktop screenshot</a>
+    <main className="bg-[#080a0d] text-white">
+      <section className="relative overflow-hidden border-b border-white/10">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,rgba(59,130,246,0.16),transparent_58%)]" />
+        <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-6 pb-20 pt-32 sm:pt-40 lg:grid-cols-[1.02fr_0.98fr] lg:gap-16 lg:pb-28">
+          <div>
+            <p className="mb-6 text-xs font-semibold uppercase tracking-[0.22em] text-blue-300">AI engineering execution</p>
+            <h1 className="max-w-3xl text-5xl font-semibold leading-[1.04] tracking-[-0.055em] sm:text-6xl lg:text-7xl">
+              Delegate engineering work. Review what gets done.
+            </h1>
+            <p className="mt-7 max-w-2xl text-lg leading-8 text-neutral-300 sm:text-xl">
+              PawOS helps developers investigate issues, understand projects, plan code changes and carry out supported engineering tasks. Work from a local terminal, a Windows desktop workspace or a browser connected to GitHub.
+            </p>
+            <div className="mt-9 flex flex-wrap gap-3">
+              <Link href="/signup" onClick={() => trackEvent("home_primary_cta", { destination: "/signup" })} className="inline-flex items-center rounded-lg bg-white px-5 py-3.5 text-sm font-semibold text-neutral-950 transition hover:bg-neutral-200">
+                Get started <span aria-hidden="true" className="ml-2">→</span>
+              </Link>
+              <Link href="/docs/getting-started/four-ways-to-work" className="inline-flex items-center rounded-lg border border-white/20 px-5 py-3.5 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-white/5">
+                Read the developer guide
+              </Link>
             </div>
-            <div className="order-first md:order-last">
-              <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-6">
-                Start with what you need.
-              </h2>
-              <p className="text-lg text-neutral-400 leading-relaxed">
-                PawOS Desktop gives you a graphical place to start a task, continue a conversation, and work with projects. Use the desktop app when you want PawOS alongside your local environment.
-              </p>
-            </div>
+            <p className="mt-5 text-sm text-neutral-500">Three product experiences. Different execution boundaries. One PawOS account.</p>
+          </div>
+          <div className="relative">
+            <div className="absolute -inset-4 rounded-3xl bg-blue-500/10 blur-2xl" />
+            <figure className="relative overflow-hidden rounded-2xl border border-white/15 bg-neutral-950 shadow-2xl shadow-black/40">
+              <Image src="/pawos-desktop-capture.png" alt="PawOS Desktop application showing the product workspace" width={1000} height={764} priority className="h-auto w-full object-contain" sizes="(min-width: 1024px) 48vw, 100vw" />
+              <figcaption className="flex items-center justify-between gap-4 border-t border-white/10 px-4 py-3 text-xs text-neutral-400">
+                <span>PawOS Desktop · Product screenshot</span>
+                <span>Windows</span>
+              </figcaption>
+            </figure>
           </div>
         </div>
       </section>
 
-      {/* 4. CLI CODE CHANGES (Text Left, Image Right) */}
-      <section className="py-32 px-6 bg-black relative z-10">
+      <section className="border-b border-white/10 bg-[#0c0f14] px-6 py-16">
         <div className="mx-auto max-w-7xl">
-          <div className="text-center mb-24">
-            <h2 className="text-4xl md:text-6xl font-medium tracking-tight text-white">
-              From a request to reviewed changes
-            </h2>
-          </div>
-          <div className="grid md:grid-cols-2 gap-16 items-start">
-            <div className="pt-12 order-first">
-              <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-6">
-                A terminal interface for local projects
-              </h2>
-              <p className="text-xl text-neutral-400 leading-relaxed">
-                PawOS CLI works from a local project folder. It can inspect the project, propose a plan, request approval for file changes or commands, and report the checks it ran.
-              </p>
-            </div>
-            <div className="rounded-2xl overflow-hidden border border-neutral-800 shadow-2xl relative order-last">
-              <ProductScreenshot src="/pawos-cli-edits.png" mobileSrc="/pawos-cli-edits-mobile.webp" alt="PawOS CLI showing project file edits and successful lint and build commands" width={1166} height={642} />
-              <a href="/pawos-cli-edits.png" target="_blank" rel="noreferrer" className="block px-4 py-3 text-sm text-neutral-300 underline decoration-neutral-600 underline-offset-4 md:hidden">View the full CLI screenshot</a>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 4b. PAWOS WEB (Text Left, Product capture Right) */}
-      <section className="py-32 px-6 bg-neutral-950 border-t border-neutral-900 relative z-10" aria-labelledby="continue-from-web">
-        <div className="mx-auto max-w-7xl">
-          <div className="grid md:grid-cols-2 gap-16 items-center">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-wider text-blue-400 mb-4">PawOS Web</p>
-              <h2 id="continue-from-web" className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-6">
-                Select your repo and start coding from the web.
-              </h2>
-              <p className="text-lg text-neutral-400 leading-relaxed">
-                PawOS Web offers browser-based Chat and Code modes. In Code mode, connect GitHub, choose a repository and describe a change. Web works with the connected repository; it does not access your computer&apos;s files or terminal.
-              </p>
-              <ol className="mt-8 space-y-3">
-                {[
-                  ["Connect GitHub", "Sign in with GitHub — from your computer or your phone."],
-                  ["Pick a repository", "Choose the repo Paw should work in."],
-                  ["Describe the change", "Review the proposed change and its available checks."],
-                ].map(([title, detail], index) => (
-                  <li key={title} className="flex gap-4">
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-neutral-700 text-xs font-semibold text-neutral-300">{index + 1}</span>
-                    <span>
-                      <span className="block text-base font-medium text-white">{title}</span>
-                      <span className="block text-sm text-neutral-400">{detail}</span>
-                    </span>
-                  </li>
-                ))}
-              </ol>
-              <div className="mt-10 flex flex-wrap items-center gap-4">
-                <Link href="/app" className="px-6 py-3 text-sm font-medium bg-white text-black rounded-full hover:bg-neutral-200 transition">
-                  Open PawOS Web
-                </Link>
-                <Link href="/docs/getting-started/web-and-mobile" className="text-sm font-medium text-neutral-300 hover:text-white transition">
-                  How it works &rarr;
-                </Link>
-              </div>
-            </div>
-
-            <div className="mx-auto w-full space-y-4">
-              <figure className="overflow-hidden rounded-2xl border border-neutral-800 shadow-2xl">
-                <ProductScreenshot src="/pawos-web-chat.png" mobileSrc="/pawos-web-chat-mobile.webp" alt="PawOS Web Chat mode in a desktop browser" width={1490} height={697} />
-                <figcaption className="sr-only">PawOS Web Chat mode</figcaption>
-                <a href="/pawos-web-chat.png" target="_blank" rel="noreferrer" className="block px-4 py-3 text-sm text-neutral-300 underline decoration-neutral-600 underline-offset-4 md:hidden">View the full Web Chat screenshot</a>
-              </figure>
-              <figure className="overflow-hidden rounded-2xl border border-neutral-800 shadow-2xl">
-                <ProductScreenshot src="/pawos-web-code.png" mobileSrc="/pawos-web-code-mobile.webp" alt="PawOS Web Code mode showing the GitHub connection and repository setup steps" width={1493} height={697} />
-                <figcaption className="sr-only">PawOS Web Code mode</figcaption>
-                <a href="/pawos-web-code.png" target="_blank" rel="noreferrer" className="block px-4 py-3 text-sm text-neutral-300 underline decoration-neutral-600 underline-offset-4 md:hidden">View the full Web Code screenshot</a>
-              </figure>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 5. PAWOS CLI (Image Left, Text Right) */}
-      <section className="py-32 px-6 bg-neutral-950 relative z-10">
-        <div className="mx-auto max-w-7xl">
-          <div className="grid md:grid-cols-2 gap-16 items-center">
-            <div className="rounded-2xl overflow-hidden border border-neutral-800 shadow-2xl relative order-last md:order-first">
-              <ProductScreenshot src="/pawos-cli-start.png" mobileSrc="/pawos-cli-start-mobile.webp" alt="PawOS CLI showing the detected local folder, branch, repository, and prompt" width={725} height={361} />
-              <a href="/pawos-cli-start.png" target="_blank" rel="noreferrer" className="block px-4 py-3 text-sm text-neutral-300 underline decoration-neutral-600 underline-offset-4 md:hidden">View the full CLI screenshot</a>
-            </div>
-            <div className="order-first md:order-last">
-              <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-6">
-                Work from the folder you choose.
-              </h2>
-              <p className="text-lg text-neutral-400 leading-relaxed">
-                The CLI starts by identifying the current folder, Git branch, and repository. You can then describe a task in the terminal and review the proposed work before proceeding.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 6. CLI CHECKS (Text Left, Image Right) */}
-      <section className="py-32 px-6 bg-black relative z-10">
-        <div className="mx-auto max-w-7xl">
-          <div className="grid md:grid-cols-2 gap-16 items-center">
-            <div className="order-first">
-              <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-6">
-                See the checks that ran.
-              </h2>
-              <p className="text-lg text-neutral-400 leading-relaxed">
-                The terminal asks before running the lint command and shows it in progress. A separate PawOS CLI capture records the lint and build results.
-              </p>
-            </div>
-            <div className="rounded-2xl overflow-hidden border border-neutral-800 shadow-2xl relative order-last">
-              <ProductScreenshot src="/pawos-cli-validation.png" mobileSrc="/pawos-cli-validation-mobile.webp" alt="PawOS CLI asking approval to run npm run lint" width={1162} height={632} />
-              <a href="/pawos-cli-validation.png" target="_blank" rel="noreferrer" className="block px-4 py-3 text-sm text-neutral-300 underline decoration-neutral-600 underline-offset-4 md:hidden">View the full CLI screenshot</a>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 7. PRODUCT DEMO */}
-      <section className="py-32 px-6 bg-neutral-950 relative z-10">
-        <div className="mx-auto max-w-7xl">
-          <div className="grid md:grid-cols-2 gap-16 items-center">
-            <div className="order-last md:order-first space-y-5">
-              <figure className="overflow-hidden rounded-2xl border border-neutral-800 bg-black shadow-2xl">
-                <video controls playsInline preload="metadata" width={1072} height={576} poster="/pawos-product-demo-poster.webp" onPlay={() => trackEvent("demo_video_play", { video: "shopflow_storefront" })} className="block h-auto w-full" aria-label="ShopFlow e-commerce live preview built with PawOS" aria-describedby="shopflow-video-description">
-                  <source src="/pawos-product-demo.mp4" type="video/mp4" />
-                  Your browser does not support embedded video.
-                </video>
-                <figcaption id="shopflow-video-description" className="border-t border-neutral-800 px-4 py-3 text-sm text-neutral-300">ShopFlow storefront live preview, showing the product cards and store navigation.</figcaption>
-              </figure>
-              <figure className="overflow-hidden rounded-2xl border border-neutral-800 bg-black shadow-2xl">
-                <video controls playsInline preload="metadata" width={832} height={448} poster="/pawos-product-demo-2-poster.webp" onPlay={() => trackEvent("demo_video_play", { video: "shopflow_cli" })} className="block h-auto w-full" aria-label="PawOS CLI proposing a source file edit in the local ShopFlow project" aria-describedby="shopflow-cli-video-description">
-                  <source src="/pawos-cli-shopflow-demo.mp4" type="video/mp4" />
-                  Your browser does not support embedded video.
-                </video>
-                <figcaption id="shopflow-cli-video-description" className="border-t border-neutral-800 px-4 py-3 text-sm text-neutral-300">PawOS CLI proposing an edit to <code>src/App.css</code> in the local ShopFlow project.</figcaption>
-              </figure>
-            </div>
-            <div className="order-first md:order-last">
-              <div className="inline-flex items-center rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-sm font-medium text-blue-300 mb-6 tracking-wide">
-                PRODUCT RECORDING
-              </div>
-              <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-6">
-                PawOS in action.
-              </h2>
-              <p className="text-lg text-neutral-400 leading-relaxed">
-                The first recording shows the ShopFlow e-commerce live preview built with PawOS. The second shows PawOS CLI preparing an edit in the local ShopFlow project. Use each player&apos;s controls to review the recordings.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 8. CROSS-CONNECTION */}
-      <section className="py-32 px-6 bg-black relative z-10 border-t border-neutral-900">
-        <div className="mx-auto max-w-5xl text-center mb-16 relative z-10">
-          <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-6">
-            Work doesn&apos;t live in one place.
-          </h2>
-          <p className="text-xl text-neutral-400 max-w-3xl mx-auto leading-relaxed">
-            Your project may begin in a folder, continue in code, depend on a terminal command, pass through Git, and end with a ticket or message. PawOS is built to carry the context across those boundaries. Connected services expose different actions, depending on each integration.
-          </p>
-        </div>
-        
-        <div className="mx-auto max-w-7xl mb-16">
-          <ConnectionsWorkflow />
-        </div>
-
-        <div className="mx-auto max-w-5xl overflow-hidden rounded-2xl border border-neutral-800 shadow-2xl relative z-10">
-          <picture className="block w-full">
-            <source media="(max-width: 639px)" srcSet="/pawos-connections-mobile.webp" />
-            <Image src="/pawos-connections-capture.png" alt="PawOS Desktop Connections page showing integration cards and their displayed connection states" width={1255} height={336} sizes="(min-width: 1024px) 80vw, 100vw" className="block h-auto w-full object-contain" />
-          </picture>
-          <a href="/pawos-connections-capture.png" target="_blank" rel="noreferrer" className="block px-4 py-3 text-sm text-neutral-300 underline decoration-neutral-600 underline-offset-4 sm:hidden">View the full Connections screenshot</a>
-        </div>
-      </section>
-
-      {/* 10. PRODUCT EVOLUTION (01 - 05) */}
-      <section className="py-32 px-6 bg-neutral-950 relative z-10 border-t border-neutral-900">
-        <div className="mx-auto max-w-7xl">
-          <div className="text-center mb-24">
-            <h2 className="text-4xl md:text-6xl font-medium tracking-tight text-white mb-6">
-              Where PawOS is today — and where we&apos;re taking it.
-            </h2>
-            <p className="text-xl text-neutral-400 max-w-3xl mx-auto leading-relaxed">
-            Desktop, CLI and Web each support different parts of an engineering workflow. Here is what is available today and what we are still working toward.
+          <div className="max-w-3xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">The engineering workflow</p>
+            <h2 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">Software work is more than writing code.</h2>
+            <p className="mt-5 text-base leading-7 text-neutral-400 sm:text-lg">
+              A change can involve reading an issue, understanding an unfamiliar codebase, tracing an error, editing files, running commands and checking the result. PawOS is designed to help coordinate those steps within the capabilities of the product experience you choose.
             </p>
           </div>
-
-          <div className="max-w-4xl mx-auto space-y-32">
-            
-            {/* 01 */}
-            <div className="flex flex-col md:flex-row gap-8 items-baseline">
-              <div className="text-5xl font-light text-neutral-700 w-24 flex-shrink-0">01</div>
-              <div>
-                <h3 className="text-3xl font-medium text-white mb-4">A companion that executes real work.</h3>
-                <p className="text-lg text-neutral-400 mb-6 leading-relaxed">
-                  On Windows, PawOS Desktop can work with supported local projects and development tools. Depending on the task and permissions, it can inspect files, make changes, run commands, install software and help repair environment issues.
-                </p>
-                <div className="grid sm:grid-cols-2 gap-4 text-neutral-300">
-                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Understand an existing project</div>
-                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Change and refactor code</div>
-                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Install software and configure environments</div>
-                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Fix paths and development issues</div>
-                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Run commands and verify results</div>
-                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Work with Git and project files</div>
-                </div>
-              </div>
-            </div>
-
-            {/* 02 */}
-            <div className="flex flex-col md:flex-row gap-8 items-baseline">
-              <div className="text-5xl font-light text-neutral-700 w-24 flex-shrink-0">02</div>
-              <div>
-                <h3 className="text-3xl font-medium text-white mb-4">Deepening the working environment.</h3>
-                <p className="text-lg text-neutral-400 mb-6 leading-relaxed">
-                  We are improving how people review work in PawOS. The details shown depend on the experience and task; check the current product and documentation for what is available.
-                </p>
-                <div className="grid sm:grid-cols-2 gap-4 text-neutral-300">
-                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Review the task plan before work begins</div>
-                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>See command output and reported results</div>
-                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Approve actions that require confirmation</div>
-                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Choose the experience that fits the project</div>
-                </div>
-              </div>
-            </div>
-
-            {/* 03 */}
-            <div className="flex flex-col md:flex-row gap-8 items-baseline">
-              <div className="text-5xl font-light text-neutral-700 w-24 flex-shrink-0">03</div>
-              <div>
-                <h3 className="text-3xl font-medium text-white mb-4">Expanding across connections.</h3>
-                <p className="text-lg text-neutral-400 mb-6 leading-relaxed">
-                  A task may involve a local project, terminal commands, Git and a connected issue tracker. PawOS can help with supported steps, but the actions available depend on the product experience and each connection.
-                </p>
-              </div>
-            </div>
-
-            {/* 04 */}
-            <div className="flex flex-col md:flex-row gap-8 items-baseline">
-              <div className="text-5xl font-light text-neutral-700 w-24 flex-shrink-0">04</div>
-              <div>
-                <h3 className="text-3xl font-medium text-white mb-4">Autonomous execution.</h3>
-                <p className="text-lg text-neutral-400 mb-6 leading-relaxed">
-                  PawOS includes ticket-based workflows for supported plans and connected services. They can stop when a step needs approval or a required capability is unavailable; they do not guarantee a fix or pull request for every ticket.
-                </p>
-                <div className="flex flex-wrap items-center gap-2 text-sm font-medium tracking-wide text-neutral-500 uppercase">
-                  <span>Request</span>
-                  <span>→</span>
-                  <span>Understand</span>
-                  <span>→</span>
-                  <span>Plan</span>
-                  <span>→</span>
-                  <span>Approve</span>
-                  <span>→</span>
-                  <span className="text-white">Execute</span>
-                  <span>→</span>
-                  <span>Verify</span>
-                  <span>→</span>
-                  <span>Report</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 05 */}
-            <div className="flex flex-col md:flex-row gap-8 items-baseline">
-              <div className="text-5xl font-light text-neutral-700 w-24 flex-shrink-0">05</div>
-              <div>
-                <h3 className="text-3xl font-medium text-white mb-4">Organizational direction.</h3>
-                <p className="text-lg text-neutral-400 mb-6 leading-relaxed">
-                  Team and Enterprise features add organization workspaces, administration and governance. Availability depends on plan and configuration; contact the team to discuss an organization rollout.
-                </p>
-                <div className="grid sm:grid-cols-2 gap-4 text-neutral-300">
-                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Collaborative PawOS workspaces</div>
-                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Granular RBAC and policies</div>
-                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Enterprise SSO and delegated access</div>
-                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Budgets and execution controls</div>
-                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Organization-wide connected workflows</div>
-                  <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-white/20"></span>Deeper team collaboration</div>
-                </div>
-              </div>
-            </div>
-
+          <div className="mt-12 grid gap-px overflow-hidden rounded-xl border border-white/10 bg-white/10 sm:grid-cols-2 lg:grid-cols-4">
+            {workflow.map(([number, title, detail]) => (
+              <article key={number} className="bg-[#0c0f14] p-6 sm:p-7">
+                <p className="font-mono text-xs text-blue-300">{number}</p>
+                <h3 className="mt-5 text-lg font-semibold">{title}</h3>
+                <p className="mt-3 text-sm leading-6 text-neutral-400">{detail}</p>
+              </article>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* 06 - LARGE CONCEPTUAL STATEMENT */}
-      <section className="py-40 px-6 bg-black relative z-10 border-t border-neutral-900 flex flex-col items-center justify-center text-center">
-        <div className="max-w-5xl mx-auto">
-          <h2 className="text-5xl md:text-7xl font-medium tracking-tight text-white mb-10 leading-tight">
-            Tools that help move engineering work forward.
-          </h2>
-          <p className="text-2xl text-neutral-400 font-light max-w-4xl mx-auto leading-relaxed">
-            PawOS is focused on engineering tasks that span a project, its tools and connected services. We are building toward more continuity between those steps, while keeping each experience within its supported access and permissions.
-          </p>
+      <section className="px-6 py-20 sm:py-24">
+        <div className="mx-auto max-w-7xl">
+          <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
+            <div className="max-w-3xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">Choose your environment</p>
+              <h2 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">Three ways to work with PawOS.</h2>
+              <p className="mt-5 text-base leading-7 text-neutral-400 sm:text-lg">Choose the experience based on where the project lives and where the work needs to run.</p>
+            </div>
+            <Link href="/docs/getting-started/four-ways-to-work" className="text-sm font-semibold text-blue-300 transition hover:text-blue-200">Compare all three experiences →</Link>
+          </div>
+          <div className="mt-10 grid gap-5 lg:grid-cols-3">
+            {products.map((product) => (
+              <article key={product.name} className="overflow-hidden rounded-xl border border-white/10 bg-[#0c0f14]">
+                <div className="border-b border-white/10 bg-black/30 p-3">
+                  <Image src={product.image} alt={product.alt} width={1493} height={697} className="h-auto w-full rounded-lg object-contain" sizes="(min-width: 1024px) 33vw, 100vw" />
+                </div>
+                <div className="p-6">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-300">{product.label}</p>
+                  <h3 className="mt-3 text-xl font-semibold">{product.name}</h3>
+                  <p className="mt-3 min-h-24 text-sm leading-6 text-neutral-400">{product.description}</p>
+                  <Link href={product.href} className="mt-5 inline-flex text-sm font-semibold text-white hover:text-blue-200">Explore {product.name} <span aria-hidden="true" className="ml-2">→</span></Link>
+                </div>
+              </article>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* 11. BUILDERS / STORY PREVIEW */}
-      <section className="py-32 px-6 bg-black relative z-10 border-t border-neutral-900">
-        <div className="mx-auto max-w-4xl">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-white mb-6">
-              Why we&apos;re building PawOS.
-            </h2>
-          </div>
-          <div className="prose prose-invert prose-lg mx-auto text-neutral-400 leading-relaxed mb-12">
-            <p className="mb-6">
-              We started PawOS because discussing a code change and carrying it out are different jobs.
+      <section className="border-y border-white/10 bg-[#0c0f14] px-6 py-20 sm:py-24">
+        <div className="mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-[0.9fr_1.1fr]">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">Execution you can inspect</p>
+            <h2 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">A result should come with evidence.</h2>
+            <p className="mt-5 text-base leading-7 text-neutral-400 sm:text-lg">
+              PawOS reports the work it performed and the checks it ran. Review file changes, command output, validation results, failures and remaining work before relying on a task outcome.
             </p>
-            <p className="mb-6">
-              When a developer sits down at a computer, they don&apos;t just read code. They install dependencies, they navigate the file system, they run commands in the terminal, they debug failing builds, and they track their work in Jira. The work is connected.
-            </p>
-            <p>
-              PawOS is being built to help with the steps between a request and a checked result. It can work with local projects in Desktop or CLI, and with connected repositories in Web. Each experience has its own boundaries, and PawOS reports what it could and could not verify.
-            </p>
+            <ul className="mt-7 space-y-3 text-sm text-neutral-300">
+              {["Review proposed changes before execution where supported", "Approve actions that require confirmation", "See command and tool outcomes", "Distinguish passed, failed and unverified checks"].map((item) => (
+                <li key={item} className="flex gap-3"><span className="mt-0.5 text-blue-300">✓</span><span>{item}</span></li>
+              ))}
+            </ul>
+            <Link href="/docs/security/permissions" className="mt-8 inline-flex text-sm font-semibold text-blue-300 hover:text-blue-200">Read about permissions and execution safety →</Link>
           </div>
-          <div className="text-center">
-            <Link href="/about" className="inline-flex items-center gap-2 text-indigo-400 hover:text-indigo-300 font-medium text-lg transition-colors">
-              Read the full story <span aria-hidden="true">&rarr;</span>
-            </Link>
+          <figure className="overflow-hidden rounded-xl border border-white/10 bg-black">
+            <Image src="/pawos-cli-validation.png" alt="PawOS CLI showing a request to approve a lint command" width={1162} height={632} className="h-auto w-full object-contain" sizes="(min-width: 1024px) 55vw, 100vw" />
+            <figcaption className="border-t border-white/10 px-4 py-3 text-xs text-neutral-500">PawOS CLI · Approval before running a development check</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section className="px-6 py-20 sm:py-24">
+        <div className="mx-auto max-w-7xl">
+          <div className="max-w-3xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">Start with your workflow</p>
+            <h2 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">Use the right PawOS experience for the task.</h2>
+          </div>
+          <div className="mt-9 grid gap-4 md:grid-cols-3">
+            <article className="rounded-xl border border-white/10 p-6">
+              <h3 className="font-semibold">Local project work</h3>
+              <p className="mt-3 text-sm leading-6 text-neutral-400">Install the CLI, open a project folder and start PawOS from your terminal. Local project work does not require a Git repository.</p>
+              <pre className="mt-5 overflow-x-auto rounded-lg border border-white/10 bg-black p-4 text-xs text-neutral-300"><code>npm install -g @revantaai/pawos-cli{"\n"}pawos</code></pre>
+              <Link href="/docs/getting-started/four-ways-to-work#install-cli" className="mt-5 inline-flex text-sm font-semibold text-blue-300 hover:text-blue-200">CLI installation guide →</Link>
+            </article>
+            <article className="rounded-xl border border-white/10 p-6">
+              <h3 className="font-semibold">Browser-based work</h3>
+              <p className="mt-3 text-sm leading-6 text-neutral-400">Open PawOS Web for browser chat and supported coding tasks on repositories connected through GitHub.</p>
+              <Link href="/app" className="mt-5 inline-flex text-sm font-semibold text-blue-300 hover:text-blue-200">Open PawOS Web →</Link>
+            </article>
+            <article className="rounded-xl border border-white/10 p-6">
+              <h3 className="font-semibold">Windows environment work</h3>
+              <p className="mt-3 text-sm leading-6 text-neutral-400">Request Windows early access for the Desktop experience. The available installer and release status are confirmed through the access process.</p>
+              <DownloadWindowsButton source="home_windows_card" className="mt-5 inline-flex text-sm font-semibold text-blue-300 hover:text-blue-200">Request Windows access →</DownloadWindowsButton>
+            </article>
           </div>
         </div>
       </section>
 
-      {/* EARLY ACCESS */}
-      <EarlyAccessSection />
-
-      {/* 12. FINAL CTA */}
-      <section className="py-32 px-6 text-center bg-neutral-950 relative z-10 border-t border-neutral-900">
-        <h2 className="text-4xl md:text-6xl font-medium tracking-tight text-white mb-8">
-          Your next task starts here.
-        </h2>
-        <div className="flex flex-col sm:flex-row justify-center gap-4">
-          <a href="#early-access" className="px-8 py-4 text-base font-medium bg-white text-black hover:bg-neutral-200">
-            Get Early Access &rarr;
-          </a>
-          <Button href="/docs" variant="secondary" className="px-8 py-4 text-base font-medium bg-transparent text-white border border-neutral-700 hover:bg-neutral-900">
-            Read Documentation
-          </Button>
+      <section className="border-t border-white/10 bg-[#0c0f14] px-6 py-20 text-center sm:py-24">
+        <div className="mx-auto max-w-3xl">
+          <h2 className="text-3xl font-semibold tracking-tight sm:text-5xl">Bring a real engineering task.</h2>
+          <p className="mt-5 text-base leading-7 text-neutral-400 sm:text-lg">Explore the product, check the supported workflows and decide where PawOS fits in your development process.</p>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <Link href="/signup" className="rounded-lg bg-white px-5 py-3.5 text-sm font-semibold text-neutral-950 hover:bg-neutral-200">Create an account</Link>
+            <Link href="/docs" className="rounded-lg border border-white/20 px-5 py-3.5 text-sm font-semibold text-white hover:bg-white/5">Browse documentation</Link>
+          </div>
         </div>
       </section>
-    </>
+    </main>
   );
 }
