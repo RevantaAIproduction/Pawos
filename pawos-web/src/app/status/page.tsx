@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Section } from "../../components/ui/Section";
 import { Badge } from "../../components/ui/Badge";
 
-export const metadata: Metadata = { title: "Status", description: "PawOS system status." };
+export const metadata: Metadata = { title: "Status", description: "PawOS product availability and service status information." };
 
 const COMPONENTS = [
   { name: "pawos.revantaai.com (this website)", status: "Operational" as const },
@@ -17,7 +17,7 @@ const STATUS_TONE: Record<string, "green" | "amber" | "neutral"> = {
 
 export default function StatusPage() {
   return (
-    <Section title="Status" subtitle="PawOS is primarily a desktop application, not a hosted service — so traditional uptime metrics don't apply the same way they would to a SaaS product.">
+    <Section title="Status" subtitle="PawOS includes browser-based services and local applications. This page describes product access; it is not a live uptime monitor or a substitute for incident reporting.">
       <div className="mx-auto mt-12 max-w-xl space-y-4">
         {COMPONENTS.map((c) => (
           <div key={c.name} className="flex items-center justify-between rounded-lg border border-neutral-800 p-4">
@@ -27,7 +27,7 @@ export default function StatusPage() {
         ))}
       </div>
       <p className="mx-auto mt-8 max-w-xl text-center text-sm text-neutral-500">
-        PawOS runs on your computer, so most of it keeps working independently of these services.
+        Local CLI and Desktop workflows run in their respective environments. Features that use PawOS services or connected providers depend on those services being available.
       </p>
     </Section>
   );
