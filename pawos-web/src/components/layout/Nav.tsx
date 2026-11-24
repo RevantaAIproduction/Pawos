@@ -52,11 +52,11 @@ const NAV_GROUPS: NavGroup[] = [
 ];
 
 const SEARCH_INDEX = [
-  { title: "PawOS Home", url: "/", type: "Page", desc: "Explore PawOS Desktop, CLI, Web and real product workflows." },
+  { title: "PawOS Home", url: "/", type: "Page", desc: "Understand PawOS engineering workflows across Web, CLI and Desktop." },
   { title: "Product overview", url: "/", type: "Page", desc: "Explore PawOS Desktop, CLI, Web and real product workflows." },
-  { title: "Desktop", url: "/features/desktop-ai", type: "Product", desc: "Learn about the local PawOS desktop experience." },
+  { title: "Desktop", url: "/features/desktop-ai", type: "Product", desc: "Windows local development workflows and availability." },
   { title: "CLI guide", url: "/docs/getting-started/four-ways-to-work", type: "Documentation", desc: "Compare Web, Desktop and CLI workflows." },
-  { title: "Web", url: "/docs/getting-started/web-and-mobile", type: "Documentation", desc: "Learn about browser-based PawOS workflows." },
+  { title: "Web", url: "/docs/getting-started/web-and-mobile", type: "Documentation", desc: "Browser Chat and GitHub-connected Code workflows." },
   { title: "About PawOS", url: "/about", type: "Page", desc: "Why PawOS exists and what it is being built to do." },
   { title: "Careers", url: "/careers", type: "Page", desc: "Explore opportunities at Revanta AI." },
   { title: "Contact", url: "/support/contact", type: "Page", desc: "Contact the PawOS team for help or business questions." },
