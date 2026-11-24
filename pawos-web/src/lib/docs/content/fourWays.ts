@@ -33,7 +33,7 @@ export const fourWaysPages: DocPage[] = [
       { type: 'heading', level: 2, text: 'Capability comparison', id: 'capabilities' },
       {
         type: 'table',
-        headers: ['Capability', 'Web', 'Published CLI 1.2.0', 'Desktop source'],
+        headers: ['Capability', 'Web', 'CLI', 'Desktop for Windows'],
         rows: [
           ['Local project files', 'No', 'Yes; in the current folder, including non-Git projects', 'Yes; selected workspace'],
           ['Git and non-Git support', 'GitHub repository for coding', 'Non-Git local work; Git operations need a repository', 'Non-Git local workspace; Git actions need Git/repository'],
@@ -46,10 +46,10 @@ export const fourWaysPages: DocPage[] = [
         ],
       },
       { type: 'heading', level: 2, text: 'Published CLI and local candidate', id: 'cli-release' },
-      { type: 'paragraph', text: 'The currently published npm package is `@revantaai/pawos-cli` 1.2.0. A local 1.2.1 candidate adds `/env`, `/tools`, `/github`, `/linear`, and `/work`; it is unpublished. Candidate service-backed behavior is not verified against live production APIs. See the CLI README for the version-specific commands and limitations.' },
-      { type: 'status', status: 'not-verified', text: 'Do not infer that candidate commands are available to npm users. `/env` is read-only diagnostics. It does not repair PATH.' },
+      { type: 'paragraph', text: 'Install the published package with npm. The commands available to you are the commands included in that published release; local development builds may contain changes that have not shipped to npm. See the CLI README for installation, authentication, workspace boundaries and command reference.' },
+      { type: 'status', status: 'not-verified', text: 'Use the published CLI release when following these instructions. Do not assume that unreleased development commands are available in the npm package.' },
       { type: 'heading', level: 2, text: 'Desktop release status', id: 'desktop-release' },
-      { type: 'status', status: 'not-verified', text: 'The existing Desktop 1.0.4 MSIX is unsigned, lacks a matching WACK report and verified source provenance, and has not passed disposable-environment install/runtime checks. It is not certified, Partner Center ready, or proven equivalent to current source.' },
+      { type: 'status', status: 'not-verified', text: 'PawOS Desktop is distributed through the Windows early-access process. Request access to receive the current supported release and installation instructions. Availability may change as releases are validated.' },
       { type: 'heading', level: 2, text: 'Using PawOS on a phone', id: 'phone' },
       { type: 'paragraph', text: 'PawOS on a phone is PawOS Web in a mobile browser, or a paired view of a running Desktop session. A phone browser does not gain access to a computer’s local files or terminal.' },
       { type: 'screenshot', shot: MOBILE_SCREENSHOT },
