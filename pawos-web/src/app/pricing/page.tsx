@@ -5,7 +5,7 @@ import { Section } from "../../components/ui/Section";
 
 export const metadata: Metadata = {
   title: "Pricing",
-  description: "Compare PawOS individual and organization plans, included Paw Compute, and additional usage terms.",
+  description: "Compare PawOS plans, included Paw Compute and organization options. Review the in-app billing screen for account-specific usage prices and limits.",
 };
 
 const COMPARISON_ROWS: { feature: string; go: string; pro: string; proMax: string; team: string; enterprise: string }[] = [
@@ -52,7 +52,7 @@ const FAQS = [
 export default function PricingPage() {
   return (
     <>
-      <Section id="individual-plans" title="Plans and pricing" subtitle="Start with Paw Go, compare the individual plans, or contact the team about Team and Enterprise." className="scroll-mt-24">
+      <Section id="individual-plans" title="Plans for individual developers and engineering teams" subtitle="Choose an individual plan or talk with the team about organization seats, shared usage and administration. Plan features and included usage are described below; account-specific rates and limits are confirmed in billing." className="scroll-mt-24">
         <PricingPlans />
         <div className="mt-10 flex flex-wrap justify-center gap-3">
           <Link href="/signup" className="inline-flex items-center justify-center rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:bg-neutral-200">Get Started</Link>
