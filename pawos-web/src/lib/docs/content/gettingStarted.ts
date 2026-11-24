@@ -92,8 +92,8 @@ export const gettingStartedPages: DocPage[] = [
       {
         type: 'steps',
         items: [
-          { title: 'Get PawOS from the Microsoft Store', detail: 'Request Windows early access using the Download for Windows flow. Follow the instructions sent by the PawOS team for the release currently available to your account.' },
-          { title: 'Let the Store install it', detail: 'Use only the installer or distribution link supplied through the official PawOS access process.' },
+          { title: 'Request Windows access', detail: 'Use the PawOS Windows early-access flow and follow the instructions sent by the PawOS team for the release available to your account.' },
+          { title: 'Use the official distribution link', detail: 'Install only from the installer or distribution link supplied through the official PawOS access process.' },
           { title: 'Sign in', detail: 'Open PawOS and sign in. Workspace and system permissions are requested only when a task needs them.' },
         ],
       },
@@ -105,7 +105,7 @@ export const gettingStartedPages: DocPage[] = [
       },
       {
         type: 'warning',
-        text: 'Only install PawOS from its Microsoft Store listing.',
+        text: 'Only install PawOS from an official distribution link supplied by the PawOS team.',
       },
       {
         type: 'note',
@@ -119,7 +119,7 @@ export const gettingStartedPages: DocPage[] = [
       {
         type: 'faq',
         items: [
-          { q: 'What if launch fails?', a: 'Make sure you installed PawOS from the Microsoft Store, that Windows allowed the app to run, and see Troubleshooting \u2192 PawOS won\u2019t start.' },
+          { q: 'What if launch fails?', a: 'Make sure you used the official installer supplied through the early-access process, that Windows allowed the app to run, and see Troubleshooting \u2192 PawOS won\u2019t start.' },
           { q: 'Do I need anything else installed first?', a: 'No — the PawOS installer includes everything the app needs.' },
         ],
       },
@@ -135,7 +135,7 @@ export const gettingStartedPages: DocPage[] = [
     blocks: [
       {
         type: 'lead',
-        text: 'PawOS Desktop is for Windows only, and is installed from the Microsoft Store. PawOS Web runs in a browser on any computer or phone, with nothing to install.',
+        text: 'PawOS Desktop is the Windows application and currently uses an early-access distribution process. PawOS Web runs in a supported browser on a computer or phone. PawOS CLI runs in a terminal with Node.js 20 or newer.',
       },
       { type: 'heading', level: 2, id: 'desktop', text: 'PawOS Desktop (Windows only)' },
       {
@@ -144,7 +144,7 @@ export const gettingStartedPages: DocPage[] = [
         rows: [
           ['Operating system', 'Windows 10 (64-bit) or later'],
           ['Memory', '4\u202fGB RAM minimum (8\u202fGB recommended)'],
-          ['Install from', 'The Microsoft Store'],
+          ['Access', 'PawOS Windows early-access process'],
         ],
       },
       {
