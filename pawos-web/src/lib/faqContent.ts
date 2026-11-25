@@ -20,7 +20,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   { category: "Deployments", q: "Do I need to give PawOS my cloud credentials?", a: "Deployment workflows may use the provider credentials configured for the selected runtime. Check the provider's setup guide to see how access is handled." },
   { category: "Deployments", q: "What happens if a deploy breaks production?", a: "Health checks and rollback depend on the deployment provider and configured workflow. PawOS does not guarantee that every deployment can be rolled back automatically." },
   { category: "Updates", q: "How often does PawOS update?", a: "See the Changelog for the real, chronological history of what's shipped." },
-  { category: "Downloads", q: "Are public installers available yet?", a: "PawOS Desktop for Windows is available from the Microsoft Store. There is no macOS or Linux installer." },
+  { category: "Downloads", q: "Are public installers available yet?", a: "No. Public Desktop installers are not currently available. PawOS Desktop is a Windows application distributed through the current early-access process; use the Download page to check availability and request launch updates. PawOS Web runs in a browser, and PawOS CLI is installed separately. macOS and Linux Desktop installers are not currently available." },
   { category: "Licensing", q: "Is PawOS open source?", a: "See our Licensing and Third-Party Licenses pages for the current, accurate answer rather than an assumption either way." },
   { category: "Support", q: "How do I report a bug?", a: "Email support@revantaai.com with steps to reproduce — see the Support page." },
   { category: "Support", q: "How do I request a feature?", a: "Email support@revantaai.com — see the Support page." },
