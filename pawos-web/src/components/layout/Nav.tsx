@@ -35,9 +35,10 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Developers",
     links: [
       { href: "/docs", label: "Documentation" },
-      { href: "/docs/getting-started/four-ways-to-work#install-cli", label: "CLI Installation" },
+      { href: "/docs/getting-started/four-ways-to-work#install-cli", label: "Install the CLI" },
+      { href: "/docs/getting-started/four-ways-to-work", label: "Choose your workflow" },
       { href: "/docs/connectors/overview", label: "Integrations" },
-      { href: "/docs/coding/overview", label: "Technical Guides" },
+      { href: "/docs/coding/overview", label: "Coding & validation guides" },
     ],
   },
   {
@@ -45,8 +46,10 @@ const NAV_GROUPS: NavGroup[] = [
     links: [
       { href: "/about", label: "About PawOS" },
       { href: "/changelog", label: "Changelog" },
+      { href: "/faq", label: "FAQ" },
+      { href: "/docs", label: "Documentation" },
+      { href: "/support/contact", label: "Support & contact" },
       { href: "/careers", label: "Careers" },
-      { href: "/support/contact", label: "Contact" },
     ],
   },
 ];
