@@ -1,72 +1,25 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Section } from "../../components/ui/Section";
-import { Badge } from "../../components/ui/Badge";
 
 export const metadata: Metadata = {
   title: "Changelog",
-  description: "What's shipped in PawOS, in order.",
-};
-
-type Entry = { date: string; tag: "Feature" | "Fix" | "Security" | "Breaking"; title: string; body: string };
-
-const ENTRIES: Entry[] = [
-  {
-    date: "2026-07-23",
-    tag: "Feature",
-    title: "Deployment and production investigation",
-    body: "Paw can now deploy and investigate production issues across supported hosting providers, using each provider's own tools and your existing sign-in.",
-  },
-  {
-    date: "2026-07-23",
-    tag: "Feature",
-    title: "Success-gated Autonomous Engineering Task billing",
-    body: "Billing now only ever fires on a genuinely completed run (real PR + updated ticket) — never on deploy alone, and never on failure, cancellation, retry-limit, or denied approval.",
-  },
-  {
-    date: "2026-07-19",
-    tag: "Feature",
-    title: "Companion Runtime complete",
-    body: "The 3D companion stack is now authoritative: automatic rigging, procedural motion, live facial expression, personality presets, and export/import as a portable .paw package.",
-  },
-  {
-    date: "2026-07-18",
-    tag: "Feature",
-    title: "Meeting capture, transcription and follow-ups",
-    body: "Desktop meeting and call capture, transcription, and follow-up drafting reached a stable release.",
-  },
-  {
-    date: "2026-07-16",
-    tag: "Feature",
-    title: "Browser Runtime frozen for Phase 1",
-    body: "Navigation, extraction, form-filling, and the comparison workflow reached a stable baseline; a WorkflowMetadata extension point was added for higher-level runtimes to build on.",
-  },
-];
-
-const TAG_TONE: Record<Entry["tag"], "blue" | "green" | "amber" | "neutral"> = {
-  Feature: "blue",
-  Fix: "green",
-  Security: "amber",
-  Breaking: "neutral",
+  description: "PawOS release notes and verified product changes.",
 };
 
 export default function ChangelogPage() {
   return (
-    <Section title="Changelog" subtitle="A real, chronological record of what's shipped — most recent first.">
-      <div className="mx-auto mt-12 max-w-2xl space-y-8">
-        {ENTRIES.map((e) => (
-          <div key={e.title} className="border-b border-neutral-900 pb-8">
-            <div className="flex items-center gap-3">
-              <Badge tone={TAG_TONE[e.tag]}>{e.tag}</Badge>
-              <time className="text-sm text-neutral-500" dateTime={e.date}>{e.date}</time>
-            </div>
-            <h2 className="mt-3 text-lg font-semibold text-neutral-100">{e.title}</h2>
-            <p className="mt-2 text-neutral-400">{e.body}</p>
-          </div>
-        ))}
-        <p className="pt-4 text-center text-sm text-neutral-500">
-          This changelog covers major, user-visible milestones — not every internal commit. Versioned releases (once
-          published) will follow semantic versioning; see the Versioning doc for detail.
+    <Section title="Changelog" subtitle="Release notes are published here when a change is confirmed in a public release.">
+      <div className="mx-auto mt-12 max-w-2xl rounded-2xl border border-neutral-800 bg-neutral-900/30 p-7">
+        <h2 className="text-lg font-semibold text-white">No public release notes published yet</h2>
+        <p className="mt-3 text-sm leading-6 text-neutral-400">
+          This page is limited to changes that can be tied to a verified public release. Internal development milestones and unverified capability claims are not presented as shipped releases.
         </p>
+        <div className="mt-6 flex flex-wrap gap-4 text-sm">
+          <Link href="/docs" className="font-medium text-blue-300 hover:text-blue-200">Read the documentation</Link>
+          <Link href="/features" className="font-medium text-blue-300 hover:text-blue-200">Explore product capabilities</Link>
+          <Link href="/support/contact" className="font-medium text-blue-300 hover:text-blue-200">Ask about availability</Link>
+        </div>
       </div>
     </Section>
   );
