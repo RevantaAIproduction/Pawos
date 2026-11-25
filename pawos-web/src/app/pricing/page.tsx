@@ -89,21 +89,31 @@ export default function PricingPage() {
         </div>
       </Section>
 
-      <Section id="autonomous-engineering" eyebrow="Autonomous Ticket System" title="Understand usage before a run" className="border-t border-neutral-900 bg-neutral-900/30">
-        <div className="mx-auto mt-8 max-w-2xl space-y-4 text-neutral-400">
-          <p>
-            Autonomous Ticket System usage is billed from a <strong className="text-neutral-200">prepaid balance</strong> separate from your subscription. Top-up limits and run rates are account-controlled; the billing screen shows the current amounts for your account before you pay.
-          </p>
-          <ul className="space-y-2">
-            <li>• The billing screen shows the available top-up amounts and minimum for your account.</li>
-            <li>• Individual and Team run rates may follow configured volume tiers. Enterprise usage is billed at pass-through provider rates under its organization terms.</li>
-          </ul>
-          <ul className="space-y-2">
-            <li>• Check the current balance, run terms and any approval steps in the app before starting paid work.</li>
-            <li>• Under current billing rules, failed, cancelled or approval-denied runs are not charged.</li>
-            <li>• If your balance cannot cover a run, the app will ask you to add funds before proceeding.</li>
-            <li>• Purchase and usage history are fully visible in-app, with CSV export.</li>
-          </ul>
+      <Section id="autonomous-engineering" eyebrow="Autonomous Ticket System" title="Separate, evidence-based ticket pricing" className="border-t border-neutral-900 bg-neutral-900/30">
+        <div className="mx-auto mt-8 max-w-4xl space-y-6 text-neutral-400">
+          <p>Ticket Balance is a prepaid wallet, separate from your subscription and Paw Compute. A ticket requires at least <strong className="text-neutral-100">$5 available to start</strong>; that amount is held while work runs. The final completed-ticket charge is based on recorded change size.</p>
+          <div className="overflow-x-auto rounded-xl border border-neutral-800">
+            <table className="w-full min-w-[560px] text-sm">
+              <thead><tr className="border-b border-neutral-800 text-left text-neutral-300"><th className="p-3">Change size</th><th className="p-3">Completed-ticket charge</th></tr></thead>
+              <tbody className="divide-y divide-neutral-800">
+                <tr><td className="p-3">1 file and up to 10 lines</td><td className="p-3 font-semibold text-white">$1.00</td></tr>
+                <tr><td className="p-3">Up to 3 size units</td><td className="p-3 font-semibold text-white">$5.00</td></tr>
+                <tr><td className="p-3">4–9 size units</td><td className="p-3 font-semibold text-white">$7.50</td></tr>
+                <tr><td className="p-3">10–20 size units</td><td className="p-3 font-semibold text-white">$10.00</td></tr>
+                <tr><td className="p-3">21–30 size units</td><td className="p-3 font-semibold text-white">$15.00</td></tr>
+                <tr><td className="p-3">31–50 size units</td><td className="p-3 font-semibold text-white">$20 + $0.50 per unit above 30</td></tr>
+                <tr><td className="p-3">Above 50 size units</td><td className="p-3 font-semibold text-white">$30 + $0.50 per unit above 50</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="text-sm">Size units = the greater of files changed or ceiling(lines changed ÷ 100). If change-size evidence is unavailable, the standard $5 rate applies.</p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-neutral-800 p-4"><p className="font-semibold text-white">Automatic retry</p><p className="mt-1 text-sm">$3.00 when a retry starts</p></div>
+            <div className="rounded-xl border border-neutral-800 p-4"><p className="font-semibold text-white">Cancellation</p><p className="mt-1 text-sm">Up to $2.50 if execution has started</p></div>
+            <div className="rounded-xl border border-neutral-800 p-4"><p className="font-semibold text-white">Failure</p><p className="mt-1 text-sm">$0 ticket charge</p></div>
+          </div>
+          <p className="text-sm">A completed ticket may cost more than the initial $5 hold and can leave a negative balance. Another ticket cannot start until the balance is topped up. Current top-up minimum is $30; maximum is $20,000.</p>
+          <p className="text-xs text-neutral-500">These rates describe the individual/Team Ticket Balance model. Enterprise task usage follows separately agreed pass-through terms. Check the in-app billing screen before purchase or execution.</p>
         </div>
       </Section>
 
