@@ -506,14 +506,14 @@ export const FEATURES: FeatureContent[] = [
     capabilities: [
       "Ticket context from supported trackers, including Jira, Linear and GitHub Issues where enabled",
       "Root-cause correlation across logs, code, and deployment history",
-      "Implementation, testing, and a real pull request as the deliverable",
+      "Local implementation and validation evidence, with external pull-request and ticket updates reported according to connector support",
       "Structured engineering reports capturing what was found and what was done",
       "Separate usage billing; current rates and completion rules are shown in the app",
     ],
     workflow: [
       { step: "Gather context", detail: "PawOS reads information available through the connected tracker and repository." },
       { step: "Plan", detail: "Review the proposed steps and provide approvals when requested." },
-      { step: "Carry out supported work", detail: "The run may edit files or run checks within its configured environment." },
+      { step: "Carry out supported work", detail: "The run can investigate a connected ticket, work in its configured local repository, run supported validation and report evidence. External PR creation and Jira/Linear ticket write-back are not currently implemented." },
       { step: "Review the report", detail: "Check what changed, which checks ran and whether any steps remain." },
     ],
     useCases: [
@@ -522,7 +522,7 @@ export const FEATURES: FeatureContent[] = [
     ],
     limitations: [
       "Best suited to well-scoped, well-defined tickets — ambiguous or highly exploratory work still benefits from a human in the loop",
-      "Requires a connected repository and ticket tracker to run end to end",
+      "Requires a supported ticket source, local repository path and configured runtime. Current connector implementation can read ticket context, but does not create PRs or write ticket updates back to Jira/Linear.",
     ],
   },
 ];
