@@ -112,6 +112,20 @@ function PlanCard({ plan }: { plan: Plan }) {
         <p className="mt-2 text-3xl font-bold">{formatPrice(plan)}</p>
       )}
 
+      {plan.id === "proMax" && (
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-xl border border-neutral-700 bg-black/30 p-4">
+            <p className="text-sm font-semibold text-neutral-100">Pro Max 5x</p>
+            <p className="mt-1 text-2xl font-bold text-white">$100<span className="text-xs font-normal text-neutral-400"> / month</span></p>
+            <p className="mt-1 text-xs text-neutral-400">10,000 PC per period · 5,000 PC weekly limit</p>
+          </div>
+          <div className="rounded-xl border border-neutral-700 bg-black/30 p-4">
+            <p className="text-sm font-semibold text-neutral-100">Pro Max 20x</p>
+            <p className="mt-1 text-2xl font-bold text-white">$250<span className="text-xs font-normal text-neutral-400"> / month</span></p>
+            <p className="mt-1 text-xs text-neutral-400">25,000 PC per period · 12,500 PC weekly limit</p>
+          </div>
+        </div>
+      )}
       <ul className="mt-6 space-y-2 text-sm text-neutral-400">
         {plan.features.map((f) => (
           <li key={f}>• {f}</li>
