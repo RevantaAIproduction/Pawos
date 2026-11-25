@@ -25,7 +25,7 @@ const COMPARISON_ROWS: { feature: string; go: string; pro: string; proMax: strin
 const FAQS = [
   {
     q: "How does Autonomous Ticket System billing work?",
-    a: "Autonomous Ticket System usage is paid from a prepaid balance separate from your subscription. The available top-up amounts and minimum, and the rate for a completed run, are shown in the billing screen and can depend on your account or organization. Enterprise usage is billed at pass-through provider rates under its organization terms. Review the displayed price before adding funds or starting paid work. Failed, cancelled or approval-denied runs are not charged under the current billing rules.",
+    a: "Ticket Balance is separate from your subscription and Paw Compute. A ticket needs at least $5 available to start; that amount is held while it runs. Completed tickets are charged by recorded change size: one file and up to 10 lines costs $1; up to 3 size units costs $5; 4–9 costs $7.50; 10–20 costs $10; 21–30 costs $15; 31–50 costs $20 plus $0.50 per unit above 30; above 50 costs $30 plus $0.50 per unit above 50. Size is the greater of files changed or ceiling(lines changed ÷ 100). If size evidence is unavailable, the standard $5 rate applies. Automatic retries cost $3 when started. Cancellation after execution starts costs up to $2.50; failed runs cost $0. A completed change may cost more than the initial $5 hold and leave a negative balance, which must be topped up before another ticket starts. Enterprise uses separate pass-through terms.",
   },
   {
     q: "How is usage measured?",
